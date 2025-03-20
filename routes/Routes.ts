@@ -1,4 +1,5 @@
 import express from "express";
+import { Request, Response } from "express";
 
 import Operations from "../controllers/Operations.controller";
 import Utils from "../controllers/Utils.controller";
@@ -25,13 +26,19 @@ router.get("/diagnostics/finalized", operations.getAllFinalizedOperations);
 
 // If using endpoint for receiving reveal data (non-EVM chains without L2 contract)
 if (process.env.USE_ENDPOINT === "true") {
-  const endpointController = new EndpointController(chainHandler);
+  // Use lazy initialization pattern - only create controller when handling requests
   
   // Endpoint for receiving reveal data
-  router.post("/api/reveal", endpointController.handleReveal.bind(endpointController));
+  router.post("/api/reveal", (req: Request, res: Response) => {
+    const endpointController = new EndpointController(chainHandler);
+    return endpointController.handleReveal(req, res);
+  });
   
   // Endpoint for checking deposit status
-  router.get("/api/deposit/:depositId", endpointController.getDepositStatus.bind(endpointController));
+  router.get("/api/deposit/:depositId", (req: Request, res: Response) => {
+    const endpointController = new EndpointController(chainHandler);
+    return endpointController.getDepositStatus(req, res);
+  });
 }
 
 export default router;
