@@ -1,6 +1,6 @@
 {
 	"name": "tbtc-relayer",
-	"version": "1.0.0",
+	"version": "0.2.0-pre",
 	"description": "Threshold Network tBTC Relayer for Arbitrum",
 	"main": "index.ts",
 	"scripts": {
