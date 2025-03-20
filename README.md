@@ -1,4 +1,4 @@
-# Threshold Network | tBTC Arbitrum relayer
+# Threshold Network | tBTC Cross-Chain Relayer
 
 Based on [L2 tBTC SDK Relayer Implementation](https://thresholdnetwork.notion.site/L2-tBTC-SDK-Relayer-Implementation-4dfedabfcf594c7d8ef80609541cf791?pvs=4)
 
@@ -20,15 +20,13 @@ This project is built with NodeJS and includes a variety of libraries to facilit
 
 To run the project using Docker, follow these steps:
 
-1. Download the [docker-compose.dev.yml](https://raw.githubusercontent.com/Unknown-Gravity/tbtc-arb-relayer/dev/docker-compose.dev.yml) file from this repository.
-
-2. Edit `docker-compose.dev.yml` with your customizations:
+1. Edit `docker-compose.dev.yml` with your customizations:
 
     - PRIVATE_KEY: The wallet private key you will use in your application.
-    - EthereumRPC: URL for the Ethereum RPC
-    - ArbitrumRPC: URL for the Arbitrum RPC
+    - L1_RPC: URL for the Layer 1 RPC (e.g., Ethereum)
+    - L2_RPC: URL for the Layer 2 RPC (e.g., Arbitrum, Base, Optimism)
 
-3. Run the following command to start the project:
+2. Run the following command to start the project:
     ```bash
     docker compose -f docker-compose.dev.yml up
     ```

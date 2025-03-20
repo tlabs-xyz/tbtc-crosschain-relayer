@@ -4,7 +4,7 @@ import { FundingTransaction } from "../types/FundingTransaction.type";
 import { getFundingTxHash, getTransactionHash } from "./GetTransactionHash";
 import { writeJson } from "./JsonUtils";
 import { LogMessage } from "./Logs";
-import { providerArb } from "../services/Core";
+import { providerL2 } from "../services/Core";
 
 const START_BLOCK: number = parseInt(process.env.L2_START_BLOCK || "0");
 
@@ -223,7 +223,7 @@ export const getBlocksByTimestamp = async (timestamp: number, latestBlock: numbe
 		while (low <= high) {
 			console.log(`Binary search iteration: low=${low}, high=${high}`);
 			const mid = Math.floor((low + high) / 2);
-			const blockData = await providerArb.getBlock(mid);
+			const blockData = await providerL2.getBlock(mid);
 
 			if (!blockData) {
 				high = mid - 1;

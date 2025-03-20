@@ -1,7 +1,7 @@
 {
 	"name": "tbtc-relayer",
 	"version": "0.1.0",
-	"description": "Threshold Network tBTC Relayer",
+	"description": "Threshold Network tBTC Cross-Chain Relayer",
 	"main": "index.ts",
 	"scripts": {
 		"start": "npm run build && node --env-file .env dist/index.js",
@@ -13,7 +13,7 @@
 		"swagger": "node swagger.js"
 	},
 	"keywords": [],
-	"author": "Unknown Gravity | All-in-one Blockchain Company",
+	"author": "T-Labs",
 	"license": "ISC",
 	"dependencies": {
 		"@ethersproject/experimental": "^5.7.0",

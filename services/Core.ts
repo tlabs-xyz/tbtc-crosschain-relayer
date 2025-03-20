@@ -17,8 +17,8 @@ import { checkForPastDeposits } from "./CheckForPastDeposits";
 // ---------------------------------------------------------------
 // Environment Variables
 // ---------------------------------------------------------------
-const ARBITRUM_RPC: string = process.env.ARBITRUM_RPC || "";
-const ETHEREUM_RPC: string = process.env.ETHEREUM_RPC || "";
+const L2_RPC: string = process.env.L2_RPC || "";
+const L1_RPC: string = process.env.L1_RPC || "";
 const L1BitcoinDepositor_Address: string = process.env.L1BitcoinDepositor || "";
 const L2BitcoinDepositor_Address: string = process.env.L2BitcoinDepositor || "";
 const TBTCVaultAddress: string = process.env.TBTCVault || "";
@@ -29,18 +29,18 @@ export const TIME_TO_RETRY = 1000 * 60 * 5; // 5 minutes
 // ---------------------------------------------------------------
 // Providers
 // ---------------------------------------------------------------
-export const providerArb: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(ARBITRUM_RPC);
-export const providerEth: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(ETHEREUM_RPC);
+export const providerL2: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(L2_RPC);
+export const providerL1: ethers.providers.JsonRpcProvider = new ethers.providers.JsonRpcProvider(L1_RPC);
 
 // ---------------------------------------------------------------
 // Signers
 // ---------------------------------------------------------------
-export const signerArb: ethers.Wallet = new ethers.Wallet(privateKey, providerArb);
-export const signerEth: ethers.Wallet = new ethers.Wallet(privateKey, providerEth);
+export const signerL2: ethers.Wallet = new ethers.Wallet(privateKey, providerL2);
+export const signerL1: ethers.Wallet = new ethers.Wallet(privateKey, providerL1);
 
 //NonceManager Wallets
-export const nonceManagerArb = new NonceManager(signerArb);
-export const nonceManagerEth = new NonceManager(signerEth);
+export const nonceManagerL2 = new NonceManager(signerL2);
+export const nonceManagerL1 = new NonceManager(signerL1);
 
 // ---------------------------------------------------------------
 // Contracts for signing transactions
@@ -48,16 +48,16 @@ export const nonceManagerEth = new NonceManager(signerEth);
 export const L1BitcoinDepositor: ethers.Contract = new ethers.Contract(
 	L1BitcoinDepositor_Address,
 	L1BitcoinDepositorABI,
-	nonceManagerEth
+	nonceManagerL1
 );
 
 export const L2BitcoinDepositor: ethers.Contract = new ethers.Contract(
 	L2BitcoinDepositor_Address,
 	L2BitcoinDepositorABI,
-	nonceManagerArb
+	nonceManagerL2
 );
 
-export const TBTCVault: ethers.Contract = new ethers.Contract(TBTCVaultAddress, TBTCVaultABI, signerEth);
+export const TBTCVault: ethers.Contract = new ethers.Contract(TBTCVaultAddress, TBTCVaultABI, signerL1);
 
 
 // ---------------------------------------------------------------
@@ -66,16 +66,16 @@ export const TBTCVault: ethers.Contract = new ethers.Contract(TBTCVaultAddress, 
 const L1BitcoinDepositorProvider = new ethers.Contract(
     L1BitcoinDepositor_Address,
     L1BitcoinDepositorABI,
-    providerEth
+    providerL1
   );
   
-  const L2BitcoinDepositorProvider = new ethers.Contract(
+const L2BitcoinDepositorProvider = new ethers.Contract(
     L2BitcoinDepositor_Address,
     L2BitcoinDepositorABI,
-    providerArb
-  );
+    providerL2
+);
   
-  const TBTCVaultProvider = new ethers.Contract(TBTCVaultAddress, TBTCVaultABI, providerEth);
+const TBTCVaultProvider = new ethers.Contract(TBTCVaultAddress, TBTCVaultABI, providerL1);
 
 // ---------------------------------------------------------------
 // Cron Jobs
@@ -98,7 +98,7 @@ export const startCronJobs = () => {
 
     // Every 5 minutes
     cron.schedule("*/5 * * * *", async () => {
-        const latestBlock = await providerArb.getBlock("latest");
+        const latestBlock = await providerL2.getBlock("latest");
         await checkForPastDeposits({ pastTimeInMinutes: 5 , latestBlock: latestBlock.number});
     });
 

@@ -28,8 +28,8 @@ services:
             # Key
             PRIVATE_KEY: "..."
             # RPC
-            ETHEREUM_RPC: "..."
-            ARBITRUM_RPC: "..."
+            L1_RPC: "..."
+            L2_RPC: "..."
             # L2BitcoinDepositor blocknumber creation
             L2_START_BLOCK: 247865814
             # Contracts
