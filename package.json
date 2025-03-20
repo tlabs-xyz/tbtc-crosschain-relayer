@@ -1,7 +1,7 @@
 {
 	"name": "tbtc-relayer",
-	"version": "0.2.0-pre",
-	"description": "Threshold Network tBTC Relayer for Arbitrum",
+	"version": "0.1.0",
+	"description": "Threshold Network tBTC Relayer",
 	"main": "index.ts",
 	"scripts": {
 		"start": "npm run build && node --env-file .env dist/index.js",
