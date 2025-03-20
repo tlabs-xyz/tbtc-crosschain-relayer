@@ -16,9 +16,8 @@ import Routes from "./routes/Routes";
 
 // Utils
 import { LogMessage } from "./utils/Logs";
-import { createEventListeners, startCronJobs } from "./services/Core";
+import { initializeChain, startCronJobs } from "./services/Core";
 import { checkAndCreateDataFolder } from "./utils/JsonUtils";
-import { checkForPastDeposits } from "./services/CheckForPastDeposits";
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
@@ -69,12 +68,19 @@ app.use(Routes);
 // |                              SERVER START                             |
 // -------------------------------------------------------------------------
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
 	LogMessage(`Server running on port ${PORT}`);
+	
 	// Create data folder
 	checkAndCreateDataFolder();
-	// Events
-	createEventListeners();
-	//CronJobs
-	startCronJobs();
+	
+	// Initialize chain handler
+	const initialized = await initializeChain();
+	
+	if (initialized) {
+		// Start cron jobs
+		startCronJobs();
+	} else {
+		LogMessage("Failed to initialize chain handler, cron jobs not started");
+	}
 });

@@ -27,6 +27,10 @@ services:
             CLEAN_FINALIZED_TIME: 12
             # Key
             PRIVATE_KEY: "..."
+            # Chain Configuration
+            CHAIN_TYPE: "evm"
+            CHAIN_NAME: "Ethereum-Arbitrum-Dev"
+            USE_ENDPOINT: "false"
             # RPC
             L1_RPC: "..."
             L2_RPC: "..."
