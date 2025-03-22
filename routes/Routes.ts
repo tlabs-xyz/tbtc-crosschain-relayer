@@ -18,6 +18,9 @@ router.get("/", utils.defaultController);
 // Ping route for the API
 router.get("/status", utils.pingController);
 
+// Audit logs route
+router.get("/audit-logs", utils.auditLogsController);
+
 // Diagnostic route for the API
 router.get("/diagnostics", operations.getAllOperations);
 router.get("/diagnostics/queued", operations.getAllQueuedOperations);

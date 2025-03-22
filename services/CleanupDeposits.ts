@@ -1,9 +1,10 @@
 import { Deposit } from "../types/Deposit.type";
-import { deleteJson, getAllJsonOperationsByStatus } from "../utils/JsonUtils";
+import { deleteJson, getAllJsonOperationsByStatus, getJsonById } from "../utils/JsonUtils";
 import { LogMessage } from "../utils/Logs";
+import { logDepositDeleted } from "../utils/AuditLog";
 
 /****************************************************************************************
-The goal of this task is cleaning up trash deposits and preventing relayer’s congestion.
+The goal of this task is cleaning up trash deposits and preventing relayer's congestion.
 
 This task should:
 - Delete (remove from persistent storage) QUEUED deposits that have been in that state for more than 48 hours.
@@ -37,6 +38,14 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
 			const ageInHours = (ageInMs / (60 * 60 * 1000)).toFixed(2);
 
 			LogMessage(`Deleting QUEUED ID: ${id} | Created: ${dates.createdAt} | Age: ${ageInHours} hours`);
+			
+			// Get full deposit to log it before deletion
+			const deposit = getJsonById(id);
+			if (deposit) {
+				// Log the deletion to the audit log
+				logDepositDeleted(deposit, `QUEUED deposit exceeded age limit (${ageInHours} hours)`);
+			}
+			
 			deleteJson(id);
 		}
 	});
@@ -65,6 +74,14 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
 			const ageInHours = (ageInMs / (60 * 60 * 1000)).toFixed(2);
 
 			LogMessage(`Deleting FINALIZED ID: ${id} | Finalized: ${dates.finalizationAt} | Age: ${ageInHours} hours`);
+			
+			// Get full deposit to log it before deletion
+			const deposit = getJsonById(id);
+			if (deposit) {
+				// Log the deletion to the audit log
+				logDepositDeleted(deposit, `FINALIZED deposit exceeded age limit (${ageInHours} hours)`);
+			}
+			
 			deleteJson(id);
 		}
 	});

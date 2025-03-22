@@ -18,6 +18,7 @@ import Routes from "./routes/Routes";
 import { LogMessage } from "./utils/Logs";
 import { initializeChain, startCronJobs } from "./services/Core";
 import { checkAndCreateDataFolder } from "./utils/JsonUtils";
+import { initializeAuditLog } from "./utils/AuditLog";
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
@@ -73,6 +74,9 @@ app.listen(PORT, async () => {
 	
 	// Create data folder
 	checkAndCreateDataFolder();
+	
+	// Initialize audit log system
+	initializeAuditLog();
 	
 	// Initialize chain handler
 	const initialized = await initializeChain();
