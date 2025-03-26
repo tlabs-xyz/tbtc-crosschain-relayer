@@ -7,7 +7,7 @@ import { LogError, LogMessage } from './Logs';
 // Constants
 const AUDIT_LOG_DIR = process.env.AUDIT_LOG_DIR || "./logs";
 const AUDIT_LOG_FILE = process.env.AUDIT_LOG_FILE || "deposit_audit.log";
-const AUDIT_LOG_PATH = path.join(AUDIT_LOG_DIR, AUDIT_LOG_FILE);
+const AUDIT_LOG_PATH = path.resolve(AUDIT_LOG_DIR, AUDIT_LOG_FILE);
 
 // Event types
 export enum AuditEventType {
@@ -24,15 +24,20 @@ export enum AuditEventType {
 // Initialize the audit log directory
 export const initializeAuditLog = (): void => {
   try {
-    if (!fs.existsSync(AUDIT_LOG_DIR)) {
-      fs.mkdirSync(AUDIT_LOG_DIR, { recursive: true });
-      LogMessage(`Created audit log directory: ${AUDIT_LOG_DIR}`);
+    // Get absolute path
+    const auditLogDir = path.resolve(AUDIT_LOG_DIR);
+    const auditLogPath = path.resolve(auditLogDir, AUDIT_LOG_FILE);
+    
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(auditLogDir)) {
+      fs.mkdirSync(auditLogDir, { recursive: true });
+      LogMessage(`Created audit log directory: ${auditLogDir}`);
     }
     
     // Create the log file if it doesn't exist
-    if (!fs.existsSync(AUDIT_LOG_PATH)) {
-      fs.writeFileSync(AUDIT_LOG_PATH, '', 'utf8');
-      LogMessage(`Created audit log file: ${AUDIT_LOG_PATH}`);
+    if (!fs.existsSync(auditLogPath)) {
+      fs.writeFileSync(auditLogPath, '', 'utf8');
+      LogMessage(`Created audit log file: ${auditLogPath}`);
     }
   } catch (error) {
     LogError("Failed to initialize audit log", error as Error);
@@ -51,8 +56,12 @@ export const appendToAuditLog = (
   data: any = {}
 ): void => {
   try {
+    // Get absolute paths
+    const auditLogDir = path.resolve(AUDIT_LOG_DIR);
+    const auditLogPath = path.resolve(auditLogDir, AUDIT_LOG_FILE);
+    
     // Create directory if it doesn't exist
-    if (!fs.existsSync(AUDIT_LOG_DIR)) {
+    if (!fs.existsSync(auditLogDir)) {
       initializeAuditLog();
     }
     
@@ -66,7 +75,7 @@ export const appendToAuditLog = (
     
     // Append to log file
     fs.appendFileSync(
-      AUDIT_LOG_PATH, 
+      auditLogPath, 
       JSON.stringify(logEntry) + '\n',
       'utf8'
     );

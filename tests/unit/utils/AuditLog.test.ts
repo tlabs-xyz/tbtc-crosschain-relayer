@@ -30,6 +30,11 @@ describe('AuditLog', () => {
     
     // Initialize audit log
     initializeAuditLog();
+    
+    // Ensure the file exists by writing to it
+    if (!fs.existsSync(TEST_LOG_FILE)) {
+      fs.writeFileSync(TEST_LOG_FILE, '', 'utf8');
+    }
   });
   
   // Clean up after each test
