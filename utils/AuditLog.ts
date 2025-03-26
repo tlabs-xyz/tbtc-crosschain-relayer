@@ -7,7 +7,6 @@ import { LogError, LogMessage } from './Logs';
 // Constants
 const AUDIT_LOG_DIR = process.env.AUDIT_LOG_DIR || "./logs";
 const AUDIT_LOG_FILE = process.env.AUDIT_LOG_FILE || "deposit_audit.log";
-const AUDIT_LOG_PATH = path.resolve(AUDIT_LOG_DIR, AUDIT_LOG_FILE);
 
 // Event types
 export enum AuditEventType {
@@ -60,11 +59,18 @@ export const appendToAuditLog = (
     const auditLogDir = path.resolve(AUDIT_LOG_DIR);
     const auditLogPath = path.resolve(auditLogDir, AUDIT_LOG_FILE);
     
-    // Create directory if it doesn't exist
+    // Ensure directory exists before appending (add a check just in case)
     if (!fs.existsSync(auditLogDir)) {
-      initializeAuditLog();
+       throw new Error(`Audit log directory does not exist: ${auditLogDir}`);
     }
-    
+    // Ensure file exists before appending (initializeAuditLog should handle this)
+    if (!fs.existsSync(auditLogPath)) {
+       // Optionally recreate it if missing, or throw error
+       fs.writeFileSync(auditLogPath, '', 'utf8'); 
+       LogMessage(`Audit log file was missing, recreated: ${auditLogPath}`);
+       // OR: throw new Error(`Audit log file does not exist: ${auditLogPath}`);
+    }
+
     const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,
@@ -73,14 +79,16 @@ export const appendToAuditLog = (
       data
     };
     
+    const logString = JSON.stringify(logEntry) + '\n';
+    
     // Append to log file
     fs.appendFileSync(
       auditLogPath, 
-      JSON.stringify(logEntry) + '\n',
+      logString,
       'utf8'
     );
+    
   } catch (error) {
-    // Log to console as fallback if file logging fails
     LogError("Failed to write to audit log", error as Error);
     console.error("AUDIT LOG ENTRY (FALLBACK):", {
       timestamp: new Date().toISOString(),

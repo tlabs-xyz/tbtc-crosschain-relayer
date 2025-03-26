@@ -10,6 +10,7 @@ import {
 } from '../../../utils/JsonUtils';
 import { createTestDeposit } from '../../mocks/BlockchainMock';
 import { describe, test, expect, beforeAll, afterEach } from '@jest/globals';
+import { DepositStatus } from '../../../types/DepositStatus.enum';
 
 // Set test environment variables
 process.env.JSON_PATH = './tests/data/';
@@ -149,22 +150,55 @@ describe('JsonUtils', () => {
     
     test('should get operations by status', async () => {
       // Create test deposits with different statuses
-      const queuedDeposit1 = createTestDeposit({ status: 'QUEUED' });
-      const queuedDeposit2 = createTestDeposit({ status: 'QUEUED' });
-      const initializedDeposit = createTestDeposit({ status: 'INITIALIZED' });
-      const finalizedDeposit = createTestDeposit({ status: 'FINALIZED' });
-      
+      const queuedDeposit1 = createTestDeposit({ status: DepositStatus.QUEUED });
+      const queuedDeposit2 = createTestDeposit({ status: DepositStatus.QUEUED });
+      const initializedDeposit = createTestDeposit({ status: DepositStatus.INITIALIZED });
+      const finalizedDeposit = createTestDeposit({ status: DepositStatus.FINALIZED });
+
+      // --- Add Logging ---
+      console.log('--- Test: should get operations by status ---');
+      console.log('Initialized Deposit ID:', initializedDeposit.id);
+      console.log('Initialized Deposit Status:', initializedDeposit.status);
+      const initializedFilePath = path.join(TEST_DIR, `${initializedDeposit.id}.json`);
+      console.log('Expected Initialized File Path:', initializedFilePath);
+      // --- End Logging ---
+
       // Write deposits to files
       writeJson(queuedDeposit1, queuedDeposit1.id);
       writeJson(queuedDeposit2, queuedDeposit2.id);
-      writeJson(initializedDeposit, initializedDeposit.id);
+      const writeResult = writeJson(initializedDeposit, initializedDeposit.id);
       writeJson(finalizedDeposit, finalizedDeposit.id);
-      
+
+      // --- Add Logging ---
+      console.log('Write result for initializedDeposit:', writeResult);
+      try {
+        const fileExists = fs.existsSync(initializedFilePath);
+        console.log(`File exists (${initializedFilePath})?`, fileExists);
+        if (fileExists) {
+          const fileContent = fs.readFileSync(initializedFilePath, 'utf8');
+          console.log('File content:', fileContent);
+          try {
+            const parsedContent = JSON.parse(fileContent);
+            console.log('Parsed status:', parsedContent.status);
+          } catch (parseError) {
+            console.error('Error parsing file content:', parseError);
+          }
+        }
+        // Log all files in the directory
+        const allFiles = fs.readdirSync(TEST_DIR);
+        console.log('Files in TEST_DIR:', allFiles);
+      } catch (fsError) {
+        console.error('Error checking file system:', fsError);
+      }
+      // --- End Logging ---
+
       // Get operations by status
-      const queuedOperations = await getAllJsonOperationsByStatus('QUEUED');
-      const initializedOperations = await getAllJsonOperationsByStatus('INITIALIZED');
-      const finalizedOperations = await getAllJsonOperationsByStatus('FINALIZED');
-      
+      console.log('Calling getAllJsonOperationsByStatus("INITIALIZED")...');
+      const queuedOperations = await getAllJsonOperationsByStatus(DepositStatus.QUEUED);
+      const initializedOperations = await getAllJsonOperationsByStatus(DepositStatus.INITIALIZED);
+      const finalizedOperations = await getAllJsonOperationsByStatus(DepositStatus.FINALIZED);
+      console.log('Result for initializedOperations:', initializedOperations);
+
       // Check if deposits were retrieved correctly by status
       expect(queuedOperations).toHaveLength(2);
       expect(initializedOperations).toHaveLength(1);

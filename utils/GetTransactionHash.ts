@@ -7,7 +7,11 @@ import { FundingTransaction } from "../types/FundingTransaction.type";
  * @param {string} hex - The hexadecimal string to convert.
  * @returns {Buffer} The resulting buffer.
  */
-function hexToBuffer(hex: string): Buffer {
+function hexToBuffer(hex: string | undefined | null): Buffer {
+	if (!hex || hex === '0x') {
+		return Buffer.alloc(0);
+	}
+	
 	return Buffer.from(hex.slice(2), "hex");
 }
 
