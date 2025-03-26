@@ -22,11 +22,11 @@ const setupBeforeTests = () => {
   if (!fs.existsSync(testDataDir)) {
     fs.mkdirSync(testDataDir, { recursive: true });
   }
-  
+
   if (!fs.existsSync(testLogsDir)) {
     fs.mkdirSync(testLogsDir, { recursive: true });
   }
-  
+
   // Initialize audit log for tests
   initializeAuditLog();
 };
@@ -39,7 +39,7 @@ const cleanupAfterTests = () => {
       fs.unlinkSync(path.join(testDataDir, file));
     }
   }
-  
+
   // Clean up test logs after all tests
   if (fs.existsSync(testLogsDir)) {
     const files = fs.readdirSync(testLogsDir);
@@ -54,4 +54,4 @@ const cleanupAfterTests = () => {
 // @ts-ignore
 eval('beforeAll(setupBeforeTests)');
 // @ts-ignore
-eval('afterAll(cleanupAfterTests)'); 
+eval('afterAll(cleanupAfterTests)');

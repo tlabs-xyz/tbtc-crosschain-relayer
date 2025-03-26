@@ -24,15 +24,15 @@ const mockResponse = () => {
 describe('EndpointController', () => {
   let endpointController: EndpointController;
   let mockChainHandler: MockChainHandler;
-  
+
   beforeEach(() => {
     // Create a new MockChainHandler for each test
     mockChainHandler = new MockChainHandler();
-    
+
     // Create a new EndpointController with the MockChainHandler
     endpointController = new EndpointController(mockChainHandler);
   });
-  
+
   describe('handleReveal', () => {
     test('should successfully handle a valid reveal request', async () => {
       // Create mock request with required parameters
@@ -42,9 +42,11 @@ describe('EndpointController', () => {
           outputIndex: 0,
           value: ethers.utils.parseEther('0.1').toString(),
           version: '0x01000000',
-          inputVector: '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
-          locktime: '0x00000000'
+          inputVector:
+            '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
+          outputVector:
+            '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
+          locktime: '0x00000000',
         },
         reveal: [
           0,
@@ -52,18 +54,18 @@ describe('EndpointController', () => {
           ethers.utils.hexlify(ethers.utils.randomBytes(20)),
           ethers.utils.hexlify(ethers.utils.randomBytes(20)),
           ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-          '0x'
+          '0x',
         ],
         l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
         l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
       };
-      
+
       // Create mock response
       const res = mockResponse();
-      
+
       // Call handleReveal
       await endpointController.handleReveal(req, res);
-      
+
       // Verify response
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(
@@ -74,7 +76,7 @@ describe('EndpointController', () => {
         })
       );
     });
-    
+
     test('should return 400 for missing required fields', async () => {
       // Create mock request with missing fields
       const req = mockRequest();
@@ -84,19 +86,21 @@ describe('EndpointController', () => {
           outputIndex: 0,
           value: ethers.utils.parseEther('0.1').toString(),
           version: '0x01000000',
-          inputVector: '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
-          locktime: '0x00000000'
+          inputVector:
+            '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
+          outputVector:
+            '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
+          locktime: '0x00000000',
         },
         // Missing reveal, l2DepositOwner, l2Sender
       };
-      
+
       // Create mock response
       const res = mockResponse();
-      
+
       // Call handleReveal
       await endpointController.handleReveal(req, res);
-      
+
       // Verify response
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith(
@@ -107,7 +111,7 @@ describe('EndpointController', () => {
       );
     });
   });
-  
+
   describe('getDepositStatus', () => {
     test('should return status for a valid deposit ID', async () => {
       // Create test deposit and add it to the chain handler
@@ -115,19 +119,19 @@ describe('EndpointController', () => {
         status: 'INITIALIZED',
       });
       mockChainHandler.addDeposit(testDeposit);
-      
+
       // Create mock request with deposit ID
       const req = mockRequest();
       req.params = {
         depositId: testDeposit.id,
       };
-      
+
       // Create mock response
       const res = mockResponse();
-      
+
       // Call getDepositStatus
       await endpointController.getDepositStatus(req, res);
-      
+
       // Verify response
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(
@@ -138,20 +142,20 @@ describe('EndpointController', () => {
         })
       );
     });
-    
+
     test('should return 400 for missing deposit ID', async () => {
       // Create mock request with missing deposit ID
       const req = mockRequest();
       req.params = {
         // Missing depositId
       };
-      
+
       // Create mock response
       const res = mockResponse();
-      
+
       // Call getDepositStatus
       await endpointController.getDepositStatus(req, res);
-      
+
       // Verify response
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith(
@@ -162,4 +166,4 @@ describe('EndpointController', () => {
       );
     });
   });
-}); 
+});

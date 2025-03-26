@@ -2,7 +2,14 @@ import fs from 'fs';
 import path from 'path';
 import { DepositStatus } from '../../../types/DepositStatus.enum';
 import { createTestDeposit } from '../../mocks/BlockchainMock';
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import {
+  describe,
+  test,
+  expect,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 
 // --- Type Aliases for AuditLog functions (optional but helpful) ---
 type AuditLogFunctions = typeof import('../../../utils/AuditLog');
@@ -56,7 +63,7 @@ describe('AuditLog', () => {
   beforeEach(() => {
     // --- Reset modules FIRST ---
     jest.resetModules();
-    
+
     // --- Reset mock state variables ---
     mockFileContent = '';
     mockDirExists = false;
@@ -77,13 +84,19 @@ describe('AuditLog', () => {
         let result: boolean;
         if (pathStr === TEST_LOG_DIR) {
           result = mockDirExists;
-          console.log(`[inlineExistsSync] Check DIR: "${pathStr}", State: ${mockDirExists}, Returning: ${result}`);
+          console.log(
+            `[inlineExistsSync] Check DIR: "${pathStr}", State: ${mockDirExists}, Returning: ${result}`
+          );
         } else if (pathStr === TEST_LOG_FILE) {
           result = mockFileExists;
-          console.log(`[inlineExistsSync] Check FILE: "${pathStr}", State: ${mockFileExists}, Returning: ${result}`);
+          console.log(
+            `[inlineExistsSync] Check FILE: "${pathStr}", State: ${mockFileExists}, Returning: ${result}`
+          );
         } else {
           result = false;
-          console.log(`[inlineExistsSync] Check OTHER: "${pathStr}", Returning: ${result}`);
+          console.log(
+            `[inlineExistsSync] Check OTHER: "${pathStr}", Returning: ${result}`
+          );
         }
         return result;
       });
@@ -108,11 +121,11 @@ describe('AuditLog', () => {
         console.log(`[inlineAppendFileSync] Called with path: "${p}"`);
         if (p === TEST_LOG_FILE) {
           if (!mockFileExists) {
-             mockFileExists = true;
-             mockDirExists = true;
-             mockFileContent = data as string;
+            mockFileExists = true;
+            mockDirExists = true;
+            mockFileContent = data as string;
           } else {
-             mockFileContent += data as string;
+            mockFileContent += data as string;
           }
         }
       });
@@ -134,7 +147,8 @@ describe('AuditLog', () => {
     });
 
     // --- Re-require the modules AFTER reset and doMock ---
-    const AuditLogModule = require('../../../utils/AuditLog') as AuditLogFunctions;
+    const AuditLogModule =
+      require('../../../utils/AuditLog') as AuditLogFunctions;
     initializeAuditLog = AuditLogModule.initializeAuditLog;
     appendToAuditLog = AuditLogModule.appendToAuditLog;
     logDepositCreated = AuditLogModule.logDepositCreated;
@@ -158,13 +172,15 @@ describe('AuditLog', () => {
     mockDirExists = false;
     mockFileExists = false;
   });
-  
+
   // No afterEach needed for cleanup when mocking fs
 
   describe('initializeAuditLog', () => {
     test('should create directory and file if they do not exist', () => {
       // Arrange: Set state variables to simulate non-existence
-      console.log('[Test Init 1] Setting mockDirExists=false, mockFileExists=false');
+      console.log(
+        '[Test Init 1] Setting mockDirExists=false, mockFileExists=false'
+      );
       mockDirExists = false;
       mockFileExists = false;
 
@@ -172,18 +188,26 @@ describe('AuditLog', () => {
       console.log('[Test Init 1] Calling initializeAuditLog...');
       initializeAuditLog();
       console.log('[Test Init 1] initializeAuditLog finished.');
-      
+
       // Assert: Check if fs functions were called correctly
       console.log('[Test Init 1] Asserting calls...');
-      expect(mockMkdirSync).toHaveBeenCalledWith(TEST_LOG_DIR, { recursive: true });
-      expect(mockLogMessage).toHaveBeenCalledWith(`Created audit log directory: ${TEST_LOG_DIR}`);
+      expect(mockMkdirSync).toHaveBeenCalledWith(TEST_LOG_DIR, {
+        recursive: true,
+      });
+      expect(mockLogMessage).toHaveBeenCalledWith(
+        `Created audit log directory: ${TEST_LOG_DIR}`
+      );
       expect(mockWriteFileSync).toHaveBeenCalledWith(TEST_LOG_FILE, '', 'utf8');
-      expect(mockLogMessage).toHaveBeenCalledWith(`Created audit log file: ${TEST_LOG_FILE}`);
+      expect(mockLogMessage).toHaveBeenCalledWith(
+        `Created audit log file: ${TEST_LOG_FILE}`
+      );
     });
 
     test('should only create file if directory exists but file does not', () => {
       // Arrange: Set state variables
-      console.log('[Test Init 2] Setting mockDirExists=true, mockFileExists=false');
+      console.log(
+        '[Test Init 2] Setting mockDirExists=true, mockFileExists=false'
+      );
       mockDirExists = true;
       mockFileExists = false;
 
@@ -191,56 +215,60 @@ describe('AuditLog', () => {
       console.log('[Test Init 2] Calling initializeAuditLog...');
       initializeAuditLog();
       console.log('[Test Init 2] initializeAuditLog finished.');
-      
+
       // Assert
       console.log('[Test Init 2] Asserting calls...');
       expect(mockMkdirSync).not.toHaveBeenCalled();
       expect(mockWriteFileSync).toHaveBeenCalledWith(TEST_LOG_FILE, '', 'utf8');
-      expect(mockLogMessage).toHaveBeenCalledWith(`Created audit log file: ${TEST_LOG_FILE}`);
+      expect(mockLogMessage).toHaveBeenCalledWith(
+        `Created audit log file: ${TEST_LOG_FILE}`
+      );
     });
 
     test('should do nothing if directory and file already exist', () => {
-       // Arrange: Set state variables
-       console.log('[Test Init 3] Setting mockDirExists=true, mockFileExists=true');
-       mockDirExists = true;
-       mockFileExists = true;
+      // Arrange: Set state variables
+      console.log(
+        '[Test Init 3] Setting mockDirExists=true, mockFileExists=true'
+      );
+      mockDirExists = true;
+      mockFileExists = true;
 
-       // Act
-       console.log('[Test Init 3] Calling initializeAuditLog...');
-       initializeAuditLog();
-       console.log('[Test Init 3] initializeAuditLog finished.');
+      // Act
+      console.log('[Test Init 3] Calling initializeAuditLog...');
+      initializeAuditLog();
+      console.log('[Test Init 3] initializeAuditLog finished.');
 
-       // Assert
-       console.log('[Test Init 3] Asserting calls...');
-       expect(mockMkdirSync).not.toHaveBeenCalled();
-       expect(mockWriteFileSync).not.toHaveBeenCalled();
-       expect(mockLogMessage).not.toHaveBeenCalled();
+      // Assert
+      console.log('[Test Init 3] Asserting calls...');
+      expect(mockMkdirSync).not.toHaveBeenCalled();
+      expect(mockWriteFileSync).not.toHaveBeenCalled();
+      expect(mockLogMessage).not.toHaveBeenCalled();
     });
   });
-  
+
   describe('appendToAuditLog', () => {
     test('should append entry to audit log file', () => {
       // Arrange: Set state variables
       mockDirExists = true;
       mockFileExists = true;
       // Initialize mock content if needed for append simulation
-      mockFileContent = 'Existing content\n'; 
+      mockFileContent = 'Existing content\n';
 
       const testEvent = AuditEventType.DEPOSIT_CREATED;
       const testDepositId = 'test-deposit-id';
       const testData = { testKey: 'testValue' };
-      
+
       // Act
       appendToAuditLog(testEvent, testDepositId, testData);
-      
+
       // Assert
       expect(mockAppendFileSync).toHaveBeenCalledTimes(1);
       const [filePath, fileData, encoding] = mockAppendFileSync.mock.calls[0];
-      
+
       expect(filePath).toBe(TEST_LOG_FILE);
       expect(encoding).toBe('utf8');
-      
-      const appendedEntry = JSON.parse((fileData as string).trim()); 
+
+      const appendedEntry = JSON.parse((fileData as string).trim());
       expect(appendedEntry.eventType).toBe(testEvent);
       expect(appendedEntry.depositId).toBe(testDepositId);
       expect(appendedEntry.data).toEqual(testData);
@@ -250,7 +278,7 @@ describe('AuditLog', () => {
       // expect(mockFileContent).toContain('Existing content');
       // expect(mockFileContent).toContain('"eventType":"DEPOSIT_CREATED"');
     });
-    
+
     test('should create file if appending and file does not exist', () => {
       // Arrange: Set state variables
       mockDirExists = true;
@@ -261,18 +289,24 @@ describe('AuditLog', () => {
 
       // Assert: writeFileSync should be called by appendToAuditLog's internal check
       expect(mockWriteFileSync).toHaveBeenCalledWith(TEST_LOG_FILE, '', 'utf8');
-      expect(mockLogMessage).toHaveBeenCalledWith(`Audit log file was missing, recreated: ${TEST_LOG_FILE}`);
+      expect(mockLogMessage).toHaveBeenCalledWith(
+        `Audit log file was missing, recreated: ${TEST_LOG_FILE}`
+      );
       // Assert: appendFileSync should still be called AFTER writeFileSync
-      expect(mockAppendFileSync).toHaveBeenCalledTimes(1); 
+      expect(mockAppendFileSync).toHaveBeenCalledTimes(1);
       const [filePath, fileData] = mockAppendFileSync.mock.calls[0];
       expect(filePath).toBe(TEST_LOG_FILE);
-      expect(JSON.parse((fileData as string).trim()).eventType).toBe(AuditEventType.ERROR);
+      expect(JSON.parse((fileData as string).trim()).eventType).toBe(
+        AuditEventType.ERROR
+      );
     });
 
     // --- MODIFIED TEST ---
     test('should call LogError if directory does not exist', () => {
       // Arrange: Set state variables
-      console.log('[Test Append Error] Setting mockDirExists=false, mockFileExists=false');
+      console.log(
+        '[Test Append Error] Setting mockDirExists=false, mockFileExists=false'
+      );
       mockDirExists = false;
       mockFileExists = false;
 
@@ -285,31 +319,33 @@ describe('AuditLog', () => {
       console.log('[Test Append Error] Asserting mockLogError call...');
       expect(mockLogError).toHaveBeenCalledTimes(1);
       expect(mockLogError).toHaveBeenCalledWith(
-        "Failed to write to audit log",
+        'Failed to write to audit log',
         expect.any(Error) // Check that an Error object was passed
       );
       // Check that the error message is correct
       const actualError = mockLogError.mock.calls[0][1] as Error;
-      expect(actualError.message).toBe(`Audit log directory does not exist: ${TEST_LOG_DIR}`);
+      expect(actualError.message).toBe(
+        `Audit log directory does not exist: ${TEST_LOG_DIR}`
+      );
 
       // Assert that file operations were NOT attempted
       expect(mockAppendFileSync).not.toHaveBeenCalled();
       expect(mockWriteFileSync).not.toHaveBeenCalled();
     });
   });
-  
+
   // --- Update Event-specific tests to check appendFileSync calls ---
   describe('Event-specific log functions', () => {
     beforeEach(() => {
-       // Ensure simulated dir/file exist for these tests by default
-       mockDirExists = true;
-       mockFileExists = true;
+      // Ensure simulated dir/file exist for these tests by default
+      mockDirExists = true;
+      mockFileExists = true;
     });
 
     test('logDepositCreated should call appendToAuditLog correctly', () => {
       const testDeposit = createTestDeposit({ status: 'QUEUED' });
       logDepositCreated(testDeposit);
-      
+
       expect(mockAppendFileSync).toHaveBeenCalledTimes(1);
       const [, fileData] = mockAppendFileSync.mock.calls[0];
       const appendedEntry = JSON.parse((fileData as string).trim());
@@ -333,7 +369,7 @@ describe('AuditLog', () => {
     });
 
     test('logDepositFinalized should call appendToAuditLog correctly', () => {
-       const testDeposit = createTestDeposit({
+      const testDeposit = createTestDeposit({
         status: 'FINALIZED',
         hashes: { eth: { finalizeTxHash: 'final-hash' } } as any,
       });
@@ -372,4 +408,4 @@ describe('AuditLog', () => {
       expect(appendedEntry.data.to).toBe('INITIALIZED');
     });
   });
-}); 
+});

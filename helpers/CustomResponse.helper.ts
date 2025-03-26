@@ -1,5 +1,5 @@
-import { Response } from "express";
-import { ResponseJson } from "../types/ResponseJson.type";
+import { Response } from 'express';
+import { ResponseJson } from '../types/ResponseJson.type';
 
 /**
  * @class CustomResponse
@@ -8,47 +8,47 @@ import { ResponseJson } from "../types/ResponseJson.type";
  */
 
 export class CustomResponse {
-	private res: Response;
-	private responseJson: ResponseJson;
+  private res: Response;
+  private responseJson: ResponseJson;
 
-	constructor(res: Response) {
-		this.res = res;
-		this.responseJson = {
-			error: null,
-			message: null,
-			data: undefined,
-		};
-	}
+  constructor(res: Response) {
+    this.res = res;
+    this.responseJson = {
+      error: null,
+      message: null,
+      data: undefined,
+    };
+  }
 
-	ko404(): void {
-		this.responseJson.error = true;
-		this.responseJson.message = "Route not found";
+  ko404(): void {
+    this.responseJson.error = true;
+    this.responseJson.message = 'Route not found';
 
-		this.res.status(404).send(this.responseJson);
-	}
+    this.res.status(404).send(this.responseJson);
+  }
 
-	ko(message: string): void {
-		this.responseJson.error = true;
-		this.responseJson.message = message;
+  ko(message: string): void {
+    this.responseJson.error = true;
+    this.responseJson.message = message;
 
-		this.res.status(400).send(this.responseJson);
-	}
+    this.res.status(400).send(this.responseJson);
+  }
 
-	ok(message?: string, data?: any): void {
-		this.responseJson.error = false;
-		this.responseJson.message = message || "Operation succesful";
-		this.responseJson.data = data !== undefined ? data : null;
+  ok(message?: string, data?: any): void {
+    this.responseJson.error = false;
+    this.responseJson.message = message || 'Operation succesful';
+    this.responseJson.data = data !== undefined ? data : null;
 
-		this.res.status(200).send(this.responseJson);
-	}
+    this.res.status(200).send(this.responseJson);
+  }
 
-	custom(codeStatus: number, message: string, err: any): void {
-		this.responseJson.error = true;
-		this.responseJson.message = message;
-		this.responseJson.data = err;
+  custom(codeStatus: number, message: string, err: any): void {
+    this.responseJson.error = true;
+    this.responseJson.message = message;
+    this.responseJson.data = err;
 
-		this.res.status(codeStatus).send(this.responseJson);
-	}
+    this.res.status(codeStatus).send(this.responseJson);
+  }
 }
 
 export default CustomResponse;

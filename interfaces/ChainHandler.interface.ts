@@ -1,4 +1,4 @@
-import { Deposit } from "../types/Deposit.type";
+import { Deposit } from '../types/Deposit.type';
 
 /**
  * Interface for chain-specific handlers that define common functionality
@@ -52,5 +52,8 @@ export interface ChainHandlerInterface {
    * Check for past deposits that might have been missed
    * @param options Options for checking past deposits
    */
-  checkForPastDeposits(options: { pastTimeInMinutes: number, latestBlock: number }): Promise<void>;
-} 
+  checkForPastDeposits(options: {
+    pastTimeInMinutes: number;
+    latestBlock: number;
+  }): Promise<void>;
+}

@@ -2,23 +2,23 @@
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
 // Express Server
-import express from "express";
+import express from 'express';
 
 // Security
-import cors from "cors";
-import helmet from "helmet";
+import cors from 'cors';
+import helmet from 'helmet';
 
 // Compression
-import compression from "compression";
+import compression from 'compression';
 
 // Rutas
-import Routes from "./routes/Routes";
+import Routes from './routes/Routes';
 
 // Utils
-import { LogMessage } from "./utils/Logs";
-import { initializeChain, startCronJobs } from "./services/Core";
-import { checkAndCreateDataFolder } from "./utils/JsonUtils";
-import { initializeAuditLog } from "./utils/AuditLog";
+import { LogMessage } from './utils/Logs';
+import { initializeChain, startCronJobs } from './services/Core';
+import { checkAndCreateDataFolder } from './utils/JsonUtils';
+import { initializeAuditLog } from './utils/AuditLog';
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
@@ -28,25 +28,25 @@ const app = express();
 
 // Port
 const PORT = 3333;
-app.set("port", PORT);
+app.set('port', PORT);
 
 // -------------------------------------------------------------------------
 // |                              SECURITY                                 |
 // -------------------------------------------------------------------------
 
-if (process.env.CORS_ENABLED === "true") {
-	app.use(
-		cors({
-			credentials: true,
-			origin: process.env.CORS_URL, // true para local? Compatibilidad con navegadores
-		})
-	);
+if (process.env.CORS_ENABLED === 'true') {
+  app.use(
+    cors({
+      credentials: true,
+      origin: process.env.CORS_URL, // true para local? Compatibilidad con navegadores
+    })
+  );
 }
 // Helmet (Security middleware)
 app.use(helmet());
 
 // Deshabilitar la cabecera X-Powered-By
-app.disable("x-powered-by");
+app.disable('x-powered-by');
 
 // -------------------------------------------------------------------------
 // |                              COMPRESSION                              |
@@ -56,8 +56,8 @@ app.disable("x-powered-by");
 app.use(compression as any);
 
 // File Upload limit
-app.use(express.json({ limit: "2048mb" }));
-app.use(express.urlencoded({ limit: "2048mb", extended: true }));
+app.use(express.json({ limit: '2048mb' }));
+app.use(express.urlencoded({ limit: '2048mb', extended: true }));
 
 // -------------------------------------------------------------------------
 // |                                 ROUTES                                |
@@ -70,21 +70,21 @@ app.use(Routes);
 // -------------------------------------------------------------------------
 
 app.listen(PORT, async () => {
-	LogMessage(`Server running on port ${PORT}`);
-	
-	// Create data folder
-	checkAndCreateDataFolder();
-	
-	// Initialize audit log system
-	initializeAuditLog();
-	
-	// Initialize chain handler
-	const initialized = await initializeChain();
-	
-	if (initialized) {
-		// Start cron jobs
-		startCronJobs();
-	} else {
-		LogMessage("Failed to initialize chain handler, cron jobs not started");
-	}
+  LogMessage(`Server running on port ${PORT}`);
+
+  // Create data folder
+  checkAndCreateDataFolder();
+
+  // Initialize audit log system
+  initializeAuditLog();
+
+  // Initialize chain handler
+  const initialized = await initializeChain();
+
+  if (initialized) {
+    // Start cron jobs
+    startCronJobs();
+  } else {
+    LogMessage('Failed to initialize chain handler, cron jobs not started');
+  }
 });

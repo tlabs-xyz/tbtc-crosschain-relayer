@@ -80,6 +80,7 @@ npm run test:coverage
 Unit tests focus on testing individual functions and modules in isolation. They use mocks to simulate dependencies and are designed to be fast and reliable.
 
 Example:
+
 ```typescript
 // Testing JsonUtils functions
 describe('JsonUtils', () => {
@@ -94,6 +95,7 @@ describe('JsonUtils', () => {
 Integration tests verify that different components of the system work correctly together. They test interactions between modules, such as controllers and services.
 
 Example:
+
 ```typescript
 // Testing EndpointController with MockChainHandler
 describe('EndpointController', () => {
@@ -108,6 +110,7 @@ describe('EndpointController', () => {
 End-to-end tests verify complete workflows from a user's perspective. They test API endpoints and simulate user interactions with the system.
 
 Example:
+
 ```typescript
 // Testing API endpoints
 describe('API Endpoints', () => {
@@ -146,4 +149,4 @@ When writing tests:
 4. **Clean Up**: Clean up resources after tests complete
 5. **Test Edge Cases**: Include tests for error conditions and edge cases
 6. **Keep Tests Fast**: Tests should run quickly to provide fast feedback
-7. **Use Mocks Appropriately**: Use mocks to isolate components and simulate dependencies 
+7. **Use Mocks Appropriately**: Use mocks to isolate components and simulate dependencies

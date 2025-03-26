@@ -1,5 +1,5 @@
-import { createHash } from "crypto";
-import { FundingTransaction } from "../types/FundingTransaction.type";
+import { createHash } from 'crypto';
+import { FundingTransaction } from '../types/FundingTransaction.type';
 
 /**
  * Converts a hexadecimal string to a Buffer.
@@ -8,11 +8,11 @@ import { FundingTransaction } from "../types/FundingTransaction.type";
  * @returns {Buffer} The resulting buffer.
  */
 function hexToBuffer(hex: string | undefined | null): Buffer {
-	if (!hex || hex === '0x') {
-		return Buffer.alloc(0);
-	}
-	
-	return Buffer.from(hex.slice(2), "hex");
+  if (!hex || hex === '0x') {
+    return Buffer.alloc(0);
+  }
+
+  return Buffer.from(hex.slice(2), 'hex');
 }
 
 /**
@@ -22,18 +22,23 @@ function hexToBuffer(hex: string | undefined | null): Buffer {
  * @returns {Buffer} The serialized transaction as a buffer.
  */
 function serializeTransaction(fundingTx: FundingTransaction): Buffer {
-	const { version, inputVector, outputVector, locktime } = fundingTx;
+  const { version, inputVector, outputVector, locktime } = fundingTx;
 
-	// Convert hex strings to buffers
-	const versionBuffer = hexToBuffer(version);
-	const inputVectorBuffer = hexToBuffer(inputVector);
-	const outputVectorBuffer = hexToBuffer(outputVector);
-	const locktimeBuffer = hexToBuffer(locktime);
+  // Convert hex strings to buffers
+  const versionBuffer = hexToBuffer(version);
+  const inputVectorBuffer = hexToBuffer(inputVector);
+  const outputVectorBuffer = hexToBuffer(outputVector);
+  const locktimeBuffer = hexToBuffer(locktime);
 
-	// Concatenate all buffers
-	const serializedTx = Buffer.concat([versionBuffer, inputVectorBuffer, outputVectorBuffer, locktimeBuffer]);
+  // Concatenate all buffers
+  const serializedTx = Buffer.concat([
+    versionBuffer,
+    inputVectorBuffer,
+    outputVectorBuffer,
+    locktimeBuffer,
+  ]);
 
-	return serializedTx;
+  return serializedTx;
 }
 
 /**
@@ -43,8 +48,8 @@ function serializeTransaction(fundingTx: FundingTransaction): Buffer {
  * @returns {Buffer} The resulting double SHA-256 hash.
  */
 function doubleSha256(buffer: Buffer): Buffer {
-	const hash1 = createHash("sha256").update(buffer).digest();
-	return createHash("sha256").update(hash1).digest();
+  const hash1 = createHash('sha256').update(buffer).digest();
+  return createHash('sha256').update(hash1).digest();
 }
 
 /**
@@ -54,9 +59,9 @@ function doubleSha256(buffer: Buffer): Buffer {
  * @returns {string} The resulting hash as a hexadecimal string.
  */
 export function getTransactionHash(fundingTx: FundingTransaction): string {
-	const serializedTx = serializeTransaction(fundingTx);
-	const hash = doubleSha256(serializedTx);
-	return hash.reverse().toString("hex");
+  const serializedTx = serializeTransaction(fundingTx);
+  const hash = doubleSha256(serializedTx);
+  return hash.reverse().toString('hex');
 }
 
 /**
@@ -66,7 +71,7 @@ export function getTransactionHash(fundingTx: FundingTransaction): string {
  * @returns {string} The resulting hash as a hexadecimal string.
  */
 export function getFundingTxHash(fundingTx: FundingTransaction): string {
-	const serializedTx = serializeTransaction(fundingTx);
-	const hash = doubleSha256(serializedTx);
-	return hash.toString("hex");
+  const serializedTx = serializeTransaction(fundingTx);
+  const hash = doubleSha256(serializedTx);
+  return hash.toString('hex');
 }

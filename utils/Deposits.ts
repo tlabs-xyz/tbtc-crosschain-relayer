@@ -1,12 +1,12 @@
-import { ethers } from "ethers";
-import { Deposit } from "../types/Deposit.type";
-import { FundingTransaction } from "../types/FundingTransaction.type";
-import { getFundingTxHash, getTransactionHash } from "./GetTransactionHash";
-import { writeJson } from "./JsonUtils";
-import { LogMessage } from "./Logs";
-import { providerL2 } from "../services/Core";
+import { ethers } from 'ethers';
+import { Deposit } from '../types/Deposit.type';
+import { FundingTransaction } from '../types/FundingTransaction.type';
+import { getFundingTxHash, getTransactionHash } from './GetTransactionHash';
+import { writeJson } from './JsonUtils';
+import { LogMessage } from './Logs';
+import { providerL2 } from '../services/Core';
 
-const START_BLOCK: number = parseInt(process.env.L2_START_BLOCK || "0");
+const START_BLOCK: number = parseInt(process.env.L2_START_BLOCK || '0');
 
 /**
  * @name createDeposit
@@ -24,56 +24,56 @@ const START_BLOCK: number = parseInt(process.env.L2_START_BLOCK || "0");
  */
 
 export const createDeposit = (
-	fundingTx: FundingTransaction,
-	reveal: any,
-	l2DepositOwner: any,
-	l2Sender: any
+  fundingTx: FundingTransaction,
+  reveal: any,
+  l2DepositOwner: any,
+  l2Sender: any
 ): Deposit => {
-	const fundingTxHash = getFundingTxHash(fundingTx);
-	const depositId = getDepositId(fundingTxHash, reveal[0]);
-	const deposit: Deposit = {
-		id: depositId,
-		fundingTxHash: fundingTxHash,
-		outputIndex: reveal[0],
-		hashes: {
-			btc: {
-				btcTxHash: getTransactionHash(fundingTx),
-			},
-			eth: {
-				initializeTxHash: null,
-				finalizeTxHash: null,
-			},
-		},
-		receipt: {
-			depositor: l2Sender,
-			blindingFactor: reveal[1],
-			walletPublicKeyHash: reveal[2],
-			refundPublicKeyHash: reveal[3],
-			refundLocktime: reveal[4],
-			extraData: reveal[5],
-		},
-		L1OutputEvent: {
-			fundingTx: {
-				version: fundingTx.version,
-				inputVector: fundingTx.inputVector,
-				outputVector: fundingTx.outputVector,
-				locktime: fundingTx.locktime,
-			},
-			reveal: reveal,
-			l2DepositOwner: l2DepositOwner,
-			l2Sender: l2Sender,
-		},
-		owner: l2DepositOwner,
-		status: "QUEUED",
-		dates: {
-			createdAt: new Date().getTime(),
-			initializationAt: null,
-			finalizationAt: null,
-			lastActivityAt: new Date().getTime(),
-		},
-		error: null,
-	};
-	return deposit;
+  const fundingTxHash = getFundingTxHash(fundingTx);
+  const depositId = getDepositId(fundingTxHash, reveal[0]);
+  const deposit: Deposit = {
+    id: depositId,
+    fundingTxHash: fundingTxHash,
+    outputIndex: reveal[0],
+    hashes: {
+      btc: {
+        btcTxHash: getTransactionHash(fundingTx),
+      },
+      eth: {
+        initializeTxHash: null,
+        finalizeTxHash: null,
+      },
+    },
+    receipt: {
+      depositor: l2Sender,
+      blindingFactor: reveal[1],
+      walletPublicKeyHash: reveal[2],
+      refundPublicKeyHash: reveal[3],
+      refundLocktime: reveal[4],
+      extraData: reveal[5],
+    },
+    L1OutputEvent: {
+      fundingTx: {
+        version: fundingTx.version,
+        inputVector: fundingTx.inputVector,
+        outputVector: fundingTx.outputVector,
+        locktime: fundingTx.locktime,
+      },
+      reveal: reveal,
+      l2DepositOwner: l2DepositOwner,
+      l2Sender: l2Sender,
+    },
+    owner: l2DepositOwner,
+    status: 'QUEUED',
+    dates: {
+      createdAt: new Date().getTime(),
+      initializationAt: null,
+      finalizationAt: null,
+      lastActivityAt: new Date().getTime(),
+    },
+    error: null,
+  };
+  return deposit;
 };
 
 /**
@@ -85,34 +85,41 @@ export const createDeposit = (
  * @param {Deposit} deposit - The deposit object to be updated.
  * @param {any} tx - The transaction object containing the finalization transaction hash.
  */
-export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error?: string) => {
-	const newStatus = tx ? "FINALIZED" : deposit.status;
-	const newFinalizationAt = tx ? Date.now() : deposit.dates.finalizationAt;
-	const newHash = tx
-		? {
-			...deposit.hashes,
-			eth: {
-				...deposit.hashes.eth,
-				finalizeTxHash: tx?.hash ? tx.hash : null,
-			},
-		}
-		: deposit.hashes;
+export const updateToFinalizedDeposit = async (
+  deposit: Deposit,
+  tx?: any,
+  error?: string
+) => {
+  const newStatus = tx ? 'FINALIZED' : deposit.status;
+  const newFinalizationAt = tx ? Date.now() : deposit.dates.finalizationAt;
+  const newHash = tx
+    ? {
+        ...deposit.hashes,
+        eth: {
+          ...deposit.hashes.eth,
+          finalizeTxHash: tx?.hash ? tx.hash : null,
+        },
+      }
+    : deposit.hashes;
 
-	// Crear el objeto updatedDeposit con propiedades condicionales
-	const updatedDeposit: Deposit = {
-		...deposit,
-		status: newStatus,
-		dates: {
-			...deposit.dates,
-			finalizationAt: newFinalizationAt,
-			lastActivityAt: Date.now(),
-		},
-		hashes: newHash,
-		error: error ? error : null,
-	};
+  // Crear el objeto updatedDeposit con propiedades condicionales
+  const updatedDeposit: Deposit = {
+    ...deposit,
+    status: newStatus,
+    dates: {
+      ...deposit.dates,
+      finalizationAt: newFinalizationAt,
+      lastActivityAt: Date.now(),
+    },
+    hashes: newHash,
+    error: error ? error : null,
+  };
 
-	writeJson(updatedDeposit, deposit.id);
-	if (tx) LogMessage(`Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`);
+  writeJson(updatedDeposit, deposit.id);
+  if (tx)
+    LogMessage(
+      `Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`
+    );
 };
 
 /**
@@ -124,34 +131,41 @@ export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error
  * @param {Deposit} deposit - The deposit object to be updated.
  * @param {any} tx - The transaction object containing the initialization transaction hash.
  */
-export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, error?: string) => {
-	// Crear el objeto updatedDeposit con propiedades condicionales
-	const newStatus = tx ? "INITIALIZED" : deposit.status;
-	const newInitializationAt = tx ? Date.now() : deposit.dates.initializationAt;
-	const newHash = tx
-		? {
-			...deposit.hashes,
-			eth: {
-				...deposit.hashes.eth,
-				initializeTxHash: tx?.hash ? tx.hash : null,
-			},
-		}
-		: deposit.hashes;
+export const updateToInitializedDeposit = async (
+  deposit: Deposit,
+  tx?: any,
+  error?: string
+) => {
+  // Crear el objeto updatedDeposit con propiedades condicionales
+  const newStatus = tx ? 'INITIALIZED' : deposit.status;
+  const newInitializationAt = tx ? Date.now() : deposit.dates.initializationAt;
+  const newHash = tx
+    ? {
+        ...deposit.hashes,
+        eth: {
+          ...deposit.hashes.eth,
+          initializeTxHash: tx?.hash ? tx.hash : null,
+        },
+      }
+    : deposit.hashes;
 
-	const updatedDeposit: Deposit = {
-		...deposit,
-		status: newStatus,
-		dates: {
-			...deposit.dates,
-			initializationAt: newInitializationAt,
-			lastActivityAt: Date.now(),
-		},
-		hashes: newHash,
-		error: error ? error : null,
-	};
+  const updatedDeposit: Deposit = {
+    ...deposit,
+    status: newStatus,
+    dates: {
+      ...deposit.dates,
+      initializationAt: newInitializationAt,
+      lastActivityAt: Date.now(),
+    },
+    hashes: newHash,
+    error: error ? error : null,
+  };
 
-	writeJson(updatedDeposit, deposit.id);
-	if (tx) LogMessage(`Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`);
+  writeJson(updatedDeposit, deposit.id);
+  if (tx)
+    LogMessage(
+      `Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`
+    );
 };
 
 /**
@@ -162,16 +176,16 @@ export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, err
  * @param {Deposit} deposit - The deposit object to be updated.
  */
 export const updateLastActivity = (deposit: Deposit) => {
-	const updatedDeposit: Deposit = {
-		...deposit,
-		dates: {
-			...deposit.dates,
-			lastActivityAt: Date.now(),
-		},
-	};
+  const updatedDeposit: Deposit = {
+    ...deposit,
+    dates: {
+      ...deposit.dates,
+      lastActivityAt: Date.now(),
+    },
+  };
 
-	writeJson(updatedDeposit, deposit.id);
-	return updatedDeposit;
+  writeJson(updatedDeposit, deposit.id);
+  return updatedDeposit;
 };
 
 /**
@@ -187,66 +201,75 @@ export const updateLastActivity = (deposit: Deposit) => {
  * @throws {Error} If the fundingTxHash is not a 64-character string.
  */
 
-export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
-	// Asegúrate de que fundingTxHash es una cadena de 64 caracteres hexadecimales
-	if (fundingTxHash.length !== 64) throw new Error("Invalid fundingTxHash");
+export const getDepositId = (
+  fundingTxHash: string,
+  fundingOutputIndex: number
+): string => {
+  // Asegúrate de que fundingTxHash es una cadena de 64 caracteres hexadecimales
+  if (fundingTxHash.length !== 64) throw new Error('Invalid fundingTxHash');
 
-	// Convertir el fundingTxHash a un formato de bytes32 esperado por ethers.js
-	const fundingTxHashBytes = "0x" + fundingTxHash;
+  // Convertir el fundingTxHash a un formato de bytes32 esperado por ethers.js
+  const fundingTxHashBytes = '0x' + fundingTxHash;
 
-	// Codifica los datos de manera similar a abi.encodePacked en Solidity
-	const encodedData = ethers.utils.solidityPack(["bytes32", "uint32"], [fundingTxHashBytes, fundingOutputIndex]);
+  // Codifica los datos de manera similar a abi.encodePacked en Solidity
+  const encodedData = ethers.utils.solidityPack(
+    ['bytes32', 'uint32'],
+    [fundingTxHashBytes, fundingOutputIndex]
+  );
 
-	// Calcula el hash keccak256
-	const hash = ethers.utils.keccak256(encodedData);
+  // Calcula el hash keccak256
+  const hash = ethers.utils.keccak256(encodedData);
 
-	// Convierte el hash a un entero sin signo de 256 bits (uint256)
-	const depositKey = ethers.BigNumber.from(hash).toString();
+  // Convierte el hash a un entero sin signo de 256 bits (uint256)
+  const depositKey = ethers.BigNumber.from(hash).toString();
 
-	return depositKey;
+  return depositKey;
 };
 
-export const getBlocksByTimestamp = async (timestamp: number, latestBlock: number): Promise<{
-	startBlock: number;
-	endBlock: number;
+export const getBlocksByTimestamp = async (
+  timestamp: number,
+  latestBlock: number
+): Promise<{
+  startBlock: number;
+  endBlock: number;
 }> => {
-	let startBlock = -1;
-	let low = START_BLOCK;
-	let latestBlockNumber = 0;
+  let startBlock = -1;
+  let low = START_BLOCK;
+  let latestBlockNumber = 0;
 
-	try {
-		let high = latestBlock;
-		latestBlockNumber = high
+  try {
+    let high = latestBlock;
+    latestBlockNumber = high;
 
-		console.log(`Starting binary search between blocks ${low} and ${high}`);
+    console.log(`Starting binary search between blocks ${low} and ${high}`);
 
-		while (low <= high) {
-			console.log(`Binary search iteration: low=${low}, high=${high}`);
-			const mid = Math.floor((low + high) / 2);
-			const blockData = await providerL2.getBlock(mid);
+    while (low <= high) {
+      console.log(`Binary search iteration: low=${low}, high=${high}`);
+      const mid = Math.floor((low + high) / 2);
+      const blockData = await providerL2.getBlock(mid);
 
-			if (!blockData) {
-				high = mid - 1;
-				continue;
-			}
+      if (!blockData) {
+        high = mid - 1;
+        continue;
+      }
 
-			if (blockData.timestamp === timestamp) {
-				startBlock = mid;
-				break;
-			} else if (blockData.timestamp < timestamp) {
-				low = mid + 1;
-				startBlock = mid;
-			} else {
-				high = mid - 1;
-			}
-		}
+      if (blockData.timestamp === timestamp) {
+        startBlock = mid;
+        break;
+      } else if (blockData.timestamp < timestamp) {
+        low = mid + 1;
+        startBlock = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
 
-		if (startBlock === -1) {
-			startBlock = START_BLOCK;
-		}
-	} catch (error) {
-		LogMessage(`Error in the getBlocksByTimestamp: ${error}`);
-	}
+    if (startBlock === -1) {
+      startBlock = START_BLOCK;
+    }
+  } catch (error) {
+    LogMessage(`Error in the getBlocksByTimestamp: ${error}`);
+  }
 
-	return { startBlock, endBlock: latestBlockNumber };
+  return { startBlock, endBlock: latestBlockNumber };
 };

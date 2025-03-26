@@ -98,8 +98,13 @@ export class MockChainHandler implements ChainHandlerInterface {
   /**
    * Check for past deposits
    */
-  async checkForPastDeposits(options: { pastTimeInMinutes: number; latestBlock: number }): Promise<void> {
-    LogMessage(`Mock chain handler: Checking for past deposits (${options.pastTimeInMinutes} minutes)`);
+  async checkForPastDeposits(options: {
+    pastTimeInMinutes: number;
+    latestBlock: number;
+  }): Promise<void> {
+    LogMessage(
+      `Mock chain handler: Checking for past deposits (${options.pastTimeInMinutes} minutes)`
+    );
     return Promise.resolve();
   }
 
@@ -108,10 +113,10 @@ export class MockChainHandler implements ChainHandlerInterface {
    */
   async initializeDeposit(deposit: Deposit): Promise<void> {
     LogMessage(`Mock chain handler: Initializing deposit ${deposit.id}`);
-    
+
     // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, this.processingDelayMs));
-    
+    await new Promise((resolve) => setTimeout(resolve, this.processingDelayMs));
+
     // Update deposit status
     if (deposit.status === 'QUEUED') {
       const updatedDeposit = {
@@ -121,7 +126,9 @@ export class MockChainHandler implements ChainHandlerInterface {
           ...deposit.hashes,
           eth: {
             ...deposit.hashes.eth,
-            initializeTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+            initializeTxHash: ethers.utils.hexlify(
+              ethers.utils.randomBytes(32)
+            ),
           },
         },
         dates: {
@@ -130,13 +137,13 @@ export class MockChainHandler implements ChainHandlerInterface {
           lastActivityAt: Date.now(),
         },
       } as Deposit;
-      
+
       this.deposits.set(deposit.id, updatedDeposit);
-      
+
       // Emit initialized event if listeners are set up
       this.emitEvent('DepositInitialized', deposit.id);
     }
-    
+
     return Promise.resolve();
   }
 
@@ -145,10 +152,10 @@ export class MockChainHandler implements ChainHandlerInterface {
    */
   async finalizeDeposit(deposit: Deposit): Promise<void> {
     LogMessage(`Mock chain handler: Finalizing deposit ${deposit.id}`);
-    
+
     // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, this.processingDelayMs));
-    
+    await new Promise((resolve) => setTimeout(resolve, this.processingDelayMs));
+
     // Update deposit status
     if (deposit.status === 'INITIALIZED') {
       const updatedDeposit = {
@@ -167,13 +174,13 @@ export class MockChainHandler implements ChainHandlerInterface {
           lastActivityAt: Date.now(),
         },
       } as Deposit;
-      
+
       this.deposits.set(deposit.id, updatedDeposit);
-      
+
       // Emit finalized event if listeners are set up
       this.emitEvent('DepositFinalized', deposit.id);
     }
-    
+
     return Promise.resolve();
   }
 
@@ -182,14 +189,14 @@ export class MockChainHandler implements ChainHandlerInterface {
    */
   async processInitializeDeposits(): Promise<void> {
     LogMessage('Mock chain handler: Processing deposits for initialization');
-    
+
     // Find queued deposits and initialize them
     for (const [id, deposit] of this.deposits.entries()) {
       if (deposit.status === 'QUEUED') {
         await this.initializeDeposit(deposit);
       }
     }
-    
+
     return Promise.resolve();
   }
 
@@ -198,14 +205,14 @@ export class MockChainHandler implements ChainHandlerInterface {
    */
   async processFinalizeDeposits(): Promise<void> {
     LogMessage('Mock chain handler: Processing deposits for finalization');
-    
+
     // Find initialized deposits and finalize them
     for (const [id, deposit] of this.deposits.entries()) {
       if (deposit.status === 'INITIALIZED') {
         await this.finalizeDeposit(deposit);
       }
     }
-    
+
     return Promise.resolve();
   }
 
@@ -214,11 +221,11 @@ export class MockChainHandler implements ChainHandlerInterface {
    */
   async checkDepositStatus(depositId: string): Promise<number> {
     const deposit = this.deposits.get(depositId);
-    
+
     if (!deposit) {
       return Promise.resolve(DepositStatus.QUEUED);
     }
-    
+
     switch (deposit.status) {
       case 'INITIALIZED':
         return Promise.resolve(DepositStatus.INITIALIZED);
@@ -257,7 +264,7 @@ export class MockChainHandler implements ChainHandlerInterface {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
-    
+
     this.listeners.get(event)!.push(listener);
   }
 
@@ -268,10 +275,10 @@ export class MockChainHandler implements ChainHandlerInterface {
     if (!this.listeners.has(event)) {
       return;
     }
-    
+
     const listeners = this.listeners.get(event)!;
     const index = listeners.indexOf(listener);
-    
+
     if (index !== -1) {
       listeners.splice(index, 1);
     }
@@ -284,9 +291,9 @@ export class MockChainHandler implements ChainHandlerInterface {
     if (!this.listeners.has(event)) {
       return;
     }
-    
+
     const listeners = this.listeners.get(event)!;
-    
+
     for (const listener of listeners) {
       listener(...args);
     }
@@ -298,4 +305,4 @@ export class MockChainHandler implements ChainHandlerInterface {
   setProcessingDelay(delayMs: number): void {
     this.processingDelayMs = delayMs;
   }
-} 
+}

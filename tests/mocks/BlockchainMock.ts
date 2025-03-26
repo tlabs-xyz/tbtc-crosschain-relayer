@@ -7,29 +7,30 @@ import { EventEmitter } from 'events';
 export class MockProvider extends EventEmitter {
   private blockNumber: number = 1000;
   private transactions: Map<string, any> = new Map();
-  
+
   constructor() {
     super();
   }
-  
+
   /**
    * Get the current block number
    */
   async getBlockNumber(): Promise<number> {
     return this.blockNumber;
   }
-  
+
   /**
    * Get a block by number
    */
   async getBlock(blockNumber: number): Promise<any> {
     return {
       number: blockNumber,
-      timestamp: Math.floor(Date.now() / 1000) - (this.blockNumber - blockNumber) * 15, // 15 seconds per block
+      timestamp:
+        Math.floor(Date.now() / 1000) - (this.blockNumber - blockNumber) * 15, // 15 seconds per block
       hash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
     };
   }
-  
+
   /**
    * Get a transaction by hash
    */
@@ -39,7 +40,7 @@ export class MockProvider extends EventEmitter {
     }
     return null;
   }
-  
+
   /**
    * Get a transaction receipt
    */
@@ -55,14 +56,14 @@ export class MockProvider extends EventEmitter {
     }
     return null;
   }
-  
+
   /**
    * Mock advancing blocks
    */
   async advanceBlocks(count: number): Promise<void> {
     this.blockNumber += count;
   }
-  
+
   /**
    * Mock a transaction
    */
@@ -73,7 +74,7 @@ export class MockProvider extends EventEmitter {
       ...data,
     });
   }
-  
+
   /**
    * Emit a mock event
    */
@@ -89,25 +90,25 @@ export class MockContract extends EventEmitter {
   private address: string;
   private functions: Map<string, Function> = new Map();
   private provider: MockProvider;
-  
+
   constructor(address: string, provider: MockProvider) {
     super();
     this.address = address;
     this.provider = provider;
-    
+
     // Listen to provider events and re-emit them
     this.provider.on('*', (event: string, ...args: any[]) => {
       this.emit(event, ...args);
     });
   }
-  
+
   /**
    * Mock a contract function
    */
   mockFunction(name: string, implementation: Function): void {
     this.functions.set(name, implementation);
   }
-  
+
   /**
    * Call a contract function
    */
@@ -118,14 +119,14 @@ export class MockContract extends EventEmitter {
     }
     throw new Error(`Function ${name} not mocked`);
   }
-  
+
   /**
    * Mock the contract's methods
    */
   get(methodName: string, ...args: any[]): Promise<any> {
     return this.callFunction(methodName, ...args);
   }
-  
+
   /**
    * Generate a mock transaction hash
    */
@@ -138,9 +139,10 @@ export class MockContract extends EventEmitter {
  * Create a test deposit object
  */
 export function createTestDeposit(overrides: Partial<any> = {}): any {
-  const depositId = overrides.id || ethers.utils.hexlify(ethers.utils.randomBytes(32));
+  const depositId =
+    overrides.id || ethers.utils.hexlify(ethers.utils.randomBytes(32));
   const now = Date.now();
-  
+
   return {
     id: depositId,
     fundingTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
@@ -188,4 +190,4 @@ export function createTestDeposit(overrides: Partial<any> = {}): any {
     error: null,
     ...overrides,
   };
-} 
+}

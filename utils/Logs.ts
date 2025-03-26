@@ -1,7 +1,7 @@
-import { getStringDate } from "./Dates";
+import { getStringDate } from './Dates';
 
-const APP_NAME = (process.env.APP_NAME || "Unknown Gravity").toUpperCase();
-const VERBOSE_APP = process.env.VERBOSE_APP === "true";
+const APP_NAME = (process.env.APP_NAME || 'Unknown Gravity').toUpperCase();
+const VERBOSE_APP = process.env.VERBOSE_APP === 'true';
 
 // ---------------------------------------------------------------
 // --------------------- UTILITY FUNCTIONS -----------------------
@@ -14,8 +14,8 @@ const VERBOSE_APP = process.env.VERBOSE_APP === "true";
  * @returns {string}
  */
 const formatLog = (message: string): string => {
-	const timestamp: string = getStringDate();
-	return `[${APP_NAME}] | ${timestamp} | ${message}`;
+  const timestamp: string = getStringDate();
+  return `[${APP_NAME}] | ${timestamp} | ${message}`;
 };
 
 // ---------------------------------------------------------------
@@ -28,9 +28,9 @@ const formatLog = (message: string): string => {
  * @returns {void}
  */
 const LogMessage = (message: string): void => {
-	if (!VERBOSE_APP) return;
-	const log: string = formatLog(message);
-	console.log(log); // NO BORRAR..
+  if (!VERBOSE_APP) return;
+  const log: string = formatLog(message);
+  console.log(log); // NO BORRAR..
 };
 
 /**
@@ -42,8 +42,8 @@ const LogMessage = (message: string): void => {
  */
 
 const LogError = (message: string, error: Error): void => {
-	const log = formatLog(message);
-	console.error(log, error);
+  const log = formatLog(message);
+  console.error(log, error);
 };
 
 /**
@@ -53,8 +53,8 @@ const LogError = (message: string, error: Error): void => {
  * @returns {void}
  */
 const LogWarning = (message: string): void => {
-	const log = formatLog(message);
-	console.warn(log);
+  const log = formatLog(message);
+  console.warn(log);
 };
 
 // ---------------------------------------------------------------

@@ -1,10 +1,14 @@
-import { Deposit } from "../types/Deposit.type";
-import { DepositStatus } from "../types/DepositStatus.enum";
-import { updateToInitializedDeposit, updateLastActivity, updateToFinalizedDeposit } from "../utils/Deposits";
-import { getAllJsonOperationsByStatus } from "../utils/JsonUtils";
-import { LogError, LogMessage } from "../utils/Logs";
-import { checkTxStatus, filterDepositsActivityTime } from "./CheckStatus";
-import { L1BitcoinDepositor, nonceManagerL1 } from "./Core";
+import { Deposit } from '../types/Deposit.type';
+import { DepositStatus } from '../types/DepositStatus.enum';
+import {
+  updateToInitializedDeposit,
+  updateLastActivity,
+  updateToFinalizedDeposit,
+} from '../utils/Deposits';
+import { getAllJsonOperationsByStatus } from '../utils/JsonUtils';
+import { LogError, LogMessage } from '../utils/Logs';
+import { checkTxStatus, filterDepositsActivityTime } from './CheckStatus';
+import { L1BitcoinDepositor, nonceManagerL1 } from './Core';
 
 /*****************************************************************************************
 This will initialise the QUEUED deposits in the L1BitcoinDepositor contract.
@@ -31,48 +35,57 @@ https://www.notion.so/thresholdnetwork/L2-tBTC-SDK-Relayer-Implementation-4dfeda
  * @returns {Promise<void>} A promise that resolves when the deposit status is updated in the JSON storage.
  */
 export const initializeDeposits = async (): Promise<void> => {
-	try {
-		const queuedDeposits: Array<Deposit> = await getAllJsonOperationsByStatus("QUEUED");
-		if (queuedDeposits.length === 0) return;
+  try {
+    const queuedDeposits: Array<Deposit> =
+      await getAllJsonOperationsByStatus('QUEUED');
+    if (queuedDeposits.length === 0) return;
 
-		// Filter deposits that have more than 5 minutes since the last activity
-		// This is to avoid calling the contract for deposits that have been recently
-		// checked and are still in the same state
+    // Filter deposits that have more than 5 minutes since the last activity
+    // This is to avoid calling the contract for deposits that have been recently
+    // checked and are still in the same state
 
-		const filteredDeposits = filterDepositsActivityTime(queuedDeposits);
-		if (filteredDeposits.length === 0) return;
+    const filteredDeposits = filterDepositsActivityTime(queuedDeposits);
+    if (filteredDeposits.length === 0) return;
 
-		LogMessage(`INITIALIZE | To be processed: ${filteredDeposits.length} deposits`);
+    LogMessage(
+      `INITIALIZE | To be processed: ${filteredDeposits.length} deposits`
+    );
 
-		for (const deposit of filteredDeposits) {
-			// Update the last activity timestamp of the deposit
-			const updatedDeposit = updateLastActivity(deposit);
+    for (const deposit of filteredDeposits) {
+      // Update the last activity timestamp of the deposit
+      const updatedDeposit = updateLastActivity(deposit);
 
-			// Check the status of the deposit in the contract
-			const status = await checkTxStatus(updatedDeposit);
-			LogMessage(`L1BitcoinDepositor status | STATUS: ${status}`);
+      // Check the status of the deposit in the contract
+      const status = await checkTxStatus(updatedDeposit);
+      LogMessage(`L1BitcoinDepositor status | STATUS: ${status}`);
 
-			switch (status) {
-				case DepositStatus.INITIALIZED:
-					await updateToInitializedDeposit(updatedDeposit, "Deposit already initialized");
-					break;
+      switch (status) {
+        case DepositStatus.INITIALIZED:
+          await updateToInitializedDeposit(
+            updatedDeposit,
+            'Deposit already initialized'
+          );
+          break;
 
-				case DepositStatus.QUEUED:
-					await attemptToInitializeDeposit(updatedDeposit);
-					break;
+        case DepositStatus.QUEUED:
+          await attemptToInitializeDeposit(updatedDeposit);
+          break;
 
-				case DepositStatus.FINALIZED:
-					await updateToFinalizedDeposit(updatedDeposit, "Deposit already finalized");
-					break;
+        case DepositStatus.FINALIZED:
+          await updateToFinalizedDeposit(
+            updatedDeposit,
+            'Deposit already finalized'
+          );
+          break;
 
-				default:
-					LogMessage(`Unhandled deposit status: ${status}`);
-					break;
-			}
-		}
-	} catch (error) {
-		LogError("Error in initializeDeposits:", error as Error);
-	}
+        default:
+          LogMessage(`Unhandled deposit status: ${status}`);
+          break;
+      }
+    }
+  } catch (error) {
+    LogError('Error in initializeDeposits:', error as Error);
+  }
 };
 
 // ----------------------------------------------------------
@@ -86,36 +99,42 @@ export const initializeDeposits = async (): Promise<void> => {
  * @returns {Promise<void>} A promise that resolves when the deposit status is updated in the JSON storage.
  */
 
-export const attemptToInitializeDeposit = async (deposit: Deposit): Promise<void> => {
-	try {
-		LogMessage(`INITIALIZE | Pre-call checking... | ID: ${deposit.id}`);
-		// Pre-call
-		await L1BitcoinDepositor.callStatic.initializeDeposit(
-			deposit.L1OutputEvent.fundingTx,
-			deposit.L1OutputEvent.reveal,
-			deposit.L1OutputEvent.l2DepositOwner
-		);
-		LogMessage(`INITIALIZE | Pre-call successful | ID: ${deposit.id}`);
+export const attemptToInitializeDeposit = async (
+  deposit: Deposit
+): Promise<void> => {
+  try {
+    LogMessage(`INITIALIZE | Pre-call checking... | ID: ${deposit.id}`);
+    // Pre-call
+    await L1BitcoinDepositor.callStatic.initializeDeposit(
+      deposit.L1OutputEvent.fundingTx,
+      deposit.L1OutputEvent.reveal,
+      deposit.L1OutputEvent.l2DepositOwner
+    );
+    LogMessage(`INITIALIZE | Pre-call successful | ID: ${deposit.id}`);
 
-		const currentNonce = await nonceManagerL1.getTransactionCount("latest");
-		// Call
-		const tx = await L1BitcoinDepositor.initializeDeposit(
-			deposit.L1OutputEvent.fundingTx,
-			deposit.L1OutputEvent.reveal,
-			deposit.L1OutputEvent.l2DepositOwner,
-			{ nonce: currentNonce }
-		);
+    const currentNonce = await nonceManagerL1.getTransactionCount('latest');
+    // Call
+    const tx = await L1BitcoinDepositor.initializeDeposit(
+      deposit.L1OutputEvent.fundingTx,
+      deposit.L1OutputEvent.reveal,
+      deposit.L1OutputEvent.l2DepositOwner,
+      { nonce: currentNonce }
+    );
 
-		LogMessage(`INITIALIZE | Waiting to be mined | ID: ${deposit.id} | TxHash: ${tx.hash}`);
-		// Wait for the transaction to be mined
-		await tx.wait();
-		LogMessage(`INITIALIZE | Transaction mined | ID: ${deposit.id} | TxHash: ${tx.hash}`);
+    LogMessage(
+      `INITIALIZE | Waiting to be mined | ID: ${deposit.id} | TxHash: ${tx.hash}`
+    );
+    // Wait for the transaction to be mined
+    await tx.wait();
+    LogMessage(
+      `INITIALIZE | Transaction mined | ID: ${deposit.id} | TxHash: ${tx.hash}`
+    );
 
-		// Update the deposit status in the JSON storage
-		updateToInitializedDeposit(deposit, tx);
-	} catch (error: any) {
-		const reason = error.reason ? error.reason : "Unknown error";
-		LogError(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: `, reason);
-		updateToInitializedDeposit(deposit, null, reason);
-	}
+    // Update the deposit status in the JSON storage
+    updateToInitializedDeposit(deposit, tx);
+  } catch (error: any) {
+    const reason = error.reason ? error.reason : 'Unknown error';
+    LogError(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: `, reason);
+    updateToInitializedDeposit(deposit, null, reason);
+  }
 };
