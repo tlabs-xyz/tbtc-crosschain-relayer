@@ -53,7 +53,7 @@ app.disable("x-powered-by");
 // -------------------------------------------------------------------------
 
 // Compresion
-app.use(compression());
+app.use(compression as any);
 
 // File Upload limit
 app.use(express.json({ limit: "2048mb" }));

@@ -21,14 +21,14 @@ export interface ChainConfig {
   /** RPC URL for the Layer 1 chain (typically Ethereum) */
   l1Rpc: string;
   
-  /** RPC URL for the Layer 2 chain (if applicable) */
-  l2Rpc?: string;
+  /** RPC URL for the Layer 2 chain */
+  l2Rpc: string;
   
   /** Address of the L1BitcoinDepositor contract */
   l1ContractAddress: string;
   
-  /** Address of the L2BitcoinDepositor contract (if applicable) */
-  l2ContractAddress?: string;
+  /** Address of the L2BitcoinDepositor contract */
+  l2ContractAddress: string;
   
   /** Address of the TBTCVault contract */
   vaultAddress: string;

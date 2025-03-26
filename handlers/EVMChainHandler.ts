@@ -313,6 +313,11 @@ export class EVMChainHandler implements ChainHandlerInterface {
         LogMessage(`Found ${events.length} DepositInitialized events in the past`);
         
         for (const event of events) {
+          if (!event.args) {
+            LogMessage("Event args are undefined, skipping event");
+            continue;
+          }
+          
           const { fundingTx, reveal, l2DepositOwner, l2Sender } = event.args;
           const deposit = getJsonById(fundingTx.transactionHash);
           
