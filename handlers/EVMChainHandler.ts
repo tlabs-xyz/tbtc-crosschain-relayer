@@ -205,18 +205,22 @@ export class EVMChainHandler implements ChainHandlerInterface {
 
   async finalizeDeposit(deposit: Deposit): Promise<void> {
     try {
+      LogMessage(`FINALIZE | Quoting fee... | ID: ${deposit.id}`);
+      const value = (
+        await this.l1BitcoinDepositor.quoteFinalizeDeposit()
+      ).toString();
+      LogMessage(
+        `FINALIZE | Fee quoted: ${value} wei | ID: ${deposit.id}`
+      );
+
       LogMessage(`FINALIZE | Pre-call checking... | ID: ${deposit.id}`);
-      // Pre-call (preflight)
-      const valueRequired =
-        await this.l1BitcoinDepositor.callStatic.finalizeDeposit(deposit.id);
+      await this.l1BitcoinDepositor.callStatic.finalizeDeposit(deposit.id, {
+        value: value,
+      });
       LogMessage(`FINALIZE | Pre-call successful | ID: ${deposit.id}`);
-      const value = valueRequired.gt(BigNumber.from(0))
-        ? valueRequired
-        : BigNumber.from(0);
 
       const currentNonce =
         await this.nonceManagerL1.getTransactionCount('latest');
-      // Call
       const tx = await this.l1BitcoinDepositor.finalizeDeposit(deposit.id, {
         value: value,
         nonce: currentNonce,
@@ -225,17 +229,15 @@ export class EVMChainHandler implements ChainHandlerInterface {
       LogMessage(
         `FINALIZE | Waiting to be mined | ID: ${deposit.id} | TxHash: ${tx.hash}`
       );
-      // Wait for the transaction to be mined
       await tx.wait();
       LogMessage(
         `FINALIZE | Transaction mined | ID: ${deposit.id} | TxHash: ${tx.hash}`
       );
 
-      // Update the deposit status in the JSON storage
       updateToFinalizedDeposit(deposit, tx);
     } catch (error: any) {
       const reason = error.reason ? error.reason : 'Unknown error';
-      LogError(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: `, reason);
+      LogError(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
       updateToFinalizedDeposit(deposit, null, reason);
     }
   }

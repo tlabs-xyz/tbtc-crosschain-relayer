@@ -9,11 +9,12 @@ import { createDeposit } from '../utils/Deposits';
 import { Deposit } from '../types/Deposit.type';
 import { LogMessage, LogError } from '../utils/Logs';
 import { TBTCVaultABI } from '../interfaces/TBTCVault';
-import { cleanFinalizedDeposits, cleanQueuedDeposits } from './CleanupDeposits';
-import { attemptToInitializeDeposit } from './InitializeDeposits';
-import { attemptToFinalizeDeposit } from './FinalizeDeposits';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type';
+import {
+  cleanQueuedDeposits,
+  cleanFinalizedDeposits,
+} from './CleanupDeposits';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
@@ -198,7 +199,7 @@ export const createEventListeners = () => {
         );
         writeNewJsonDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
         LogMessage(`Initializing deposit | Id: ${deposit.id}`);
-        await attemptToInitializeDeposit(deposit);
+        await chainHandler.initializeDeposit(deposit);
       } catch (error) {
         LogMessage(`Error in DepositInitialized handler: ${error}`);
       }
@@ -207,11 +208,18 @@ export const createEventListeners = () => {
 
   TBTCVaultProvider.on(
     'OptimisticMintingFinalized',
-    (minter, depositKey, depositor, optimisticMintingDebt) => {
+    async (minter, depositKey, depositor, optimisticMintingDebt) => {
       try {
         const BigDepositKey = BigNumber.from(depositKey);
         const deposit: Deposit | null = getJsonById(BigDepositKey.toString());
-        if (deposit) attemptToFinalizeDeposit(deposit);
+        if (deposit) {
+          LogMessage(`OptimisticMintingFinalized for Deposit ID: ${deposit.id}`);
+          await chainHandler.finalizeDeposit(deposit);
+        } else {
+          LogMessage(
+            `OptimisticMintingFinalized event for unknown Deposit Key: ${depositKey.toString()}`
+          );
+        }
       } catch (error) {
         LogMessage(`Error in the OptimisticMintingFinalized handler: ${error}`);
       }
