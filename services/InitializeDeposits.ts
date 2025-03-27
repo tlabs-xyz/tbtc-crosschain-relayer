@@ -36,8 +36,9 @@ https://www.notion.so/thresholdnetwork/L2-tBTC-SDK-Relayer-Implementation-4dfeda
  */
 export const initializeDeposits = async (): Promise<void> => {
   try {
-    const queuedDeposits: Array<Deposit> =
-      await getAllJsonOperationsByStatus('QUEUED');
+    const queuedDeposits: Array<Deposit> = await getAllJsonOperationsByStatus(
+      DepositStatus.QUEUED
+    );
     if (queuedDeposits.length === 0) return;
 
     // Filter deposits that have more than 5 minutes since the last activity

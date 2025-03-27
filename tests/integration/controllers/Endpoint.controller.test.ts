@@ -3,6 +3,7 @@ import { EndpointController } from '../../../controllers/Endpoint.controller';
 import { MockChainHandler } from '../../mocks/MockChainHandler';
 import { createTestDeposit } from '../../mocks/BlockchainMock';
 import { ethers } from 'ethers';
+import { DepositStatus } from '../../../types/DepositStatus.enum';
 
 // Mock Express request and response
 const mockRequest = () => {
@@ -116,7 +117,7 @@ describe('EndpointController', () => {
     test('should return status for a valid deposit ID', async () => {
       // Create test deposit and add it to the chain handler
       const testDeposit = createTestDeposit({
-        status: 'INITIALIZED',
+        status: DepositStatus.INITIALIZED,
       });
       mockChainHandler.addDeposit(testDeposit);
 
@@ -138,7 +139,7 @@ describe('EndpointController', () => {
         expect.objectContaining({
           success: true,
           depositId: testDeposit.id,
-          status: 1, // INITIALIZED
+          status: DepositStatus.INITIALIZED,
         })
       );
     });

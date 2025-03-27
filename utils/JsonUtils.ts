@@ -2,6 +2,7 @@ import { Deposit } from '../types/Deposit.type';
 import { FundingTransaction } from '../types/FundingTransaction.type';
 import { createDeposit } from './Deposits';
 import { LogError } from './Logs';
+import { DepositStatus } from '../types/DepositStatus.enum';
 
 const fs = require('fs');
 const path = require('path');
@@ -95,13 +96,16 @@ const getAllJsonOperations = async (): Promise<Array<Deposit>> => {
 
 /**
  * Get all JSON operations by status
- * @param {String} status Operation status (QUEUED, FINALIZED, INITIALIZED)
+ * @param {DepositStatus} status Operation status enum value (NUMERIC)
  * @returns {Array} List of JSON operations by status
  */
-const getAllJsonOperationsByStatus = async (
-  status: 'QUEUED' | 'FINALIZED' | 'INITIALIZED'
+export const getAllJsonOperationsByStatus = async (
+  status: DepositStatus // Parameter is still the Enum type
 ): Promise<Array<Deposit>> => {
-  const operations = await getAllJsonOperations();
+  const operations = await getAllJsonOperations(); // operations is Deposit[]
+  // operation.status is now type 'number' (from Deposit interface)
+  // status is type 'DepositStatus' (numeric enum)
+  // This comparison (number === numeric enum) should now pass type checking
   return operations.filter((operation: Deposit) => operation.status === status);
 };
 
@@ -203,5 +207,4 @@ export {
   writeJson,
   deleteJson,
   getAllJsonOperations,
-  getAllJsonOperationsByStatus,
 };

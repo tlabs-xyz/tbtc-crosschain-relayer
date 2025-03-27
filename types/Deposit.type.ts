@@ -1,5 +1,6 @@
 import { FundingTransaction } from './FundingTransaction.type';
 import { Reveal } from './Reveal.type';
+import { DepositStatus } from './DepositStatus.enum';
 
 export type Deposit = {
   id: string;
@@ -23,7 +24,7 @@ export type Deposit = {
     extraData: string;
   };
   owner: string;
-  status: 'QUEUED' | 'INITIALIZED' | 'FINALIZED';
+  status: number;
   L1OutputEvent: {
     fundingTx: FundingTransaction;
     reveal: Reveal;

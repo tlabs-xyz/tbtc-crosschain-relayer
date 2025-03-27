@@ -6,6 +6,7 @@ import {
 } from '../utils/JsonUtils';
 import { LogMessage } from '../utils/Logs';
 import { logDepositDeleted } from '../utils/AuditLog';
+import { DepositStatus } from '../types/DepositStatus.enum';
 
 /****************************************************************************************
 The goal of this task is cleaning up trash deposits and preventing relayer's congestion.
@@ -28,7 +29,9 @@ const REMOVE_QUEUED_TIME_MS: number =
   parseInt(process.env.CLEAN_QUEUED_TIME || '48', 10) * 60 * 60 * 1000;
 
 export const cleanQueuedDeposits = async (): Promise<void> => {
-  const operations: Deposit[] = await getAllJsonOperationsByStatus('QUEUED');
+  const operations: Deposit[] = await getAllJsonOperationsByStatus(
+    DepositStatus.QUEUED
+  );
   const currentTime = Date.now();
 
   // Filtrar y eliminar depósitos en una sola pasada, verificando que createdAt exista
@@ -73,7 +76,9 @@ const REMOVE_FINALIZED_TIME_MS: number =
   parseInt(process.env.CLEAN_FINALIZED_TIME || '12', 10) * 60 * 60 * 1000;
 
 export const cleanFinalizedDeposits = async (): Promise<void> => {
-  const operations: Deposit[] = await getAllJsonOperationsByStatus('FINALIZED');
+  const operations: Deposit[] = await getAllJsonOperationsByStatus(
+    DepositStatus.FINALIZED
+  );
   const currentTime = Date.now();
 
   // Filter and delete deposits in a single pass, checking that finalizationAt exists

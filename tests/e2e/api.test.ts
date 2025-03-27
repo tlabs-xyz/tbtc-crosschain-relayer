@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import { EndpointController } from '../../controllers/Endpoint.controller';
 import { MockChainHandler } from '../mocks/MockChainHandler';
 import { createTestDeposit } from '../mocks/BlockchainMock';
+import { DepositStatus } from '../../types/DepositStatus.enum';
 
 // Mock environment variables
 process.env.USE_ENDPOINT = 'true';
@@ -143,21 +144,23 @@ describe('API Endpoints', () => {
 
   describe('GET /api/deposit/:depositId', () => {
     test('should return 200 and deposit status for valid ID', async () => {
-      // Create test deposit and add it to the chain handler
+      // Arrange: Create a test deposit WITH NUMERIC STATUS
       const testDeposit = createTestDeposit({
-        status: 'INITIALIZED',
+        status: DepositStatus.INITIALIZED,
       });
+
+      // Add deposit to the mock handler
       mockChainHandler.addDeposit(testDeposit);
 
-      // Send request
+      // Act: Make the API request
       const response = await request(app).get(`/api/deposit/${testDeposit.id}`);
 
-      // Check response
+      // Assert
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
         success: true,
         depositId: testDeposit.id,
-        status: 1, // INITIALIZED
+        status: DepositStatus.INITIALIZED,
       });
     });
 

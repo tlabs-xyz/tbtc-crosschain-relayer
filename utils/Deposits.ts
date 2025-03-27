@@ -5,6 +5,7 @@ import { getFundingTxHash, getTransactionHash } from './GetTransactionHash';
 import { writeJson } from './JsonUtils';
 import { LogMessage } from './Logs';
 import { providerL2 } from '../services/Core';
+import { DepositStatus } from '../types/DepositStatus.enum';
 
 const START_BLOCK: number = parseInt(process.env.L2_START_BLOCK || '0');
 
@@ -64,7 +65,7 @@ export const createDeposit = (
       l2Sender: l2Sender,
     },
     owner: l2DepositOwner,
-    status: 'QUEUED',
+    status: DepositStatus.QUEUED,
     dates: {
       createdAt: new Date().getTime(),
       initializationAt: null,
@@ -90,7 +91,7 @@ export const updateToFinalizedDeposit = async (
   tx?: any,
   error?: string
 ) => {
-  const newStatus = tx ? 'FINALIZED' : deposit.status;
+  const newStatus = tx ? DepositStatus.FINALIZED : deposit.status;
   const newFinalizationAt = tx ? Date.now() : deposit.dates.finalizationAt;
   const newHash = tx
     ? {
@@ -137,7 +138,7 @@ export const updateToInitializedDeposit = async (
   error?: string
 ) => {
   // Crear el objeto updatedDeposit con propiedades condicionales
-  const newStatus = tx ? 'INITIALIZED' : deposit.status;
+  const newStatus = tx ? DepositStatus.INITIALIZED : deposit.status;
   const newInitializationAt = tx ? Date.now() : deposit.dates.initializationAt;
   const newHash = tx
     ? {
@@ -272,4 +273,52 @@ export const getBlocksByTimestamp = async (
   }
 
   return { startBlock, endBlock: latestBlockNumber };
+};
+
+export const updateDepositStatus = (
+  deposit: Deposit,
+  newStatus: DepositStatus
+): Deposit => {
+  return {
+    ...deposit,
+    status: newStatus,
+    dates: {
+      ...deposit.dates,
+      lastActivityAt: Date.now(),
+    },
+  };
+};
+
+export const updateDepositHashes = (
+  deposit: Deposit,
+  newStatus: DepositStatus,
+  txHash: string,
+  txType: 'initialize' | 'finalize'
+): Deposit => {
+  // Define updatedHashes based on txType
+  const updatedHashes = {
+    ...deposit.hashes,
+    eth: {
+      ...deposit.hashes.eth,
+      ...(txType === 'initialize' && { initializeTxHash: txHash }),
+      ...(txType === 'finalize' && { finalizeTxHash: txHash }),
+    },
+  };
+
+  // Define updatedDates based on txType and always update lastActivityAt
+  const updatedDates = {
+    ...deposit.dates,
+    ...(txType === 'initialize' && { initializationAt: Date.now() }),
+    ...(txType === 'finalize' && { finalizationAt: Date.now() }),
+    lastActivityAt: Date.now(),
+  };
+
+  // Return the updated deposit object
+  return {
+    ...deposit,
+    status: newStatus,
+    hashes: updatedHashes,
+    dates: updatedDates,
+    error: null,
+  };
 };

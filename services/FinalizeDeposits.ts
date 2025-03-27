@@ -37,7 +37,7 @@ https://www.notion.so/thresholdnetwork/L2-tBTC-SDK-Relayer-Implementation-4dfeda
 export const finalizeDeposits = async (): Promise<void> => {
   try {
     const initializedDeposits: Array<Deposit> =
-      await getAllJsonOperationsByStatus('INITIALIZED');
+      await getAllJsonOperationsByStatus(DepositStatus.INITIALIZED);
     if (initializedDeposits.length === 0) {
       LogMessage(`No Initialized deposits have been found`);
       return;

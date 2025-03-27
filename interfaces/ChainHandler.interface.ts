@@ -1,4 +1,5 @@
 import { Deposit } from '../types/Deposit.type';
+import { DepositStatus } from '../types/DepositStatus.enum';
 
 /**
  * Interface for chain-specific handlers that define common functionality
@@ -28,10 +29,11 @@ export interface ChainHandlerInterface {
   finalizeDeposit(deposit: Deposit): Promise<void>;
 
   /**
-   * Check the status of a deposit
-   * @param depositId The deposit ID to check
+   * Check the status of a deposit on the chain.
+   * @param depositId The unique identifier of the deposit.
+   * @returns The current status as a numeric enum value, or null if not found.
    */
-  checkDepositStatus(depositId: string): Promise<number>;
+  checkDepositStatus(depositId: string): Promise<DepositStatus | null>;
 
   /**
    * Get the latest block number from the chain

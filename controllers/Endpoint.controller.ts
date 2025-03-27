@@ -7,6 +7,7 @@ import {
   logDepositCreated,
   logDepositError,
 } from '../utils/AuditLog';
+import { DepositStatus } from '../types/DepositStatus.enum';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -115,12 +116,18 @@ export class EndpointController {
         return;
       }
 
-      const status = await this.chainHandler.checkDepositStatus(depositId);
+      const numericStatus: DepositStatus | null =
+        await this.chainHandler.checkDepositStatus(depositId);
+
+      if (numericStatus === null) {
+        res.status(404).json({ success: false, message: 'Deposit not found' });
+        return;
+      }
 
       res.status(200).json({
         success: true,
         depositId,
-        status,
+        status: numericStatus,
       });
     } catch (error: any) {
       LogError('Error getting deposit status:', error);

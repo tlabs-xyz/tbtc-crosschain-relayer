@@ -6,6 +6,7 @@ import {
 } from '../utils/JsonUtils';
 import { LogError } from '../utils/Logs';
 import { Deposit } from '../types/Deposit.type';
+import { DepositStatus } from '../types/DepositStatus.enum';
 
 /**
  * @name Operations
@@ -48,8 +49,9 @@ export default class Operations {
     const response = new CustomResponse(res);
 
     try {
-      const operations: Array<Deposit> =
-        await getAllJsonOperationsByStatus('QUEUED');
+      const operations: Array<Deposit> = await getAllJsonOperationsByStatus(
+        DepositStatus.QUEUED
+      );
       return response.ok('OK - Retrieved all queued operations', operations);
     } catch (err) {
       LogError('🚀 ~ getAllQueuedOperations ~ err:', err as Error);
@@ -73,8 +75,9 @@ export default class Operations {
     const response = new CustomResponse(res);
 
     try {
-      const operations: Array<Deposit> =
-        await getAllJsonOperationsByStatus('INITIALIZED');
+      const operations: Array<Deposit> = await getAllJsonOperationsByStatus(
+        DepositStatus.INITIALIZED
+      );
       return response.ok(
         'OK - Retrieved all initialized operations',
         operations
@@ -101,8 +104,9 @@ export default class Operations {
     const response = new CustomResponse(res);
 
     try {
-      const operations: Array<Deposit> =
-        await getAllJsonOperationsByStatus('FINALIZED');
+      const operations: Array<Deposit> = await getAllJsonOperationsByStatus(
+        DepositStatus.FINALIZED
+      );
       return response.ok('OK - Retrieved all finalized operations', operations);
     } catch (err) {
       LogError('🚀 ~ getAllFinalizedOperations ~ err:', err as Error);

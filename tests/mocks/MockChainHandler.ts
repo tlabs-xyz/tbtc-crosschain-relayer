@@ -118,10 +118,10 @@ export class MockChainHandler implements ChainHandlerInterface {
     await new Promise((resolve) => setTimeout(resolve, this.processingDelayMs));
 
     // Update deposit status
-    if (deposit.status === 'QUEUED') {
+    if (deposit.status === DepositStatus.QUEUED) {
       const updatedDeposit = {
         ...deposit,
-        status: 'INITIALIZED',
+        status: DepositStatus.INITIALIZED,
         hashes: {
           ...deposit.hashes,
           eth: {
@@ -157,10 +157,10 @@ export class MockChainHandler implements ChainHandlerInterface {
     await new Promise((resolve) => setTimeout(resolve, this.processingDelayMs));
 
     // Update deposit status
-    if (deposit.status === 'INITIALIZED') {
+    if (deposit.status === DepositStatus.INITIALIZED) {
       const updatedDeposit = {
         ...deposit,
-        status: 'FINALIZED',
+        status: DepositStatus.FINALIZED,
         hashes: {
           ...deposit.hashes,
           eth: {
@@ -192,7 +192,7 @@ export class MockChainHandler implements ChainHandlerInterface {
 
     // Find queued deposits and initialize them
     for (const [id, deposit] of this.deposits.entries()) {
-      if (deposit.status === 'QUEUED') {
+      if (deposit.status === DepositStatus.QUEUED) {
         await this.initializeDeposit(deposit);
       }
     }
@@ -208,7 +208,7 @@ export class MockChainHandler implements ChainHandlerInterface {
 
     // Find initialized deposits and finalize them
     for (const [id, deposit] of this.deposits.entries()) {
-      if (deposit.status === 'INITIALIZED') {
+      if (deposit.status === DepositStatus.INITIALIZED) {
         await this.finalizeDeposit(deposit);
       }
     }
@@ -219,21 +219,14 @@ export class MockChainHandler implements ChainHandlerInterface {
   /**
    * Check deposit status
    */
-  async checkDepositStatus(depositId: string): Promise<number> {
+  async checkDepositStatus(depositId: string): Promise<DepositStatus | null> {
     const deposit = this.deposits.get(depositId);
 
     if (!deposit) {
-      return Promise.resolve(DepositStatus.QUEUED);
+      return null;
     }
 
-    switch (deposit.status) {
-      case 'INITIALIZED':
-        return Promise.resolve(DepositStatus.INITIALIZED);
-      case 'FINALIZED':
-        return Promise.resolve(DepositStatus.FINALIZED);
-      default:
-        return Promise.resolve(DepositStatus.QUEUED);
-    }
+    return deposit.status;
   }
 
   /**

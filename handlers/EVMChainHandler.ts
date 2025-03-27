@@ -254,8 +254,9 @@ export class EVMChainHandler implements ChainHandlerInterface {
 
   async processInitializeDeposits(): Promise<void> {
     try {
-      const queuedDeposits: Array<Deposit> =
-        await getAllJsonOperationsByStatus('QUEUED');
+      const queuedDeposits: Array<Deposit> = await getAllJsonOperationsByStatus(
+        DepositStatus.QUEUED
+      );
       if (queuedDeposits.length === 0) return;
 
       // Filter deposits that have more than 5 minutes since the last activity
@@ -306,7 +307,7 @@ export class EVMChainHandler implements ChainHandlerInterface {
   async processFinalizeDeposits(): Promise<void> {
     try {
       const initializedDeposits: Array<Deposit> =
-        await getAllJsonOperationsByStatus('INITIALIZED');
+        await getAllJsonOperationsByStatus(DepositStatus.INITIALIZED);
       if (initializedDeposits.length === 0) return;
 
       // Filter deposits that have more than 5 minutes since the last activity
