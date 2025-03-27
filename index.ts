@@ -2,7 +2,7 @@
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
 // Express Server
-import express from 'express';
+import express, { Express, Request, Response } from 'express';
 
 // Security
 import cors from 'cors';
@@ -15,19 +15,18 @@ import compression from 'compression';
 import Routes from './routes/Routes';
 
 // Utils
-import { LogMessage } from './utils/Logs';
-import { initializeChain, startCronJobs } from './services/Core';
-import { checkAndCreateDataFolder } from './utils/JsonUtils';
+import { LogMessage, LogError, LogWarning } from './utils/Logs';
+import { initializeChain } from './services/Core';
 import { initializeAuditLog } from './utils/AuditLog';
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
 // -------------------------------------------------------------------------
 // Express app
-const app = express();
+const app: Express = express();
 
 // Port
-const PORT = 3333;
+const PORT = process.env.APP_PORT || 3000;
 app.set('port', PORT);
 
 // -------------------------------------------------------------------------
@@ -38,7 +37,7 @@ if (process.env.CORS_ENABLED === 'true') {
   app.use(
     cors({
       credentials: true,
-      origin: process.env.CORS_URL, // true para local? Compatibilidad con navegadores
+      origin: process.env.CORS_URL,
     })
   );
 }
@@ -69,22 +68,59 @@ app.use(Routes);
 // |                              SERVER START                             |
 // -------------------------------------------------------------------------
 
-app.listen(PORT, async () => {
-  LogMessage(`Server running on port ${PORT}`);
+// --- Add Log ---
+LogMessage('Application starting...');
 
-  // Create data folder
-  checkAndCreateDataFolder();
-
-  // Initialize audit log system
+// Initialize Audit Log System
+try {
   initializeAuditLog();
+  LogMessage('Audit log initialized.');
+} catch (error: any) {
+  LogError('Failed to initialize audit log:', error);
+  process.exit(1); // Exit if audit log fails
+}
 
-  // Initialize chain handler
-  const initialized = await initializeChain();
+// Initialize chain handler
+let chainInitializationSuccess = false;
+(async () => {
+  try {
+    LogMessage('Attempting to initialize chain handler...');
+    await initializeChain();
+    chainInitializationSuccess = true;
+    LogMessage('Chain handler initialized successfully.');
 
-  if (initialized) {
-    // Start cron jobs
+    // Start Cron Jobs only if chain initialization was successful
+    const { startCronJobs } = await import('./services/Core');
     startCronJobs();
-  } else {
-    LogMessage('Failed to initialize chain handler, cron jobs not started');
+    LogMessage('Cron jobs started.');
+
+  } catch (error: any) {
+    LogError('FATAL: Failed to initialize chain handler or dependent services:', error);
+    // Decide if the app should exit or run in a degraded state
+    // process.exit(1); // Option: Exit if chain handler is critical
+    LogWarning('Running without active chain handler or cron jobs due to initialization error.');
   }
-});
+
+  // Start the server regardless of chain init success? Or only if successful?
+  // Let's start it anyway to provide basic API status, but log a warning.
+
+  // --- Add Log ---
+  LogMessage(`Attempting to start server on port ${PORT}...`);
+
+  app.listen(PORT, () => {
+    // --- Add Log ---
+    LogMessage(`Server is running on port ${PORT}`);
+    if (!chainInitializationSuccess) {
+      LogWarning('Server started, but chain handler failed to initialize. Service may be degraded.');
+    }
+  }).on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      const errorMessage = `FATAL: Port ${PORT} is already in use.`;
+      LogError(errorMessage, new Error(errorMessage));
+    } else {
+      LogError(`FATAL: Failed to start server:`, err);
+    }
+    process.exit(1); // Exit if server fails to start
+  });
+
+})(); // Immediately invoke the async function

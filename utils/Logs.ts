@@ -1,6 +1,6 @@
 import { getStringDate } from './Dates';
 
-const APP_NAME = (process.env.APP_NAME || 'Unknown Gravity').toUpperCase();
+const APP_NAME = (process.env.APP_NAME || 'tBTC Cross-Chain Relayer').toUpperCase();
 const VERBOSE_APP = process.env.VERBOSE_APP === 'true';
 
 // ---------------------------------------------------------------
