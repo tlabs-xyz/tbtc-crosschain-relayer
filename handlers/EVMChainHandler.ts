@@ -4,6 +4,7 @@ import { NonceManager } from '@ethersproject/experimental';
 import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
 import { ChainConfig } from '../types/ChainConfig.type';
 import { Deposit } from '../types/Deposit.type';
+import { FundingTransaction } from '../types/FundingTransaction.type';
 import { LogError, LogMessage } from '../utils/Logs';
 import {
   getJsonById,
@@ -16,7 +17,9 @@ import {
   updateToFinalizedDeposit,
   updateLastActivity,
   getBlocksByTimestamp,
+  getDepositId,
 } from '../utils/Deposits';
+import { getFundingTxHash } from '../utils/GetTransactionHash';
 import { DepositStatus } from '../types/DepositStatus.enum';
 
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor';
@@ -363,17 +366,15 @@ export class EVMChainHandler implements ChainHandlerInterface {
         options.latestBlock
       );
 
-      // Skip if no L2 contracts to listen to
-      if (!this.l2BitcoinDepositor) {
+      if (!this.l2BitcoinDepositorProvider) {
         LogMessage(
-          'No L2BitcoinDepositor contract configured, skipping past deposits check'
+          'No L2BitcoinDepositor provider configured, skipping past deposits check'
         );
         return;
       }
 
-      // Query events historically
-      const events = await this.l2BitcoinDepositor.queryFilter(
-        this.l2BitcoinDepositor.filters.DepositInitialized(),
+      const events = await this.l2BitcoinDepositorProvider.queryFilter(
+        this.l2BitcoinDepositorProvider.filters.DepositInitialized(),
         startBlock,
         endBlock
       );
@@ -390,12 +391,14 @@ export class EVMChainHandler implements ChainHandlerInterface {
           }
 
           const { fundingTx, reveal, l2DepositOwner, l2Sender } = event.args;
-          const deposit = getJsonById(fundingTx.transactionHash);
 
-          if (!deposit) {
-            LogMessage(
-              `Processing missed deposit event: ${fundingTx.transactionHash}`
-            );
+          const fundingTxHash = getFundingTxHash(fundingTx as FundingTransaction);
+          const depositId = getDepositId(fundingTxHash, reveal[0]);
+
+          const existingDeposit = getJsonById(depositId);
+
+          if (!existingDeposit) {
+            LogMessage(`Processing missed deposit event: ${depositId}`);
             const newDeposit = createDeposit(
               fundingTx,
               reveal,
