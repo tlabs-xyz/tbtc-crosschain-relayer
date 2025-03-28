@@ -209,9 +209,7 @@ export class EVMChainHandler implements ChainHandlerInterface {
       const value = (
         await this.l1BitcoinDepositor.quoteFinalizeDeposit()
       ).toString();
-      LogMessage(
-        `FINALIZE | Fee quoted: ${value} wei | ID: ${deposit.id}`
-      );
+      LogMessage(`FINALIZE | Fee quoted: ${value} wei | ID: ${deposit.id}`);
 
       LogMessage(`FINALIZE | Pre-call checking... | ID: ${deposit.id}`);
       await this.l1BitcoinDepositor.callStatic.finalizeDeposit(deposit.id, {
@@ -237,7 +235,10 @@ export class EVMChainHandler implements ChainHandlerInterface {
       updateToFinalizedDeposit(deposit, tx);
     } catch (error: any) {
       const reason = error.reason ? error.reason : 'Unknown error';
-      LogError(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
+      LogError(
+        `FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`,
+        error
+      );
       updateToFinalizedDeposit(deposit, null, reason);
     }
   }
@@ -394,7 +395,9 @@ export class EVMChainHandler implements ChainHandlerInterface {
 
           const { fundingTx, reveal, l2DepositOwner, l2Sender } = event.args;
 
-          const fundingTxHash = getFundingTxHash(fundingTx as FundingTransaction);
+          const fundingTxHash = getFundingTxHash(
+            fundingTx as FundingTransaction
+          );
           const depositId = getDepositId(fundingTxHash, reveal[0]);
 
           const existingDeposit = getJsonById(depositId);

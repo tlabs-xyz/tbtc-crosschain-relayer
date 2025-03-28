@@ -93,12 +93,16 @@ let chainInitializationSuccess = false;
     const { startCronJobs } = await import('./services/Core');
     startCronJobs();
     LogMessage('Cron jobs started.');
-
   } catch (error: any) {
-    LogError('FATAL: Failed to initialize chain handler or dependent services:', error);
+    LogError(
+      'FATAL: Failed to initialize chain handler or dependent services:',
+      error
+    );
     // Decide if the app should exit or run in a degraded state
     // process.exit(1); // Option: Exit if chain handler is critical
-    LogWarning('Running without active chain handler or cron jobs due to initialization error.');
+    LogWarning(
+      'Running without active chain handler or cron jobs due to initialization error.'
+    );
   }
 
   // Start the server regardless of chain init success? Or only if successful?
@@ -107,20 +111,23 @@ let chainInitializationSuccess = false;
   // --- Add Log ---
   LogMessage(`Attempting to start server on port ${PORT}...`);
 
-  app.listen(PORT, () => {
-    // --- Add Log ---
-    LogMessage(`Server is running on port ${PORT}`);
-    if (!chainInitializationSuccess) {
-      LogWarning('Server started, but chain handler failed to initialize. Service may be degraded.');
-    }
-  }).on('error', (err: any) => {
-    if (err.code === 'EADDRINUSE') {
-      const errorMessage = `FATAL: Port ${PORT} is already in use.`;
-      LogError(errorMessage, new Error(errorMessage));
-    } else {
-      LogError(`FATAL: Failed to start server:`, err);
-    }
-    process.exit(1); // Exit if server fails to start
-  });
-
+  app
+    .listen(PORT, () => {
+      // --- Add Log ---
+      LogMessage(`Server is running on port ${PORT}`);
+      if (!chainInitializationSuccess) {
+        LogWarning(
+          'Server started, but chain handler failed to initialize. Service may be degraded.'
+        );
+      }
+    })
+    .on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        const errorMessage = `FATAL: Port ${PORT} is already in use.`;
+        LogError(errorMessage, new Error(errorMessage));
+      } else {
+        LogError(`FATAL: Failed to start server:`, err);
+      }
+      process.exit(1); // Exit if server fails to start
+    });
 })(); // Immediately invoke the async function

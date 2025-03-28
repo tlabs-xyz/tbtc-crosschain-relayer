@@ -11,10 +11,7 @@ import { LogMessage, LogError } from '../utils/Logs';
 import { TBTCVaultABI } from '../interfaces/TBTCVault';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type';
-import {
-  cleanQueuedDeposits,
-  cleanFinalizedDeposits,
-} from './CleanupDeposits';
+import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
@@ -177,56 +174,6 @@ export const initializeChain = async () => {
     LogError('Failed to initialize chain handler:', error as Error);
     return false;
   }
-};
-
-/**
- * @name createEventListeners
- * @description Sets up listeners for deposit initialization and finalization events.
- */
-export const createEventListeners = () => {
-  LogMessage('Setting up event listeners...');
-
-  L2BitcoinDepositorProvider.on(
-    'DepositInitialized',
-    async (fundingTx, reveal, l2DepositOwner, l2Sender) => {
-      try {
-        LogMessage(`Received DepositInitialized event for Tx: ${fundingTx}`);
-        const deposit: Deposit = createDeposit(
-          fundingTx,
-          reveal,
-          l2DepositOwner,
-          l2Sender
-        );
-        writeNewJsonDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
-        LogMessage(`Initializing deposit | Id: ${deposit.id}`);
-        await chainHandler.initializeDeposit(deposit);
-      } catch (error) {
-        LogMessage(`Error in DepositInitialized handler: ${error}`);
-      }
-    }
-  );
-
-  TBTCVaultProvider.on(
-    'OptimisticMintingFinalized',
-    async (minter, depositKey, depositor, optimisticMintingDebt) => {
-      try {
-        const BigDepositKey = BigNumber.from(depositKey);
-        const deposit: Deposit | null = getJsonById(BigDepositKey.toString());
-        if (deposit) {
-          LogMessage(`OptimisticMintingFinalized for Deposit ID: ${deposit.id}`);
-          await chainHandler.finalizeDeposit(deposit);
-        } else {
-          LogMessage(
-            `OptimisticMintingFinalized event for unknown Deposit Key: ${depositKey.toString()}`
-          );
-        }
-      } catch (error) {
-        LogMessage(`Error in the OptimisticMintingFinalized handler: ${error}`);
-      }
-    }
-  );
-
-  LogMessage('Event listeners setup complete.');
 };
 
 // ---------------------------------------------------------------
