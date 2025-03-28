@@ -25,6 +25,9 @@ import { DepositStatus } from '../types/DepositStatus.enum';
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor';
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor';
 import { TBTCVaultABI } from '../interfaces/TBTCVault';
+import {
+  logDepositError,
+} from '../utils/AuditLog';
 
 export class EVMChainHandler implements ChainHandlerInterface {
   private l1Provider: ethers.providers.JsonRpcProvider;
@@ -199,6 +202,7 @@ export class EVMChainHandler implements ChainHandlerInterface {
     } catch (error: any) {
       const reason = error.reason ? error.reason : 'Unknown error';
       LogError(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: `, reason);
+      logDepositError(deposit.id, `Failed to initialize deposit: ${reason}`, error);
       updateToInitializedDeposit(deposit, null, reason);
     }
   }
@@ -239,6 +243,7 @@ export class EVMChainHandler implements ChainHandlerInterface {
         `FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`,
         error
       );
+      logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, error);
       updateToFinalizedDeposit(deposit, null, reason);
     }
   }
@@ -307,6 +312,7 @@ export class EVMChainHandler implements ChainHandlerInterface {
       }
     } catch (error) {
       LogError('Error in processInitializeDeposits:', error as Error);
+      logDepositError('batch-initialize', 'Error processing initialize batch', error);
     }
   }
 
@@ -353,6 +359,7 @@ export class EVMChainHandler implements ChainHandlerInterface {
       }
     } catch (error) {
       LogError('Error in processFinalizeDeposits:', error as Error);
+      logDepositError('batch-finalize', 'Error processing finalize batch', error);
     }
   }
 

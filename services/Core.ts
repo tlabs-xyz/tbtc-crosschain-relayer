@@ -1,12 +1,9 @@
-import { BigNumber, ethers } from 'ethers';
+import { ethers } from 'ethers';
 import cron from 'node-cron';
 import { NonceManager } from '@ethersproject/experimental';
 
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor';
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor';
-import { getJsonById, writeNewJsonDeposit } from '../utils/JsonUtils';
-import { createDeposit } from '../utils/Deposits';
-import { Deposit } from '../types/Deposit.type';
 import { LogMessage, LogError } from '../utils/Logs';
 import { TBTCVaultABI } from '../interfaces/TBTCVault';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory';
@@ -81,27 +78,6 @@ export const TBTCVault: ethers.Contract = new ethers.Contract(
   chainConfig.vaultAddress,
   TBTCVaultABI,
   signerL1
-);
-
-// ---------------------------------------------------------------
-// Contracts for event listening
-// ---------------------------------------------------------------
-const L1BitcoinDepositorProvider = new ethers.Contract(
-  chainConfig.l1ContractAddress,
-  L1BitcoinDepositorABI,
-  providerL1
-);
-
-const L2BitcoinDepositorProvider = new ethers.Contract(
-  chainConfig.l2ContractAddress,
-  L2BitcoinDepositorABI,
-  providerL2
-);
-
-const TBTCVaultProvider = new ethers.Contract(
-  chainConfig.vaultAddress,
-  TBTCVaultABI,
-  providerL1
 );
 
 // ---------------------------------------------------------------

@@ -6,6 +6,14 @@ import { writeJson } from './JsonUtils';
 import { LogMessage } from './Logs';
 import { providerL2 } from '../services/Core';
 import { DepositStatus } from '../types/DepositStatus.enum';
+// --- Audit Log Import ---
+import {
+  logDepositCreated,
+  logStatusChange,
+  logDepositInitialized,
+  logDepositFinalized,
+} from './AuditLog';
+// --- End Import ---
 
 const START_BLOCK: number = parseInt(process.env.L2_START_BLOCK || '0');
 
@@ -74,6 +82,11 @@ export const createDeposit = (
     },
     error: null,
   };
+
+  // --- Log Deposit Creation ---
+  logDepositCreated(deposit);
+  // --- End Log ---
+
   return deposit;
 };
 
@@ -91,6 +104,7 @@ export const updateToFinalizedDeposit = async (
   tx?: any,
   error?: string
 ) => {
+  const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.FINALIZED : deposit.status;
   const newFinalizationAt = tx ? Date.now() : deposit.dates.finalizationAt;
   const newHash = tx
@@ -103,7 +117,6 @@ export const updateToFinalizedDeposit = async (
       }
     : deposit.hashes;
 
-  // Crear el objeto updatedDeposit con propiedades condicionales
   const updatedDeposit: Deposit = {
     ...deposit,
     status: newStatus,
@@ -116,11 +129,22 @@ export const updateToFinalizedDeposit = async (
     error: error ? error : null,
   };
 
+  // Log status change if it actually changed
+  if (newStatus !== oldStatus) {
+    logStatusChange(deposit, newStatus, oldStatus);
+  }
+
   writeJson(updatedDeposit, deposit.id);
-  if (tx)
+
+  if (tx) {
     LogMessage(
       `Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`
     );
+    // --- Log Deposit Finalized ---
+    logDepositFinalized(updatedDeposit);
+    // --- End Log ---
+  }
+  // Note: No specific log if only error was updated
 };
 
 /**
@@ -137,7 +161,7 @@ export const updateToInitializedDeposit = async (
   tx?: any,
   error?: string
 ) => {
-  // Crear el objeto updatedDeposit con propiedades condicionales
+  const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.INITIALIZED : deposit.status;
   const newInitializationAt = tx ? Date.now() : deposit.dates.initializationAt;
   const newHash = tx
@@ -162,11 +186,22 @@ export const updateToInitializedDeposit = async (
     error: error ? error : null,
   };
 
+  // Log status change if it actually changed
+  if (newStatus !== oldStatus) {
+    logStatusChange(deposit, newStatus, oldStatus);
+  }
+
   writeJson(updatedDeposit, deposit.id);
-  if (tx)
+
+  if (tx) {
     LogMessage(
       `Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`
     );
+    // --- Log Deposit Initialized ---
+    logDepositInitialized(updatedDeposit);
+    // --- End Log ---
+  }
+  // Note: No specific log if only error was updated
 };
 
 /**
@@ -273,52 +308,4 @@ export const getBlocksByTimestamp = async (
   }
 
   return { startBlock, endBlock: latestBlockNumber };
-};
-
-export const updateDepositStatus = (
-  deposit: Deposit,
-  newStatus: DepositStatus
-): Deposit => {
-  return {
-    ...deposit,
-    status: newStatus,
-    dates: {
-      ...deposit.dates,
-      lastActivityAt: Date.now(),
-    },
-  };
-};
-
-export const updateDepositHashes = (
-  deposit: Deposit,
-  newStatus: DepositStatus,
-  txHash: string,
-  txType: 'initialize' | 'finalize'
-): Deposit => {
-  // Define updatedHashes based on txType
-  const updatedHashes = {
-    ...deposit.hashes,
-    eth: {
-      ...deposit.hashes.eth,
-      ...(txType === 'initialize' && { initializeTxHash: txHash }),
-      ...(txType === 'finalize' && { finalizeTxHash: txHash }),
-    },
-  };
-
-  // Define updatedDates based on txType and always update lastActivityAt
-  const updatedDates = {
-    ...deposit.dates,
-    ...(txType === 'initialize' && { initializationAt: Date.now() }),
-    ...(txType === 'finalize' && { finalizationAt: Date.now() }),
-    lastActivityAt: Date.now(),
-  };
-
-  // Return the updated deposit object
-  return {
-    ...deposit,
-    status: newStatus,
-    hashes: updatedHashes,
-    dates: updatedDates,
-    error: null,
-  };
 };
