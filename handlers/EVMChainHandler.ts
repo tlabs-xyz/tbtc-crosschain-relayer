@@ -9,7 +9,7 @@ import { LogError, LogMessage } from '../utils/Logs';
 import {
   getJsonById,
   getAllJsonOperationsByStatus,
-  writeNewJsonDeposit,
+  writeJson,
 } from '../utils/JsonUtils';
 import {
   createDeposit,
@@ -139,7 +139,7 @@ export class EVMChainHandler implements ChainHandlerInterface {
               l2DepositOwner,
               l2Sender
             );
-            writeNewJsonDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
+            writeJson(deposit, deposit.id);
             LogMessage(`Initializing deposit | Id: ${deposit.id}`);
             await this.initializeDeposit(deposit);
           } catch (error) {
@@ -411,13 +411,16 @@ export class EVMChainHandler implements ChainHandlerInterface {
 
           if (!existingDeposit) {
             LogMessage(`Processing missed deposit event: ${depositId}`);
+
             const newDeposit = createDeposit(
               fundingTx,
               reveal,
               l2DepositOwner,
               l2Sender
             );
-            writeNewJsonDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
+
+            writeJson(newDeposit, newDeposit.id);
+
             await this.initializeDeposit(newDeposit);
           }
         }

@@ -4,7 +4,6 @@ import { createDeposit } from '../utils/Deposits';
 import { LogError, LogMessage } from '../utils/Logs';
 import {
   logApiRequest,
-  logDepositCreated,
   logDepositError,
 } from '../utils/AuditLog';
 import { DepositStatus } from '../types/DepositStatus.enum';
@@ -62,9 +61,6 @@ export class EndpointController {
         l2Sender
       );
       LogMessage(`Created deposit with ID: ${deposit.id}`);
-
-      // Log deposit creation to audit log
-      logDepositCreated(deposit);
 
       // Initialize the deposit
       await this.chainHandler.initializeDeposit(deposit);

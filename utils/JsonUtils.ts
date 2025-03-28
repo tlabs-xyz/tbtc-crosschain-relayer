@@ -153,29 +153,6 @@ const writeJson = (data: Deposit, operationId: string): boolean => {
 };
 
 /**
- * Create a new deposit and write it to a JSON file.
- * @param {FundingTransaction} fundingTx - The Bitcoin funding transaction.
- * @param {any} reveal - An array containing reveal parameters related to the Bitcoin deposit.
- * @param {any} l2DepositOwner - The owner of the deposit on the L2 network.
- * @param {any} l2Sender - The sender address on the L2 network.
- */
-
-export const writeNewJsonDeposit = (
-  fundingTx: FundingTransaction,
-  reveal: any,
-  l2DepositOwner: any,
-  l2Sender: any
-) => {
-  const deposit: Deposit = createDeposit(
-    fundingTx,
-    reveal,
-    l2DepositOwner,
-    l2Sender
-  );
-  writeJson(deposit, deposit.id);
-};
-
-/**
  * Delete a JSON operation by its ID
  * @param {String} operationId Operation ID
  * @returns {boolean} True if the JSON data was deleted successfully, false otherwise
