@@ -2,10 +2,7 @@ import { Request, Response } from 'express';
 import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
 import { createDeposit } from '../utils/Deposits';
 import { LogError, LogMessage } from '../utils/Logs';
-import {
-  logApiRequest,
-  logDepositError,
-} from '../utils/AuditLog';
+import { logApiRequest, logDepositError } from '../utils/AuditLog';
 import { DepositStatus } from '../types/DepositStatus.enum';
 
 /**

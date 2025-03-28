@@ -58,4 +58,12 @@ export interface ChainHandlerInterface {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void>;
+
+  /**
+   * Indicates whether the handler supports checking for past L2 deposits.
+   * Typically true if L2 listeners are used, false if using an endpoint.
+   *
+   * @returns {boolean} True if past deposit checking is supported, false otherwise.
+   */
+  supportsPastDepositCheck(): boolean;
 }

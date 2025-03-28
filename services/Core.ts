@@ -1,11 +1,6 @@
-import { ethers } from 'ethers';
 import cron from 'node-cron';
-import { NonceManager } from '@ethersproject/experimental';
 
-import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor';
-import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor';
-import { LogMessage, LogError } from '../utils/Logs';
-import { TBTCVaultABI } from '../interfaces/TBTCVault';
+import { LogMessage, LogError, LogWarning } from '../utils/Logs';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type';
 import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits';
@@ -33,52 +28,7 @@ const chainConfig: ChainConfig = {
 export const chainHandler = ChainHandlerFactory.createHandler(chainConfig);
 
 // Constants
-export const TIME_TO_RETRY = 1000 * 60 * 5; // 5 minutes
-
-// ---------------------------------------------------------------
-// Providers
-// ---------------------------------------------------------------
-export const providerL2: ethers.providers.JsonRpcProvider =
-  new ethers.providers.JsonRpcProvider(chainConfig.l2Rpc);
-export const providerL1: ethers.providers.JsonRpcProvider =
-  new ethers.providers.JsonRpcProvider(chainConfig.l1Rpc);
-
-// ---------------------------------------------------------------
-// Signers
-// ---------------------------------------------------------------
-export const signerL2: ethers.Wallet = new ethers.Wallet(
-  chainConfig.privateKey,
-  providerL2
-);
-export const signerL1: ethers.Wallet = new ethers.Wallet(
-  chainConfig.privateKey,
-  providerL1
-);
-
-//NonceManager Wallets
-export const nonceManagerL2 = new NonceManager(signerL2);
-export const nonceManagerL1 = new NonceManager(signerL1);
-
-// ---------------------------------------------------------------
-// Contracts for signing transactions
-// ---------------------------------------------------------------
-export const L1BitcoinDepositor: ethers.Contract = new ethers.Contract(
-  chainConfig.l1ContractAddress,
-  L1BitcoinDepositorABI,
-  nonceManagerL1
-);
-
-export const L2BitcoinDepositor: ethers.Contract = new ethers.Contract(
-  chainConfig.l2ContractAddress,
-  L2BitcoinDepositorABI,
-  nonceManagerL2
-);
-
-export const TBTCVault: ethers.Contract = new ethers.Contract(
-  chainConfig.vaultAddress,
-  TBTCVaultABI,
-  signerL1
-);
+// export const TIME_TO_RETRY = 1000 * 60 * 5; // Moved to BaseChainHandler
 
 // ---------------------------------------------------------------
 // Cron Jobs
@@ -105,11 +55,26 @@ export const startCronJobs = () => {
   // Every 5 minutes - check for past deposits
   cron.schedule('*/5 * * * *', async () => {
     try {
-      const latestBlock = await chainHandler.getLatestBlock();
-      await chainHandler.checkForPastDeposits({
-        pastTimeInMinutes: 5,
-        latestBlock: latestBlock,
-      });
+      if (chainHandler.supportsPastDepositCheck()) {
+        const latestBlock = await chainHandler.getLatestBlock();
+        if (latestBlock > 0) {
+          LogMessage(
+            `Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`
+          );
+          await chainHandler.checkForPastDeposits({
+            pastTimeInMinutes: 5,
+            latestBlock: latestBlock,
+          });
+        } else {
+          LogWarning(
+            `Skipping checkForPastDeposits - Invalid latestBlock received: ${latestBlock}`
+          );
+        }
+      } else {
+        LogMessage(
+          'Skipping checkForPastDeposits - Handler does not support it (e.g., using endpoint).'
+        );
+      }
     } catch (error) {
       LogError('Error in past deposits cron job:', error as Error);
     }
@@ -138,9 +103,7 @@ export const initializeChain = async () => {
     await chainHandler.initialize();
 
     // Set up event listeners if not using endpoint
-    if (!chainConfig.useEndpoint) {
-      await chainHandler.setupListeners();
-    }
+    await chainHandler.setupListeners();
 
     LogMessage(
       `Chain handler for ${chainConfig.chainName} successfully initialized`

@@ -3,6 +3,11 @@ import { ChainConfig, ChainType } from '../types/ChainConfig.type';
 import { EVMChainHandler } from './EVMChainHandler';
 import { LogMessage } from '../utils/Logs';
 
+// --- Import New Handlers ---
+import { StarknetChainHandler } from './StarknetChainHandler';
+import { SuiChainHandler } from './SuiChainHandler';
+import { SolanaChainHandler } from './SolanaChainHandler';
+
 /**
  * Factory class for creating appropriate chain handlers based on configuration
  */
@@ -14,7 +19,7 @@ export class ChainHandlerFactory {
    */
   static createHandler(chainConfig: ChainConfig): ChainHandlerInterface {
     LogMessage(
-      `Creating chain handler for ${chainConfig.chainName} (${chainConfig.chainType})`
+      `Factory: Creating chain handler for ${chainConfig.chainName} (${chainConfig.chainType})`
     );
 
     switch (chainConfig.chainType) {
@@ -22,19 +27,18 @@ export class ChainHandlerFactory {
         return new EVMChainHandler(chainConfig);
 
       case ChainType.STARKNET:
-        // For future implementation
-        throw new Error(`StarkNet chain handler not yet implemented`);
+        return new StarknetChainHandler(chainConfig);
 
       case ChainType.SUI:
-        // For future implementation
-        throw new Error(`Sui chain handler not yet implemented`);
+        return new SuiChainHandler(chainConfig);
 
       case ChainType.SOLANA:
-        // For future implementation
-        throw new Error(`Solana chain handler not yet implemented`);
+        return new SolanaChainHandler(chainConfig);
 
       default:
-        throw new Error(`Unsupported chain type: ${chainConfig.chainType}`);
+        // Ensure exhaustive check - if new types added, this will error
+        const _exhaustiveCheck: never = chainConfig.chainType;
+        throw new Error(`Unsupported chain type: ${_exhaustiveCheck}`);
     }
   }
 }

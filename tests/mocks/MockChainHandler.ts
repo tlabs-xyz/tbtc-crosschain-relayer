@@ -298,4 +298,14 @@ export class MockChainHandler implements ChainHandlerInterface {
   setProcessingDelay(delayMs: number): void {
     this.processingDelayMs = delayMs;
   }
+
+  /**
+   * Indicates whether the mock handler supports checking for past deposits.
+   * For testing, we can make this configurable or default to true/false.
+   * Let's default to true for now, assuming tests might need it.
+   */
+  supportsPastDepositCheck(): boolean {
+    // Return true by default for the mock, can be overridden in specific tests if needed.
+    return true;
+  }
 }

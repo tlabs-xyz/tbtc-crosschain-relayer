@@ -4,7 +4,6 @@ import { FundingTransaction } from '../types/FundingTransaction.type';
 import { getFundingTxHash, getTransactionHash } from './GetTransactionHash';
 import { writeJson } from './JsonUtils';
 import { LogMessage } from './Logs';
-import { providerL2 } from '../services/Core';
 import { DepositStatus } from '../types/DepositStatus.enum';
 // --- Audit Log Import ---
 import {
@@ -14,8 +13,6 @@ import {
   logDepositFinalized,
 } from './AuditLog';
 // --- End Import ---
-
-const START_BLOCK: number = parseInt(process.env.L2_START_BLOCK || '0');
 
 /**
  * @name createDeposit
@@ -260,52 +257,4 @@ export const getDepositId = (
   const depositKey = ethers.BigNumber.from(hash).toString();
 
   return depositKey;
-};
-
-export const getBlocksByTimestamp = async (
-  timestamp: number,
-  latestBlock: number
-): Promise<{
-  startBlock: number;
-  endBlock: number;
-}> => {
-  let startBlock = -1;
-  let low = START_BLOCK;
-  let latestBlockNumber = 0;
-
-  try {
-    let high = latestBlock;
-    latestBlockNumber = high;
-
-    console.log(`Starting binary search between blocks ${low} and ${high}`);
-
-    while (low <= high) {
-      console.log(`Binary search iteration: low=${low}, high=${high}`);
-      const mid = Math.floor((low + high) / 2);
-      const blockData = await providerL2.getBlock(mid);
-
-      if (!blockData) {
-        high = mid - 1;
-        continue;
-      }
-
-      if (blockData.timestamp === timestamp) {
-        startBlock = mid;
-        break;
-      } else if (blockData.timestamp < timestamp) {
-        low = mid + 1;
-        startBlock = mid;
-      } else {
-        high = mid - 1;
-      }
-    }
-
-    if (startBlock === -1) {
-      startBlock = START_BLOCK;
-    }
-  } catch (error) {
-    LogMessage(`Error in the getBlocksByTimestamp: ${error}`);
-  }
-
-  return { startBlock, endBlock: latestBlockNumber };
 };
