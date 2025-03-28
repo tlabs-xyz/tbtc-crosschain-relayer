@@ -5,7 +5,7 @@ import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
 import { ChainConfig } from '../types/ChainConfig.type';
 import { Deposit } from '../types/Deposit.type';
 import { FundingTransaction } from '../types/FundingTransaction.type';
-import { LogError, LogMessage } from '../utils/Logs';
+import { LogError, LogMessage, LogWarning } from '../utils/Logs';
 import {
   getJsonById,
   getAllJsonOperationsByStatus,
@@ -237,14 +237,23 @@ export class EVMChainHandler implements ChainHandlerInterface {
       );
 
       updateToFinalizedDeposit(deposit, tx);
+
     } catch (error: any) {
       const reason = error.reason ? error.reason : 'Unknown error';
-      LogError(
-        `FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`,
-        error
-      );
-      logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, error);
-      updateToFinalizedDeposit(deposit, null, reason);
+
+      if (reason === "Deposit not finalized by the bridge") {
+        LogWarning(
+          `FINALIZE | WAITING | ID: ${deposit.id} | Reason: ${reason}`
+        );
+        updateLastActivity(deposit);
+      } else {
+        LogError(
+          `FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`,
+          error
+        );
+        logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, error);
+        updateToFinalizedDeposit(deposit, null, reason);
+      }
     }
   }
 
