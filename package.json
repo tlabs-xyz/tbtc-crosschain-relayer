@@ -1,6 +1,6 @@
 {
   "name": "tbtc-relayer",
-  "version": "0.1.0",
+  "version": "1.0.0-pre",
   "description": "Threshold Network tBTC Cross-Chain Relayer",
   "main": "index.ts",
   "scripts": {
