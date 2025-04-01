@@ -7,3 +7,10 @@ package-lock.json
 # ADD .ENV FILE !!
 .env
 .env.dev
+
+.cursor
+
+/coverage
+
+/logs
+/data

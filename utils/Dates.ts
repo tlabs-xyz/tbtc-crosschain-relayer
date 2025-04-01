@@ -1,4 +1,4 @@
-import { formatNumber } from "./Numbers";
+import { formatNumber } from './Numbers';
 
 /**
  * @name getStringDate
@@ -7,16 +7,16 @@ import { formatNumber } from "./Numbers";
  **/
 
 export const getStringDate = (): string => {
-	const date = new Date();
-	const day = formatNumber(date.getDate());
-	const month = formatNumber(date.getMonth() + 1);
-	const year = date.getFullYear();
-	const hours = formatNumber(date.getHours());
-	const minutes = formatNumber(date.getMinutes());
-	const seconds = formatNumber(date.getSeconds());
+  const date = new Date();
+  const day = formatNumber(date.getDate());
+  const month = formatNumber(date.getMonth() + 1);
+  const year = date.getFullYear();
+  const hours = formatNumber(date.getHours());
+  const minutes = formatNumber(date.getMinutes());
+  const seconds = formatNumber(date.getSeconds());
 
-	const formattedDate = `${day}/${month}/${year}`;
-	const formattedTime = `${hours}:${minutes}:${seconds}`;
+  const formattedDate = `${day}/${month}/${year}`;
+  const formattedTime = `${hours}:${minutes}:${seconds}`;
 
-	return `${formattedDate} - ${formattedTime}`;
+  return `${formattedDate} - ${formattedTime}`;
 };

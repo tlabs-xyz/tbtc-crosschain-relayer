@@ -5,5 +5,5 @@
  * @returns {string} formatted number
  */
 export const formatNumber = (number: number): string => {
-	return number.toString().padStart(2, "0");
+  return number.toString().padStart(2, '0');
 };
