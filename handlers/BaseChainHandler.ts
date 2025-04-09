@@ -226,7 +226,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     }
   }
 
-  async finalizeDeposit(deposit: Deposit): Promise<void> {
+  async finalizeDeposit(deposit: Deposit): Promise<void | { receipt: ethers.ContractReceipt | null; }> {
     // Check if already finalized locally
     if (deposit.status === DepositStatus.FINALIZED) {
       LogWarning(
@@ -291,6 +291,8 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
       // Update status upon successful mining
       updateToFinalizedDeposit(deposit, receipt); // Pass only deposit and receipt on success
+
+      return { receipt }
     } catch (error: any) {
       const reason =
         error.reason ??

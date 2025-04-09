@@ -44,4 +44,6 @@ export interface ChainConfig {
 
   /** Starting block number for scanning L2 events */
   l2StartBlock?: number;
+
+  solanaKeyBase?: string; // Base64 encoded secret key for Solana
 }

@@ -25,7 +25,10 @@
   "author": "T-Labs",
   "license": "ISC",
   "dependencies": {
+    "@certusone/wormhole-sdk": "^0.10.18",
+    "@coral-xyz/anchor": "^0.31.0",
     "@ethersproject/experimental": "^5.7.0",
+    "@solana/web3.js": "^1.98.0",
     "axios": "^1.7.2",
     "bitcoinjs-lib": "^6.0.1",
     "compression": "^1.7.4",

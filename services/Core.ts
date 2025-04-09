@@ -3,7 +3,7 @@ import cron from 'node-cron';
 import { LogMessage, LogError, LogWarning } from '../utils/Logs';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type';
-import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits';
+import { cleanQueuedDeposits, cleanFinalizedDeposits, cleanBridgedDeposits } from './CleanupDeposits';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
@@ -45,15 +45,18 @@ export const startCronJobs = () => {
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
     try {
-      await chainHandler.processFinalizeDeposits();
-      await chainHandler.processInitializeDeposits();
+      await Promise.all([
+        chainHandler.processInitializeDeposits(),
+        chainHandler.processFinalizeDeposits(),
+        chainHandler.processWormholeBridging?.()
+      ]);
     } catch (error) {
       LogError('Error in deposit processing cron job:', error as Error);
     }
   });
 
-  // Every 5 minutes - check for past deposits
-  cron.schedule('*/5 * * * *', async () => {
+  // Every 60 minutes - check for past deposits
+  cron.schedule('*/60 * * * *', async () => {
     try {
       if (chainHandler.supportsPastDepositCheck()) {
         const latestBlock = await chainHandler.getLatestBlock();
@@ -62,7 +65,7 @@ export const startCronJobs = () => {
             `Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`
           );
           await chainHandler.checkForPastDeposits({
-            pastTimeInMinutes: 5,
+            pastTimeInMinutes: 60,
             latestBlock: latestBlock,
           });
         } else {
@@ -83,8 +86,11 @@ export const startCronJobs = () => {
   // Every 10 minutes - cleanup
   cron.schedule('*/10 * * * *', async () => {
     try {
-      await cleanQueuedDeposits();
-      await cleanFinalizedDeposits();
+      await Promise.all([
+        cleanQueuedDeposits(),
+        cleanFinalizedDeposits(),
+        cleanBridgedDeposits()
+      ]);
     } catch (error) {
       LogError('Error in cleanup cron job:', error as Error);
     }
