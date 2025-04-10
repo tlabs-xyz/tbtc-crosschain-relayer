@@ -28,6 +28,7 @@
     "@certusone/wormhole-sdk": "^0.10.18",
     "@coral-xyz/anchor": "^0.31.0",
     "@ethersproject/experimental": "^5.7.0",
+    "@solana/spl-token": "^0.4.13",
     "@solana/web3.js": "^1.98.0",
     "axios": "^1.7.2",
     "bitcoinjs-lib": "^6.0.1",
