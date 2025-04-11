@@ -1,27 +1,20 @@
 import { PublicKey } from "@solana/web3.js";
 
+export const TBTC_ADDRESS_BYTES_32 = Buffer.concat([
+  Buffer.alloc(12), // 12 zero bytes
+  Buffer.from("517f2982701695D4E52f1ECFBEf3ba31Df470161", "hex")
+]); // sepolia address in bytes32
+
 export const TBTC_PROGRAM_ID = new PublicKey(
-  "HksEtDgsXJV1BqcuhzbLRTmXp5gHgHJktieJCtQd3pG"
+  "Gj93RRt6QB7FjmyokAD5rcMAku7pq3Fk2Aa8y6nNbwsV"
 );
 export const WORMHOLE_GATEWAY_PROGRAM_ID = new PublicKey(
-  "8H9F5JGbEMyERycwaGuzLS5MQnV7dn2wm2h6egJ3Leiu"
+  "87MEvHZCXE3ML5rrmh5uX1FbShHmRXXS32xJDGbQ7h5t"
 );
 
 export const CORE_BRIDGE_PROGRAM_ID = new PublicKey(
-  "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth"
+  "Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"
 );
 export const TOKEN_BRIDGE_PROGRAM_ID = new PublicKey(
-  "wormDTUJ6AWPNvk59vGQbDvGJmqbDTdgWgAqcLBCgUb"
+  "B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE"
 );
-
-// relevant token bridge PDAs
-export const WRAPPED_TBTC_MINT = new PublicKey(
-  "25rXTx9zDZcHyTav5sRqM6YBvTGu9pPH9yv83uAEqbgG"
-);
-export const WRAPPED_TBTC_ASSET = new PublicKey(
-  "5LEUZpBxUQmoxoNGqmYmFEGAPDuhWbAY5CGt519UixLo"
-);
-export const ETHEREUM_ENDPOINT = new PublicKey(
-  "DujfLgMKW71CT2W8pxknf42FT86VbcK5PjQ6LsutjWKC"
-);
-

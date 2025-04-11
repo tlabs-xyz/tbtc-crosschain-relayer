@@ -119,7 +119,7 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
  */
 
 const REMOVE_BRIDGED_TIME_MS: number =
-  parseInt(process.env.CLEAN_FINALIZED_TIME || '12', 10) * 60 * 60 * 1000;
+  parseInt(process.env.CLEAN_BRIDGED_TIME || '12', 10) * 60 * 60 * 1000;
 
 export const cleanBridgedDeposits = async (): Promise<void> => {
   const operations: Deposit[] = await getAllJsonOperationsByStatus(

@@ -1,11 +1,17 @@
-import { PublicKey, SYSVAR_RENT_PUBKEY, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
 import { ReceiveTbtcContext } from "../types/Wormhole.type";
 import { parseVaa } from "@certusone/wormhole-sdk";
 import * as tokenBridge from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 import * as coreBridge from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import { Idl, Program } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { CORE_BRIDGE_PROGRAM_ID, ETHEREUM_ENDPOINT, TBTC_PROGRAM_ID, TOKEN_BRIDGE_PROGRAM_ID, WORMHOLE_GATEWAY_PROGRAM_ID, WRAPPED_TBTC_ASSET, WRAPPED_TBTC_MINT } from "./Constants";
+import { 
+  CORE_BRIDGE_PROGRAM_ID,
+  TBTC_ADDRESS_BYTES_32,
+  TBTC_PROGRAM_ID,
+  TOKEN_BRIDGE_PROGRAM_ID,
+  WORMHOLE_GATEWAY_PROGRAM_ID
+} from "./Constants";
 
 
 export function getCustodianPDA(): PublicKey {
@@ -152,7 +158,11 @@ export async function receiveTbtcIx(
   }
 
   if (wrappedTbtcMint === undefined) {
-    wrappedTbtcMint = WRAPPED_TBTC_MINT;
+    wrappedTbtcMint = tokenBridge.deriveWrappedMintKey(
+      TOKEN_BRIDGE_PROGRAM_ID, 
+      parsed.emitterChain,
+      TBTC_ADDRESS_BYTES_32
+    );
   }
 
   if (tbtcMint === undefined) {
@@ -181,11 +191,18 @@ export async function receiveTbtcIx(
   }
 
   if (tokenBridgeRegisteredEmitter === undefined) {
-    tokenBridgeRegisteredEmitter = ETHEREUM_ENDPOINT;
+    tokenBridgeRegisteredEmitter = tokenBridge.deriveEndpointKey(
+      TOKEN_BRIDGE_PROGRAM_ID,
+      parsed.emitterChain,
+      parsed.emitterAddress,
+    );
   }
 
   if (tokenBridgeWrappedAsset === undefined) {
-    tokenBridgeWrappedAsset = WRAPPED_TBTC_ASSET;
+    tokenBridgeWrappedAsset = tokenBridge.deriveWrappedMetaKey(
+      TOKEN_BRIDGE_PROGRAM_ID,
+      wrappedTbtcMint
+    );
   }
 
   if (tokenBridgeMintAuthority === undefined) {
@@ -227,7 +244,6 @@ export async function receiveTbtcIx(
       wrappedTbtcMint,
       tokenBridgeConfig,
       tokenBridgeRegisteredEmitter,
-      //tokenBridgeRedeemer,
       tokenBridgeWrappedAsset,
       tokenBridgeMintAuthority,
       rent,

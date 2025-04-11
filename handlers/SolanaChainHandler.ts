@@ -3,6 +3,7 @@ import {
   AnchorProvider, 
   Idl, 
   Program, 
+  setProvider, 
   Wallet, 
 } from '@coral-xyz/anchor';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
@@ -14,11 +15,12 @@ import { BaseChainHandler } from './BaseChainHandler';
 import { Deposit } from '../types/Deposit.type';
 import { DepositStatus } from '../types/DepositStatus.enum';
 
-import wormholeGatewayIdl from '../idl/wormhole_gateway.json';
+import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json';
 import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits';
 import { getAllJsonOperationsByStatus } from '../utils/JsonUtils';
 import { getMintPDA, receiveTbtcIx } from '../utils/Wormhole';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
+import { WORMHOLE_GATEWAY_PROGRAM_ID } from '../utils/Constants';
 
 const RPC_HOSTS = [
   'https://api.testnet.wormholescan.io/api/v1/',  // Testnet RPC
@@ -59,18 +61,22 @@ export class SolanaChainHandler extends BaseChainHandler {
 
       const secretKeyBase64 = this.config.solanaKeyBase;
       if (!secretKeyBase64) throw new Error("Missing solanaKeyBase");
-      const secretKeyBytes = Buffer.from(secretKeyBase64, "base64");
-      const keypair = Keypair.fromSecretKey(Uint8Array.from(secretKeyBytes));
+      const secretKeyBytes =  new Uint8Array(secretKeyBase64.split(',').map(Number));
+      const keypair = Keypair.fromSecretKey(secretKeyBytes);
       const wallet = new Wallet(keypair);
+
       this.provider = new AnchorProvider(
         this.connection,
         wallet,
-        AnchorProvider.defaultOptions()
+        {}
       );
+
+      setProvider(this.provider);
 
       this.wormholeGatewayProgram = new Program<Idl>(
         wormholeGatewayIdl as unknown as Idl,
-        this.provider,
+        WORMHOLE_GATEWAY_PROGRAM_ID,
+        this.provider
       );
 
       LogMessage(

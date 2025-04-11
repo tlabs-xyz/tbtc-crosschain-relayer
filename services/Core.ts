@@ -13,15 +13,16 @@ const chainConfig: ChainConfig = {
   chainName: process.env.CHAIN_NAME || 'Default Chain',
   l1Rpc: process.env.L1_RPC || '',
   l2Rpc: process.env.L2_RPC || '',
-  l1ContractAddress: process.env.L1BitcoinDepositor || '',
-  l2ContractAddress: process.env.L2BitcoinDepositor || '',
-  vaultAddress: process.env.TBTCVault || '',
+  l1ContractAddress: process.env.L1_BITCOIN_DEPOSITOR || '',
+  l2ContractAddress: process.env.L2_BITCOIN_DEPOSITOR || '',
+  vaultAddress: process.env.TBTC_VAULT || '',
   privateKey: process.env.PRIVATE_KEY || '',
   useEndpoint: process.env.USE_ENDPOINT === 'true',
   endpointUrl: process.env.ENDPOINT_URL,
   l2StartBlock: process.env.L2_START_BLOCK
     ? parseInt(process.env.L2_START_BLOCK)
     : undefined,
+  solanaKeyBase: process.env.SOLANA_KEY_BASE,
 };
 
 // Create the appropriate chain handler
@@ -45,11 +46,9 @@ export const startCronJobs = () => {
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
     try {
-      await Promise.all([
-        chainHandler.processInitializeDeposits(),
-        chainHandler.processFinalizeDeposits(),
-        chainHandler.processWormholeBridging?.()
-      ]);
+      await chainHandler.processWormholeBridging?.();
+      await chainHandler.processFinalizeDeposits();
+      await chainHandler.processInitializeDeposits();
     } catch (error) {
       LogError('Error in deposit processing cron job:', error as Error);
     }
@@ -86,11 +85,9 @@ export const startCronJobs = () => {
   // Every 10 minutes - cleanup
   cron.schedule('*/10 * * * *', async () => {
     try {
-      await Promise.all([
-        cleanQueuedDeposits(),
-        cleanFinalizedDeposits(),
-        cleanBridgedDeposits()
-      ]);
+      await cleanQueuedDeposits();
+      await cleanFinalizedDeposits();
+      await cleanBridgedDeposits();
     } catch (error) {
       LogError('Error in cleanup cron job:', error as Error);
     }
