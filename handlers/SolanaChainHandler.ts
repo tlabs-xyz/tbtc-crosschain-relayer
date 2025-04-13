@@ -7,7 +7,7 @@ import {
   Wallet, 
 } from '@coral-xyz/anchor';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
-import { getSignedVAAWithRetry, postVaaSolana, CHAIN_ID_ETH, CONTRACTS } from '@certusone/wormhole-sdk';
+import { postVaaSolana, CONTRACTS, getEmitterAddressEth } from '@certusone/wormhole-sdk';
 
 import { ChainConfig, ChainType } from '../types/ChainConfig.type';
 import { LogMessage, LogWarning, LogError } from '../utils/Logs';
@@ -20,12 +20,12 @@ import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/De
 import { getAllJsonOperationsByStatus } from '../utils/JsonUtils';
 import { getMintPDA, receiveTbtcIx } from '../utils/Wormhole';
 import { getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { WORMHOLE_GATEWAY_PROGRAM_ID } from '../utils/Constants';
+import { 
+  EMITTER_CHAIN_ID, IS_MAINNET,
+  WORMHOLE_API_URL,
+  WORMHOLE_GATEWAY_PROGRAM_ID
+} from '../utils/Constants';
 
-const RPC_HOSTS = [
-  'https://api.testnet.wormholescan.io/api/v1/',  // Testnet RPC
-  'https://api.wormholescan.io/api/v1/', // Mainnet RPC
-];
 
 export class SolanaChainHandler extends BaseChainHandler {
   private connection?: Connection;
@@ -61,7 +61,7 @@ export class SolanaChainHandler extends BaseChainHandler {
 
       const secretKeyBase64 = this.config.solanaKeyBase;
       if (!secretKeyBase64) throw new Error("Missing solanaKeyBase");
-      const secretKeyBytes =  new Uint8Array(secretKeyBase64.split(',').map(Number));
+      const secretKeyBytes = new Uint8Array(secretKeyBase64.split(',').map(Number));
       const keypair = Keypair.fromSecretKey(secretKeyBytes);
       const wallet = new Wallet(keypair);
 
@@ -144,9 +144,10 @@ export class SolanaChainHandler extends BaseChainHandler {
   async finalizeDeposit(deposit: Deposit): Promise<void> {
     const finalizedDeposit = await super.finalizeDeposit(deposit);
   
-    if (deposit.status !== DepositStatus.FINALIZED || !finalizedDeposit?.receipt) {
+    if (!finalizedDeposit?.receipt) {
       return;
     }
+    LogMessage(`Finalizing deposit ${deposit.id} on Solana...`);
   
     const l1Receipt = finalizedDeposit.receipt;
     if (!l1Receipt) {
@@ -183,11 +184,13 @@ export class SolanaChainHandler extends BaseChainHandler {
       return;
     }
 
-    await updateToAwaitingWormholeVAA(deposit, transferSequence);  
+    await updateToAwaitingWormholeVAA(deposit, transferSequence);
     LogMessage(`Deposit ${deposit.id} now awaiting Wormhole VAA.`);
   }
 
   public async bridgeSolanaDeposit(deposit: Deposit): Promise<void> {
+    LogMessage(`Bridging deposit ${deposit.id} on Solana...`);
+
     if (!this.wormholeGatewayProgram) {
       LogWarning(`Wormhole Gateway program not initialized. Cannot bridge deposit ${deposit.id}.`);
       return;
@@ -205,28 +208,29 @@ export class SolanaChainHandler extends BaseChainHandler {
     if (!transferSequence) return;
   
     LogMessage(`Attempting to fetch VAA for deposit ${deposit.id} seq=${transferSequence}`);
+    const emitterAddressEth = getEmitterAddressEth(this.l1BitcoinDepositor.address);
   
     try {
-      const { vaaBytes } = await getSignedVAAWithRetry(
-        RPC_HOSTS,
-        CHAIN_ID_ETH,
-        this.l1BitcoinDepositor.address,
-        transferSequence,
-        {
-          maxAttempts: 30,
-          retryDelayMs: 60000,         // Wait 60s between attempts
-        },
+      const signedVaaResponse = await fetch(
+        `${WORMHOLE_API_URL}/v1/signed_vaa/${EMITTER_CHAIN_ID}/${emitterAddressEth}/${transferSequence}`
       );
+      let vaaBytes = await signedVaaResponse.json();
+      
+      if (!signedVaaResponse.ok) {
+       LogWarning(`VAA message is not yet signed by the guardians: ${signedVaaResponse.status}`);
+        return;
+      }
       // If no error thrown, we have the VAA.
       LogMessage(`VAA found for deposit ${deposit.id}. Posting to Solana...`);
-  
-      const isMainnet = this.l1BitcoinDepositorProvider.network.chainId === 1;
-      const NETWORK = isMainnet ? 'MAINNET' : 'TESTNET';
+      const NETWORK = IS_MAINNET ? 'MAINNET' : 'TESTNET';
       
       const WORMHOLE_CONTRACTS = CONTRACTS[NETWORK]["solana"];
       const CORE_BRIDGE_PID = new PublicKey(WORMHOLE_CONTRACTS.core);
 
-      const vaaBuffer = Buffer.from(vaaBytes);
+      const vaaBytesStr = vaaBytes.vaaBytes;
+      const vaaBuffer = Buffer.from(vaaBytesStr, "base64");
+
+      LogMessage(`Posting VAA to Solana...`);
 
       const postVaaTxSig = await postVaaSolana(
         this.connection,
@@ -235,13 +239,16 @@ export class SolanaChainHandler extends BaseChainHandler {
         this.provider.wallet.publicKey,
         vaaBuffer
       );
-      LogMessage(`Posted VAA on Solana (txSig=${postVaaTxSig}). Now calling receive_tbtc.`);
+      LogMessage(`Posted VAA on Solana (txSig=${postVaaTxSig[0]} and response=${postVaaTxSig[1]})`);
   
-      const recipientPubkey = new PublicKey(deposit.receipt.extraData);
+      const recipientPubkeyBytes = Buffer.from(deposit.receipt.extraData.slice(2), "hex");
+      const recipientPubkey = new PublicKey(recipientPubkeyBytes);
       const recipientToken = getAssociatedTokenAddressSync(
         getMintPDA(),
         recipientPubkey
       );
+
+      LogMessage(`Calling receiveTbtcIx...`);
 
       const txSig = await receiveTbtcIx(
         {

@@ -14,6 +14,7 @@ import {
   logDepositAwaitingWormholeVAA,
   logDepositBridged,
 } from './AuditLog';
+import { Reveal } from '../types/Reveal.type';
 // --- End Import ---
 
 /**
@@ -37,12 +38,13 @@ export const createDeposit = (
   l2DepositOwner: any,
   l2Sender: any
 ): Deposit => {
+  const revealArray = Array.isArray(reveal) ? reveal : Object.values(reveal) as Reveal;
   const fundingTxHash = getFundingTxHash(fundingTx);
-  const depositId = getDepositId(fundingTxHash, reveal[0]);
+  const depositId = getDepositId(fundingTxHash, revealArray[0]);
   const deposit: Deposit = {
     id: depositId,
     fundingTxHash: fundingTxHash,
-    outputIndex: reveal[0],
+    outputIndex: revealArray[0],
     hashes: {
       btc: {
         btcTxHash: getTransactionHash(fundingTx),
@@ -57,11 +59,11 @@ export const createDeposit = (
     },
     receipt: {
       depositor: l2Sender,
-      blindingFactor: reveal[1],
-      walletPublicKeyHash: reveal[2],
-      refundPublicKeyHash: reveal[3],
-      refundLocktime: reveal[4],
-      extraData: reveal[5],
+      blindingFactor: revealArray[1],
+      walletPublicKeyHash: revealArray[2],
+      refundPublicKeyHash: revealArray[3],
+      refundLocktime: revealArray[4],
+      extraData: l2DepositOwner,
     },
     L1OutputEvent: {
       fundingTx: {

@@ -1,3 +1,4 @@
+import { CHAIN_ID_ETH, CHAIN_ID_SEPOLIA } from "@certusone/wormhole-sdk";
 import { PublicKey } from "@solana/web3.js";
 
 export const TBTC_ADDRESS_BYTES_32 = Buffer.concat([
@@ -18,3 +19,9 @@ export const CORE_BRIDGE_PROGRAM_ID = new PublicKey(
 export const TOKEN_BRIDGE_PROGRAM_ID = new PublicKey(
   "B6RHG3mfcckmrYN1UhmJzyS1XX3fZKbkeUcpJe9Sy3FE"
 );
+
+export const WORMHOLE_API_URL = process.env.IS_MAINNET === "true" ? "https://api.wormholescan.io" : "https://api.testnet.wormholescan.io";
+
+export const IS_MAINNET = process.env.IS_MAINNET === "true";
+
+export const EMITTER_CHAIN_ID = IS_MAINNET ? CHAIN_ID_ETH : CHAIN_ID_SEPOLIA;
