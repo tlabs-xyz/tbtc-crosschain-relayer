@@ -1,13 +1,12 @@
-import { PublicKey, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
+import { PublicKey, SYSVAR_RENT_PUBKEY, TransactionInstruction } from "@solana/web3.js";
 import { ReceiveTbtcContext } from "../types/Wormhole.type";
-import { parseVaa } from "@certusone/wormhole-sdk";
+import { isBytes, parseTokenTransferVaa, SignedVaa } from "@certusone/wormhole-sdk";
 import * as tokenBridge from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
 import * as coreBridge from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
 import { Idl, Program } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { 
   CORE_BRIDGE_PROGRAM_ID,
-  TBTC_ADDRESS_BYTES_32,
   TBTC_PROGRAM_ID,
   TOKEN_BRIDGE_PROGRAM_ID,
   WORMHOLE_GATEWAY_PROGRAM_ID
@@ -17,7 +16,7 @@ import {
 export function getCustodianPDA(): PublicKey {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("redeemer")],
-    WORMHOLE_GATEWAY_PROGRAM_ID
+    new PublicKey(WORMHOLE_GATEWAY_PROGRAM_ID)
   )[0];
 }
 
@@ -105,10 +104,10 @@ export function getMintersPDA(): PublicKey {
 
 export async function receiveTbtcIx(
   accounts: ReceiveTbtcContext,
-  signedVaa: Buffer,
+  signedVaa: SignedVaa,
   program: Program<Idl>,
-): Promise<string> {
-  const parsed = parseVaa(signedVaa);
+): Promise<TransactionInstruction> {
+  const parsed = parseTokenTransferVaa(signedVaa);
 
   let {
     payer,
@@ -137,6 +136,8 @@ export async function receiveTbtcIx(
     custodian = getCustodianPDA();
   }
 
+  const custodianData = await program.account.custodian.fetch(custodian);
+
   if (postedVaa === undefined) {
     postedVaa = coreBridge.derivePostedVaaKey(
       CORE_BRIDGE_PROGRAM_ID,
@@ -154,19 +155,19 @@ export async function receiveTbtcIx(
   }
 
   if (wrappedTbtcToken === undefined) {
-    wrappedTbtcToken = getWrappedTbtcTokenPDA();
+    wrappedTbtcToken = new PublicKey(
+      custodianData.wrappedTbtcToken as string
+    );
   }
 
   if (wrappedTbtcMint === undefined) {
-    wrappedTbtcMint = tokenBridge.deriveWrappedMintKey(
-      TOKEN_BRIDGE_PROGRAM_ID, 
-      parsed.emitterChain,
-      TBTC_ADDRESS_BYTES_32
+    wrappedTbtcMint = new PublicKey(
+      custodianData.wrappedTbtcMint as string
     );
   }
 
   if (tbtcMint === undefined) {
-    tbtcMint = getMintPDA();
+    tbtcMint = new PublicKey(custodianData.tbtcMint as string);
   }
 
   if (recipientWrappedToken == undefined) {
@@ -227,21 +228,23 @@ export async function receiveTbtcIx(
     coreBridgeProgram = CORE_BRIDGE_PROGRAM_ID;
   }
 
-  return program.methods
-    .receiveTbtc(Array.from(parsed.hash))
+  console.log("postedVaa: ", postedVaa);
+
+  return await program.methods
+    .receiveTbtc(parsed.hash)
     .accounts({
       payer,
       custodian,
       postedVaa,
       tokenBridgeClaim,
       wrappedTbtcToken,
+      wrappedTbtcMint,
       tbtcMint,
       recipientToken,
       recipient,
       recipientWrappedToken,
       tbtcConfig,
       tbtcMinterInfo,
-      wrappedTbtcMint,
       tokenBridgeConfig,
       tokenBridgeRegisteredEmitter,
       tokenBridgeWrappedAsset,
@@ -251,5 +254,5 @@ export async function receiveTbtcIx(
       tokenBridgeProgram,
       coreBridgeProgram,
     })
-    .rpc();
+    .instruction();
 }
