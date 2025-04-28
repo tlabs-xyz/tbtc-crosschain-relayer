@@ -1,8 +1,8 @@
+import { toChainId, type TBTCBridge } from '@wormhole-foundation/sdk-connect';
 import { PublicKey, SYSVAR_RENT_PUBKEY, TransactionInstruction } from "@solana/web3.js";
 import { ReceiveTbtcContext } from "../types/Wormhole.type";
-import { isBytes, parseTokenTransferVaa, SignedVaa } from "@certusone/wormhole-sdk";
 import * as tokenBridge from "@certusone/wormhole-sdk/lib/cjs/solana/tokenBridge";
-import * as coreBridge from "@certusone/wormhole-sdk/lib/cjs/solana/wormhole";
+import { utils as coreUtils } from '@wormhole-foundation/sdk-solana-core';
 import { Idl, Program } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { 
@@ -11,7 +11,6 @@ import {
   TOKEN_BRIDGE_PROGRAM_ID,
   WORMHOLE_GATEWAY_PROGRAM_ID
 } from "./Constants";
-
 
 export function getCustodianPDA(): PublicKey {
   return PublicKey.findProgramAddressSync(
@@ -101,14 +100,11 @@ export function getMintersPDA(): PublicKey {
   )[0];
 }
 
-
 export async function receiveTbtcIx(
   accounts: ReceiveTbtcContext,
-  signedVaa: SignedVaa,
+  vaa: TBTCBridge.VAA,
   program: Program<Idl>,
 ): Promise<TransactionInstruction> {
-  const parsed = parseTokenTransferVaa(signedVaa);
-
   let {
     payer,
     custodian,
@@ -139,18 +135,18 @@ export async function receiveTbtcIx(
   const custodianData = await program.account.custodian.fetch(custodian);
 
   if (postedVaa === undefined) {
-    postedVaa = coreBridge.derivePostedVaaKey(
+    postedVaa = coreUtils.derivePostedVaaKey(
       CORE_BRIDGE_PROGRAM_ID,
-      parsed.hash
+      Buffer.from(vaa.hash)
     );
   }
 
   if (tokenBridgeClaim === undefined) {
-    tokenBridgeClaim = coreBridge.deriveClaimKey(
+    tokenBridgeClaim = coreUtils.deriveClaimKey(
       TOKEN_BRIDGE_PROGRAM_ID,
-      parsed.emitterAddress,
-      parsed.emitterChain,
-      parsed.sequence
+      vaa.emitterAddress.toUint8Array(),
+      toChainId(vaa.emitterChain),
+      vaa.sequence
     );
   }
 
@@ -194,8 +190,8 @@ export async function receiveTbtcIx(
   if (tokenBridgeRegisteredEmitter === undefined) {
     tokenBridgeRegisteredEmitter = tokenBridge.deriveEndpointKey(
       TOKEN_BRIDGE_PROGRAM_ID,
-      parsed.emitterChain,
-      parsed.emitterAddress,
+      toChainId(vaa.emitterChain),
+      vaa.emitterAddress.toUint8Array(),
     );
   }
 
@@ -228,10 +224,8 @@ export async function receiveTbtcIx(
     coreBridgeProgram = CORE_BRIDGE_PROGRAM_ID;
   }
 
-  console.log("postedVaa: ", postedVaa);
-
   return await program.methods
-    .receiveTbtc(parsed.hash)
+    .receiveTbtc([...vaa.hash])
     .accounts({
       payer,
       custodian,

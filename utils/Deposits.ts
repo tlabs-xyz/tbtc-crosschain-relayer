@@ -87,6 +87,7 @@ export const createDeposit = (
       bridgedAt: null,
     },
     wormholeInfo: {
+      txHash: null,
       transferSequence: null,
       bridgingAttempted: false,
     },
@@ -230,6 +231,7 @@ export const updateToInitializedDeposit = async (
  * @param bridgingAttempted Whether bridging was already attempted (default: false)
  */
 export const updateToAwaitingWormholeVAA = async (
+  txHash: string,
   deposit: Deposit,
   transferSequence: string,
   bridgingAttempted: boolean = false,
@@ -240,6 +242,7 @@ export const updateToAwaitingWormholeVAA = async (
   // Update (or create) wormholeInfo
   const newWormholeInfo = {
     ...deposit.wormholeInfo,
+    txHash,
     transferSequence,
     bridgingAttempted,
   };

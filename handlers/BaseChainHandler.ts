@@ -1,15 +1,19 @@
+import { ChainContext, Network, Wormhole, wormhole } from "@wormhole-foundation/sdk";
+
+import solana from "@wormhole-foundation/sdk/solana";
+import sui from "@wormhole-foundation/sdk/sui";
+import evm from "@wormhole-foundation/sdk/evm";
+
 import { BigNumber, ethers } from 'ethers';
 import { NonceManager } from '@ethersproject/experimental';
 
 import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
-import { ChainConfig } from '../types/ChainConfig.type';
+import { ChainConfig, NETWORK } from '../types/ChainConfig.type';
 import { Deposit } from '../types/Deposit.type';
-import { FundingTransaction } from '../types/FundingTransaction.type'; // Keep if needed by initializeDeposit args
 import { LogError, LogMessage, LogWarning } from '../utils/Logs';
 import {
   getJsonById,
   getAllJsonOperationsByStatus,
-  writeJson,
 } from '../utils/JsonUtils';
 import {
   // createDeposit, // Keep if used by L2 listeners implementations - moved to EVM handler for now
@@ -34,6 +38,8 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected l1BitcoinDepositorProvider: ethers.Contract; // For L1 reads/events
   protected tbtcVaultProvider: ethers.Contract; // For L1 events
   protected config: ChainConfig;
+  protected ethereumWormhole: Wormhole<Network>;
+  protected ethereumWormholeContext: ChainContext<"Mainnet" | "Testnet" | "Devnet", "Sepolia", "Evm">
 
   protected readonly TIME_TO_RETRY = 1000 * 60 * 5; // 5 minutes
 
@@ -50,12 +56,29 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
       !this.config.l1Rpc ||
       !this.config.privateKey ||
       !this.config.l1ContractAddress ||
-      !this.config.vaultAddress
+      !this.config.vaultAddress ||
+      !this.config.network
     ) {
       throw new Error(
         `Missing required L1 configuration for ${this.config.chainName}`
       );
     }
+
+    const ethereumNetwork = this.config.network === NETWORK.DEVNET
+      ? NETWORK.TESTNET
+      : this.config.network; // Adjust for devnet
+
+    this.ethereumWormhole = await wormhole(
+      ethereumNetwork,
+      [evm, solana, sui],
+      {
+        chains: {
+          Solana: {
+            rpc: this.config.l2Rpc,
+          },
+        },
+      }
+    )
     this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc);
     this.l1Signer = new ethers.Wallet(this.config.privateKey, this.l1Provider);
     this.nonceManagerL1 = new NonceManager(this.l1Signer);

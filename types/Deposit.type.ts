@@ -44,6 +44,7 @@ export type Deposit = {
 
   };
   wormholeInfo: {
+    txHash: string | null;
     transferSequence: string | null;
     bridgingAttempted: boolean;
   };

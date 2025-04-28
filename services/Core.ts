@@ -2,14 +2,15 @@ import cron from 'node-cron';
 
 import { LogMessage, LogError, LogWarning } from '../utils/Logs';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory';
-import { ChainConfig, ChainType } from '../types/ChainConfig.type';
+import { ChainConfig, CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type';
 import { cleanQueuedDeposits, cleanFinalizedDeposits, cleanBridgedDeposits } from './CleanupDeposits';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
 // ---------------------------------------------------------------
 const chainConfig: ChainConfig = {
-  chainType: (process.env.CHAIN_TYPE as ChainType) || ChainType.EVM,
+  chainType: process.env.CHAIN_TYPE as CHAIN_TYPE,
+  network: process.env.NETWORK as NETWORK,
   chainName: process.env.CHAIN_NAME || 'Default Chain',
   l1Rpc: process.env.L1_RPC || '',
   l2Rpc: process.env.L2_RPC || '',
@@ -22,7 +23,7 @@ const chainConfig: ChainConfig = {
   l2StartBlock: process.env.L2_START_BLOCK
     ? parseInt(process.env.L2_START_BLOCK)
     : undefined,
-  solanaKeyBase: process.env.SOLANA_KEY_BASE,
+  solanaSignerKeyBase: process.env.SOLANA_KEY_BASE,
 };
 
 // Create the appropriate chain handler
