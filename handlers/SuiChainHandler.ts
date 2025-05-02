@@ -4,19 +4,15 @@ import { LogError, LogMessage, LogWarning } from '../utils/Logs';
 import { BaseChainHandler } from './BaseChainHandler';
 import { DepositStatus } from '../types/DepositStatus.enum';
 
-// Import Sui SDK
-// Note: You may need to handle this import using require() if TypeScript cannot find the module
+// Import from Sui SDK using subpath exports
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const {
-  SuiClient,
-  SuiEvent,
-  SuiEventFilter,
-  TransactionBlock,
-  Connection,
-  Ed25519Keypair,
-  fromB64,
-  JsonRpcProvider
-} = require('@mysten/sui');
+const { SuiClient } = require('@mysten/sui/client');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { TransactionBlock } = require('@mysten/sui/transactions');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { Ed25519Keypair } = require('@mysten/sui/keypairs/ed25519');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { fromB64 } = require('@mysten/sui/utils');
 
 // Transaction status constants
 enum TxStatus {
@@ -36,7 +32,6 @@ interface PendingVaaSubmission {
 export class SuiChainHandler extends BaseChainHandler {
   // Define Sui specific properties
   private suiClient?: any; // Using any type to bypass TypeScript errors
-  private suiProvider?: any;
   private suiKeypair?: any;
   private suiAddress?: string;
   
@@ -81,24 +76,29 @@ export class SuiChainHandler extends BaseChainHandler {
       const rpcUrl = this.config.l2Rpc;
       this.suiClient = new SuiClient({ url: rpcUrl });
       
-      // For backwards compatibility, also initialize JsonRpcProvider
-      this.suiProvider = new JsonRpcProvider(new Connection({ fullnode: rpcUrl }));
-      
       // Initialize Sui keypair if privateKey is provided
-      if (this.config.l2PrivateKey) {
-        // Expect private key to be in base64 format
-        const privateKeyBytes = fromB64(this.config.l2PrivateKey);
-        this.suiKeypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
-        this.suiAddress = this.suiKeypair.getPublicKey().toSuiAddress();
-        LogMessage(`Sui L2 wallet initialized with address: ${this.suiAddress}`);
+      if (this.config.l2PrivateKey && this.config.l2PrivateKey !== 'YOUR_SUI_PRIVATE_KEY_BASE64_ENCODED') {
+        try {
+          // Expect private key to be in base64 format
+          const privateKeyBytes = fromB64(this.config.l2PrivateKey);
+          this.suiKeypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
+          this.suiAddress = this.suiKeypair.getPublicKey().toSuiAddress();
+          LogMessage(`Sui L2 wallet initialized with address: ${this.suiAddress}`);
+        } catch (error: any) {
+          LogWarning(
+            `Invalid Sui L2 private key format for ${this.config.chainName}. Cannot sign transactions.`
+          );
+        }
       } else {
         LogWarning(
-          `No Sui L2 private key provided for ${this.config.chainName}. Cannot sign transactions.`
+          `No valid Sui L2 private key provided for ${this.config.chainName}. Cannot sign transactions.`
         );
       }
       
       // Store package and object IDs from config
-      if (this.config.l2ContractAddress) {
+      if (this.config.l2ContractAddress && 
+          !this.config.l2ContractAddress.includes('YOUR_SUI_') && 
+          this.config.l2ContractAddress !== '0xYOUR_SUI_BITCOINDEPOSITOR_PACKAGE_ID') {
         this.bitcoinDepositorPackageId = this.config.l2ContractAddress;
         
         // These should come from config in a production system
@@ -111,26 +111,40 @@ export class SuiChainHandler extends BaseChainHandler {
         this.tbtcTokenStateId = this.config.tbtcTokenStateId;
         
         // Log missing required object IDs
-        if (!this.receiverStateId) {
-          LogWarning(`Missing receiverStateId for ${this.config.chainName}`);
+        if (!this.receiverStateId || 
+            this.receiverStateId.includes('YOUR_') || 
+            this.receiverStateId === '0xYOUR_RECEIVER_STATE_OBJECT_ID') {
+          LogWarning(`Missing or invalid receiverStateId for ${this.config.chainName}`);
         }
-        if (!this.gatewayStateId) {
-          LogWarning(`Missing gatewayStateId for ${this.config.chainName}`);
+        if (!this.gatewayStateId || 
+            this.gatewayStateId.includes('YOUR_') || 
+            this.gatewayStateId === '0xYOUR_GATEWAY_STATE_OBJECT_ID') {
+          LogWarning(`Missing or invalid gatewayStateId for ${this.config.chainName}`);
         }
-        if (!this.gatewayCapabilitiesId) {
-          LogWarning(`Missing gatewayCapabilitiesId for ${this.config.chainName}`);
+        if (!this.gatewayCapabilitiesId || 
+            this.gatewayCapabilitiesId.includes('YOUR_') || 
+            this.gatewayCapabilitiesId === '0xYOUR_GATEWAY_CAPABILITIES_OBJECT_ID') {
+          LogWarning(`Missing or invalid gatewayCapabilitiesId for ${this.config.chainName}`);
         }
-        if (!this.wormholeStateId) {
-          LogWarning(`Missing wormholeStateId for ${this.config.chainName}`);
+        if (!this.wormholeStateId || 
+            this.wormholeStateId.includes('YOUR_') || 
+            this.wormholeStateId === '0xYOUR_WORMHOLE_STATE_OBJECT_ID') {
+          LogWarning(`Missing or invalid wormholeStateId for ${this.config.chainName}`);
         }
-        if (!this.tokenBridgeStateId) {
-          LogWarning(`Missing tokenBridgeStateId for ${this.config.chainName}`);
+        if (!this.tokenBridgeStateId || 
+            this.tokenBridgeStateId.includes('YOUR_') || 
+            this.tokenBridgeStateId === '0xYOUR_TOKEN_BRIDGE_STATE_OBJECT_ID') {
+          LogWarning(`Missing or invalid tokenBridgeStateId for ${this.config.chainName}`);
         }
-        if (!this.tbtcTokenStateId) {
-          LogWarning(`Missing tbtcTokenStateId for ${this.config.chainName}`);
+        if (!this.tbtcTokenStateId || 
+            this.tbtcTokenStateId.includes('YOUR_') || 
+            this.tbtcTokenStateId === '0xYOUR_TBTC_TOKEN_STATE_OBJECT_ID') {
+          LogWarning(`Missing or invalid tbtcTokenStateId for ${this.config.chainName}`);
         }
-        if (!this.treasuryId) {
-          LogWarning(`Missing treasuryId for ${this.config.chainName}`);
+        if (!this.treasuryId || 
+            this.treasuryId.includes('YOUR_') || 
+            this.treasuryId === '0xYOUR_TREASURY_OBJECT_ID') {
+          LogWarning(`Missing or invalid treasuryId for ${this.config.chainName}`);
         }
       } else {
         LogWarning(
