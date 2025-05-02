@@ -1,32 +1,49 @@
-FROM node:20-alpine3.16 as development 
+# ---- Base ----
+# Use a specific Node.js LTS version on Alpine for a smaller image
+FROM node:20-alpine AS base
+WORKDIR /app
+# Install necessary OS packages if any native dependencies require them
+# RUN apk add --no-cache g++ make python3 ...
 
-WORKDIR /usr/app
+# ---- Dependencies ----
+# Install only production dependencies in a separate stage
+FROM base AS dependencies
+COPY package.json yarn.lock ./
+RUN yarn install --production --frozen-lockfile
 
-RUN apk add --no-cache git
-RUN git config --global url."https://".insteadOf git://
-
-COPY package*.json .
-
-RUN yarn
-
+# ---- Builder ----
+# Install all dependencies (including dev) to build the project
+FROM base AS builder
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
 COPY . .
+# Ensure clean build directory
+RUN rm -rf dist
+RUN yarn build
 
-RUN yarn run build
+# ---- Production ----
+# Final stage using the lean base image
+FROM base AS production
+ENV NODE_ENV=production
 
-FROM node:20-alpine3.16 as production
+# Copy necessary artifacts from previous stages
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+# Copy package.json (using array syntax)
+COPY ["package.json", "./"]
 
-ARG NODE_ENV=production
-ENV NODE_ENV=${NODE_ENV}
+# Optional but recommended: Run as non-root user
+# Create a non-root user and group
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nodejs
+# Switch to the non-root user
+USER nodejs
 
-WORKDIR /usr/app
+# Expose the port the main application listens on (from .env or default)
+# This is informational; the actual mapping happens in docker-compose.yml
+EXPOSE 3000
 
-
-COPY package*.json .
-
-RUN npm install --only=production
-
-COPY --from=development /usr/app/dist ./dist
-
-CMD ["node", "dist/index.js"]
+# The CMD will be provided by docker-compose.yml for each service
+# No default CMD here allows flexibility
 
 

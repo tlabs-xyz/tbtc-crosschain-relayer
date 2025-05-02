@@ -1,7 +1,7 @@
 # tBTC Cross-Chain Relayer Implementation Progress
 
 ## Current Status
-Planning phase complete. Analysis of L1 contract options finished. Implementation plan updated to use `BTCDepositorWormhole` and event-driven VAA relay.
+Implementation phase complete for the main relayer components. The SuiChainHandler and ETHVAASuiRelayer classes have been implemented to handle the cross-chain VAA message passing process. Environment variables support added for improved security.
 
 ## Completed
 - Reviewed all relevant documentation (Sui Flow docs, Wormhole VAA relayer docs)
@@ -10,30 +10,46 @@ Planning phase complete. Analysis of L1 contract options finished. Implementatio
 - **Selected `BTCDepositorWormhole.sol` as the L1 contract.**
 - Created detailed summary and sequence diagrams for VAA message passing (Revised for event-driven relayer VAA fetch/submit)
 - Identified key configuration points and implementation needs (Updated for new L1 contract and flow)
-- Updated Memory Bank files (`sequenceDiagram.md`, `techContext.md`, `tasks.md`, `activeContext.md`, `progress.md`)
+- Updated Memory Bank files
+- **Verified Gateway contract on Sui has the necessary `redeem_tokens` functionality**
+- **Implemented SuiChainHandler with complete VAA submission functionality**
+- **Implemented ETHVAASuiRelayer to listen for token bridge events and fetch/relay VAAs**
+- **Created configuration templates and entry point script**
+- **Added environment variables support with dotenv for improved security**
 
-## In Progress
-- Reviewing Sui Gateway contract implementation (`Gateway.redeem_tokens` function and payload parsing)
-- Preparing detailed implementation plan for SuiChainHandler (including VAA submission logic)
+## Implementation Details
+
+### Key Components Implemented
+1. **SuiChainHandler.ts**
+   - Handles deposit event monitoring on Sui
+   - Provides VAA submission functionality with retry mechanism
+   - Handles Sui transaction building and signing
+
+2. **ETHVAASuiRelayer.ts**
+   - Listens for `TokensTransferredWithPayload` events on Ethereum
+   - Fetches VAAs from the Guardian API
+   - Submits VAAs to Sui using SuiChainHandler
+   - Includes retry mechanism with exponential backoff
+
+3. **Configuration**
+   - Created `config.example.json` with all necessary config parameters
+   - Includes chain configs for both Ethereum and Sui
+   - Includes Wormhole Token Bridge configuration
+
+4. **Entry Point**
+   - Created `vaa-relayer.ts` script to initialize and run the relayer
+   - Handles configuration loading and validation
+   - Implements proper shutdown hooks
 
 ## Next Steps
-- Check existing `Gateway.redeem_tokens` function implementation and payload handling.
-- Verify configuration points in deployed contracts (especially `trusted_emitter` on Sui).
-- **Start implementing `SuiChainHandler` components:**
-    - Event listener for `DepositInitialized`.
-    - VAA submission logic (`receiveWormholeMessages` call).
-- **Start implementing Relayer L1 components:**
-    - Listener for `TokensTransferredWithPayload`.
-    - VAA fetching logic (Guardian API polling).
-- Set up local testing environment.
+- Configure and deploy in a test environment
+- Implement automated tests for the relayer components
+- Add monitoring and alerting for production deployment
+
+## Pending Issues
+- Finalize the wrapped token type for the `receiveWormholeMessages` call
+- Set up production-grade persistence for the VAA tracking
+- Add detailed metrics and logging for production use
 
 ## Blockers
-- Need to verify current Gateway implementation status and payload parsing.
-- Need confirmation on `trusted_emitter` configuration approach/status on Sui.
-- Need Wormhole Guardian API endpoint details.
-
-## Timeline Updates
-- Planning phase: Complete
-- Implementation phase: Ready to Start
-- Testing phase: Not started
-- Deployment phase: Not started 
+- None currently 

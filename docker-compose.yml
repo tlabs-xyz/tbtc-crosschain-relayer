@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      # If you have specific stages for prod vs dev in Dockerfile, uncomment:
+      # target: production 
+    container_name: tbtc_relayer_app
+    restart: unless-stopped
+    ports:
+      # Use environment variable from .env for the host port, default to 3000
+      - "${APP_PORT:-3000}:3000"
+    env_file:
+      - .env
+    command: ["node", "dist/index.js"] # Start the main application
+    networks:
+      - tbtc_network
+
+  vaa_relayer:
+    build:
+      context: .
+      # target: production
+    container_name: tbtc_vaa_relayer
+    restart: unless-stopped
+    depends_on:
+      - app # Optional: waits for app container to start first
+    env_file:
+      - .env
+    command: ["node", "dist/bin/vaa-relayer.js"] # Start the VAA relayer
+    networks:
+      - tbtc_network
+
+networks:
+  tbtc_network:
+    driver: bridge 
