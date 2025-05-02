@@ -20,22 +20,22 @@ sequenceDiagram
 
     %% Phase 1: User initiates deposit
     User->>SDK: Connect SUI wallet
-    SDK->>SuiBD: Calculate deposit address 
+    SDK->>SuiBD: Calculate deposit address
     SuiBD-->>SDK: P2(W)SH deposit address
     User->>BTC: Send BTC to deposit address
     BTC-->>User: Confirms transaction
-    
+
     %% Phase 2: Reveal deposit on SUI
     User->>SDK: Trigger reveal (after BTC confirmations)
     SDK->>SuiBD: initialize_deposit(funding_tx, deposit_reveal, deposit_owner)
     SuiBD->>SuiBD: Emit DepositInitialized event
-    
+
     %% Phase 3: Relayer detects SUI event and initializes L1 deposit
     SuiBD-->>Relayer: DepositInitialized event detected
     Relayer->>L1BTCDeptWH: initializeDeposit(fundingTx, reveal, l2DepositOwner)
     L1BTCDeptWH->>Bridge: revealDepositWithExtraData(...)
     Bridge->>Bridge: Verify deposit & start minting process
-    
+
     %% Phase 4: Minting completed on L1, relayer finalizes L1 part
     Bridge-->>L1BTCDeptWH: tBTC minted to BTCDepositorWormhole
     Bridge-->>Relayer: OptimisticMintingFinalized event
@@ -43,7 +43,7 @@ sequenceDiagram
     L1BTCDeptWH-->>Relayer: wormhole message fee required
     Relayer->>L1BTCDeptWH: finalizeDeposit(depositKey) {value: wormholeMsgFee}
     Note over Relayer, L1BTCDeptWH: finalizeDeposit TX executes & completes
-    
+
     %% Phase 5: L1 initiates Wormhole transfer (within finalizeDeposit)
     L1BTCDeptWH->>WHTB: approve(amount)
     L1BTCDeptWH->>WHTB: transferTokensWithPayload(tbtcToken, amount, l2ChainId, l2WormholeGateway, payload)
@@ -64,13 +64,13 @@ sequenceDiagram
 
     %% Phase 7: Relayer submits VAA to SUI
     Relayer->>SuiBD: receiveWormholeMessages(vaa_bytes) # Sui Transaction (paid by Relayer SUI)
-    
+
     %% Phase 8: VAA processed on SUI
     SuiBD->>SWHC: parse_and_verify(vaa_bytes)
     SWHC-->>SuiBD: verified parsed_vaa
     SuiBD->>SuiBD: Check against processed_vaas & verify emitter (L1 WHTB)
     SuiBD->>Gateway: redeem_tokens(vaa_bytes)
-    
+
     %% Phase 9: Token redemption and minting on SUI
     Gateway->>SWTB: complete_transfer_with_payload(vaa)
     SWTB-->>Gateway: Wrapped tokens
@@ -97,7 +97,7 @@ flowchart TD
     J --> K[Gateway.redeem_tokens called with VAA]
     K --> L[SUI Token Bridge processes transfer]
     L --> M[Canonical tBTC minted to user]
-    
+
     B -->|No/Error| N[Relayer handles L1 TX error]
 ```
 
@@ -109,12 +109,12 @@ flowchart TD
 4.  **Sequence Numbers**: The `TokensTransferredWithPayload` event emitted by `BTCDepositorWormhole` provides the sequence number needed by the relayer to fetch the VAA.
 5.  **VAA Fetch & Submit**: This is an **off-chain relayer responsibility**. The relayer listens for the L1 event, polls the Guardian API, and submits the VAA via a Sui transaction (paying SUI gas).
 6.  **Fee Structure:**
-    *   The caller of `finalizeDeposit` on L1 pays the base `wormhole.messageFee()`.
-    *   The Relayer pays the gas fee in SUI for the `receiveWormholeMessages` transaction.
+    - The caller of `finalizeDeposit` on L1 pays the base `wormhole.messageFee()`.
+    - The Relayer pays the gas fee in SUI for the `receiveWormholeMessages` transaction.
 7.  **Verification Flow**: Similar to before, but emphasizes the event-driven trigger:
-    *   Relayer verifies L1 `finalizeDeposit` success.
-    *   Relayer receives `TokensTransferredWithPayload` event.
-    *   Relayer fetches VAA using correct sequence/emitter from event.
-    *   Sui Wormhole Core verifies VAA signatures.
-    *   Sui BitcoinDepositor verifies the emitter chain/address and checks for replay.
-    *   Sui Gateway handles final token bridge payload parsing and redemption. 
+    - Relayer verifies L1 `finalizeDeposit` success.
+    - Relayer receives `TokensTransferredWithPayload` event.
+    - Relayer fetches VAA using correct sequence/emitter from event.
+    - Sui Wormhole Core verifies VAA signatures.
+    - Sui BitcoinDepositor verifies the emitter chain/address and checks for replay.
+    - Sui Gateway handles final token bridge payload parsing and redemption.

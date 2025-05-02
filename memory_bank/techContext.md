@@ -3,11 +3,13 @@
 ## System Architecture
 
 ### Chain Components
+
 - **Bitcoin Network**: Source of BTC funds for deposit
 - **Ethereum (L1)**: Where tBTC is officially minted
 - **Sui (L2)**: Destination chain for user-facing tBTC
 
 ### Contract Components
+
 - **BTCDepositorWormhole (Ethereum)**: Interfaces with tBTC Bridge, initiates Wormhole token transfers via `transferTokensWithPayload`, emits `TokensTransferredWithPayload` event containing the VAA sequence.
 - **BitcoinDepositor (Sui)**: Handles deposit initialization and VAA reception from the relayer.
 - **Gateway (Sui)**: Manages token redemption from Sui Token Bridge and minting of canonical L2 tBTC.
@@ -15,12 +17,14 @@
 - **Wormhole Token Bridge (L1 & Sui)**: Token transfer extension for Wormhole.
 
 ### Off-Chain Components
+
 - **Cross-Chain Relayer**: Monitors both chains, triggers L1 `finalizeDeposit`, listens for L1 `TokensTransferredWithPayload` event, fetches VAA from Guardian API, submits VAA to Sui.
 - **Wormhole Guardians API**: Provides endpoint for fetching signed VAAs based on sequence number.
 
 ## Key Technical Interfaces
 
 ### BitcoinDepositor.initialize_deposit
+
 ```move
 public entry fun initialize_deposit(
     funding_tx: vector<u8>,
@@ -31,6 +35,7 @@ public entry fun initialize_deposit(
 ```
 
 ### BitcoinDepositor.receiveWormholeMessages
+
 ```move
 public entry fun receiveWormholeMessages<CoinType>(
     receiver_state: &mut ReceiverState,
@@ -47,6 +52,7 @@ public entry fun receiveWormholeMessages<CoinType>(
 ```
 
 ### BTCDepositorWormhole.initializeDeposit
+
 ```solidity
 function initializeDeposit(
     IBridgeTypes.BitcoinTxInfo calldata fundingTx,
@@ -56,12 +62,14 @@ function initializeDeposit(
 ```
 
 ### BTCDepositorWormhole.finalizeDeposit
+
 ```solidity
 function finalizeDeposit(uint256 depositKey) external payable
 // Note: Payable amount covers only the base L1 Wormhole message fee.
 ```
 
-### BTCDepositorWormhole._transferTbtc (Internal)
+### BTCDepositorWormhole.\_transferTbtc (Internal)
+
 ```solidity
 function _transferTbtc(uint256 amount, bytes32 destinationChainReceiver) internal override
 // Calls wormholeTokenBridge.transferTokensWithPayload
@@ -69,6 +77,7 @@ function _transferTbtc(uint256 amount, bytes32 destinationChainReceiver) interna
 ```
 
 ### BTCDepositorWormhole.TokensTransferredWithPayload (Event)
+
 ```solidity
 event TokensTransferredWithPayload(
     uint256 amount, // Normalized amount (1e8)
@@ -78,8 +87,10 @@ event TokensTransferredWithPayload(
 ```
 
 ## VAA Format and Processing (Revised)
+
 VAAs consist of standard Wormhole structure.
 Key steps:
+
 1. `BTCDepositorWormhole` calls `transferTokensWithPayload` on L1 Token Bridge.
 2. `BTCDepositorWormhole` emits `TokensTransferredWithPayload` event with the sequence number.
 3. Relayer detects the event and extracts the sequence.
@@ -90,6 +101,7 @@ Key steps:
 8. `Gateway` calls Sui Token Bridge (`complete_transfer_with_payload`) to redeem wrapped tokens, parses payload (`abi.encodePacked(bytes32)`) for recipient, and mints canonical L2 tBTC.
 
 ## Configuration Requirements
+
 - **BTCDepositorWormhole (L1)** needs correct addresses/values for:
   - `tbtcBridge`, `tbtcVault`
   - `wormhole` (Core L1 contract for message fee)
@@ -104,8 +116,9 @@ Key steps:
   - Wormhole Guardian API endpoint URL.
 
 ## Expected Gas Requirements (Revised)
+
 - **L1 (`finalizeDeposit` Caller/Relayer):** Needs ETH for:
   - L1 transaction fee for `finalizeDeposit`.
   - `msg.value` covering the base `wormhole.messageFee()`.
 - **Relayer (Sui):** Needs SUI for:
-  - Gas fee for submitting the `receiveWormholeMessages` transaction on Sui. 
+  - Gas fee for submitting the `receiveWormholeMessages` transaction on Sui.

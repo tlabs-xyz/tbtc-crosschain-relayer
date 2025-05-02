@@ -1,9 +1,11 @@
 # tBTC Cross-Chain Relayer Implementation Progress
 
 ## Current Status
+
 Implementation phase complete for the main relayer components. The SuiChainHandler and ETHVAASuiRelayer classes have been implemented to handle the cross-chain VAA message passing process. Environment variables support added for improved security.
 
 ## Completed
+
 - Reviewed all relevant documentation (Sui Flow docs, Wormhole VAA relayer docs)
 - Analyzed existing contracts (BitcoinDepositor.move)
 - Analyzed L1 contract options (`L1BitcoinDepositorWormhole.sol`, `BTCDepositorWormhole.sol`)
@@ -20,18 +22,22 @@ Implementation phase complete for the main relayer components. The SuiChainHandl
 ## Implementation Details
 
 ### Key Components Implemented
+
 1. **SuiChainHandler.ts**
+
    - Handles deposit event monitoring on Sui
    - Provides VAA submission functionality with retry mechanism
    - Handles Sui transaction building and signing
 
 2. **ETHVAASuiRelayer.ts**
+
    - Listens for `TokensTransferredWithPayload` events on Ethereum
    - Fetches VAAs from the Guardian API
    - Submits VAAs to Sui using SuiChainHandler
    - Includes retry mechanism with exponential backoff
 
 3. **Configuration**
+
    - Created `config.example.json` with all necessary config parameters
    - Includes chain configs for both Ethereum and Sui
    - Includes Wormhole Token Bridge configuration
@@ -42,14 +48,17 @@ Implementation phase complete for the main relayer components. The SuiChainHandl
    - Implements proper shutdown hooks
 
 ## Next Steps
+
 - Configure and deploy in a test environment
 - Implement automated tests for the relayer components
 - Add monitoring and alerting for production deployment
 
 ## Pending Issues
+
 - Finalize the wrapped token type for the `receiveWormholeMessages` call
 - Set up production-grade persistence for the VAA tracking
 - Add detailed metrics and logging for production use
 
 ## Blockers
-- None currently 
+
+- None currently

@@ -59,7 +59,7 @@ function parseNumber(value: string | undefined, defaultValue: number): number {
  */
 function getChainType(chainTypeStr: string | undefined): ChainType {
   if (!chainTypeStr) return ChainType.EVM;
-  
+
   switch (chainTypeStr.toLowerCase()) {
     case 'evm':
       return ChainType.EVM;
@@ -98,7 +98,7 @@ export function loadEnvConfig(): AppConfig {
 
     // Build L2 chain config (can be any supported chain type)
     const l2ChainType = getChainType(process.env.L2_CHAIN_TYPE);
-    
+
     const l2Config: ChainConfig = {
       chainType: l2ChainType,
       chainName: process.env.L2_CHAIN_NAME || 'Layer 2',
@@ -113,7 +113,7 @@ export function loadEnvConfig(): AppConfig {
       endpointUrl: process.env.L2_ENDPOINT_URL,
       l2StartBlock: parseNumber(process.env.L2_START_BLOCK, 0),
     };
-    
+
     // Add Sui-specific properties if the L2 is Sui
     if (l2ChainType === ChainType.SUI) {
       l2Config.receiverStateId = process.env.SUI_RECEIVER_STATE_ID;
@@ -187,7 +187,7 @@ export function loadJsonConfig(configPath: string = 'config.json'): AppConfig {
       config.chains.l1 = config.chains.ethereum;
       delete config.chains.ethereum;
     }
-    
+
     if (config.chains.sui && !config.chains.l2) {
       config.chains.l2 = config.chains.sui;
       delete config.chains.sui;
@@ -197,8 +197,12 @@ export function loadJsonConfig(configPath: string = 'config.json'): AppConfig {
     if (config.chains.l1) {
       config.chains.l1.chainType = config.chains.l1.chainType || ChainType.EVM;
     }
-    
-    validateConfig(config.chains?.l1, config.chains?.l2, config.wormhole?.tokenBridge);
+
+    validateConfig(
+      config.chains?.l1,
+      config.chains?.l2,
+      config.wormhole?.tokenBridge
+    );
 
     return config;
   } catch (error: any) {
@@ -226,25 +230,30 @@ function validateConfig(
   // Check L2 config (can be EVM or Sui)
   if (!l2Config.l2Rpc) missingFields.push('L2_RPC');
   if (!l2Config.l2ContractAddress) missingFields.push('L2_CONTRACT_ADDRESS');
-  
+
   // If L2 is Sui, check for Sui-specific private key
   if (l2Config.chainType === ChainType.SUI && !l2Config.l2PrivateKey) {
     missingFields.push('L2_PRIVATE_KEY (required for Sui)');
   }
-  
+
   // For Sui, check for required object IDs
   if (l2Config.chainType === ChainType.SUI) {
     if (!l2Config.receiverStateId) missingFields.push('SUI_RECEIVER_STATE_ID');
     if (!l2Config.gatewayStateId) missingFields.push('SUI_GATEWAY_STATE_ID');
-    if (!l2Config.gatewayCapabilitiesId) missingFields.push('SUI_GATEWAY_CAPABILITIES_ID');
+    if (!l2Config.gatewayCapabilitiesId)
+      missingFields.push('SUI_GATEWAY_CAPABILITIES_ID');
     if (!l2Config.wormholeStateId) missingFields.push('SUI_WORMHOLE_STATE_ID');
-    if (!l2Config.tokenBridgeStateId) missingFields.push('SUI_TOKEN_BRIDGE_STATE_ID');
-    if (!l2Config.tbtcTokenStateId) missingFields.push('SUI_TBTC_TOKEN_STATE_ID');
+    if (!l2Config.tokenBridgeStateId)
+      missingFields.push('SUI_TOKEN_BRIDGE_STATE_ID');
+    if (!l2Config.tbtcTokenStateId)
+      missingFields.push('SUI_TBTC_TOKEN_STATE_ID');
   }
 
   // Check Wormhole config
-  if (!tokenBridgeConfig.tokenBridgeAddress) missingFields.push('WH_TOKEN_BRIDGE_ADDRESS');
-  if (!tokenBridgeConfig.emitterAddress) missingFields.push('WH_EMITTER_ADDRESS');
+  if (!tokenBridgeConfig.tokenBridgeAddress)
+    missingFields.push('WH_TOKEN_BRIDGE_ADDRESS');
+  if (!tokenBridgeConfig.emitterAddress)
+    missingFields.push('WH_EMITTER_ADDRESS');
 
   if (missingFields.length > 0) {
     throw new Error(
@@ -263,8 +272,10 @@ export function loadConfig(jsonConfigPath?: string): AppConfig {
     try {
       return loadEnvConfig();
     } catch (envError: any) {
-      LogWarning(`Failed to load config from environment: ${envError.message}. Falling back to JSON.`);
-      
+      LogWarning(
+        `Failed to load config from environment: ${envError.message}. Falling back to JSON.`
+      );
+
       // Fall back to JSON config if specified
       if (jsonConfigPath) {
         return loadJsonConfig(jsonConfigPath);
@@ -282,4 +293,4 @@ export function loadConfig(jsonConfigPath?: string): AppConfig {
     LogError(`Configuration loading failed: ${error.message}`, error);
     throw error;
   }
-} 
+}
