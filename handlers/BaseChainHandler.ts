@@ -5,6 +5,7 @@ import sui from "@wormhole-foundation/sdk/sui";
 import evm from "@wormhole-foundation/sdk/evm";
 
 import { BigNumber, ethers } from 'ethers';
+import { TransactionReceipt } from "@ethersproject/providers"
 import { NonceManager } from '@ethersproject/experimental';
 
 import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
@@ -66,7 +67,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
     const ethereumNetwork = this.config.network === NETWORK.DEVNET
       ? NETWORK.TESTNET
-      : this.config.network; // Adjust for devnet
+      : this.config.network;
 
     this.ethereumWormhole = await wormhole(
       ethereumNetwork,
@@ -171,7 +172,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   }
 
   // --- Core Deposit Logic (L1 Interactions) ---
-  async initializeDeposit(deposit: Deposit): Promise<void> {
+  async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     // Check if already processed locally to avoid redundant L1 calls
     if (
       deposit.status === DepositStatus.INITIALIZED ||
@@ -228,6 +229,8 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
       // Update the deposit status in the JSON storage upon successful mining
       updateToInitializedDeposit(deposit, receipt, undefined); // Pass receipt for txHash etc.
+
+      return receipt; // Return the receipt for further processing if needed
     } catch (error: any) {
       // Error Handling - Check if it's a specific revert reason or common issue
       const reason =

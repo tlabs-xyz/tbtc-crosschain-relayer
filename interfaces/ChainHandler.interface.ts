@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { TransactionReceipt } from "@ethersproject/providers"
 import { Deposit } from '../types/Deposit.type';
 import { DepositStatus } from '../types/DepositStatus.enum';
 
@@ -21,7 +22,7 @@ export interface ChainHandlerInterface {
    * Initialize a deposit on the L1 chain
    * @param deposit The deposit to initialize
    */
-  initializeDeposit(deposit: Deposit): Promise<void>;
+  initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined>;
 
   /**
    * Finalize a deposit on the L1 chain

@@ -6,7 +6,7 @@ import {
   MessageV0,
   VersionedTransaction
 } from '@solana/web3.js';
-import { Wormhole } from "@wormhole-foundation/sdk";
+import { wormhole, Wormhole } from "@wormhole-foundation/sdk";
 import { getSolanaSigner, SolanaUnsignedTransaction } from '@wormhole-foundation/sdk-solana';
 import type {
   Chain,
