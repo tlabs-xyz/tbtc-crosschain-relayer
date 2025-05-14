@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
+import { WormholeVaaService } from './WormholeVaaService';
+import { L1RedemptionHandler } from '../handlers/L1RedemptionHandler';
 import { ChainId } from '@wormhole-foundation/sdk';
-import { WormholeVaaService } from './WormholeVaaService.js';
-import { L1RedemptionHandler } from '../handlers/L1RedemptionHandler.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer.js';
 

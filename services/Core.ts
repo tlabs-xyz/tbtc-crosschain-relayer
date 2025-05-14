@@ -4,8 +4,7 @@ import cron from 'node-cron';
 import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
-import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits.js';
-import { L2RedemptionService } from './L2RedemptionService.js';
+import { L2RedemptionService } from './L2RedemptionService';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
@@ -40,6 +39,11 @@ const chainConfig: ChainConfig = {
     ? parseInt(process.env.L2_START_BLOCK)
     : undefined,
 };
+
+export const WORMHOLE_GUARDIAN_API_ENDPOINT = requireEnv('WORMHOLE_GUARDIAN_API_ENDPOINT');
+export const VAA_FETCH_RETRY_DELAY_MS = parseInt(process.env.VAA_FETCH_RETRY_DELAY_MS || '60000');
+export const VAA_FETCH_MAX_RETRIES = parseInt(process.env.VAA_FETCH_MAX_RETRIES || '5');
+export const L1_TX_CONFIRMATION_TIMEOUT_MS = parseInt(process.env.L1_TX_CONFIRMATION_TIMEOUT_MS || '300000');
 
 // Create the appropriate chain handler
 export const chainHandler = ChainHandlerFactory.createHandler(chainConfig);

@@ -39,6 +39,7 @@ export class L1RedemptionHandler {
         logger.info(JSON.stringify({ // Stringify complex object
             message: 'Attempting to finalize L2 redemption on L1',
             l2TransactionHash: redemptionData.l2TransactionHash,
+            l2Identifier: redemptionData.l2Identifier.toString(),
             relayerAddress: this.l1Signer.address,
             l1Contract: this.l1BitcoinRedeemer.address,
             walletPubKeyHash: redemptionData.walletPubKeyHash,
@@ -58,7 +59,7 @@ export class L1RedemptionHandler {
             const encodedVm = `0x${Buffer.from(signedVaa).toString('hex')}`;
 
             const args = [
-                walletPubKeyHashBytes32, 
+                walletPubKeyHashBytes32,
                 redemptionData.mainUtxo,
                 redemptionData.amount,
                 encodedVm,
