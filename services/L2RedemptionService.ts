@@ -1,0 +1,153 @@
+import { ethers } from 'ethers';
+import { WormholeVaaService } from './WormholeVaaService';
+import { L1RedemptionHandler } from '../handlers/L1RedemptionHandler';
+import logger, { logErrorContext } from '../utils/Logger';
+import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer';
+import { ChainId } from '@wormhole-foundation/sdk';
+
+
+export interface RedemptionRequestedEventData {
+    walletPubKeyHash: string; // bytes20
+    redeemerOutputScript: string; // bytes
+    redeemer: string; // address
+    requestedAmount: ethers.BigNumber; // uint64
+    treasuryFee: ethers.BigNumber; // uint64
+    txMaxFee: ethers.BigNumber; // uint64, from event
+    l2Identifier: ethers.BigNumber; // uint256, from event
+    // Derived from the event object, not part of event.args typically
+    l2TransactionHash: string;
+    l2BlockNumber: number;
+}
+
+export class L2RedemptionService {
+    private l2Provider: ethers.providers.JsonRpcProvider;
+    private l2RpcUrl: string;
+    private l2BitcoinRedeemerContract: ethers.Contract;
+    private wormholeVaaService: WormholeVaaService;
+    private l1RedemptionHandler: L1RedemptionHandler;
+
+    private l2WormholeChainId: number;
+    private l2WormholeGatewayAddress: string; // Emitter address on L2 for VAA fetching
+
+    constructor(
+        l2RpcUrl: string,
+        l2BitcoinRedeemerAddress: string,
+        relayerL1PrivateKey: string,
+        l1RpcUrl: string,
+        l1BitcoinRedeemerAddress: string,
+        l2WormholeChainId: number,
+        l2WormholeGatewayAddress: string,
+    ) {
+        this.l2RpcUrl = l2RpcUrl;
+        this.l2Provider = new ethers.providers.JsonRpcProvider(l2RpcUrl);
+        this.l2BitcoinRedeemerContract = new ethers.Contract(l2BitcoinRedeemerAddress, L2BitcoinRedeemerABI, this.l2Provider);
+
+        this.l2WormholeChainId = l2WormholeChainId;
+        this.l2WormholeGatewayAddress = l2WormholeGatewayAddress;
+
+        this.l1RedemptionHandler = new L1RedemptionHandler(
+            l1RpcUrl,
+            l1BitcoinRedeemerAddress,
+            relayerL1PrivateKey
+        );
+
+        logger.info(
+            `L2RedemptionService initialized for L2 contract ${l2BitcoinRedeemerAddress} on ${l2RpcUrl}. Listening for 'RedemptionRequested' event.`
+        );
+        logger.info(`Wormhole VAA Service configured for L2 Wormhole Gateway: ${l2WormholeGatewayAddress} on chain ID: ${l2WormholeChainId}.`);
+        logger.info(`L1 Redemption Handler configured for L1BitcoinRedeemer: ${l1BitcoinRedeemerAddress} on ${l1RpcUrl}.`);
+    }
+    
+    public async initialize(): Promise<void> {
+        this.wormholeVaaService = await WormholeVaaService.create(this.l2RpcUrl);
+    }
+
+    public startListening(): void {
+        if (!this.l2BitcoinRedeemerContract.interface.events['RedemptionRequested']) {
+            logErrorContext("L2 contract ABI does not seem to contain 'RedemptionRequested' event. Cannot listen for events.", new Error('Missing RedemptionRequested in ABI'));
+            return;
+        }
+        logger.info(`Starting to listen for 'RedemptionRequested' events from ${this.l2BitcoinRedeemerContract.address}`);
+
+        this.l2BitcoinRedeemerContract.on('RedemptionRequested', async (
+            walletPubKeyHash: string,
+            redeemerOutputScript: string,
+            redeemer: string,
+            requestedAmount: ethers.BigNumber,
+            treasuryFee: ethers.BigNumber,
+            txMaxFee: ethers.BigNumber,
+            l2Identifier: ethers.BigNumber,
+            event: ethers.Event
+        ) => {
+            const eventData: RedemptionRequestedEventData = {
+                walletPubKeyHash,
+                redeemerOutputScript,
+                redeemer,
+                requestedAmount,
+                treasuryFee,
+                txMaxFee,
+                l2Identifier,
+                l2TransactionHash: event.transactionHash,
+                l2BlockNumber: event.blockNumber,
+            };
+
+            logger.info(`Received RedemptionRequested event. L2 Tx: ${event.transactionHash}, Block: ${event.blockNumber}, Args: ${JSON.stringify(event.args)}`);
+
+            await this.handleRedemptionRequest(eventData);
+        });
+
+        this.l2Provider.on('error', (error) => {
+            logErrorContext('L2 Provider emitted an error:', error);
+        });
+    }
+
+    public stopListening(): void {
+        logger.info(`Stopping 'RedemptionRequested' event listener for ${this.l2BitcoinRedeemerContract.address}.`);
+        this.l2BitcoinRedeemerContract.removeAllListeners('RedemptionRequested');
+    }
+
+    private async handleRedemptionRequest(eventData: RedemptionRequestedEventData): Promise<void> {
+        logger.info(`Processing redemption request triggered by L2 tx: ${eventData.l2TransactionHash}. Data: ${JSON.stringify(eventData)}`);
+
+        try {
+            const vaaDetails = await this.wormholeVaaService.fetchAndVerifyVaaForL2Event(
+                eventData.l2TransactionHash,
+                this.l2WormholeChainId as ChainId,
+                this.l2WormholeGatewayAddress
+            );
+
+            if (!vaaDetails || !vaaDetails.vaaBytes || !vaaDetails.parsedVaa) {
+                logErrorContext(
+                    `Failed to fetch or verify VAA for L2 transaction ${eventData.l2TransactionHash}. Halting process for this event.`,
+                    new Error('VAA fetch or verification failed')
+                );
+                return;
+            }
+
+            // Log details from the parsed VAA for better traceability
+            logger.info(
+                `Successfully fetched and verified VAA for L2 Tx: ${eventData.l2TransactionHash}. ` +
+                `VAA Sequence: ${vaaDetails.parsedVaa.sequence}, ` +
+                `Emitter: ${vaaDetails.parsedVaa.emitterAddress.toString()}, ` +
+                `Consistency: ${vaaDetails.parsedVaa.consistencyLevel}.`
+            );
+
+            // VAA is fetched and verified, now proceed to L1 submission.
+            // The VAA itself (vaaDetails.vaaBytes) is not passed to submitRedemptionDataToL1
+            // as per the current design where L1BitcoinRedeemer does not take VAA as direct input.
+            // The VAA fetch and verification acts as a gate.
+            const success = await this.l1RedemptionHandler.submitRedemptionDataToL1(
+                eventData
+            );
+
+            if (success) {
+                logger.info(`Successfully submitted VAA to L1 and initiated redemption for L2 Tx: ${eventData.l2TransactionHash}.`);
+            } else {
+                logErrorContext(`Failed to submit VAA to L1 or L1 redemption failed for L2 Tx: ${eventData.l2TransactionHash}.`, new Error('L1 submission/redemption failed'));
+            }
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            logErrorContext(`Unhandled error during redemption request processing for L2 Tx: ${eventData.l2TransactionHash}. Error: ${err.message}`, err);
+        }
+    }
+}

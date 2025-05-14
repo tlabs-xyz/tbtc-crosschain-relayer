@@ -12,9 +12,6 @@ import {
 } from '../utils/JsonUtils.js';
 import {
   createDeposit,
-  updateToInitializedDeposit,
-  updateToFinalizedDeposit,
-  updateLastActivity,
   getDepositId,
 } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';

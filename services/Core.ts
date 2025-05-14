@@ -5,19 +5,32 @@ import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
 import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits.js';
+import { L2RedemptionService } from './L2RedemptionService';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
 // ---------------------------------------------------------------
+const requireEnv = (envVar: string) => {
+  if (!process.env[envVar]) {
+    logErrorContext(`Environment variable ${envVar} is not set.`, new Error(`Environment variable ${envVar} is not set.`));
+    process.exit(1);
+  }
+  return process.env[envVar] as string;
+};
+
 const chainConfig: ChainConfig = {
   chainType: (process.env.CHAIN_TYPE as ChainType) || ChainType.EVM,
   chainName: process.env.CHAIN_NAME || 'Default Chain',
-  l1Rpc: process.env.L1_RPC || '',
-  l2Rpc: process.env.L2_RPC || '',
-  l1ContractAddress: process.env.L1BitcoinDepositor || '',
-  l2ContractAddress: process.env.L2BitcoinDepositor || '',
-  vaultAddress: process.env.TBTCVault || '',
-  privateKey: process.env.PRIVATE_KEY || '',
+  l1Rpc: requireEnv('L1_RPC'),
+  l2Rpc: requireEnv('L2_RPC'),
+  l1ContractAddress: requireEnv('L1BitcoinDepositor'),
+  l1BitcoinRedeemerAddress: requireEnv('L1_BITCOIN_REDEEMER_ADDRESS'),
+  l2ContractAddress: requireEnv('L2BitcoinDepositor'),
+  l2BitcoinRedeemerAddress: requireEnv('L2_BITCOIN_REDEEMER_ADDRESS'),
+  l2WormholeGatewayAddress: requireEnv('L2_WORMHOLE_GATEWAY_ADDRESS'),
+  l2WormholeChainId: requireEnv('L2_WORMHOLE_CHAIN_ID'),
+  vaultAddress: requireEnv('TBTCVault'),
+  privateKey: requireEnv('PRIVATE_KEY'),
   useEndpoint: process.env.USE_ENDPOINT === 'true',
   endpointUrl: process.env.ENDPOINT_URL,
   l2StartBlock: process.env.L2_START_BLOCK
@@ -25,11 +38,13 @@ const chainConfig: ChainConfig = {
     : undefined,
 };
 
+export const WORMHOLE_GUARDIAN_API_ENDPOINT = requireEnv('WORMHOLE_GUARDIAN_API_ENDPOINT');
+export const VAA_FETCH_RETRY_DELAY_MS = parseInt(process.env.VAA_FETCH_RETRY_DELAY_MS || '60000');
+export const VAA_FETCH_MAX_RETRIES = parseInt(process.env.VAA_FETCH_MAX_RETRIES || '5');
+export const L1_TX_CONFIRMATION_TIMEOUT_MS = parseInt(process.env.L1_TX_CONFIRMATION_TIMEOUT_MS || '300000');
+
 // Create the appropriate chain handler
 export const chainHandler = ChainHandlerFactory.createHandler(chainConfig);
-
-// Constants
-// export const TIME_TO_RETRY = 1000 * 60 * 5; // Moved to BaseChainHandler
 
 // ---------------------------------------------------------------
 // Cron Jobs
@@ -100,20 +115,36 @@ export const startCronJobs = () => {
  */
 export const initializeChain = async () => {
   try {
-    // Initialize the chain handler
     await chainHandler.initialize();
-
-    // Set up event listeners if not using endpoint
     await chainHandler.setupListeners();
-
     logger.debug(
-      `Chain handler for ${chainConfig.chainName} successfully initialized`
+      `Deposit chain handler for ${chainConfig.chainName} successfully initialized`
     );
-    return true;
   } catch (error) {
-    logErrorContext('Failed to initialize chain handler:', error);
+    logErrorContext('Failed to initialize deposit chain handler:', error);
     return false;
   }
+  return true;
 };
 
-// ---------------------------------------------------------------
+export const initializeL2RedemptionService = async () => {
+  try {
+    logger.info('Attempting to initialize L2RedemptionService...');
+    const l2RedemptionService = new L2RedemptionService(
+      chainConfig.l2Rpc,
+      chainConfig.l2BitcoinRedeemerAddress,
+      chainConfig.privateKey,
+      chainConfig.l1Rpc,
+      chainConfig.l1BitcoinRedeemerAddress,
+      Number(chainConfig.l2WormholeChainId),
+      chainConfig.l2WormholeGatewayAddress,
+    );
+    await l2RedemptionService.initialize();
+    l2RedemptionService.startListening();
+    logger.info('L2RedemptionService initialized and started successfully.');
+  } catch (error) {
+    logErrorContext('Failed to initialize or start L2RedemptionService:', error as Error);
+    return false;
+  }
+  return true;
+};
