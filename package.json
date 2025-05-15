@@ -4,9 +4,9 @@
   "description": "Threshold Network tBTC Cross-Chain Relayer",
   "main": "index.ts",
   "scripts": {
-    "start": "yarn build && node --env-file .env dist/index.js",
+    "start": "yarn build && node --env-file .env dist/index.",
     "start:dev": "yarn build && node dist/index.js",
-    "dev": "ts-node-dev --watch --trace-warnings --env-file .env.dev index.ts",
+    "dev": "ts-node-dev --watch --trace-warnings --env-file .env index.ts",
     "test": "jest",
     "test:unit": "jest --testPathPattern=tests/unit",
     "test:integration": "jest --testPathPattern=tests/integration",

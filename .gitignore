@@ -3,7 +3,6 @@
 /data
 /dist
 
-# ADD .ENV FILE !!
 .env
 .env.dev
 
@@ -11,7 +10,6 @@
 
 /coverage
 .eslintcache
-
 
 /logs
 /data

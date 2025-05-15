@@ -1,0 +1,11 @@
+services:
+  tbtc-relayer-dev:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    ports:
+      - "${HOST_PORT}:${APP_PORT}"
+    command: yarn dev

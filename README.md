@@ -19,18 +19,21 @@ This project is built with NodeJS and includes a variety of libraries to facilit
 
 ## Docker Setup
 
-To run the project using Docker, follow these steps:
+To run the project in a development environment using Docker, follow these steps:
 
-1. Edit `docker-compose.dev.yml` with your customizations:
+1. Create a `.env` file:
 
-   - PRIVATE_KEY: The wallet private key you will use in your application.
-   - L1_RPC: URL for the Layer 1 RPC (e.g., Ethereum)
-   - L2_RPC: URL for the Layer 2 RPC (e.g., Arbitrum, Base, Optimism)
+```bash
+cp .env.example .env
+```
 
-2. Run the following command to start the project:
-   ```bash
-   docker compose -f docker-compose.dev.yml up
-   ```
+2. Start the Docker container:
+```bash
+docker compose up --build
+```
+3. Access the application:
+* Once the container is running, the application should be accessible on your host machine at `http://localhost:${PORT}`.
+* The service uses `ts-node-dev` for hot-reloading, so changes you make to your TypeScript source code will automatically trigger a server restart within the container.
 
 ## How to Start the Project (Local)
 

@@ -2,7 +2,7 @@
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
 // Express Server
-import express, { Express, Request, Response } from 'express';
+import express, { Express } from 'express';
 
 // Security
 import cors from 'cors';
