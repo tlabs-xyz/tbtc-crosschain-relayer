@@ -26,7 +26,6 @@ const VAA_FETCH_MAX_RETRIES = parseInt(process.env.VAA_FETCH_MAX_RETRIES || '5')
 const GET_VAA_TIMEOUT_MS = VAA_FETCH_MAX_RETRIES * VAA_FETCH_RETRY_DELAY_MS > 0 ? VAA_FETCH_MAX_RETRIES * VAA_FETCH_RETRY_DELAY_MS : 60000;
 const DEFAULT_TARGET_L1_CHAIN_ID: ChainId = 2; // Ethereum Mainnet
 
-const TARGET_L1_CHAIN_ID: ChainId = 2; // Ethereum Mainnet, TODO: Make this configurable for testing
 
 export class WormholeVaaService {
     private l2Provider: ethers.providers.JsonRpcProvider;
