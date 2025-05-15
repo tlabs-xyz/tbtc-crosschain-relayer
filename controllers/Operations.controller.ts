@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
-import CustomResponse from '../helpers/CustomResponse.helper';
+import CustomResponse from '../helpers/CustomResponse.helper.js';
 import {
   getAllJsonOperations,
   getAllJsonOperationsByStatus,
-} from '../utils/JsonUtils';
-import { LogError } from '../utils/Logs';
-import { Deposit } from '../types/Deposit.type';
-import { DepositStatus } from '../types/DepositStatus.enum';
+} from '../utils/JsonUtils.js';
+import { LogError } from '../utils/Logs.js';
+import { Deposit } from '../types/Deposit.type.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 
 /**
  * @name Operations

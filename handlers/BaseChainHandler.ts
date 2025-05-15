@@ -1,29 +1,29 @@
 import { BigNumber, ethers } from 'ethers';
 import { NonceManager } from '@ethersproject/experimental';
 
-import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
-import { ChainConfig } from '../types/ChainConfig.type';
-import { Deposit } from '../types/Deposit.type';
-import { FundingTransaction } from '../types/FundingTransaction.type'; // Keep if needed by initializeDeposit args
-import { LogError, LogMessage, LogWarning } from '../utils/Logs';
+import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { ChainConfig } from '../types/ChainConfig.type.js';
+import { Deposit } from '../types/Deposit.type.js';
+import { FundingTransaction } from '../types/FundingTransaction.type.js'; // Keep if needed by initializeDeposit args
+import { LogError, LogMessage, LogWarning } from '../utils/Logs.js';
 import {
   getJsonById,
   getAllJsonOperationsByStatus,
   writeJson,
-} from '../utils/JsonUtils';
+} from '../utils/JsonUtils.js';
 import {
   // createDeposit, // Keep if used by L2 listeners implementations - moved to EVM handler for now
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
   updateLastActivity,
   // getDepositId, // Keep if used by L2 listeners implementations - moved to EVM handler for now
-} from '../utils/Deposits';
-// import { getFundingTxHash } from '../utils/GetTransactionHash'; // Keep if used by L2 listeners implementations - moved to EVM handler for now
-import { DepositStatus } from '../types/DepositStatus.enum';
+} from '../utils/Deposits.js';
+// import { getFundingTxHash } from '../utils/GetTransactionHash.js'; // Keep if used by L2 listeners implementations - moved to EVM handler for now
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 
-import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor';
-import { TBTCVaultABI } from '../interfaces/TBTCVault';
-import { logDepositError } from '../utils/AuditLog';
+import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
+import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
+import { logDepositError } from '../utils/AuditLog.js';
 
 export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;

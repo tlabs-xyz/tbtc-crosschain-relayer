@@ -1,4 +1,4 @@
-import { formatNumber } from './Numbers';
+import { formatNumber } from './Numbers.js';
 
 /**
  * @name getStringDate

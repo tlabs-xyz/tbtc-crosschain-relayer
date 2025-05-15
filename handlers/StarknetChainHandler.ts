@@ -1,7 +1,7 @@
-import { ChainConfig, ChainType } from '../types/ChainConfig.type';
-import { Deposit } from '../types/Deposit.type';
-import { LogError, LogMessage, LogWarning } from '../utils/Logs';
-import { BaseChainHandler } from './BaseChainHandler';
+import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
+import { Deposit } from '../types/Deposit.type.js';
+import { LogError, LogMessage, LogWarning } from '../utils/Logs.js';
+import { BaseChainHandler } from './BaseChainHandler.js';
 
 // Placeholder for StarkNet specific imports (e.g., starknet.js)
 

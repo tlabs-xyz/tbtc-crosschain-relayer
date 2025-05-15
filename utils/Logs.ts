@@ -1,4 +1,4 @@
-import { getStringDate } from './Dates';
+import { getStringDate } from './Dates.js';
 
 const APP_NAME = (
   process.env.APP_NAME || 'tBTC Cross-Chain Relayer'
