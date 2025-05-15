@@ -40,6 +40,9 @@ jobs:
 
       # - name: Format check
         # run: yarn format
+        
+      - name: Detect unused dependencies
+        run: yarn depcheck
 
       - name: Build
         run: yarn build
