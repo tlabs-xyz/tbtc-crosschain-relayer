@@ -8,7 +8,7 @@ services:
       - .:/usr/src/app
       - /usr/src/app/node_modules
     ports:
-      - '4000:3333'
+      - \"${PORT}:${PORT}\"
     environment:
       # API Name
       APP_NAME: 'tBTC Relayer'
@@ -40,4 +40,4 @@ services:
       L1BitcoinDepositor: '0xD9B523fb879C63b00ef14e48C98f4e3398d3BA2D'
       L2BitcoinDepositor: '0xB2fEC598a9374078Bb639f3d70555fc4389b7a78'
       TBTCVault: '0xB5679dE944A79732A75CE556191DF11F489448d5'
-    command: npm run start:dev
+    command: yarn start:dev

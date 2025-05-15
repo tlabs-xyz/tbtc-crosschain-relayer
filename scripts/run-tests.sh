@@ -2,16 +2,20 @@
 
 # Define colors for output
 GREEN='\033[0;32m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Install missing dependencies if needed
-echo -e "${BLUE}Checking for required dependencies...${NC}"
+# Ensure script is run from the project root
+if [ ! -f "package.json" ]; then
+  echo -e "${RED}Error: This script must be run from the project root directory.${NC}"
+  exit 1
+fi
+
+# Install dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
   echo -e "${YELLOW}Installing dependencies...${NC}"
-  npm install
+  yarn install
 fi
 
 # Create needed directories
@@ -22,23 +26,23 @@ mkdir -p tests/logs
 case "$1" in
   "unit")
     echo -e "${GREEN}Running unit tests...${NC}"
-    npm run test:unit
+    yarn test:unit
     ;;
   "integration")
     echo -e "${GREEN}Running integration tests...${NC}"
-    npm run test:integration
+    yarn test:integration
     ;;
   "e2e")
     echo -e "${GREEN}Running end-to-end tests...${NC}"
-    npm run test:e2e
+    yarn test:e2e
     ;;
   "coverage")
     echo -e "${GREEN}Running tests with coverage...${NC}"
-    npm run test:coverage
+    yarn test:coverage
     ;;
   "all" | "")
     echo -e "${GREEN}Running all tests...${NC}"
-    npm test
+    yarn test
     ;;
   *)
     echo -e "${RED}Unknown test type: $1${NC}"

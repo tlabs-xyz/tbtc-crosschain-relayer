@@ -4,8 +4,8 @@
   "description": "Threshold Network tBTC Cross-Chain Relayer",
   "main": "index.ts",
   "scripts": {
-    "start": "npm run build && node --env-file .env dist/index.js",
-    "start:dev": "npm run build && node dist/index.js",
+    "start": "yarn build && node --env-file .env dist/index.js",
+    "start:dev": "yarn build && node dist/index.js",
     "dev": "ts-node-dev --watch --trace-warnings --env-file .env.dev index.ts",
     "test": "jest",
     "test:unit": "jest --testPathPattern=tests/unit",
@@ -13,7 +13,7 @@
     "test:e2e": "jest --testPathPattern=tests/e2e --runInBand",
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watch",
-    "build": "npm run clean:build && tsc",
+    "build": "yarn clean:build && tsc",
     "clean:build": "rimraf ./dist",
     "swagger": "node swagger.js",
     "lint": "eslint . --ext .ts --cache",
@@ -36,6 +36,9 @@
     "helmet": "^7.1.0",
     "node-cron": "^3.0.3",
     "rimraf": "^6.0.1"
+  },
+  "optionalDependencies": {
+    "fsevents": "^2.3.2"
   },
   "devDependencies": {
     "@types/axios": "^0.14.0",
