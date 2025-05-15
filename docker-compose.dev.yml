@@ -3,12 +3,11 @@ services:
     build:
       context: .
       target: development
-    image: eruizmoreno/unknown-gravity:tbtc-relayer-dev
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules
     ports:
-      - \"${PORT}:${PORT}\"
+      - "4000:3333"
     environment:
       # API Name
       APP_NAME: 'tBTC Relayer'

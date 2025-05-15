@@ -12,12 +12,12 @@ import helmet from 'helmet';
 import compression from 'compression';
 
 // Rutas
-import Routes from './routes/Routes';
+import Routes from './routes/Routes.js';
 
 // Utils
-import { LogMessage, LogError, LogWarning } from './utils/Logs';
-import { initializeChain } from './services/Core';
-import { initializeAuditLog } from './utils/AuditLog';
+import { LogMessage, LogError, LogWarning } from './utils/Logs.js';
+import { initializeChain } from './services/Core.js';
+import { initializeAuditLog } from './utils/AuditLog.js';
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
@@ -90,7 +90,7 @@ let chainInitializationSuccess = false;
     LogMessage('Chain handler initialized successfully.');
 
     // Start Cron Jobs only if chain initialization was successful
-    const { startCronJobs } = await import('./services/Core');
+    const { startCronJobs } = await import('./services/Core.js');
     startCronJobs();
     LogMessage('Cron jobs started.');
   } catch (error: any) {
