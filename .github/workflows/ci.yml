@@ -47,6 +47,20 @@ jobs:
       - name: Build
         run: yarn build
 
+      - name: Setup .env file
+        run: cp .env.example .env
+
+      - name: Start Docker Compose services
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+
+      - name: Wait for services to become healthy
+        run: .github/scripts/wait-for-healthy-services.sh
+        shell: bash
+
+      - name: Stop Docker Compose services
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down
+
       - name: Run tests
         run: yarn test:coverage
 

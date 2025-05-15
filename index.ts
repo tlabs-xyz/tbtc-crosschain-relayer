@@ -2,7 +2,7 @@
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
 // Express Server
-import express, { Express } from 'express';
+import express, { Express, RequestHandler } from 'express';
 
 // Security
 import cors from 'cors';
@@ -26,8 +26,11 @@ import { initializeAuditLog } from './utils/AuditLog.js';
 const app: Express = express();
 
 // Port
-const PORT = process.env.APP_PORT || 3000;
+const PORT = parseInt(process.env.APP_PORT || '3000', 10);
 app.set('port', PORT);
+
+// API Only Mode Flag
+const API_ONLY_MODE = process.env.API_ONLY_MODE === 'true';
 
 // -------------------------------------------------------------------------
 // |                              SECURITY                                 |
@@ -41,6 +44,7 @@ if (process.env.CORS_ENABLED === 'true') {
     })
   );
 }
+
 // Helmet (Security middleware)
 app.use(helmet());
 
@@ -52,11 +56,11 @@ app.disable('x-powered-by');
 // -------------------------------------------------------------------------
 
 // Compresion
-app.use(compression as any);
+app.use(compression() as unknown as RequestHandler);
 
 // File Upload limit
-app.use(express.json({ limit: '2048mb' }));
-app.use(express.urlencoded({ limit: '2048mb', extended: true }));
+app.use(express.json({ limit: '8mb' }));
+app.use(express.urlencoded({ limit: '8mb', extended: true }));
 
 // -------------------------------------------------------------------------
 // |                                 ROUTES                                |
@@ -71,51 +75,56 @@ app.use(Routes);
 // --- Add Log ---
 LogMessage('Application starting...');
 
+if (API_ONLY_MODE) {
+  LogWarning('Application starting in API_ONLY_MODE. Services will not be initialized.');
+}
+
 // Initialize Audit Log System
-try {
-  initializeAuditLog();
-  LogMessage('Audit log initialized.');
-} catch (error: any) {
-  LogError('Failed to initialize audit log:', error);
-  process.exit(1); // Exit if audit log fails
+if (!API_ONLY_MODE) {
+  try {
+    initializeAuditLog();
+    LogMessage('Audit log initialized.');
+  } catch (error: any) {
+    LogError('Failed to initialize audit log:', error);
+    process.exit(1);
+  }
+} else {
+  LogMessage('Skipping Audit Log initialization due to API_ONLY_MODE.');
 }
 
 // Initialize chain handler
 let chainInitializationSuccess = false;
 (async () => {
-  try {
-    LogMessage('Attempting to initialize chain handler...');
-    await initializeChain();
-    chainInitializationSuccess = true;
-    LogMessage('Chain handler initialized successfully.');
+  if (!API_ONLY_MODE) {
+    try {
+      LogMessage('Attempting to initialize chain handler...');
+      const success = await initializeChain();
+      if (!success) {
+        LogError('Failed to initialize chain handler.', new Error('Failed to initialize chain handler.'));
+        process.exit(1);
+      }
+      LogMessage('Chain handler initialized successfully.');
 
-    // Start Cron Jobs only if chain initialization was successful
-    const { startCronJobs } = await import('./services/Core.js');
-    startCronJobs();
-    LogMessage('Cron jobs started.');
-  } catch (error: any) {
-    LogError(
-      'FATAL: Failed to initialize chain handler or dependent services:',
-      error
-    );
-    // Decide if the app should exit or run in a degraded state
-    // process.exit(1); // Option: Exit if chain handler is critical
-    LogWarning(
-      'Running without active chain handler or cron jobs due to initialization error.'
-    );
+      const { startCronJobs } = await import('./services/Core.js');
+      startCronJobs();
+      LogMessage('Cron jobs started.');
+    } catch (error: any) {
+      LogError(
+        'FATAL: Failed to initialize chain handler or dependent services:',
+        error
+      );
+      process.exit(1);
+    }
+  } else {
+    LogMessage('Skipping Chain Handler and Cron Jobs initialization due to API_ONLY_MODE.');
   }
 
-  // Start the server regardless of chain init success? Or only if successful?
-  // Let's start it anyway to provide basic API status, but log a warning.
-
-  // --- Add Log ---
-  LogMessage(`Attempting to start server on port ${PORT}...`);
-
   app
-    .listen(PORT, () => {
-      // --- Add Log ---
-      LogMessage(`Server is running on port ${PORT}`);
-      if (!chainInitializationSuccess) {
+    .listen(PORT, '0.0.0.0', () => {
+      LogMessage(`Server is running on port ${PORT} and listening on all interfaces`);
+      if (API_ONLY_MODE) {
+        LogWarning('Server is running in API_ONLY_MODE. Most services are not active.');
+      } else if (!chainInitializationSuccess) {
         LogWarning(
           'Server started, but chain handler failed to initialize. Service may be degraded.'
         );
@@ -128,6 +137,6 @@ let chainInitializationSuccess = false;
       } else {
         LogError(`FATAL: Failed to start server:`, err);
       }
-      process.exit(1); // Exit if server fails to start
+      process.exit(1);
     });
-})(); // Immediately invoke the async function
+})();
