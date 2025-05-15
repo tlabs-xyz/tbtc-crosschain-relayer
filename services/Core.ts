@@ -1,6 +1,7 @@
+import { logErrorContext } from '../utils/Logger.js';
 import cron from 'node-cron';
 
-import { LogMessage, LogError, LogWarning } from '../utils/Logs.js';
+import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
 import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits.js';
@@ -40,7 +41,7 @@ export const chainHandler = ChainHandlerFactory.createHandler(chainConfig);
  */
 export const startCronJobs = () => {
   // CRONJOBS
-  LogMessage('Starting cron job setup...');
+  logger.debug('Starting cron job setup...');
 
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
@@ -48,7 +49,7 @@ export const startCronJobs = () => {
       await chainHandler.processFinalizeDeposits();
       await chainHandler.processInitializeDeposits();
     } catch (error) {
-      LogError('Error in deposit processing cron job:', error as Error);
+      logErrorContext('Error in deposit processing cron job:', error);
     }
   });
 
@@ -58,7 +59,7 @@ export const startCronJobs = () => {
       if (chainHandler.supportsPastDepositCheck()) {
         const latestBlock = await chainHandler.getLatestBlock();
         if (latestBlock > 0) {
-          LogMessage(
+          logger.debug(
             `Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`
           );
           await chainHandler.checkForPastDeposits({
@@ -66,17 +67,17 @@ export const startCronJobs = () => {
             latestBlock: latestBlock,
           });
         } else {
-          LogWarning(
+          logger.warn(
             `Skipping checkForPastDeposits - Invalid latestBlock received: ${latestBlock}`
           );
         }
       } else {
-        LogMessage(
+        logger.debug(
           'Skipping checkForPastDeposits - Handler does not support it (e.g., using endpoint).'
         );
       }
     } catch (error) {
-      LogError('Error in past deposits cron job:', error as Error);
+      logErrorContext('Error in past deposits cron job:', error);
     }
   });
 
@@ -86,11 +87,11 @@ export const startCronJobs = () => {
       await cleanQueuedDeposits();
       await cleanFinalizedDeposits();
     } catch (error) {
-      LogError('Error in cleanup cron job:', error as Error);
+      logErrorContext('Error in cleanup cron job:', error);
     }
   });
 
-  LogMessage('Cron job setup complete.');
+  logger.debug('Cron job setup complete.');
 };
 
 /**
@@ -105,12 +106,12 @@ export const initializeChain = async () => {
     // Set up event listeners if not using endpoint
     await chainHandler.setupListeners();
 
-    LogMessage(
+    logger.debug(
       `Chain handler for ${chainConfig.chainName} successfully initialized`
     );
     return true;
   } catch (error) {
-    LogError('Failed to initialize chain handler:', error as Error);
+    logErrorContext('Failed to initialize chain handler:', error);
     return false;
   }
 };

@@ -1,6 +1,5 @@
 import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
-import { Deposit } from '../types/Deposit.type.js';
-import { LogError, LogMessage, LogWarning } from '../utils/Logs.js';
+import logger from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 
 // Placeholder for Sui specific imports (e.g., @mysten/sui.js)
@@ -11,7 +10,7 @@ export class SuiChainHandler extends BaseChainHandler {
 
   constructor(config: ChainConfig) {
     super(config);
-    LogMessage(`Constructing SuiChainHandler for ${this.config.chainName}`);
+    logger.debug(`Constructing SuiChainHandler for ${this.config.chainName}`);
     if (config.chainType !== ChainType.SUI) {
       throw new Error(
         `Incorrect chain type ${config.chainType} provided to SuiChainHandler.`
@@ -20,17 +19,17 @@ export class SuiChainHandler extends BaseChainHandler {
   }
 
   protected async initializeL2(): Promise<void> {
-    LogMessage(`Initializing Sui L2 components for ${this.config.chainName}`);
+    logger.debug(`Initializing Sui L2 components for ${this.config.chainName}`);
     if (this.config.l2Rpc) {
       // TODO: Initialize Sui client (e.g., using @mysten/sui.js)
       // const { SuiClient, getFullnodeUrl } = await import('@mysten/sui');
       // const fullnodeUrl = getFullnodeUrl('testnet'); // Or use this.config.l2Rpc
       // this.suiClient = new SuiClient({ url: fullnodeUrl });
-      LogWarning(
+      logger.warn(
         `Sui L2 client initialization NOT YET IMPLEMENTED for ${this.config.chainName}.`
       );
     } else {
-      LogWarning(
+      logger.warn(
         `Sui L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`
       );
     }
@@ -38,14 +37,14 @@ export class SuiChainHandler extends BaseChainHandler {
 
   protected async setupL2Listeners(): Promise<void> {
     if (!this.config.useEndpoint) {
-      LogWarning(
+      logger.warn(
         `Sui L2 Listener setup NOT YET IMPLEMENTED for ${this.config.chainName}.`
       );
       // TODO: Implement Sui event subscription
       // Example: await this.suiClient.subscribeEvent({ filter: { MoveModule: { package: '<PACKAGE_ID>', module: '<MODULE_NAME>' } }, onMessage: callback });
       // Requires Sui Move module equivalent of L2BitcoinDepositor events.
     } else {
-      LogMessage(
+      logger.debug(
         `Sui L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`
       );
     }
@@ -53,7 +52,7 @@ export class SuiChainHandler extends BaseChainHandler {
 
   async getLatestBlock(): Promise<number> {
     if (this.config.useEndpoint) return 0;
-    LogWarning(
+    logger.warn(
       `Sui getLatestBlock (checkpoint sequence number) NOT YET IMPLEMENTED for ${this.config.chainName}. Returning 0.`
     );
     // TODO: Implement logic to get the latest Sui checkpoint sequence number
@@ -66,7 +65,7 @@ export class SuiChainHandler extends BaseChainHandler {
     latestBlock: number; // Represents checkpoint sequence number
   }): Promise<void> {
     if (this.config.useEndpoint) return;
-    LogWarning(
+    logger.warn(
       `Sui checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`
     );
     // TODO: Implement logic to query past Sui events

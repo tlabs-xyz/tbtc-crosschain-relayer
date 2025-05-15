@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { Deposit } from '../types/Deposit.type.js';
-import { LogError, LogMessage } from './Logs.js';
+import logger, { logErrorContext } from './Logger.js';
 
 // Constants
 const AUDIT_LOG_DIR = process.env.AUDIT_LOG_DIR || './logs';
@@ -30,16 +30,16 @@ export const initializeAuditLog = (): void => {
     // Create directory if it doesn't exist
     if (!fs.existsSync(auditLogDir)) {
       fs.mkdirSync(auditLogDir, { recursive: true });
-      LogMessage(`Created audit log directory: ${auditLogDir}`);
+      logger.info(`Created audit log directory: ${auditLogDir}`);
     }
 
     // Create the log file if it doesn't exist
     if (!fs.existsSync(auditLogPath)) {
       fs.writeFileSync(auditLogPath, '', 'utf8');
-      LogMessage(`Created audit log file: ${auditLogPath}`);
+      logger.info(`Created audit log file: ${auditLogPath}`);
     }
   } catch (error) {
-    LogError('Failed to initialize audit log', error as Error);
+    logErrorContext('Failed to initialize audit log', error);
   }
 };
 
@@ -67,7 +67,7 @@ export const appendToAuditLog = (
     if (!fs.existsSync(auditLogPath)) {
       // Optionally recreate it if missing, or throw error
       fs.writeFileSync(auditLogPath, '', 'utf8');
-      LogMessage(`Audit log file was missing, recreated: ${auditLogPath}`);
+      logger.info(`Audit log file was missing, recreated: ${auditLogPath}`);
       // OR: throw new Error(`Audit log file does not exist: ${auditLogPath}`);
     }
 
@@ -84,7 +84,7 @@ export const appendToAuditLog = (
     // Append to log file
     fs.appendFileSync(auditLogPath, logString, 'utf8');
   } catch (error) {
-    LogError('Failed to write to audit log', error as Error);
+    logErrorContext('Failed to write to audit log', error);
     console.error('AUDIT LOG ENTRY (FALLBACK):', {
       timestamp: new Date().toISOString(),
       eventType,

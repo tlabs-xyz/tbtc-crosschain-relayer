@@ -3,7 +3,7 @@ import { Deposit } from '../types/Deposit.type.js';
 import { FundingTransaction } from '../types/FundingTransaction.type.js';
 import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
 import { writeJson } from './JsonUtils.js';
-import { LogMessage } from './Logs.js';
+import logger from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 // --- Audit Log Import ---
 import {
@@ -134,7 +134,7 @@ export const updateToFinalizedDeposit = async (
   writeJson(updatedDeposit, deposit.id);
 
   if (tx) {
-    LogMessage(
+    logger.info(
       `Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`
     );
     // --- Log Deposit Finalized ---
@@ -191,7 +191,7 @@ export const updateToInitializedDeposit = async (
   writeJson(updatedDeposit, deposit.id);
 
   if (tx) {
-    LogMessage(
+    logger.info(
       `Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`
     );
     // --- Log Deposit Initialized ---

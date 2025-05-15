@@ -1,7 +1,5 @@
 import { Deposit } from '../types/Deposit.type.js';
-import { FundingTransaction } from '../types/FundingTransaction.type.js';
-import { createDeposit } from './Deposits.js';
-import { LogError } from './Logs.js';
+import { logErrorContext } from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 
 import fs from 'fs';
@@ -11,8 +9,8 @@ import path from 'path';
 // ------------------------- JSON UTILS --------------------------
 // ---------------------------------------------------------------
 
-const JSON_DIR = process.env.JSON_PATH || './data/';
-const dirPath = path.resolve('.', JSON_DIR);
+const JSON_PATH = process.env.JSON_PATH || './data';
+const dirPath = path.resolve('.', JSON_PATH);
 
 const checkAndCreateDataFolder = () => {
   if (!fs.existsSync(dirPath)) {
@@ -26,7 +24,7 @@ const checkAndCreateDataFolder = () => {
  * @returns {String} Filename of the JSON operation
  */
 const getFilename = (operationId: string): string =>
-  path.resolve('.', `${JSON_DIR}${operationId}.json`);
+  path.resolve('.', `${JSON_PATH}${operationId}.json`);
 
 /**
  * Check if a JSON object is empty
@@ -62,7 +60,7 @@ const checkIfExistJson = (operationId: string): boolean => {
       return isValidJson(fileContent);
     }
   } catch (error) {
-    LogError('🚀 ~ checkIfExistJson ~ error:', error as Error);
+    logErrorContext(`Error checking JSON file existence for ID ${operationId}:`, error);
   }
   return false;
 };
@@ -83,10 +81,7 @@ const getAllJsonOperations = async (): Promise<Array<Deposit>> => {
     const filePath = path.join(dirPath, file);
     const data = await fs.promises.readFile(filePath, 'utf8');
     if (!isValidJson(data)) {
-      LogError(
-        `🚀 ~ getAllOperations ~ Invalid JSON file: ${filePath}`,
-        new Error('Invalid JSON file detected')
-      );
+      logErrorContext(`Invalid JSON file detected: ${filePath}`, new Error('Invalid JSON content'));
       return null;
     }
     return JSON.parse(data);
@@ -128,7 +123,7 @@ const getJsonById = (operationId: string): Deposit | null => {
       const fileContent = fs.readFileSync(filename, 'utf8');
       return JSON.parse(fileContent);
     } catch (error) {
-      LogError('🚀 ~ getJsonById ~ error:', error as Error);
+      logErrorContext(`Error reading JSON file by ID ${operationId}:`, error);
     }
   }
   return null;
@@ -150,7 +145,7 @@ const writeJson = (data: Deposit, operationId: string): boolean => {
     fs.writeFileSync(filename, json, 'utf8');
     return true;
   } catch (error) {
-    LogError('🚀 ~ writeJson ~ error:', error as Error);
+    logErrorContext(`Error writing JSON file for ID ${operationId}:`, error);
     return false;
   }
 };
@@ -168,7 +163,7 @@ const deleteJson = (operationId: string): boolean => {
       return true;
     }
   } catch (error) {
-    LogError('🚀 ~ deleteJson ~ error:', error as Error);
+    logErrorContext(`Error deleting JSON file for ID ${operationId}:`, error);
   }
   return false;
 };

@@ -15,9 +15,10 @@ import compression from 'compression';
 import Routes from './routes/Routes.js';
 
 // Utils
-import { LogMessage, LogError, LogWarning } from './utils/Logs.js';
+import logger from './utils/Logger.js';
 import { initializeChain } from './services/Core.js';
 import { initializeAuditLog } from './utils/AuditLog.js';
+import { logErrorContext } from './utils/Logger.js';
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
@@ -73,70 +74,53 @@ app.use(Routes);
 // -------------------------------------------------------------------------
 
 // --- Add Log ---
-LogMessage('Application starting...');
+logger.info('Application starting...');
 
 if (API_ONLY_MODE) {
-  LogWarning('Application starting in API_ONLY_MODE. Services will not be initialized.');
+  logger.warn('Application starting in API_ONLY_MODE. Services will not be initialized.');
 }
 
 // Initialize Audit Log System
 if (!API_ONLY_MODE) {
   try {
     initializeAuditLog();
-    LogMessage('Audit log initialized.');
+    logger.info('Audit log initialized.');
   } catch (error: any) {
-    LogError('Failed to initialize audit log:', error);
+    logErrorContext('Failed to initialize audit log:', error);
     process.exit(1);
   }
 } else {
-  LogMessage('Skipping Audit Log initialization due to API_ONLY_MODE.');
+  logger.info('Skipping Audit Log initialization due to API_ONLY_MODE.');
 }
 
 // Initialize chain handler
-let chainInitializationSuccess = false;
 (async () => {
   if (!API_ONLY_MODE) {
     try {
-      LogMessage('Attempting to initialize chain handler...');
+      logger.info('Attempting to initialize chain handler...');
       const success = await initializeChain();
       if (!success) {
-        LogError('Failed to initialize chain handler.', new Error('Failed to initialize chain handler.'));
+        logErrorContext('Failed to initialize chain handler.', new Error('initializeChain returned false'));
         process.exit(1);
       }
-      LogMessage('Chain handler initialized successfully.');
+      logger.info('Chain handler initialized successfully.');
 
       const { startCronJobs } = await import('./services/Core.js');
       startCronJobs();
-      LogMessage('Cron jobs started.');
+      logger.info('Cron jobs started.');
     } catch (error: any) {
-      LogError(
+      logErrorContext(
         'FATAL: Failed to initialize chain handler or dependent services:',
         error
       );
       process.exit(1);
     }
   } else {
-    LogMessage('Skipping Chain Handler and Cron Jobs initialization due to API_ONLY_MODE.');
+    logger.info('Skipping Chain Handler and Cron Jobs initialization due to API_ONLY_MODE.');
   }
 
-  app
-    .listen(PORT, '0.0.0.0', () => {
-      LogMessage(`Server is running on port ${PORT} and listening on all interfaces`);
-      if (API_ONLY_MODE) {
-        LogWarning('Server is running in API_ONLY_MODE. Most services are not active.');
-      } else if (!chainInitializationSuccess) {
-        LogWarning(
-          'Server started, but chain handler failed to initialize. Service may be degraded.'
-        );
-      }
-    })
-    .on('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        const errorMessage = `FATAL: Port ${PORT} is already in use.`;
-        LogError(errorMessage, new Error(errorMessage));
-      } else {
-        LogError(`FATAL: Failed to start server:`, err);
-      }
-      process.exit(1);
-    });
+  app.listen({ port: PORT, host: '0.0.0.0' });
+
+  // Log successful initialization
+  logger.info(`Server listening on port ${PORT}`);
 })();
