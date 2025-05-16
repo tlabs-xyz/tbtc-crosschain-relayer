@@ -36,11 +36,11 @@ jobs:
       # TODO: Enable those after fixing the linting errors
 
       # - name: Lint
-        # run: yarn lint
+      # run: yarn lint
 
       # - name: Format check
-        # run: yarn format
-        
+      # run: yarn format
+
       - name: Detect unused dependencies
         run: yarn depcheck
 

@@ -73,9 +73,7 @@ const getAllJsonOperations = async (): Promise<Array<Deposit>> => {
   checkAndCreateDataFolder();
 
   const files = await fs.promises.readdir(dirPath);
-  const jsonFiles = files.filter(
-    (file: string) => path.extname(file) === '.json'
-  );
+  const jsonFiles = files.filter((file: string) => path.extname(file) === '.json');
 
   const promises = jsonFiles.map(async (file: string) => {
     const filePath = path.join(dirPath, file);
@@ -98,7 +96,7 @@ const getAllJsonOperations = async (): Promise<Array<Deposit>> => {
  * @returns {Array} List of JSON operations by status
  */
 export const getAllJsonOperationsByStatus = async (
-  status: DepositStatus // Parameter is still the Enum type
+  status: DepositStatus, // Parameter is still the Enum type
 ): Promise<Array<Deposit>> => {
   const operations = await getAllJsonOperations(); // operations is Deposit[]
   // operation.status is now type 'number' (from Deposit interface)

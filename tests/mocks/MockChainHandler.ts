@@ -1,9 +1,10 @@
+import { TransactionReceipt } from '@ethersproject/providers';
 import { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface.js';
 import { DepositStatus } from '../../types/DepositStatus.enum.js';
 import { Deposit } from '../../types/Deposit.type.js';
 import logger from '../../utils/Logger.js';
-import { createTestDeposit } from './BlockchainMock';
-import { ethers } from 'ethers';
+import { createTestDeposit } from './BlockchainMock.js';
+import { BigNumber, ethers } from 'ethers';
 
 /**
  * Mock chain handler for testing
@@ -108,7 +109,7 @@ export class MockChainHandler implements ChainHandlerInterface {
     latestBlock: number;
   }): Promise<void> {
     logger.info(
-      `MockChainHandler: Checking for past deposits (last ${options.pastTimeInMinutes} min, latest block ${options.latestBlock})`
+      `MockChainHandler: Checking for past deposits (last ${options.pastTimeInMinutes} min, latest block ${options.latestBlock})`,
     );
     // Simulate checking
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -118,10 +119,11 @@ export class MockChainHandler implements ChainHandlerInterface {
   /**
    * Initialize a deposit
    */
-  async initializeDeposit(deposit: Deposit): Promise<void> {
-    logger.info(`MockChainHandler: Initializing deposit ${deposit.id}`);
-    // Simulate processing
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+    logger.info(`Mock chain handler: Initializing deposit ${deposit.id}`);
+
+    // Simulate processing delay
+    await new Promise((resolve) => setTimeout(resolve, this.processingDelayMs));
     logger.info(`MockChainHandler: Deposit ${deposit.id} initialized.`);
 
     // Update deposit status
@@ -133,9 +135,7 @@ export class MockChainHandler implements ChainHandlerInterface {
           ...deposit.hashes,
           eth: {
             ...deposit.hashes.eth,
-            initializeTxHash: ethers.utils.hexlify(
-              ethers.utils.randomBytes(32)
-            ),
+            initializeTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
           },
         },
         dates: {
@@ -151,7 +151,24 @@ export class MockChainHandler implements ChainHandlerInterface {
       this.emitEvent('DepositInitialized', deposit.id);
     }
 
-    return Promise.resolve();
+    return {
+      to: '0x0000000000000000000000000000000000000000',
+      from: '0x0000000000000000000000000000000000000000',
+      contractAddress: '0x0000000000000000000000000000000000000000',
+      transactionIndex: 0,
+      gasUsed: BigNumber.from(21_000),
+      logsBloom: '0x' + '0'.repeat(512),
+      blockHash: '0x' + '0'.repeat(64),
+      transactionHash: '0x' + '0'.repeat(64),
+      logs: [],
+      blockNumber: 1,
+      cumulativeGasUsed: BigNumber.from(21_000),
+      confirmations: 1,
+      effectiveGasPrice: BigNumber.from(1),
+      type: 2,
+      status: 1,
+      byzantium: true,
+    };
   }
 
   /**
@@ -239,7 +256,7 @@ export class MockChainHandler implements ChainHandlerInterface {
       return deposit.status;
     }
     logger.warn(`MockChainHandler: Deposit ID ${depositId} not found during checkDepositStatus.`);
-    return null; 
+    return null;
   }
 
   /**

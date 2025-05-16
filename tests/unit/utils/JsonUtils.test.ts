@@ -40,84 +40,84 @@ describe('JsonUtils', () => {
       });
       mockExistsSyncFn = existsSyncMock;
 
-      const mkdirSyncMock = jest.fn((p: string) => { 
+      const mkdirSyncMock = jest.fn((p: string) => {
         const pathStr = path.resolve(p);
         mockDirExistsStore[pathStr] = true;
         let parent = path.dirname(pathStr);
         while (parent !== path.dirname(parent)) {
-            mockDirExistsStore[parent] = true;
-            parent = path.dirname(parent);
+          mockDirExistsStore[parent] = true;
+          parent = path.dirname(parent);
         }
       });
       mockMkdirSyncFn = mkdirSyncMock;
 
-      const writeFileSyncMock = jest.fn((p: string, data: string, encoding: string) => { 
+      const writeFileSyncMock = jest.fn((p: string, data: string, encoding: string) => {
         const pathStr = path.resolve(p);
         const dirPath = path.dirname(pathStr);
         if (!mockDirExistsStore[dirPath]) {
-           mockDirExistsStore[dirPath] = true; 
+          mockDirExistsStore[dirPath] = true;
         }
         mockFileStore[pathStr] = data;
       });
       mockWriteFileSyncFn = writeFileSyncMock;
 
-      const readFileSyncMock = jest.fn((p: string) => { 
+      const readFileSyncMock = jest.fn((p: string) => {
         const pathStr = path.resolve(p);
         if (mockFileStore[pathStr] !== undefined) {
           return mockFileStore[pathStr];
         }
-        const error: NodeJS.ErrnoException = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+        const error: NodeJS.ErrnoException = new Error(
+          `ENOENT: no such file or directory, open '${pathStr}'`,
+        );
         error.code = 'ENOENT';
         throw error;
       });
       mockReadFileSyncFn = readFileSyncMock;
 
-      const unlinkSyncMock = jest.fn((p: string) => { 
+      const unlinkSyncMock = jest.fn((p: string) => {
         const pathStr = path.resolve(p);
         if (mockFileStore[pathStr] !== undefined) {
           delete mockFileStore[pathStr];
         } else {
-          const error: NodeJS.ErrnoException = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+          const error: NodeJS.ErrnoException = new Error(
+            `ENOENT: no such file or directory, open '${pathStr}'`,
+          );
           error.code = 'ENOENT';
           throw error;
         }
       });
       mockUnlinkSyncFn = unlinkSyncMock;
 
-      const readdirMock = jest.fn(async (p: string) => { 
+      const readdirMock = jest.fn(async (p: string) => {
         const dirPathStr = path.resolve(p);
         if (!mockDirExistsStore[dirPathStr]) {
-            const error: NodeJS.ErrnoException = new Error(`ENOENT: no such file or directory, scandir '${dirPathStr}'`);
-            error.code = 'ENOENT';
-            throw error;
+          const error: NodeJS.ErrnoException = new Error(
+            `ENOENT: no such file or directory, scandir '${dirPathStr}'`,
+          );
+          error.code = 'ENOENT';
+          throw error;
         }
         return Object.keys(mockFileStore)
-          .filter(filePath => path.dirname(filePath) === dirPathStr)
-          .map(filePath => path.basename(filePath));
+          .filter((filePath) => path.dirname(filePath) === dirPathStr)
+          .map((filePath) => path.basename(filePath));
       });
       mockReaddirFn = readdirMock;
 
-      const readFileMock = jest.fn(async (fp: string, enc?: string) => {
-        try {
-            return mockReadFileSyncFn(fp);
-        } catch (e) {
-            throw e; 
-        }
-      });
+      const readFileMock = jest.fn(async (fp: string, enc?: string) => mockReadFileSyncFn(fp));
       mockReadFileFn = readFileMock;
 
       return {
         __esModule: true,
         default: {
-            existsSync: existsSyncMock,
-            mkdirSync: mkdirSyncMock,
-            writeFileSync: writeFileSyncMock,
-            readFileSync: readFileSyncMock,
-            unlinkSync: unlinkSyncMock,
-            promises: {
-                readdir: readdirMock,
-                readFile: readFileMock
-            }
+          existsSync: existsSyncMock,
+          mkdirSync: mkdirSyncMock,
+          writeFileSync: writeFileSyncMock,
+          readFileSync: readFileSyncMock,
+          unlinkSync: unlinkSyncMock,
+          promises: {
+            readdir: readdirMock,
+            readFile: readFileMock,
+          },
         },
         existsSync: existsSyncMock,
         mkdirSync: mkdirSyncMock,
@@ -125,15 +125,15 @@ describe('JsonUtils', () => {
         readFileSync: readFileSyncMock,
         unlinkSync: unlinkSyncMock,
         promises: {
-            readdir: readdirMock,
-            readFile: readFileMock
-        }
+          readdir: readdirMock,
+          readFile: readFileMock,
+        },
       };
     });
 
     jest.resetModules();
     // Re-evaluate JsonUtilsModule to ensure it uses the mocked fs
-    JsonUtilsModule = require('../../../utils/JsonUtils'); 
+    JsonUtilsModule = require('../../../utils/JsonUtils');
   });
 
   afterEach(() => {
@@ -163,12 +163,12 @@ describe('JsonUtils', () => {
     };
 
     const mockReveal: Reveal = [
-      1,                                  // version (number)
-      '0xblindingfactor_reveal',          // blindingFactor (string)
-      '0xwalletpubkeyhash_reveal',        // walletPublicKeyHash (string)
-      '0xrefundpubkeyhash_reveal',        // refundPublicKeyHash (string)
-      '0xrefundlocktime_reveal',          // refundLocktime (string)
-      '0xextradata_reveal'                // extraData (string)
+      1, // version (number)
+      '0xblindingfactor_reveal', // blindingFactor (string)
+      '0xwalletpubkeyhash_reveal', // walletPublicKeyHash (string)
+      '0xrefundpubkeyhash_reveal', // refundPublicKeyHash (string)
+      '0xrefundlocktime_reveal', // refundLocktime (string)
+      '0xextradata_reveal', // extraData (string)
       // vault, value, outpoint, depositor are not part of the Reveal tuple type
     ];
 
@@ -179,6 +179,7 @@ describe('JsonUtils', () => {
       hashes: {
         btc: { btcTxHash: '0xbtctxhash' },
         eth: { initializeTxHash: null, finalizeTxHash: null },
+        solana: { bridgeTxHash: null },
       },
       receipt: {
         depositor: '0xdepositor_receipt',
@@ -190,7 +191,7 @@ describe('JsonUtils', () => {
       },
       owner: '0xOwner',
       status: DepositStatus.QUEUED,
-      L1OutputEvent: { 
+      L1OutputEvent: {
         fundingTx: mockFundingTx,
         reveal: mockReveal,
         l2DepositOwner: '0xl2owner',
@@ -201,6 +202,13 @@ describe('JsonUtils', () => {
         initializationAt: null,
         finalizationAt: null,
         lastActivityAt: new Date().getTime(),
+        awaitingWormholeVAAMessageSince: null,
+        bridgedAt: null,
+      },
+      wormholeInfo: {
+        txHash: null,
+        transferSequence: null,
+        bridgingAttempted: false,
       },
       error: null,
     };
@@ -214,7 +222,11 @@ describe('JsonUtils', () => {
       JsonUtilsModule.writeJson(testDeposit, testDeposit.id);
       const retrievedDeposit = JsonUtilsModule.getJsonById(testDeposit.id);
 
-      expect(mockWriteFileSyncFn).toHaveBeenCalledWith(expectedFilePath, JSON.stringify(testDeposit, null, 2), 'utf8');
+      expect(mockWriteFileSyncFn).toHaveBeenCalledWith(
+        expectedFilePath,
+        JSON.stringify(testDeposit, null, 2),
+        'utf8',
+      );
       expect(retrievedDeposit).toEqual(testDeposit);
       expect(mockReadFileSyncFn).toHaveBeenCalledWith(expectedFilePath, 'utf8');
     });
@@ -222,16 +234,16 @@ describe('JsonUtils', () => {
     test('should return null when getting a non-existent deposit', () => {
       const nonExistentId = 'non-existent-id';
       const nonExistentFilePath = path.resolve(TEST_DATA_DIR, `${nonExistentId}.json`);
-      
+
       mockExistsSyncFn.mockReturnValue(false); // Simulate file not existing
 
       const result = JsonUtilsModule.getJsonById(nonExistentId);
-      
+
       expect(result).toBeNull();
       // Verify existsSync was called for the non-existent file path
       expect(mockExistsSyncFn).toHaveBeenCalledWith(nonExistentFilePath);
       // Verify readFileSync was NOT called because existsSync returned false
-      expect(mockReadFileSyncFn).not.toHaveBeenCalled(); 
+      expect(mockReadFileSyncFn).not.toHaveBeenCalled();
     });
   });
 
@@ -256,7 +268,7 @@ describe('JsonUtils', () => {
       const result = JsonUtilsModule.deleteJson(nonExistentId);
       expect(result).toBe(false);
       expect(mockExistsSyncFn).toHaveBeenCalledWith(nonExistentFilePath);
-      expect(mockUnlinkSyncFn).not.toHaveBeenCalled(); 
+      expect(mockUnlinkSyncFn).not.toHaveBeenCalled();
     });
   });
 
@@ -264,8 +276,10 @@ describe('JsonUtils', () => {
     test('should get all JSON operations', async () => {
       const queuedDeposit = createTestDeposit({ status: DepositStatus.QUEUED });
       const initializedDeposit = createTestDeposit({ status: DepositStatus.INITIALIZED });
-      mockFileStore[path.resolve(TEST_DATA_DIR, `${queuedDeposit.id}.json`)] = JSON.stringify(queuedDeposit);
-      mockFileStore[path.resolve(TEST_DATA_DIR, `${initializedDeposit.id}.json`)] = JSON.stringify(initializedDeposit);
+      mockFileStore[path.resolve(TEST_DATA_DIR, `${queuedDeposit.id}.json`)] =
+        JSON.stringify(queuedDeposit);
+      mockFileStore[path.resolve(TEST_DATA_DIR, `${initializedDeposit.id}.json`)] =
+        JSON.stringify(initializedDeposit);
       mockDirExistsStore[TEST_DATA_DIR] = true;
 
       const allOperations = await JsonUtilsModule.getAllJsonOperations();
@@ -274,27 +288,40 @@ describe('JsonUtils', () => {
       expect(allOperations).toEqual(expect.arrayContaining([queuedDeposit, initializedDeposit]));
       // Ensure readFile was called for each file found by readdir
       expect(mockReadFileFn).toHaveBeenCalledTimes(2);
-      expect(mockReadFileFn).toHaveBeenCalledWith(path.resolve(TEST_DATA_DIR, `${queuedDeposit.id}.json`), 'utf8');
-      expect(mockReadFileFn).toHaveBeenCalledWith(path.resolve(TEST_DATA_DIR, `${initializedDeposit.id}.json`), 'utf8');
+      expect(mockReadFileFn).toHaveBeenCalledWith(
+        path.resolve(TEST_DATA_DIR, `${queuedDeposit.id}.json`),
+        'utf8',
+      );
+      expect(mockReadFileFn).toHaveBeenCalledWith(
+        path.resolve(TEST_DATA_DIR, `${initializedDeposit.id}.json`),
+        'utf8',
+      );
     });
 
     test('should get operations by status', async () => {
       const queuedDeposit1 = createTestDeposit({ status: DepositStatus.QUEUED });
       const queuedDeposit2 = createTestDeposit({ status: DepositStatus.QUEUED });
       const initializedDeposit = createTestDeposit({ status: DepositStatus.INITIALIZED });
-      mockFileStore[path.resolve(TEST_DATA_DIR, `${queuedDeposit1.id}.json`)] = JSON.stringify(queuedDeposit1);
-      mockFileStore[path.resolve(TEST_DATA_DIR, `${queuedDeposit2.id}.json`)] = JSON.stringify(queuedDeposit2);
-      mockFileStore[path.resolve(TEST_DATA_DIR, `${initializedDeposit.id}.json`)] = JSON.stringify(initializedDeposit);
+      mockFileStore[path.resolve(TEST_DATA_DIR, `${queuedDeposit1.id}.json`)] =
+        JSON.stringify(queuedDeposit1);
+      mockFileStore[path.resolve(TEST_DATA_DIR, `${queuedDeposit2.id}.json`)] =
+        JSON.stringify(queuedDeposit2);
+      mockFileStore[path.resolve(TEST_DATA_DIR, `${initializedDeposit.id}.json`)] =
+        JSON.stringify(initializedDeposit);
       mockDirExistsStore[TEST_DATA_DIR] = true;
 
-      const initializedOperations = await JsonUtilsModule.getAllJsonOperationsByStatus(DepositStatus.INITIALIZED);
+      const initializedOperations = await JsonUtilsModule.getAllJsonOperationsByStatus(
+        DepositStatus.INITIALIZED,
+      );
       expect(initializedOperations).toHaveLength(1);
       expect(initializedOperations[0]).toEqual(initializedDeposit);
 
-      const queuedOperations = await JsonUtilsModule.getAllJsonOperationsByStatus(DepositStatus.QUEUED);
+      const queuedOperations = await JsonUtilsModule.getAllJsonOperationsByStatus(
+        DepositStatus.QUEUED,
+      );
       expect(queuedOperations).toHaveLength(2);
       expect(queuedOperations).toEqual(expect.arrayContaining([queuedDeposit1, queuedDeposit2]));
-      
+
       // Check calls for getAllJsonOperationsByStatus. It calls getAllJsonOperations internally.
       // So readdir is called once per call to getAllJsonOperations.
       // readFile is called for each file by getAllJsonOperations.
@@ -304,8 +331,10 @@ describe('JsonUtils', () => {
     });
 
     test('should return empty array if no files match status', async () => {
-      mockDirExistsStore[TEST_DATA_DIR] = true; 
-      const finalizedOperations = await JsonUtilsModule.getAllJsonOperationsByStatus(DepositStatus.FINALIZED);
+      mockDirExistsStore[TEST_DATA_DIR] = true;
+      const finalizedOperations = await JsonUtilsModule.getAllJsonOperationsByStatus(
+        DepositStatus.FINALIZED,
+      );
       expect(finalizedOperations).toHaveLength(0);
       expect(mockReaddirFn).toHaveBeenCalledWith(TEST_DATA_DIR);
       expect(mockReadFileFn).not.toHaveBeenCalled(); // No files to read
@@ -313,19 +342,21 @@ describe('JsonUtils', () => {
 
     test('should throw error if readdir fails other than ENOENT for getAllJsonOperations', async () => {
       mockDirExistsStore[TEST_DATA_DIR] = true;
-      mockReaddirFn.mockImplementationOnce(async () => { 
+      mockReaddirFn.mockImplementationOnce(async () => {
         const err = new Error('EPERM: operation not permitted') as NodeJS.ErrnoException;
         err.code = 'EPERM';
         throw err;
-       });
-      await expect(JsonUtilsModule.getAllJsonOperations()).rejects.toThrow('EPERM: operation not permitted');
+      });
+      await expect(JsonUtilsModule.getAllJsonOperations()).rejects.toThrow(
+        'EPERM: operation not permitted',
+      );
     });
 
-     test('should return empty array if data directory does not exist for getAllJsonOperations', async () => {
+    test('should return empty array if data directory does not exist for getAllJsonOperations', async () => {
       delete mockDirExistsStore[TEST_DATA_DIR];
       const operations = await JsonUtilsModule.getAllJsonOperations();
       expect(operations).toEqual([]);
-      expect(mockReaddirFn).toHaveBeenCalledWith(TEST_DATA_DIR); 
+      expect(mockReaddirFn).toHaveBeenCalledWith(TEST_DATA_DIR);
       expect(mockReadFileFn).not.toHaveBeenCalled();
     });
   });

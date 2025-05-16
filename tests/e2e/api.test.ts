@@ -80,8 +80,7 @@ describe('API Endpoints', () => {
       version: '0x01000000', // Example version
       inputVector:
         '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff', // Example input vector
-      outputVector:
-        '0x0100000000000000001976a914000000000000000000000000000000000000000088ac', // Example output vector
+      outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac', // Example output vector
       locktime: '0x00000000', // Example locktime
       // --- End of added fields ---
     },
@@ -99,9 +98,7 @@ describe('API Endpoints', () => {
 
   describe('POST /api/reveal', () => {
     test('should return 200 and deposit ID for valid data', async () => {
-      const response = await request(app)
-        .post('/api/reveal')
-        .send(validRevealData); // Use the updated test data
+      const response = await request(app).post('/api/reveal').send(validRevealData); // Use the updated test data
 
       // Check response
       expect(response.status).toBe(200);
@@ -110,7 +107,7 @@ describe('API Endpoints', () => {
           success: true,
           depositId: expect.any(String),
           message: 'Deposit initialized successfully',
-        })
+        }),
       );
     });
 
@@ -137,7 +134,7 @@ describe('API Endpoints', () => {
         expect.objectContaining({
           success: false,
           error: 'Missing required fields in request body',
-        })
+        }),
       );
     });
   });
@@ -177,9 +174,7 @@ describe('API Endpoints', () => {
   describe('Full deposit lifecycle', () => {
     test('should process a deposit through the complete lifecycle', async () => {
       // 1. Create deposit via /api/reveal
-      const createResponse = await request(app)
-        .post('/api/reveal')
-        .send(validRevealData); // Use the updated test data
+      const createResponse = await request(app).post('/api/reveal').send(validRevealData); // Use the updated test data
 
       // Check if deposit was created successfully
       expect(createResponse.status).toBe(200);
@@ -189,9 +184,7 @@ describe('API Endpoints', () => {
       expect(depositId).toBeDefined();
 
       // 2. Check status via /api/deposit/:depositId
-      const statusResponse = await request(app).get(
-        `/api/deposit/${depositId}`
-      );
+      const statusResponse = await request(app).get(`/api/deposit/${depositId}`);
       expect(statusResponse.status).toBe(200);
       // Initially, it should be QUEUED (or INITIALIZED if processed quickly)
       expect([0, 1]).toContain(statusResponse.body.status);

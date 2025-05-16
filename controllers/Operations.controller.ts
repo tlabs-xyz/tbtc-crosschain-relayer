@@ -43,16 +43,11 @@ export default class Operations {
    * @method GET
    * @returns {Array<Deposit>} A promise that resolves to an array of deposits.
    */
-  getAllQueuedOperations = async (
-    req: Request,
-    res: Response
-  ): Promise<void> => {
+  getAllQueuedOperations = async (req: Request, res: Response): Promise<void> => {
     const response = new CustomResponse(res);
 
     try {
-      const operations: Array<Deposit> = await getAllJsonOperationsByStatus(
-        DepositStatus.QUEUED
-      );
+      const operations: Array<Deposit> = await getAllJsonOperationsByStatus(DepositStatus.QUEUED);
       return response.ok('OK - Retrieved all queued operations', operations);
     } catch (err) {
       logErrorContext('Error fetching queued operations:', err);
@@ -69,20 +64,14 @@ export default class Operations {
    * @method GET
    * @returns {Promise<Array<Deposit>>} A promise that resolves to an array of deposits.
    */
-  getAllInitializedOperations = async (
-    req: Request,
-    res: Response
-  ): Promise<void> => {
+  getAllInitializedOperations = async (req: Request, res: Response): Promise<void> => {
     const response = new CustomResponse(res);
 
     try {
       const operations: Array<Deposit> = await getAllJsonOperationsByStatus(
-        DepositStatus.INITIALIZED
+        DepositStatus.INITIALIZED,
       );
-      return response.ok(
-        'OK - Retrieved all initialized operations',
-        operations
-      );
+      return response.ok('OK - Retrieved all initialized operations', operations);
     } catch (err) {
       logErrorContext('Error fetching initialized operations:', err);
       return response.ko((err as Error).message);
@@ -98,15 +87,12 @@ export default class Operations {
    * @method GET
    * @returns {Promise<Array<Deposit>>} A promise that resolves to an array of deposits.
    */
-  getAllFinalizedOperations = async (
-    req: Request,
-    res: Response
-  ): Promise<void> => {
+  getAllFinalizedOperations = async (req: Request, res: Response): Promise<void> => {
     const response = new CustomResponse(res);
 
     try {
       const operations: Array<Deposit> = await getAllJsonOperationsByStatus(
-        DepositStatus.FINALIZED
+        DepositStatus.FINALIZED,
       );
       return response.ok('OK - Retrieved all finalized operations', operations);
     } catch (err) {

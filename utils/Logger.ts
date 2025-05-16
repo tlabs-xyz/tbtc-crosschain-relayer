@@ -1,22 +1,23 @@
 import pino from 'pino';
 
-const APP_NAME = (
-  process.env.APP_NAME || 'tBTC Cross-Chain Relayer'
-).toUpperCase();
+const APP_NAME = (process.env.APP_NAME || 'tBTC Cross-Chain Relayer').toUpperCase();
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
   base: {
     appName: APP_NAME,
   },
-  transport: process.env.NODE_ENV !== 'production' ? {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      translateTime: 'SYS:standard',
-      ignore: 'pid,hostname',
-    },
-  } : undefined,
+  transport:
+    process.env.NODE_ENV !== 'production'
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname',
+          },
+        }
+      : undefined,
 });
 
 export default logger;
@@ -36,4 +37,4 @@ export const logErrorContext = (message: string, error: any) => {
     logDetails.errorData = error;
   }
   logger.error(logDetails, message);
-}; 
+};
