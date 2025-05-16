@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
-import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
-import { createDeposit } from '../utils/Deposits';
-import { LogError, LogMessage } from '../utils/Logs';
-import { logApiRequest, logDepositError } from '../utils/AuditLog';
-import { DepositStatus } from '../types/DepositStatus.enum';
+import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { createDeposit } from '../utils/Deposits.js';
+import { LogError, LogMessage } from '../utils/Logs.js';
+import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners

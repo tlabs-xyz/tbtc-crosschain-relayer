@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import { DepositStatus } from '../../../types/DepositStatus.enum';
 import { createTestDeposit } from '../../mocks/BlockchainMock';
@@ -7,7 +6,6 @@ import {
   test,
   expect,
   beforeEach,
-  afterEach,
   jest,
 } from '@jest/globals';
 

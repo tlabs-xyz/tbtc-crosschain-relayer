@@ -1,17 +1,17 @@
 import { ethers } from 'ethers';
-import { Deposit } from '../types/Deposit.type';
-import { FundingTransaction } from '../types/FundingTransaction.type';
-import { getFundingTxHash, getTransactionHash } from './GetTransactionHash';
-import { writeJson } from './JsonUtils';
-import { LogMessage } from './Logs';
-import { DepositStatus } from '../types/DepositStatus.enum';
+import { Deposit } from '../types/Deposit.type.js';
+import { FundingTransaction } from '../types/FundingTransaction.type.js';
+import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
+import { writeJson } from './JsonUtils.js';
+import { LogMessage } from './Logs.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 // --- Audit Log Import ---
 import {
   logDepositCreated,
   logStatusChange,
   logDepositInitialized,
   logDepositFinalized,
-} from './AuditLog';
+} from './AuditLog.js';
 // --- End Import ---
 
 /**

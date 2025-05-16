@@ -1,11 +1,11 @@
-import { Deposit } from '../types/Deposit.type';
-import { FundingTransaction } from '../types/FundingTransaction.type';
-import { createDeposit } from './Deposits';
-import { LogError } from './Logs';
-import { DepositStatus } from '../types/DepositStatus.enum';
+import { Deposit } from '../types/Deposit.type.js';
+import { FundingTransaction } from '../types/FundingTransaction.type.js';
+import { createDeposit } from './Deposits.js';
+import { LogError } from './Logs.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 // ---------------------------------------------------------------
 // ------------------------- JSON UTILS --------------------------
@@ -76,14 +76,17 @@ const getAllJsonOperations = async (): Promise<Array<Deposit>> => {
 
   const files = await fs.promises.readdir(dirPath);
   const jsonFiles = files.filter(
-    (file: JSON) => path.extname(file) === '.json'
+    (file: string) => path.extname(file) === '.json'
   );
 
-  const promises = jsonFiles.map(async (file: JSON) => {
+  const promises = jsonFiles.map(async (file: string) => {
     const filePath = path.join(dirPath, file);
     const data = await fs.promises.readFile(filePath, 'utf8');
     if (!isValidJson(data)) {
-      LogError('🚀 ~ getAllOperations ~ Invalid JSON file:', filePath);
+      LogError(
+        `🚀 ~ getAllOperations ~ Invalid JSON file: ${filePath}`,
+        new Error('Invalid JSON file detected')
+      );
       return null;
     }
     return JSON.parse(data);

@@ -1,9 +1,9 @@
 import cron from 'node-cron';
 
-import { LogMessage, LogError, LogWarning } from '../utils/Logs';
-import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory';
-import { ChainConfig, ChainType } from '../types/ChainConfig.type';
-import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits';
+import { LogMessage, LogError, LogWarning } from '../utils/Logs.js';
+import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
+import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
+import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits.js';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration

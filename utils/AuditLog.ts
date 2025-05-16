@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { DepositStatus } from '../types/DepositStatus.enum';
-import { Deposit } from '../types/Deposit.type';
-import { LogError, LogMessage } from './Logs';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { Deposit } from '../types/Deposit.type.js';
+import { LogError, LogMessage } from './Logs.js';
 
 // Constants
 const AUDIT_LOG_DIR = process.env.AUDIT_LOG_DIR || './logs';

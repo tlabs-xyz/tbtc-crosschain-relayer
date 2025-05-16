@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import CustomResponse from '../helpers/CustomResponse.helper';
-import { LogError } from '../utils/Logs';
+import CustomResponse from '../helpers/CustomResponse.helper.js';
+import { LogError } from '../utils/Logs.js';
 import fs from 'fs';
 import path from 'path';
 

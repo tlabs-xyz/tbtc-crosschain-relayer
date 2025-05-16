@@ -1,10 +1,10 @@
 import express from 'express';
 import { Request, Response } from 'express';
 
-import Operations from '../controllers/Operations.controller';
-import Utils from '../controllers/Utils.controller';
-import { EndpointController } from '../controllers/Endpoint.controller';
-import { chainHandler } from '../services/Core';
+import Operations from '../controllers/Operations.controller.js';
+import Utils from '../controllers/Utils.controller.js';
+import { EndpointController } from '../controllers/Endpoint.controller.js';
+import { chainHandler } from '../services/Core.js';
 
 export const router = express.Router();
 

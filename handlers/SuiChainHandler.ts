@@ -1,7 +1,7 @@
-import { ChainConfig, ChainType } from '../types/ChainConfig.type';
-import { Deposit } from '../types/Deposit.type';
-import { LogError, LogMessage, LogWarning } from '../utils/Logs';
-import { BaseChainHandler } from './BaseChainHandler';
+import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
+import { Deposit } from '../types/Deposit.type.js';
+import { LogError, LogMessage, LogWarning } from '../utils/Logs.js';
+import { BaseChainHandler } from './BaseChainHandler.js';
 
 // Placeholder for Sui specific imports (e.g., @mysten/sui.js)
 
@@ -23,7 +23,7 @@ export class SuiChainHandler extends BaseChainHandler {
     LogMessage(`Initializing Sui L2 components for ${this.config.chainName}`);
     if (this.config.l2Rpc) {
       // TODO: Initialize Sui client (e.g., using @mysten/sui.js)
-      // const { SuiClient, getFullnodeUrl } = await import('@mysten/sui.js');
+      // const { SuiClient, getFullnodeUrl } = await import('@mysten/sui');
       // const fullnodeUrl = getFullnodeUrl('testnet'); // Or use this.config.l2Rpc
       // this.suiClient = new SuiClient({ url: fullnodeUrl });
       LogWarning(

@@ -1,0 +1,9 @@
+services:
+  tbtc-relayer-dev:
+    environment:
+      - API_ONLY_MODE=true
+      - VERBOSE_APP=true
+    build:
+      target: production
+    command: node dist/index.js
+    volumes: [] # Avoid volumes from the base docker-compose.ym
