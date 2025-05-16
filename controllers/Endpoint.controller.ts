@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import { createDeposit } from '../utils/Deposits.js';
-import { LogError, LogMessage } from '../utils/Logs.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 
@@ -20,7 +20,7 @@ export class EndpointController {
    */
   async handleReveal(req: Request, res: Response): Promise<void> {
     try {
-      LogMessage('Received reveal data via endpoint');
+      logger.debug('Received reveal data via endpoint');
 
       // Extract data from request body
       const { fundingTx, reveal, l2DepositOwner, l2Sender } = req.body;
@@ -57,7 +57,7 @@ export class EndpointController {
         l2DepositOwner,
         l2Sender
       );
-      LogMessage(`Created deposit with ID: ${deposit.id}`);
+      logger.debug(`Created deposit with ID: ${deposit.id}`);
 
       // Initialize the deposit
       await this.chainHandler.initializeDeposit(deposit);
@@ -69,7 +69,7 @@ export class EndpointController {
         message: 'Deposit initialized successfully',
       });
     } catch (error: any) {
-      LogError('Error handling reveal endpoint:', error);
+      logErrorContext('Error handling reveal endpoint:', error);
 
       // Log error to audit log
       let depositId = 'unknown';
@@ -123,7 +123,7 @@ export class EndpointController {
         status: numericStatus,
       });
     } catch (error: any) {
-      LogError('Error getting deposit status:', error);
+      logErrorContext('Error getting deposit status:', error);
 
       // Log error to audit log
       const depositId = req.params.depositId || 'unknown';

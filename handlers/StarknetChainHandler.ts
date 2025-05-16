@@ -1,6 +1,5 @@
 import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
-import { Deposit } from '../types/Deposit.type.js';
-import { LogError, LogMessage, LogWarning } from '../utils/Logs.js';
+import logger from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 
 // Placeholder for StarkNet specific imports (e.g., starknet.js)
@@ -11,7 +10,7 @@ export class StarknetChainHandler extends BaseChainHandler {
 
   constructor(config: ChainConfig) {
     super(config);
-    LogMessage(
+    logger.info(
       `Constructing StarknetChainHandler for ${this.config.chainName}`
     );
     if (config.chainType !== ChainType.STARKNET) {
@@ -22,18 +21,18 @@ export class StarknetChainHandler extends BaseChainHandler {
   }
 
   protected async initializeL2(): Promise<void> {
-    LogMessage(
+    logger.info(
       `Initializing StarkNet L2 components for ${this.config.chainName}`
     );
     if (this.config.l2Rpc) {
       // TODO: Initialize StarkNet provider (e.g., using starknet.js)
       // const { RpcProvider } = await import('starknet');
       // this.starknetProvider = new RpcProvider({ nodeUrl: this.config.l2Rpc });
-      LogWarning(
+      logger.warn(
         `StarkNet L2 provider initialization NOT YET IMPLEMENTED for ${this.config.chainName}.`
       );
     } else {
-      LogWarning(
+      logger.warn(
         `StarkNet L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`
       );
     }
@@ -41,14 +40,14 @@ export class StarknetChainHandler extends BaseChainHandler {
 
   protected async setupL2Listeners(): Promise<void> {
     if (!this.config.useEndpoint) {
-      LogWarning(
+      logger.warn(
         `StarkNet L2 Listener setup NOT YET IMPLEMENTED for ${this.config.chainName}.`
       );
       // TODO: Implement StarkNet event listening. StarkNet v0.13+ has better event mechanisms.
       // May involve polling getEvents or using a stream if available.
       // Requires StarkNet contract equivalent of L2BitcoinDepositor events.
     } else {
-      LogMessage(
+      logger.info(
         `StarkNet L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`
       );
     }
@@ -56,7 +55,7 @@ export class StarknetChainHandler extends BaseChainHandler {
 
   async getLatestBlock(): Promise<number> {
     if (this.config.useEndpoint) return 0;
-    LogWarning(
+    logger.warn(
       `StarkNet getLatestBlock NOT YET IMPLEMENTED for ${this.config.chainName}. Returning 0.`
     );
     // TODO: Implement logic to get the latest StarkNet block number
@@ -69,7 +68,7 @@ export class StarknetChainHandler extends BaseChainHandler {
     latestBlock: number; // Represents block number
   }): Promise<void> {
     if (this.config.useEndpoint) return;
-    LogWarning(
+    logger.warn(
       `StarkNet checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`
     );
     // TODO: Implement logic to query past StarkNet events

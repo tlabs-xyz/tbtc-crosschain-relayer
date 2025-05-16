@@ -1,1 +1,1 @@
-export type Reveal = [number, string, string, string, string];
+export type Reveal = [number, string, string, string, string, string];

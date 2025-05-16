@@ -1,2 +1,2 @@
-ignores: ["rimraf", "depcheck", "ts-jest"]
+ignores: ["rimraf", "depcheck", "ts-jest", "pino-pretty"]
 skip-missing: true
