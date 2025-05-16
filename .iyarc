@@ -1,0 +1,2 @@
+# Temporarily ignoring Wormhole SDK -> bigint-buffer vulnerability
+GHSA-3gc7-fjrx-p6mg
