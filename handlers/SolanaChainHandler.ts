@@ -1,28 +1,24 @@
-import { 
+import {
   Connection,
-  PublicKey,
   Keypair,
-  TransactionInstruction,
-  MessageV0,
-  VersionedTransaction
 } from '@solana/web3.js';
-import { wormhole, Wormhole } from "@wormhole-foundation/sdk";
-import { getSolanaSigner, SolanaUnsignedTransaction } from '@wormhole-foundation/sdk-solana';
+import { deserialize, serialize, signSendWait, Wormhole } from "@wormhole-foundation/sdk";
+import { getSolanaSignAndSendSigner } from '@wormhole-foundation/sdk-solana';
 import type {
   Chain,
+  ChainContext,
   TBTCBridge,
-  TransactionId,
 } from '@wormhole-foundation/sdk-connect';
 import { ethers } from 'ethers'; // For reading the 'transferSequence' from event logs
-import { 
-  AnchorProvider, 
-  Idl, 
-  Program, 
+import {
+  AnchorProvider,
+  Idl,
+  Program,
   setProvider,
-  Wallet, 
+  Wallet,
 } from '@coral-xyz/anchor';
 
-import { ChainConfig, CHAIN_TYPE, NETWORK, CHAIN_NAME } from '../types/ChainConfig.type';
+import { ChainConfig, CHAIN_TYPE, CHAIN_NAME } from '../types/ChainConfig.type';
 import { LogMessage, LogWarning, LogError } from '../utils/Logs';
 import { BaseChainHandler } from './BaseChainHandler';
 import { Deposit } from '../types/Deposit.type';
@@ -30,11 +26,8 @@ import { DepositStatus } from '../types/DepositStatus.enum';
 import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json';
 import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits';
 import { getAllJsonOperationsByStatus } from '../utils/JsonUtils';
-import { getCustodianPDA, getMintPDA, receiveTbtcIx } from '../utils/Wormhole';
-import { createAssociatedTokenAccountInstruction, getAssociatedTokenAddress } from '@solana/spl-token';
 import { WORMHOLE_GATEWAY_PROGRAM_ID } from '../utils/Constants';
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
-import { postVaa, signSendWait } from "../utils/Solana";
 
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
   'TokensTransferredWithPayload(uint256,bytes32,uint64)'
@@ -44,8 +37,7 @@ export class SolanaChainHandler extends BaseChainHandler {
   private provider?: AnchorProvider;
   private wormholeGatewayProgram?: Program<Idl>;
   private wallet: Wallet;
-  private network: NETWORK;
-  private solanaWormhole: Wormhole<NETWORK>;
+  private ethereumWormholeContext: ChainContext<"Mainnet" | "Testnet" | "Devnet", Chain>;
 
   constructor(config: ChainConfig) {
     super(config);
@@ -72,8 +64,11 @@ export class SolanaChainHandler extends BaseChainHandler {
     }
 
     try {
-      this.network = this.config.network as NETWORK;
-      this.connection = new Connection(this.config.l2Rpc, 'confirmed');
+      this.connection = new Connection(this.config.l2Rpc, {
+        commitment: 'confirmed',
+        disableRetryOnRateLimit: true,
+        wsEndpoint: this.config.l2WsRpc, // TODO: Populate this with the correct WebSocket URL from Alchemy
+      });
 
       const secretKeyBase64 = this.config.solanaSignerKeyBase;
       if (!secretKeyBase64) throw new Error('Missing solanaSignerKeyBase');
@@ -100,6 +95,8 @@ export class SolanaChainHandler extends BaseChainHandler {
       LogMessage(
         `Solana L2/Anchor provider and Wormhole Gateway program loaded for ${this.config.chainName}`
       );
+
+      this.ethereumWormholeContext = this.wormhole.getChain(CHAIN_NAME.ETHEREUM as Chain);
     } catch (error: any) {
       LogError(`Error initializing Solana L2 for ${this.config.chainName}`, error);
       throw error;
@@ -222,7 +219,26 @@ export class SolanaChainHandler extends BaseChainHandler {
     const signerSecretKeyBytes = new Uint8Array(secretKeyBase64.split(',').map(Number));
     const signerKeypair = Keypair.fromSecretKey(signerSecretKeyBytes);
     const signerSecretKeyBase58 = bs58.encode(signerKeypair.secretKey);
-    const wormholeSolanaSigner = await getSolanaSigner(this.connection, signerSecretKeyBase58);
+    const wormholeSolanaSigner = await getSolanaSignAndSendSigner(
+      this.connection,
+      signerSecretKeyBase58,
+      {
+        debug: true,
+        priorityFee: {
+          percentile: 0.5,
+          percentileMultiple: 2,
+          min: 1,
+          max: 1000,
+        },
+        retries: 3,
+        sendOpts: {
+          skipPreflight: true,
+        },
+      }
+    );
+    const sender = Wormhole.parseAddress(wormholeSolanaSigner.chain(), wormholeSolanaSigner.address());
+
+    const toChain = this.wormhole.getChain(CHAIN_NAME.SOLANA as Chain);
 
     LogMessage(`Bridging deposit ${deposit.id} on Solana...`);
   
@@ -235,7 +251,7 @@ export class SolanaChainHandler extends BaseChainHandler {
   
     try {
       LogMessage(`Attempting to fetch VAA for deposit ${deposit.id}`);
-      const vaa = await this.ethereumWormhole.getVaa(
+      const vaa = await this.wormhole.getVaa(
         wormholeMessageId,
         "TBTCBridge:GatewayTransfer",
         60_000,
@@ -249,96 +265,24 @@ export class SolanaChainHandler extends BaseChainHandler {
       // If no error thrown, we have the VAA.
       LogMessage(`VAA found for deposit ${deposit.id}. Posting VAA to Solana...`);
 
-      const solanaWormholeContext = this.solanaWormhole.getChain(CHAIN_TYPE.SOLANA as Chain);
-      const receivingTokenBridge = await solanaWormholeContext.getTokenBridge();
+      let unsignedTransactions;
+      if (vaa.payloadLiteral === "TBTCBridge:GatewayTransfer") {
+        const bridge = await toChain.getTBTCBridge();
 
-      const postVaaTx = await postVaa(
-        this.wallet.publicKey,
-        vaa,
-        this.connection,
-        this.network
-      );
+        unsignedTransactions = bridge.redeem(sender, vaa);
+      } else {
+        const tokenBridge = await toChain.getTokenBridge();
 
-      // Now sign and send each transaction
-      const txHashes = await signSendWait(
-        solanaWormholeContext,
-        [ postVaaTx! ],
-        wormholeSolanaSigner
-      );
-      
-      LogMessage(`VAA posted to Solana successfully. txid=${txHashes[0].txid}`);
-  
-      const custodian = getCustodianPDA();
-      const recipientPubkeyBytes = Buffer.from(deposit.receipt.extraData.slice(2), "hex");
-      const recipientPubkey = new PublicKey(recipientPubkeyBytes);
-      const recipientToken = await getAssociatedTokenAddress(
-        getMintPDA(),
-        recipientPubkey
-      );
-
-      const senderPubkey = this.wallet.publicKey;
-      const tbtcMint = new PublicKey("6DNSN2BJsaPFdFFc1zP37kkeNe4Usc1Sqkzr9C9vPWcU");
-
-      const instructions: TransactionInstruction[] = [];
-
-      const ataExists = await this.connection.getAccountInfo(recipientToken);
-      if (!ataExists) {
-        instructions.push(
-          createAssociatedTokenAccountInstruction(
-            senderPubkey,
-            recipientToken,
-            recipientPubkey,
-            tbtcMint as PublicKey,
-          ),
-        );
-      };
-      LogMessage(`Calling receiveTbtcIx...`);
-
-      const txInstruction = await receiveTbtcIx(
-        {
-          payer: senderPubkey,
-          recipientToken,
-          recipient: recipientPubkey,
-          custodian,
-          tbtcMint: tbtcMint as PublicKey,
-        },
-        vaa,
-        this.wormholeGatewayProgram,
-      );
-      instructions.push(txInstruction);
-
-      const { blockhash } = await this.connection.getLatestBlockhash();
-      const messageV0 = MessageV0.compile({
-        instructions,
-        payerKey: senderPubkey,
-        recentBlockhash: blockhash,
-      });
-  
-      const transaction = new VersionedTransaction(messageV0);
-      const redeemTransaction = new SolanaUnsignedTransaction(
-        { transaction },
-        this.config.network,
-        CHAIN_NAME.SOLANA,
-        "TBTCBridge.Send",
-        true,
-      );
-
-      // Sign and send the transaction
-      let rcvTxids: TransactionId[]
-      try {
-        rcvTxids = await signSendWait(solanaWormholeContext, [ redeemTransaction ], wormholeSolanaSigner);
-      } catch (error: any) {
-        LogError(`Error sending transaction for deposit ${deposit.id}`, error);
-        return;
+        // This is really a TokenBridge:Transfer VAA
+        const serialized = serialize(vaa);
+        const tbVaa = deserialize("TokenBridge:Transfer", serialized);
+        unsignedTransactions = tokenBridge.redeem(sender, tbVaa);
       }
 
-      // Now check if the transfer is completed according to
-      // the destination token bridge
-      const isFinished = await receivingTokenBridge.isTransferCompleted(vaa! as any);
-  
-      LogMessage(`Solana bridging success for deposit ${deposit.id}, txid=${rcvTxids[1].txid}`);
+      const destinationTransactionIds = await signSendWait(toChain, unsignedTransactions, wormholeSolanaSigner);
+      LogMessage(`Solana bridging success for deposit ${deposit.id}, txids=${destinationTransactionIds}`);
 
-      updateToBridgedDeposit(deposit, rcvTxids[1].txid);  
+      updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid);
     } catch (error: any) {
       // Either the VAA isn't available yet, or some other bridging error occurred
       const reason = error.message || 'Unknown bridging error';
@@ -363,7 +307,7 @@ export class SolanaChainHandler extends BaseChainHandler {
         );
         continue;
       }
-      await this.bridgeSolanaDeposit(deposit); 
+      await this.bridgeSolanaDeposit(deposit);
     }
   }
 }

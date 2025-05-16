@@ -46,6 +46,9 @@ export interface ChainConfig {
   /** RPC URL for the Layer 2 chain */
   l2Rpc: string;
 
+  /** WebSocket RPC endpoint for the Layer 2 chain */
+  l2WsRpc?: string;
+
   /** Address of the L1BitcoinDepositor contract */
   l1ContractAddress: string;
 

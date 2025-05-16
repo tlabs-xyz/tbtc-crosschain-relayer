@@ -1,4 +1,4 @@
-import { ChainContext, Network, Wormhole, wormhole } from "@wormhole-foundation/sdk";
+import { Network, Wormhole, wormhole } from "@wormhole-foundation/sdk";
 
 import solana from "@wormhole-foundation/sdk/solana";
 import sui from "@wormhole-foundation/sdk/sui";
@@ -39,8 +39,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected l1BitcoinDepositorProvider: ethers.Contract; // For L1 reads/events
   protected tbtcVaultProvider: ethers.Contract; // For L1 events
   protected config: ChainConfig;
-  protected ethereumWormhole: Wormhole<Network>;
-  protected ethereumWormholeContext: ChainContext<"Mainnet" | "Testnet" | "Devnet", "Sepolia", "Evm">
+  protected wormhole: Wormhole<Network>;
 
   protected readonly TIME_TO_RETRY = 1000 * 60 * 5; // 5 minutes
 
@@ -69,7 +68,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
       ? NETWORK.TESTNET
       : this.config.network;
 
-    this.ethereumWormhole = await wormhole(
+    this.wormhole = await wormhole(
       ethereumNetwork,
       [evm, solana, sui],
       {

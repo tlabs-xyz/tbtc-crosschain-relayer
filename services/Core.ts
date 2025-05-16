@@ -14,6 +14,7 @@ const chainConfig: ChainConfig = {
   chainName: process.env.CHAIN_NAME || 'Default Chain',
   l1Rpc: process.env.L1_RPC || '',
   l2Rpc: process.env.L2_RPC || '',
+  l2WsRpc: process.env.L2_WS_RPC || '',
   l1ContractAddress: process.env.L1_BITCOIN_DEPOSITOR || '',
   l2ContractAddress: process.env.L2_BITCOIN_DEPOSITOR || '',
   vaultAddress: process.env.TBTC_VAULT || '',
