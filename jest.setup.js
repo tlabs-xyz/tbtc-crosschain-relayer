@@ -1,6 +1,5 @@
 // Mock environment variables for testing
-process.env.PRIVATE_KEY =
-  '0x0000000000000000000000000000000000000000000000000000000000000001'; // Test private key
+process.env.PRIVATE_KEY = '0x0000000000000000000000000000000000000000000000000000000000000001'; // Test private key
 process.env.L1_RPC = 'http://localhost:8545';
 process.env.L2_RPC = 'http://localhost:8546';
 process.env.L1_BITCOIN_DEPOSITOR = '0x0000000000000000000000000000000000000001';

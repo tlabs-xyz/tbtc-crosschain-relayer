@@ -24,7 +24,6 @@ export enum CHAIN_NAME {
   SOLANA = 'Solana',
   SUI = 'Sui',
   STARKNET = 'Starknet',
-
 }
 
 /**

@@ -217,9 +217,7 @@
           "name": "guardian",
           "isMut": false,
           "isSigner": false,
-          "docs": [
-            "`Guardians`."
-          ]
+          "docs": ["`Guardians`."]
         },
         {
           "name": "systemProgram",
@@ -356,9 +354,7 @@
           },
           {
             "name": "authority",
-            "docs": [
-              "The authority over this program."
-            ],
+            "docs": ["The authority over this program."],
             "type": "publicKey"
           },
           {

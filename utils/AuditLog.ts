@@ -54,7 +54,7 @@ export const initializeAuditLog = (): void => {
 export const appendToAuditLog = (
   eventType: AuditEventType,
   depositId: string,
-  data: any = {}
+  data: any = {},
 ): void => {
   try {
     // Get absolute paths
@@ -105,7 +105,7 @@ export const appendToAuditLog = (
 export const logStatusChange = (
   deposit: Deposit,
   newStatus: DepositStatus,
-  oldStatus?: DepositStatus
+  oldStatus?: DepositStatus,
 ): void => {
   const statusMap = {
     [DepositStatus.QUEUED]: 'QUEUED',
@@ -214,7 +214,7 @@ export const logApiRequest = (
   method: string,
   depositId: string | null,
   requestData: any = {},
-  responseStatus: number = 200
+  responseStatus: number = 200,
 ): void => {
   appendToAuditLog(AuditEventType.API_REQUEST, depositId || 'no-deposit-id', {
     endpoint,
@@ -233,7 +233,7 @@ export const logApiRequest = (
 export const logDepositError = (
   depositId: string,
   errorMessage: string,
-  errorObj: any = {}
+  errorObj: any = {},
 ): void => {
   appendToAuditLog(AuditEventType.ERROR, depositId, {
     message: errorMessage,

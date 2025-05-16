@@ -10,7 +10,7 @@ export class SuiChainHandler extends BaseChainHandler {
 
   constructor(config: ChainConfig) {
     super(config);
-    logger.debuge(`Constructing SuiChainHandler for ${this.config.chainName}`);
+    logger.debug(`Constructing SuiChainHandler for ${this.config.chainName}`);
     if (config.chainType !== CHAIN_TYPE.SUI) {
       throw new Error(`Incorrect chain type ${config.chainType} provided to SuiChainHandler.`);
     }

@@ -54,13 +54,13 @@ export class EndpointController {
 
       const fundingTxHash = getFundingTxHash(fundingTx);
       const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
-      LogMessage(
+      logger.info(
         `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
 
       const existingDeposit = getJsonById(depositId);
       if (existingDeposit) {
-        LogWarning(
+        logger.warn(
           `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
         );
         return;

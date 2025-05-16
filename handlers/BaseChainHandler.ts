@@ -298,7 +298,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
       const status: number = await this.l1BitcoinDepositorProvider.deposits(depositId);
       // Ensure the status is a valid enum value before returning
       if (Object.values(DepositStatus).includes(status as DepositStatus)) {
-        // LogMessage(`Checked L1 Status for ID ${depositId}: ${DepositStatus[status]}`); // Verbose
+        // logger.info(`Checked L1 Status for ID ${depositId}: ${DepositStatus[status]}`); // Verbose
         return status as DepositStatus;
       } else {
         logger.warn(
@@ -338,7 +338,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
       // Check L1 contract status *before* attempting initialization
       const contractStatus = await this.checkDepositStatus(updatedDeposit.id);
-      // LogMessage(`INITIALIZE | Checked L1 Status for ID ${updatedDeposit.id}: ${DepositStatus[contractStatus ?? -1] ?? 'Unknown/Error'}`); // Verbose
+      // logger.info(`INITIALIZE | Checked L1 Status for ID ${updatedDeposit.id}: ${DepositStatus[contractStatus ?? -1] ?? 'Unknown/Error'}`); // Verbose
 
       switch (contractStatus) {
         case DepositStatus.INITIALIZED:
@@ -397,7 +397,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
       // Check L1 contract status *before* attempting finalization
       const contractStatus = await this.checkDepositStatus(updatedDeposit.id);
-      // LogMessage(`FINALIZE | Checked L1 Status for ID ${updatedDeposit.id}: ${DepositStatus[contractStatus ?? -1] ?? 'Unknown/Error'}`); // Verbose
+      // logger.info(`FINALIZE | Checked L1 Status for ID ${updatedDeposit.id}: ${DepositStatus[contractStatus ?? -1] ?? 'Unknown/Error'}`); // Verbose
 
       switch (contractStatus) {
         case DepositStatus.INITIALIZED:
@@ -479,7 +479,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
       this.config.l2ContractAddress &&
       !this.config.useEndpoint
     );
-    // LogMessage(`Base supportsPastDepositCheck: ${supports} (L2Rpc: ${!!this.config.l2Rpc}, L2Contract: ${!!this.config.l2ContractAddress}, UseEndpoint: ${this.config.useEndpoint})`); // Verbose
+    // logger.info(`Base supportsPastDepositCheck: ${supports} (L2Rpc: ${!!this.config.l2Rpc}, L2Contract: ${!!this.config.l2ContractAddress}, UseEndpoint: ${this.config.useEndpoint})`); // Verbose
     return supports;
   }
 

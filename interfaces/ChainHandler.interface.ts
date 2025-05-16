@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { TransactionReceipt } from "@ethersproject/providers"
+import { TransactionReceipt } from '@ethersproject/providers';
 import { Deposit } from '../types/Deposit.type';
 import { DepositStatus } from '../types/DepositStatus.enum';
 
@@ -28,7 +28,7 @@ export interface ChainHandlerInterface {
    * Finalize a deposit on the L1 chain
    * @param deposit The deposit to finalize
    */
-  finalizeDeposit(deposit: Deposit): Promise<void | { receipt: ethers.ContractReceipt | null; }>;
+  finalizeDeposit(deposit: Deposit): Promise<void | { receipt: ethers.ContractReceipt | null }>;
 
   /**
    * Check the status of a deposit on the chain.
@@ -56,10 +56,7 @@ export interface ChainHandlerInterface {
    * Check for past deposits that might have been missed
    * @param options Options for checking past deposits
    */
-  checkForPastDeposits(options: {
-    pastTimeInMinutes: number;
-    latestBlock: number;
-  }): Promise<void>;
+  checkForPastDeposits(options: { pastTimeInMinutes: number; latestBlock: number }): Promise<void>;
 
   /**
    * Indicates whether the handler supports checking for past L2 deposits.

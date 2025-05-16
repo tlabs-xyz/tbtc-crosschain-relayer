@@ -1,51 +1,36 @@
-import {
-  Connection,
-  Keypair,
-} from '@solana/web3.js';
-import { deserialize, serialize, signSendWait, Wormhole } from "@wormhole-foundation/sdk";
+import { Connection, Keypair } from '@solana/web3.js';
+import { deserialize, serialize, signSendWait, Wormhole } from '@wormhole-foundation/sdk';
 import { getSolanaSignAndSendSigner } from '@wormhole-foundation/sdk-solana';
-import type {
-  Chain,
-  ChainContext,
-  TBTCBridge,
-} from '@wormhole-foundation/sdk-connect';
+import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
 import { ethers } from 'ethers'; // For reading the 'transferSequence' from event logs
-import {
-  AnchorProvider,
-  Idl,
-  Program,
-  setProvider,
-  Wallet,
-} from '@coral-xyz/anchor';
+import { AnchorProvider, Idl, Program, setProvider, Wallet } from '@coral-xyz/anchor';
+import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes/index.js';
 
 import { ChainConfig, CHAIN_TYPE, CHAIN_NAME } from '../types/ChainConfig.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 import { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json';
+import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json' assert { type: 'json' };
 import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
 import { getAllJsonOperationsByStatus } from '../utils/JsonUtils.js';
 import { WORMHOLE_GATEWAY_PROGRAM_ID } from '../utils/Constants.js';
-import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
-  'TokensTransferredWithPayload(uint256,bytes32,uint64)'
+  'TokensTransferredWithPayload(uint256,bytes32,uint64)',
 );
 export class SolanaChainHandler extends BaseChainHandler {
   private connection?: Connection;
   private provider?: AnchorProvider;
   private wormholeGatewayProgram?: Program<Idl>;
   private wallet: Wallet;
-  private ethereumWormholeContext: ChainContext<"Mainnet" | "Testnet" | "Devnet", Chain>;
+  private ethereumWormholeContext: ChainContext<'Mainnet' | 'Testnet' | 'Devnet', Chain>;
 
   constructor(config: ChainConfig) {
     super(config);
     logger.debug(`Constructing SolanaChainHandler for ${this.config.chainName}`);
     if (config.chainType !== CHAIN_TYPE.SOLANA) {
-      throw new Error(
-        `Incorrect chain type ${config.chainType} provided to SolanaChainHandler.`
-      );
+      throw new Error(`Incorrect chain type ${config.chainType} provided to SolanaChainHandler.`);
     }
   }
 
@@ -58,7 +43,7 @@ export class SolanaChainHandler extends BaseChainHandler {
 
     if (!this.config.l2Rpc) {
       logger.warn(
-        `Solana L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`
+        `Solana L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`,
       );
       return;
     }
@@ -78,22 +63,18 @@ export class SolanaChainHandler extends BaseChainHandler {
       const wallet = new Wallet(keypair);
       this.wallet = wallet;
 
-      this.provider = new AnchorProvider(
-        this.connection,
-        wallet,
-        {}
-      );
+      this.provider = new AnchorProvider(this.connection, wallet, {});
 
       setProvider(this.provider);
 
       this.wormholeGatewayProgram = new Program<Idl>(
         wormholeGatewayIdl as unknown as Idl,
         WORMHOLE_GATEWAY_PROGRAM_ID,
-        this.provider
+        this.provider,
       );
 
       logger.info(
-        `Solana L2/Anchor provider and Wormhole Gateway program loaded for ${this.config.chainName}`
+        `Solana L2/Anchor provider and Wormhole Gateway program loaded for ${this.config.chainName}`,
       );
 
       this.ethereumWormholeContext = this.wormhole.getChain(CHAIN_NAME.ETHEREUM as Chain);
@@ -109,14 +90,10 @@ export class SolanaChainHandler extends BaseChainHandler {
    */
   protected async setupL2Listeners(): Promise<void> {
     if (this.config.useEndpoint) {
-      logger.warn(
-        `Solana L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`
-      );
+      logger.warn(`Solana L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`);
       return;
     }
-    logger.warn(
-      `Solana L2 Listener setup NOT YET IMPLEMENTED for ${this.config.chainName}.`
-    );
+    logger.warn(`Solana L2 Listener setup NOT YET IMPLEMENTED for ${this.config.chainName}.`);
   }
 
   /**
@@ -145,9 +122,7 @@ export class SolanaChainHandler extends BaseChainHandler {
     latestBlock: number;
   }): Promise<void> {
     if (this.config.useEndpoint) return; // no direct chain scanning
-    logger.warn(
-      `Solana checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`
-    );
+    logger.warn(`Solana checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
   }
 
   /**
@@ -158,24 +133,22 @@ export class SolanaChainHandler extends BaseChainHandler {
    */
   async finalizeDeposit(deposit: Deposit): Promise<void> {
     const finalizedDeposit = await super.finalizeDeposit(deposit);
-  
+
     if (!finalizedDeposit?.receipt) {
       return;
     }
     logger.info(`Finalizing deposit ${deposit.id} on Solana...`);
-  
+
     const l1Receipt = finalizedDeposit.receipt;
     if (!l1Receipt) {
-      logger.warn(
-        `No finalize receipt found for deposit ${deposit.id}; cannot parse logs.`
-      );
+      logger.warn(`No finalize receipt found for deposit ${deposit.id}; cannot parse logs.`);
       return;
     }
-    
+
     let transferSequence: string | null = null;
     try {
       const logs = l1Receipt.logs || [];
-  
+
       for (const log of logs) {
         if (log.topics[0] === TOKENS_TRANSFERRED_SIG) {
           const parsedLog = this.l1BitcoinDepositor.interface.parseLog(log);
@@ -187,11 +160,9 @@ export class SolanaChainHandler extends BaseChainHandler {
     } catch (error: any) {
       logErrorContext(`Error parsing L1 logs for deposit ${deposit.id}`, error);
     }
-  
+
     if (!transferSequence) {
-      logger.warn(
-        `Could not find transferSequence in logs for deposit ${deposit.id}.`
-      );
+      logger.warn(`Could not find transferSequence in logs for deposit ${deposit.id}.`);
       return;
     }
 
@@ -234,29 +205,34 @@ export class SolanaChainHandler extends BaseChainHandler {
         sendOpts: {
           skipPreflight: true,
         },
-      }
+      },
     );
-    const sender = Wormhole.parseAddress(wormholeSolanaSigner.chain(), wormholeSolanaSigner.address());
+    const sender = Wormhole.parseAddress(
+      wormholeSolanaSigner.chain(),
+      wormholeSolanaSigner.address(),
+    );
 
     const toChain = this.wormhole.getChain(CHAIN_NAME.SOLANA as Chain);
 
     logger.info(`Bridging deposit ${deposit.id} on Solana...`);
-  
-    const [ wormholeMessageId ] = await this.ethereumWormholeContext.parseTransaction(deposit.wormholeInfo.txHash!);
+
+    const [wormholeMessageId] = await this.ethereumWormholeContext.parseTransaction(
+      deposit.wormholeInfo.txHash!,
+    );
 
     if (!wormholeMessageId) {
       logger.warn(`No Wormhole message found for deposit ${deposit.id}`);
       return;
     }
-  
+
     try {
       logger.info(`Attempting to fetch VAA for deposit ${deposit.id}`);
-      const vaa = await this.wormhole.getVaa(
+      const vaa = (await this.wormhole.getVaa(
         wormholeMessageId,
-        "TBTCBridge:GatewayTransfer",
+        'TBTCBridge:GatewayTransfer',
         60_000,
-      ) as TBTCBridge.VAA
-      
+      )) as TBTCBridge.VAA;
+
       if (!vaa) {
         logger.warn(`VAA message is not yet signed by the guardians`);
         return;
@@ -266,7 +242,7 @@ export class SolanaChainHandler extends BaseChainHandler {
       logger.info(`VAA found for deposit ${deposit.id}. Posting VAA to Solana...`);
 
       let unsignedTransactions;
-      if (vaa.payloadLiteral === "TBTCBridge:GatewayTransfer") {
+      if (vaa.payloadLiteral === 'TBTCBridge:GatewayTransfer') {
         const bridge = await toChain.getTBTCBridge();
 
         unsignedTransactions = bridge.redeem(sender, vaa);
@@ -275,12 +251,18 @@ export class SolanaChainHandler extends BaseChainHandler {
 
         // This is really a TokenBridge:Transfer VAA
         const serialized = serialize(vaa);
-        const tbVaa = deserialize("TokenBridge:Transfer", serialized);
+        const tbVaa = deserialize('TokenBridge:Transfer', serialized);
         unsignedTransactions = tokenBridge.redeem(sender, tbVaa);
       }
 
-      const destinationTransactionIds = await signSendWait(toChain, unsignedTransactions, wormholeSolanaSigner);
-      logger.info(`Solana bridging success for deposit ${deposit.id}, txids=${destinationTransactionIds}`);
+      const destinationTransactionIds = await signSendWait(
+        toChain,
+        unsignedTransactions,
+        wormholeSolanaSigner,
+      );
+      logger.info(
+        `Solana bridging success for deposit ${deposit.id}, txids=${destinationTransactionIds}`,
+      );
 
       updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid);
     } catch (error: any) {
@@ -296,15 +278,13 @@ export class SolanaChainHandler extends BaseChainHandler {
    */
   public async processWormholeBridging() {
     const bridgingDeposits = await getAllJsonOperationsByStatus(
-      DepositStatus.AWAITING_WORMHOLE_VAA
+      DepositStatus.AWAITING_WORMHOLE_VAA,
     );
     if (bridgingDeposits.length === 0) return;
 
     for (const deposit of bridgingDeposits) {
       if (!deposit.wormholeInfo || !deposit.wormholeInfo.transferSequence) {
-        logger.warn(
-          `Deposit ${deposit.id} is missing transferSequence. Skipping.`
-        );
+        logger.warn(`Deposit ${deposit.id} is missing transferSequence. Skipping.`);
         continue;
       }
       await this.bridgeSolanaDeposit(deposit);

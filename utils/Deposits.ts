@@ -255,7 +255,7 @@ export const updateToAwaitingWormholeVAA = async (
   // Write to JSON file
   writeJson(updatedDeposit, deposit.id);
 
-  LogMessage(
+  logger.info(
     `Deposit has been moved to AWAITING_WORMHOLE_VAA | ID: ${deposit.id} | sequence: ${transferSequence}`,
   );
 
@@ -315,7 +315,7 @@ export const updateToBridgedDeposit = async (
   // Write to JSON file
   writeJson(updatedDeposit, deposit.id);
 
-  LogMessage(`Deposit has been moved to BRIDGED | ID: ${deposit.id}`);
+  logger.info(`Deposit has been moved to BRIDGED | ID: ${deposit.id}`);
 
   logDepositBridged(updatedDeposit);
 };

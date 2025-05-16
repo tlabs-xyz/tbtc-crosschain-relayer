@@ -45,8 +45,7 @@ describe('EndpointController', () => {
           version: '0x01000000',
           inputVector:
             '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector:
-            '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
+          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
           locktime: '0x00000000',
         },
         reveal: [
@@ -74,7 +73,7 @@ describe('EndpointController', () => {
           success: true,
           depositId: expect.any(String),
           message: 'Deposit initialized successfully',
-        })
+        }),
       );
     });
 
@@ -89,8 +88,7 @@ describe('EndpointController', () => {
           version: '0x01000000',
           inputVector:
             '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector:
-            '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
+          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
           locktime: '0x00000000',
         },
         // Missing reveal, l2DepositOwner, l2Sender
@@ -108,7 +106,7 @@ describe('EndpointController', () => {
         expect.objectContaining({
           success: false,
           error: 'Missing required fields in request body',
-        })
+        }),
       );
     });
   });
@@ -140,7 +138,7 @@ describe('EndpointController', () => {
           success: true,
           depositId: testDeposit.id,
           status: DepositStatus.INITIALIZED,
-        })
+        }),
       );
     });
 
@@ -163,7 +161,7 @@ describe('EndpointController', () => {
         expect.objectContaining({
           success: false,
           error: 'Missing depositId parameter',
-        })
+        }),
       );
     });
   });

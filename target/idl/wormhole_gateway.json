@@ -39,9 +39,7 @@
           "name": "tokenBridgeSender",
           "isMut": false,
           "isSigner": false,
-          "docs": [
-            "sign for transferring via Token Bridge program with a message."
-          ]
+          "docs": ["sign for transferring via Token Bridge program with a message."]
         },
         {
           "name": "systemProgram",
@@ -200,9 +198,7 @@
           "name": "wrappedTbtcToken",
           "isMut": true,
           "isSigner": false,
-          "docs": [
-            "Custody account."
-          ]
+          "docs": ["Custody account."]
         },
         {
           "name": "wrappedTbtcMint",
@@ -234,9 +230,7 @@
           "name": "recipient",
           "isMut": false,
           "isSigner": false,
-          "docs": [
-            "be created for him."
-          ]
+          "docs": ["be created for him."]
         },
         {
           "name": "recipientWrappedToken",
@@ -319,10 +313,7 @@
         {
           "name": "messageHash",
           "type": {
-            "array": [
-              "u8",
-              32
-            ]
+            "array": ["u8", 32]
           }
         }
       ]
@@ -344,9 +335,7 @@
           "name": "wrappedTbtcToken",
           "isMut": true,
           "isSigner": false,
-          "docs": [
-            "Custody account."
-          ]
+          "docs": ["Custody account."]
         },
         {
           "name": "wrappedTbtcMint",
@@ -417,9 +406,7 @@
           "name": "tokenBridgeSender",
           "isMut": false,
           "isSigner": false,
-          "docs": [
-            "sign for transferring via Token Bridge program with a message."
-          ]
+          "docs": ["sign for transferring via Token Bridge program with a message."]
         },
         {
           "name": "rent",
@@ -468,9 +455,7 @@
           "name": "wrappedTbtcToken",
           "isMut": true,
           "isSigner": false,
-          "docs": [
-            "Custody account."
-          ]
+          "docs": ["Custody account."]
         },
         {
           "name": "wrappedTbtcMint",
@@ -579,9 +564,7 @@
           "name": "custodian",
           "isMut": true,
           "isSigner": false,
-          "docs": [
-            "NOTE: This account also acts as a minter for the TBTC program."
-          ]
+          "docs": ["NOTE: This account also acts as a minter for the TBTC program."]
         },
         {
           "name": "wrappedTbtcToken",
@@ -720,10 +703,7 @@
           {
             "name": "address",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
           }
         ]
@@ -743,10 +723,7 @@
           {
             "name": "address",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
           }
         ]
@@ -768,10 +745,7 @@
           {
             "name": "recipient",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
           },
           {
@@ -797,10 +771,7 @@
           {
             "name": "recipient",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "array": ["u8", 32]
             }
           },
           {
@@ -847,20 +818,14 @@
         {
           "name": "gateway",
           "type": {
-            "array": [
-              "u8",
-              32
-            ]
+            "array": ["u8", 32]
           },
           "index": false
         },
         {
           "name": "recipient",
           "type": {
-            "array": [
-              "u8",
-              32
-            ]
+            "array": ["u8", 32]
           },
           "index": false
         },
@@ -902,10 +867,7 @@
         {
           "name": "gateway",
           "type": {
-            "array": [
-              "u8",
-              32
-            ]
+            "array": ["u8", 32]
           },
           "index": false
         }
