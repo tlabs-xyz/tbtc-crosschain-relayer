@@ -10,12 +10,9 @@ import {
     type Chain,
     type VAA,
 } from '@wormhole-foundation/sdk';
-
 import evmPlatform from "@wormhole-foundation/sdk/platforms/evm";
 import solanaPlatform from "@wormhole-foundation/sdk/platforms/solana";
-
-import logger, { logErrorContext } from '../utils/Logger';
-
+import logger, { logErrorContext } from '../utils/Logger.js';
 
 type SignedVaa = Uint8Array;
 type ParsedVaaWithPayload = VAA<"TokenBridge:Transfer"> | VAA<"TokenBridge:TransferWithPayload">;

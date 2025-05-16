@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
-import { RedemptionRequestedEventData } from '../services/L2RedemptionService';
-import logger, { logErrorContext } from '../utils/Logger';
-import { L1BitcoinRedeemerABI } from '../interfaces/L1BitcoinRedeemer';
+import { RedemptionRequestedEventData } from '../services/L2RedemptionService.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
+import { L1BitcoinRedeemerABI } from '../interfaces/L1BitcoinRedeemer.js';
 
 const L1_TX_CONFIRMATION_TIMEOUT_MS = parseInt(process.env.L1_TX_CONFIRMATION_TIMEOUT_MS || '300000');
 const GAS_ESTIMATE_MULTIPLIER = 1.2; // Add 20% buffer to gas estimate

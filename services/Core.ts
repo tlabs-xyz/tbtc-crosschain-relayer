@@ -5,7 +5,7 @@ import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
 import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits.js';
-import { L2RedemptionService } from './L2RedemptionService';
+import { L2RedemptionService } from './L2RedemptionService.js';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
@@ -26,9 +26,9 @@ const chainConfig: ChainConfig = {
   chainName: process.env.CHAIN_NAME || 'Default Chain',
   l1Rpc: requireEnv('L1_RPC'),
   l2Rpc: requireEnv('L2_RPC'),
-  l1ContractAddress: requireEnv('L1BitcoinDepositor'),
+  l1ContractAddress: requireEnv('L2_BITCOIN_DEPOSITOR'),
   l1BitcoinRedeemerAddress: requireEnv('L1_BITCOIN_REDEEMER_ADDRESS'),
-  l2ContractAddress: requireEnv('L2BitcoinDepositor'),
+  l2ContractAddress: requireEnv('L2_BITCOIN_DEPOSITOR'),
   l2BitcoinRedeemerAddress: requireEnv('L2_BITCOIN_REDEEMER_ADDRESS'),
   l2WormholeGatewayAddress: requireEnv('L2_WORMHOLE_GATEWAY_ADDRESS'),
   l2WormholeChainId: requireEnv('L2_WORMHOLE_CHAIN_ID'),
