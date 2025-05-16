@@ -1,10 +1,10 @@
 import { ethers } from 'ethers';
-import { Deposit } from '../types/Deposit.type';
-import { FundingTransaction } from '../types/FundingTransaction.type';
-import { getFundingTxHash, getTransactionHash } from './GetTransactionHash';
-import { writeJson } from './JsonUtils';
-import { LogMessage } from './Logs';
-import { DepositStatus } from '../types/DepositStatus.enum';
+import { Deposit } from '../types/Deposit.type.js';
+import { FundingTransaction } from '../types/FundingTransaction.type.js';
+import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
+import { writeJson } from './JsonUtils.js';
+import logger from './Logger.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 // --- Audit Log Import ---
 import {
   logDepositCreated,
@@ -13,8 +13,8 @@ import {
   logDepositFinalized,
   logDepositAwaitingWormholeVAA,
   logDepositBridged,
-} from './AuditLog';
-import { Reveal } from '../types/Reveal.type';
+} from './AuditLog.js';
+import { Reveal } from '../types/Reveal.type.js';
 // --- End Import ---
 
 /**
@@ -36,9 +36,9 @@ export const createDeposit = (
   fundingTx: FundingTransaction,
   reveal: any,
   l2DepositOwner: any,
-  l2Sender: any
+  l2Sender: any,
 ): Deposit => {
-  const revealArray = Array.isArray(reveal) ? reveal : Object.values(reveal) as Reveal;
+  const revealArray = Array.isArray(reveal) ? reveal : (Object.values(reveal) as Reveal);
   const fundingTxHash = getFundingTxHash(fundingTx);
   const depositId = getDepositId(fundingTxHash, revealArray[0]);
   const deposit: Deposit = {
@@ -110,11 +110,7 @@ export const createDeposit = (
  * @param {Deposit} deposit - The deposit object to be updated.
  * @param {any} tx - The transaction object containing the finalization transaction hash.
  */
-export const updateToFinalizedDeposit = async (
-  deposit: Deposit,
-  tx?: any,
-  error?: string
-) => {
+export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error?: string) => {
   const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.FINALIZED : deposit.status;
   const newFinalizationAt = tx ? Date.now() : deposit.dates.finalizationAt;
@@ -148,9 +144,7 @@ export const updateToFinalizedDeposit = async (
   writeJson(updatedDeposit, deposit.id);
 
   if (tx) {
-    LogMessage(
-      `Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`
-    );
+    logger.info(`Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`);
     // --- Log Deposit Finalized ---
     logDepositFinalized(updatedDeposit);
     // --- End Log ---
@@ -167,11 +161,7 @@ export const updateToFinalizedDeposit = async (
  * @param {Deposit} deposit - The deposit object to be updated.
  * @param {any} tx - The transaction object containing the initialization transaction hash.
  */
-export const updateToInitializedDeposit = async (
-  deposit: Deposit,
-  tx?: any,
-  error?: string
-) => {
+export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, error?: string) => {
   const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.INITIALIZED : deposit.status;
   const newInitializationAt = tx ? Date.now() : deposit.dates.initializationAt;
@@ -205,9 +195,7 @@ export const updateToInitializedDeposit = async (
   writeJson(updatedDeposit, deposit.id);
 
   if (tx) {
-    LogMessage(
-      `Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`
-    );
+    logger.info(`Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`);
     // --- Log Deposit Initialized ---
     logDepositInitialized(updatedDeposit);
     // --- End Log ---
@@ -219,7 +207,7 @@ export const updateToInitializedDeposit = async (
  * @name updateToAwaitingWormholeVAA
  * @description Updates the status of a deposit to `AWAITING_WORMHOLE_VAA` and
  * stores the Wormhole transfer sequence (so we can fetch the VAA later).
- * 
+ *
  * - Sets deposit status to AWAITING_WORMHOLE_VAA
  * - Records lastActivityAt
  * - Clears error
@@ -268,7 +256,7 @@ export const updateToAwaitingWormholeVAA = async (
   writeJson(updatedDeposit, deposit.id);
 
   LogMessage(
-    `Deposit has been moved to AWAITING_WORMHOLE_VAA | ID: ${deposit.id} | sequence: ${transferSequence}`
+    `Deposit has been moved to AWAITING_WORMHOLE_VAA | ID: ${deposit.id} | sequence: ${transferSequence}`,
   );
 
   logDepositAwaitingWormholeVAA(updatedDeposit);
@@ -277,7 +265,7 @@ export const updateToAwaitingWormholeVAA = async (
 /**
  * @name updateToBridgedDeposit
  * @description Updates the status of a deposit to `BRIDGED`
- * 
+ *
  * - Sets deposit status to BRIDGED
  * - Records lastActivityAt
  * - Clears error
@@ -327,9 +315,7 @@ export const updateToBridgedDeposit = async (
   // Write to JSON file
   writeJson(updatedDeposit, deposit.id);
 
-  LogMessage(
-    `Deposit has been moved to BRIDGED | ID: ${deposit.id}`
-  );
+  LogMessage(`Deposit has been moved to BRIDGED | ID: ${deposit.id}`);
 
   logDepositBridged(updatedDeposit);
 };
@@ -367,10 +353,7 @@ export const updateLastActivity = (deposit: Deposit) => {
  * @throws {Error} If the fundingTxHash is not a 64-character string.
  */
 
-export const getDepositId = (
-  fundingTxHash: string,
-  fundingOutputIndex: number
-): string => {
+export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
   // Asegúrate de que fundingTxHash es una cadena de 64 caracteres hexadecimales
   if (fundingTxHash.length !== 64) throw new Error('Invalid fundingTxHash');
 
@@ -380,7 +363,7 @@ export const getDepositId = (
   // Codifica los datos de manera similar a abi.encodePacked en Solidity
   const encodedData = ethers.utils.solidityPack(
     ['bytes32', 'uint32'],
-    [fundingTxHashBytes, fundingOutputIndex]
+    [fundingTxHashBytes, fundingOutputIndex],
   );
 
   // Calcula el hash keccak256

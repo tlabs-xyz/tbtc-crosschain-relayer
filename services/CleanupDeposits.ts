@@ -1,12 +1,12 @@
-import { Deposit } from '../types/Deposit.type';
+import { Deposit } from '../types/Deposit.type.js';
 import {
   deleteJson,
   getAllJsonOperationsByStatus,
   getJsonById,
-} from '../utils/JsonUtils';
-import { LogMessage } from '../utils/Logs';
-import { logDepositDeleted } from '../utils/AuditLog';
-import { DepositStatus } from '../types/DepositStatus.enum';
+} from '../utils/JsonUtils.js';
+import logger from '../utils/Logger.js';
+import { logDepositDeleted } from '../utils/AuditLog.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 
 /****************************************************************************************
 The goal of this task is cleaning up trash deposits and preventing relayer's congestion.
@@ -47,7 +47,7 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
     if (ageInMs > REMOVE_QUEUED_TIME_MS) {
       const ageInHours = (ageInMs / (60 * 60 * 1000)).toFixed(2);
 
-      LogMessage(
+      logger.debug(
         `Deleting QUEUED ID: ${id} | Created: ${dates.createdAt} | Age: ${ageInHours} hours`
       );
 
@@ -93,7 +93,7 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
     if (ageInMs > REMOVE_FINALIZED_TIME_MS) {
       const ageInHours = (ageInMs / (60 * 60 * 1000)).toFixed(2);
 
-      LogMessage(
+      logger.debug(
         `Deleting FINALIZED ID: ${id} | Finalized: ${dates.finalizationAt} | Age: ${ageInHours} hours`
       );
 

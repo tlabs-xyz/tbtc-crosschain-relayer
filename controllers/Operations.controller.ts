@@ -1,12 +1,13 @@
 import { Request, Response } from 'express';
-import CustomResponse from '../helpers/CustomResponse.helper';
+import CustomResponse from '../helpers/CustomResponse.helper.js';
 import {
   getAllJsonOperations,
   getAllJsonOperationsByStatus,
-} from '../utils/JsonUtils';
-import { LogError } from '../utils/Logs';
-import { Deposit } from '../types/Deposit.type';
-import { DepositStatus } from '../types/DepositStatus.enum';
+  getJsonById,
+} from '../utils/JsonUtils.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
+import { Deposit } from '../types/Deposit.type.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 
 /**
  * @name Operations
@@ -28,7 +29,7 @@ export default class Operations {
       const operations: Array<Deposit> = await getAllJsonOperations();
       response.ok('OK - Retrieved all operations', operations);
     } catch (err) {
-      LogError('🚀 ~ getAllOperations ~ err:', err as Error);
+      logErrorContext('Error fetching all operations:', err);
       response.ko((err as Error).message);
     }
   };
@@ -54,7 +55,7 @@ export default class Operations {
       );
       return response.ok('OK - Retrieved all queued operations', operations);
     } catch (err) {
-      LogError('🚀 ~ getAllQueuedOperations ~ err:', err as Error);
+      logErrorContext('Error fetching queued operations:', err);
       return response.ko((err as Error).message);
     }
   };
@@ -83,7 +84,7 @@ export default class Operations {
         operations
       );
     } catch (err) {
-      LogError('🚀 ~ getAllInitializedOperations ~ err:', err as Error);
+      logErrorContext('Error fetching initialized operations:', err);
       return response.ko((err as Error).message);
     }
   };
@@ -109,7 +110,7 @@ export default class Operations {
       );
       return response.ok('OK - Retrieved all finalized operations', operations);
     } catch (err) {
-      LogError('🚀 ~ getAllFinalizedOperations ~ err:', err as Error);
+      logErrorContext('Error fetching finalized operations:', err);
       return response.ko((err as Error).message);
     }
   };

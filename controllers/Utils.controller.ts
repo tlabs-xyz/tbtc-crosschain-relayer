@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import CustomResponse from '../helpers/CustomResponse.helper';
-import { LogError } from '../utils/Logs';
+import CustomResponse from '../helpers/CustomResponse.helper.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -39,7 +39,7 @@ export default class Utils {
     try {
       return response.ok();
     } catch (err) {
-      LogError('🚀 ~ pingController ~ err:', err as Error);
+      logErrorContext('Error pinging API:', err);
       return response.ko((err as Error).message);
     }
   };
@@ -126,6 +126,7 @@ export default class Utils {
         limit,
       });
     } catch (error: any) {
+      logErrorContext('Error retrieving audit logs:', error);
       return res.status(500).json({
         message: 'Error retrieving audit logs',
         error: error.message,

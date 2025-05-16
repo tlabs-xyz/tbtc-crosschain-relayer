@@ -1,16 +1,15 @@
 /node_modules
-package-lock.json
 
 /data
 /dist
 
-# ADD .ENV FILE !!
 .env
 .env.dev
 
 .cursor
 
 /coverage
+.eslintcache
 
 /logs
 /data

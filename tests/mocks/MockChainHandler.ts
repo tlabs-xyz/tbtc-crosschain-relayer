@@ -1,9 +1,9 @@
-import { TransactionReceipt } from "@ethersproject/providers"
-import { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface';
-import { DepositStatus } from '../../types/DepositStatus.enum';
-import { Deposit } from '../../types/Deposit.type';
-import { LogMessage } from '../../utils/Logs';
-import { createTestDeposit } from './BlockchainMock';
+import { TransactionReceipt } from '@ethersproject/providers';
+import { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface.js';
+import { DepositStatus } from '../../types/DepositStatus.enum.js';
+import { Deposit } from '../../types/Deposit.type.js';
+import logger from '../../utils/Logger.js';
+import { createTestDeposit } from './BlockchainMock.js';
 import { BigNumber, ethers } from 'ethers';
 
 /**
@@ -77,23 +77,28 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Initialize the chain handler
    */
   async initialize(): Promise<void> {
-    this.initialized = true;
-    return Promise.resolve();
+    logger.info('MockChainHandler: Initializing...');
+    // Simulate async initialization
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    logger.info('MockChainHandler: Initialized.');
   }
 
   /**
    * Set up event listeners
    */
   async setupListeners(): Promise<void> {
-    LogMessage('Mock chain handler: Setting up listeners');
-    return Promise.resolve();
+    logger.info('MockChainHandler: Setting up listeners...');
+    // Simulate listener setup
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    logger.info('MockChainHandler: Listeners set up.');
   }
 
   /**
    * Get the latest block
    */
   async getLatestBlock(): Promise<number> {
-    return Promise.resolve(1000);
+    logger.info('MockChainHandler: Getting latest block...');
+    return Promise.resolve(12345); // Mock block number
   }
 
   /**
@@ -103,20 +108,23 @@ export class MockChainHandler implements ChainHandlerInterface {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void> {
-    LogMessage(
-      `Mock chain handler: Checking for past deposits (${options.pastTimeInMinutes} minutes)`
+    logger.info(
+      `MockChainHandler: Checking for past deposits (last ${options.pastTimeInMinutes} min, latest block ${options.latestBlock})`,
     );
-    return Promise.resolve();
+    // Simulate checking
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    logger.info('MockChainHandler: Past deposits check complete.');
   }
 
   /**
    * Initialize a deposit
    */
   async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    LogMessage(`Mock chain handler: Initializing deposit ${deposit.id}`);
+    logger.info(`Mock chain handler: Initializing deposit ${deposit.id}`);
 
     // Simulate processing delay
     await new Promise((resolve) => setTimeout(resolve, this.processingDelayMs));
+    logger.info(`MockChainHandler: Deposit ${deposit.id} initialized.`);
 
     // Update deposit status
     if (deposit.status === DepositStatus.QUEUED) {
@@ -127,9 +135,7 @@ export class MockChainHandler implements ChainHandlerInterface {
           ...deposit.hashes,
           eth: {
             ...deposit.hashes.eth,
-            initializeTxHash: ethers.utils.hexlify(
-              ethers.utils.randomBytes(32)
-            ),
+            initializeTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
           },
         },
         dates: {
@@ -146,14 +152,14 @@ export class MockChainHandler implements ChainHandlerInterface {
     }
 
     return {
-      to: "0x0000000000000000000000000000000000000000",
-      from: "0x0000000000000000000000000000000000000000",
-      contractAddress: "0x0000000000000000000000000000000000000000",
+      to: '0x0000000000000000000000000000000000000000',
+      from: '0x0000000000000000000000000000000000000000',
+      contractAddress: '0x0000000000000000000000000000000000000000',
       transactionIndex: 0,
       gasUsed: BigNumber.from(21_000),
-      logsBloom: "0x" + "0".repeat(512),
-      blockHash: "0x" + "0".repeat(64),
-      transactionHash: "0x" + "0".repeat(64),
+      logsBloom: '0x' + '0'.repeat(512),
+      blockHash: '0x' + '0'.repeat(64),
+      transactionHash: '0x' + '0'.repeat(64),
       logs: [],
       blockNumber: 1,
       cumulativeGasUsed: BigNumber.from(21_000),
@@ -161,7 +167,7 @@ export class MockChainHandler implements ChainHandlerInterface {
       effectiveGasPrice: BigNumber.from(1),
       type: 2,
       status: 1,
-      byzantium: true
+      byzantium: true,
     };
   }
 
@@ -169,10 +175,10 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Finalize a deposit
    */
   async finalizeDeposit(deposit: Deposit): Promise<void> {
-    LogMessage(`Mock chain handler: Finalizing deposit ${deposit.id}`);
-
-    // Simulate processing delay
-    await new Promise((resolve) => setTimeout(resolve, this.processingDelayMs));
+    logger.info(`MockChainHandler: Finalizing deposit ${deposit.id}`);
+    // Simulate processing
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    logger.info(`MockChainHandler: Deposit ${deposit.id} finalized.`);
 
     // Update deposit status
     if (deposit.status === DepositStatus.INITIALIZED) {
@@ -206,7 +212,10 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Process deposits for initialization
    */
   async processInitializeDeposits(): Promise<void> {
-    LogMessage('Mock chain handler: Processing deposits for initialization');
+    logger.info('MockChainHandler: Processing initialize deposits...');
+    // Simulate processing
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    logger.info('MockChainHandler: Initialize deposits processed.');
 
     // Find queued deposits and initialize them
     for (const [id, deposit] of this.deposits.entries()) {
@@ -222,7 +231,10 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Process deposits for finalization
    */
   async processFinalizeDeposits(): Promise<void> {
-    LogMessage('Mock chain handler: Processing deposits for finalization');
+    logger.info('MockChainHandler: Processing finalize deposits...');
+    // Simulate processing
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    logger.info('MockChainHandler: Finalize deposits processed.');
 
     // Find initialized deposits and finalize them
     for (const [id, deposit] of this.deposits.entries()) {
@@ -238,13 +250,13 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Check deposit status
    */
   async checkDepositStatus(depositId: string): Promise<DepositStatus | null> {
+    logger.info(`MockChainHandler: Checking status for deposit ${depositId}`);
     const deposit = this.deposits.get(depositId);
-
-    if (!deposit) {
-      return null;
+    if (deposit) {
+      return deposit.status;
     }
-
-    return deposit.status;
+    logger.warn(`MockChainHandler: Deposit ID ${depositId} not found during checkDepositStatus.`);
+    return null;
   }
 
   /**
@@ -323,7 +335,7 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Let's default to true for now, assuming tests might need it.
    */
   supportsPastDepositCheck(): boolean {
-    // Return true by default for the mock, can be overridden in specific tests if needed.
-    return true;
+    logger.info('MockChainHandler: supportsPastDepositCheck called');
+    return true; // Mock supports this
   }
 }

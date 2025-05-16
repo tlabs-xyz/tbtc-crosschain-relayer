@@ -1,9 +1,14 @@
+import { logErrorContext } from '../utils/Logger.js';
 import cron from 'node-cron';
 
-import { LogMessage, LogError, LogWarning } from '../utils/Logs';
-import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory';
-import { ChainConfig, CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type';
-import { cleanQueuedDeposits, cleanFinalizedDeposits, cleanBridgedDeposits } from './CleanupDeposits';
+import logger from '../utils/Logger.js';
+import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
+import { ChainConfig, CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
+import {
+  cleanQueuedDeposits,
+  cleanFinalizedDeposits,
+  cleanBridgedDeposits,
+} from './CleanupDeposits.js';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
@@ -21,9 +26,7 @@ const chainConfig: ChainConfig = {
   privateKey: process.env.PRIVATE_KEY || '',
   useEndpoint: process.env.USE_ENDPOINT === 'true',
   endpointUrl: process.env.ENDPOINT_URL,
-  l2StartBlock: process.env.L2_START_BLOCK
-    ? parseInt(process.env.L2_START_BLOCK)
-    : undefined,
+  l2StartBlock: process.env.L2_START_BLOCK ? parseInt(process.env.L2_START_BLOCK) : undefined,
   solanaSignerKeyBase: process.env.SOLANA_KEY_BASE,
 };
 
@@ -43,7 +46,7 @@ export const chainHandler = ChainHandlerFactory.createHandler(chainConfig);
  */
 export const startCronJobs = () => {
   // CRONJOBS
-  LogMessage('Starting cron job setup...');
+  logger.debug('Starting cron job setup...');
 
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
@@ -52,7 +55,7 @@ export const startCronJobs = () => {
       await chainHandler.processFinalizeDeposits();
       await chainHandler.processInitializeDeposits();
     } catch (error) {
-      LogError('Error in deposit processing cron job:', error as Error);
+      logErrorContext('Error in deposit processing cron job:', error);
     }
   });
 
@@ -62,25 +65,23 @@ export const startCronJobs = () => {
       if (chainHandler.supportsPastDepositCheck()) {
         const latestBlock = await chainHandler.getLatestBlock();
         if (latestBlock > 0) {
-          LogMessage(
-            `Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`
-          );
+          logger.debug(`Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`);
           await chainHandler.checkForPastDeposits({
             pastTimeInMinutes: 60,
             latestBlock: latestBlock,
           });
         } else {
-          LogWarning(
-            `Skipping checkForPastDeposits - Invalid latestBlock received: ${latestBlock}`
+          logger.warn(
+            `Skipping checkForPastDeposits - Invalid latestBlock received: ${latestBlock}`,
           );
         }
       } else {
-        LogMessage(
-          'Skipping checkForPastDeposits - Handler does not support it (e.g., using endpoint).'
+        logger.debug(
+          'Skipping checkForPastDeposits - Handler does not support it (e.g., using endpoint).',
         );
       }
     } catch (error) {
-      LogError('Error in past deposits cron job:', error as Error);
+      logErrorContext('Error in past deposits cron job:', error);
     }
   });
 
@@ -91,11 +92,11 @@ export const startCronJobs = () => {
       await cleanFinalizedDeposits();
       await cleanBridgedDeposits();
     } catch (error) {
-      LogError('Error in cleanup cron job:', error as Error);
+      logErrorContext('Error in cleanup cron job:', error);
     }
   });
 
-  LogMessage('Cron job setup complete.');
+  logger.debug('Cron job setup complete.');
 };
 
 /**
@@ -110,12 +111,10 @@ export const initializeChain = async () => {
     // Set up event listeners if not using endpoint
     await chainHandler.setupListeners();
 
-    LogMessage(
-      `Chain handler for ${chainConfig.chainName} successfully initialized`
-    );
+    logger.debug(`Chain handler for ${chainConfig.chainName} successfully initialized`);
     return true;
   } catch (error) {
-    LogError('Failed to initialize chain handler:', error as Error);
+    logErrorContext('Failed to initialize chain handler:', error);
     return false;
   }
 };

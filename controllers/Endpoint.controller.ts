@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
-import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
-import { createDeposit, getDepositId } from '../utils/Deposits';
-import { LogError, LogMessage, LogWarning } from '../utils/Logs';
-import { logApiRequest, logDepositError } from '../utils/AuditLog';
-import { DepositStatus } from '../types/DepositStatus.enum';
-import { getJsonById } from '../utils/JsonUtils';
-import { getFundingTxHash } from '../utils/GetTransactionHash';
+import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { createDeposit, getDepositId } from '../utils/Deposits.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
+import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { getJsonById } from '../utils/JsonUtils.js';
+import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -22,7 +22,7 @@ export class EndpointController {
    */
   async handleReveal(req: Request, res: Response): Promise<void> {
     try {
-      LogMessage('Received reveal data via endpoint');
+      logger.debug('Received reveal data via endpoint');
 
       // Extract data from request body
       const { fundingTx, reveal, l2DepositOwner, l2Sender } = req.body;
@@ -42,7 +42,7 @@ export class EndpointController {
           {
             fundingTxHash: fundingTx ? fundingTx.txHash : null,
           },
-          400
+          400,
         );
 
         res.status(400).json({
@@ -55,25 +55,20 @@ export class EndpointController {
       const fundingTxHash = getFundingTxHash(fundingTx);
       const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
       LogMessage(
-        `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`
+        `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
 
       const existingDeposit = getJsonById(depositId);
       if (existingDeposit) {
         LogWarning(
-          `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`
+          `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
         );
         return;
       }
 
       // Create deposit object
-      const deposit = createDeposit(
-        fundingTx,
-        reveal,
-        l2DepositOwner,
-        l2Sender
-      );
-      LogMessage(`Created deposit with ID: ${deposit.id}`);
+      const deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
+      logger.debug(`Created deposit with ID: ${deposit.id}`);
 
       // Initialize the deposit
       const transactionReceipt = await this.chainHandler.initializeDeposit(deposit);
@@ -86,7 +81,7 @@ export class EndpointController {
         receipt: transactionReceipt,
       });
     } catch (error: any) {
-      LogError('Error handling reveal endpoint:', error);
+      logErrorContext('Error handling reveal endpoint:', error);
 
       // Log error to audit log
       let depositId = 'unknown';
@@ -140,7 +135,7 @@ export class EndpointController {
         status: numericStatus,
       });
     } catch (error: any) {
-      LogError('Error getting deposit status:', error);
+      logErrorContext('Error getting deposit status:', error);
 
       // Log error to audit log
       const depositId = req.params.depositId || 'unknown';

@@ -2,7 +2,7 @@
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
 // Express Server
-import express, { Express, Request, Response } from 'express';
+import express, { Express, RequestHandler } from 'express';
 
 // Security
 import cors from 'cors';
@@ -12,12 +12,13 @@ import helmet from 'helmet';
 import compression from 'compression';
 
 // Rutas
-import Routes from './routes/Routes';
+import Routes from './routes/Routes.js';
 
 // Utils
-import { LogMessage, LogError, LogWarning } from './utils/Logs';
-import { initializeChain } from './services/Core';
-import { initializeAuditLog } from './utils/AuditLog';
+import logger from './utils/Logger.js';
+import { initializeChain } from './services/Core.js';
+import { initializeAuditLog } from './utils/AuditLog.js';
+import { logErrorContext } from './utils/Logger.js';
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
@@ -26,8 +27,11 @@ import { initializeAuditLog } from './utils/AuditLog';
 const app: Express = express();
 
 // Port
-const PORT = process.env.APP_PORT || 3000;
+const PORT = parseInt(process.env.APP_PORT || '3000', 10);
 app.set('port', PORT);
+
+// API Only Mode Flag
+const API_ONLY_MODE = process.env.API_ONLY_MODE === 'true';
 
 // -------------------------------------------------------------------------
 // |                              SECURITY                                 |
@@ -41,6 +45,7 @@ if (process.env.CORS_ENABLED === 'true') {
     })
   );
 }
+
 // Helmet (Security middleware)
 app.use(helmet());
 
@@ -52,11 +57,11 @@ app.disable('x-powered-by');
 // -------------------------------------------------------------------------
 
 // Compresion
-app.use(compression() as any);
+app.use(compression() as unknown as RequestHandler);
 
 // File Upload limit
-app.use(express.json({ limit: '2048mb' }));
-app.use(express.urlencoded({ limit: '2048mb', extended: true }));
+app.use(express.json({ limit: '8mb' }));
+app.use(express.urlencoded({ limit: '8mb', extended: true }));
 
 // -------------------------------------------------------------------------
 // |                                 ROUTES                                |
@@ -69,65 +74,53 @@ app.use(Routes);
 // -------------------------------------------------------------------------
 
 // --- Add Log ---
-LogMessage('Application starting...');
+logger.info('Application starting...');
+
+if (API_ONLY_MODE) {
+  logger.warn('Application starting in API_ONLY_MODE. Services will not be initialized.');
+}
 
 // Initialize Audit Log System
-try {
-  initializeAuditLog();
-  LogMessage('Audit log initialized.');
-} catch (error: any) {
-  LogError('Failed to initialize audit log:', error);
-  process.exit(1); // Exit if audit log fails
+if (!API_ONLY_MODE) {
+  try {
+    initializeAuditLog();
+    logger.info('Audit log initialized.');
+  } catch (error: any) {
+    logErrorContext('Failed to initialize audit log:', error);
+    process.exit(1);
+  }
+} else {
+  logger.info('Skipping Audit Log initialization due to API_ONLY_MODE.');
 }
 
 // Initialize chain handler
-let chainInitializationSuccess = false;
 (async () => {
-  try {
-    LogMessage('Attempting to initialize chain handler...');
-    await initializeChain();
-    chainInitializationSuccess = true;
-    LogMessage('Chain handler initialized successfully.');
+  if (!API_ONLY_MODE) {
+    try {
+      logger.info('Attempting to initialize chain handler...');
+      const success = await initializeChain();
+      if (!success) {
+        logErrorContext('Failed to initialize chain handler.', new Error('initializeChain returned false'));
+        process.exit(1);
+      }
+      logger.info('Chain handler initialized successfully.');
 
-    // Start Cron Jobs only if chain initialization was successful
-    const { startCronJobs } = await import('./services/Core');
-    startCronJobs();
-    LogMessage('Cron jobs started.');
-  } catch (error: any) {
-    LogError(
-      'FATAL: Failed to initialize chain handler or dependent services:',
-      error
-    );
-    // Decide if the app should exit or run in a degraded state
-    // process.exit(1); // Option: Exit if chain handler is critical
-    LogWarning(
-      'Running without active chain handler or cron jobs due to initialization error.'
-    );
+      const { startCronJobs } = await import('./services/Core.js');
+      startCronJobs();
+      logger.info('Cron jobs started.');
+    } catch (error: any) {
+      logErrorContext(
+        'FATAL: Failed to initialize chain handler or dependent services:',
+        error
+      );
+      process.exit(1);
+    }
+  } else {
+    logger.info('Skipping Chain Handler and Cron Jobs initialization due to API_ONLY_MODE.');
   }
 
-  // Start the server regardless of chain init success? Or only if successful?
-  // Let's start it anyway to provide basic API status, but log a warning.
+  app.listen({ port: PORT, host: '0.0.0.0' });
 
-  // --- Add Log ---
-  LogMessage(`Attempting to start server on port ${PORT}...`);
-
-  app
-    .listen(PORT, () => {
-      // --- Add Log ---
-      LogMessage(`Server is running on port ${PORT}`);
-      if (!chainInitializationSuccess) {
-        LogWarning(
-          'Server started, but chain handler failed to initialize. Service may be degraded.'
-        );
-      }
-    })
-    .on('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        const errorMessage = `FATAL: Port ${PORT} is already in use.`;
-        LogError(errorMessage, new Error(errorMessage));
-      } else {
-        LogError(`FATAL: Failed to start server:`, err);
-      }
-      process.exit(1); // Exit if server fails to start
-    });
-})(); // Immediately invoke the async function
+  // Log successful initialization
+  logger.info(`Server listening on port ${PORT}`);
+})();
