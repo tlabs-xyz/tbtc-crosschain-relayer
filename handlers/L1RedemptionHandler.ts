@@ -26,13 +26,15 @@ export class L1RedemptionHandler {
     }
 
     /**
-     * Submits data (derived from L2 event and validated by VAA) to the L1BitcoinRedeemer contract 
+     * Submits data (derived from L2 event and validated by VAA) to the L1BitcoinRedeemer contract
      * to finalize the redemption.
      * @param redemptionData - Data derived from L2 event and validated by VAA
+     * @param signedVaa - The  signed VAA data
      * @returns true if redemption is successfully finalized on L1, false otherwise
      */
     public async submitRedemptionDataToL1(
-        redemptionData: RedemptionRequestedEventData
+        redemptionData: RedemptionRequestedEventData,
+        signedVaa: Uint8Array,
     ): Promise<boolean> {
         logger.info(JSON.stringify({ // Stringify complex object
             message: 'Attempting to finalize L2 redemption on L1',
@@ -54,11 +56,14 @@ export class L1RedemptionHandler {
             // Pad to 32 bytes (64 hex characters)
             walletPubKeyHashBytes32 = '0x' + walletPubKeyHashBytes32.padEnd(64, '0');
 
+            const encodedVm = `0x${Buffer.from(signedVaa).toString('hex')}`;
+
             const args = [
                 walletPubKeyHashBytes32, 
                 redemptionData.mainUtxo,
                 redemptionData.redeemerOutputScript,
                 redemptionData.amount,
+                encodedVm,
             ];
 
             logger.info(`Estimating gas for finalizeL2Redemption with args: ${JSON.stringify(args.map(arg => ethers.BigNumber.isBigNumber(arg) ? arg.toString() : arg))}`);

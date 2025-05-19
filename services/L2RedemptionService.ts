@@ -139,7 +139,8 @@ export class L2RedemptionService {
             // as per the current design where L1BitcoinRedeemer does not take VAA as direct input.
             // The VAA fetch and verification acts as a gate.
             const success = await this.l1RedemptionHandler.submitRedemptionDataToL1(
-                eventData
+                eventData,
+              vaaDetails.vaaBytes
             );
 
             if (success) {
