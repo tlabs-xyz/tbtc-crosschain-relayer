@@ -89,7 +89,7 @@ const getAllJsonOperations = async (): Promise<Array<Deposit>> => {
 
   const results = await Promise.all(promises);
   // Clean null values
-  return results.filter((result: Deposit) => result !== null);
+  return results.filter((result: Deposit | null) => result !== null) as Array<Deposit>;
 };
 
 /**
