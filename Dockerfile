@@ -37,6 +37,11 @@ HEALTHCHECK --interval=5s --timeout=5s --start-period=5s --retries=10 \
 
 EXPOSE ${APP_PORT}
 
+# Add entrypoint script for running migrations and starting the app
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+
 CMD ["node", "dist/index.js"]
 
 
