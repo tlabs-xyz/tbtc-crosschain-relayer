@@ -3,8 +3,12 @@ import cron from 'node-cron';
 
 import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
-import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
-import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits.js';
+import { ChainConfig, CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
+import {
+  cleanQueuedDeposits,
+  cleanFinalizedDeposits,
+  cleanBridgedDeposits,
+} from './CleanupDeposits.js';
 import { L2RedemptionService } from './L2RedemptionService.js';
 
 // ---------------------------------------------------------------
@@ -14,7 +18,7 @@ const requireEnv = (envVar: string) => {
   if (!process.env[envVar]) {
     logErrorContext(
       `Environment variable ${envVar} is not set.`,
-      new Error(`Environment variable ${envVar} is not set.`)
+      new Error(`Environment variable ${envVar} is not set.`),
     );
     process.exit(1);
   }
@@ -22,23 +26,24 @@ const requireEnv = (envVar: string) => {
 };
 
 const chainConfig: ChainConfig = {
-  chainType: (process.env.CHAIN_TYPE as ChainType) || ChainType.EVM,
+  chainType: process.env.CHAIN_TYPE as CHAIN_TYPE,
+  network: process.env.NETWORK as NETWORK,
   chainName: process.env.CHAIN_NAME || 'Default Chain',
   l1Rpc: requireEnv('L1_RPC'),
   l2Rpc: requireEnv('L2_RPC'),
-  l1ContractAddress: requireEnv('L2_BITCOIN_DEPOSITOR'),
+  l2WsRpc: requireEnv('L2_WS_RPC'),
+  l1ContractAddress: requireEnv('L1_BITCOIN_DEPOSITOR_ADDRESS'),
   l1BitcoinRedeemerAddress: requireEnv('L1_BITCOIN_REDEEMER_ADDRESS'),
-  l2ContractAddress: requireEnv('L2_BITCOIN_DEPOSITOR'),
   l2BitcoinRedeemerAddress: requireEnv('L2_BITCOIN_REDEEMER_ADDRESS'),
   l2WormholeGatewayAddress: requireEnv('L2_WORMHOLE_GATEWAY_ADDRESS'),
   l2WormholeChainId: requireEnv('L2_WORMHOLE_CHAIN_ID'),
-  vaultAddress: requireEnv('TBTCVault'),
+  vaultAddress: requireEnv('TBTC_VAULT_ADDRESS'),
   privateKey: requireEnv('PRIVATE_KEY'),
-  useEndpoint: process.env.USE_ENDPOINT === 'true',
-  endpointUrl: process.env.ENDPOINT_URL,
-  l2StartBlock: process.env.L2_START_BLOCK
-    ? parseInt(process.env.L2_START_BLOCK)
-    : undefined,
+  l2ContractAddress:
+    process.env.ENDPOINT_URL === 'true' ? requireEnv('L2_BITCOIN_DEPOSITOR_ADDRESS') : undefined,
+  useEndpoint: process.env.ENDPOINT_URL === 'true',
+  l2StartBlock: process.env.L2_START_BLOCK ? parseInt(process.env.L2_START_BLOCK) : undefined,
+  solanaSignerKeyBase: process.env.SOLANA_KEY_BASE,
 };
 
 // Create the appropriate chain handler
@@ -59,6 +64,7 @@ export const startCronJobs = () => {
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
     try {
+      await chainHandler.processWormholeBridging?.();
       await chainHandler.processFinalizeDeposits();
       await chainHandler.processInitializeDeposits();
     } catch (error) {
@@ -66,27 +72,25 @@ export const startCronJobs = () => {
     }
   });
 
-  // Every 5 minutes - check for past deposits
-  cron.schedule('*/5 * * * *', async () => {
+  // Every 60 minutes - check for past deposits
+  cron.schedule('*/60 * * * *', async () => {
     try {
       if (chainHandler.supportsPastDepositCheck()) {
         const latestBlock = await chainHandler.getLatestBlock();
         if (latestBlock > 0) {
-          logger.debug(
-            `Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`
-          );
+          logger.debug(`Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`);
           await chainHandler.checkForPastDeposits({
-            pastTimeInMinutes: 5,
+            pastTimeInMinutes: 60,
             latestBlock: latestBlock,
           });
         } else {
           logger.warn(
-            `Skipping checkForPastDeposits - Invalid latestBlock received: ${latestBlock}`
+            `Skipping checkForPastDeposits - Invalid latestBlock received: ${latestBlock}`,
           );
         }
       } else {
         logger.debug(
-          'Skipping checkForPastDeposits - Handler does not support it (e.g., using endpoint).'
+          'Skipping checkForPastDeposits - Handler does not support it (e.g., using endpoint).',
         );
       }
     } catch (error) {
@@ -99,6 +103,7 @@ export const startCronJobs = () => {
     try {
       await cleanQueuedDeposits();
       await cleanFinalizedDeposits();
+      await cleanBridgedDeposits();
     } catch (error) {
       logErrorContext('Error in cleanup cron job:', error);
     }
@@ -115,9 +120,7 @@ export const initializeChain = async () => {
   try {
     await chainHandler.initialize();
     await chainHandler.setupListeners();
-    logger.debug(
-      `Deposit chain handler for ${chainConfig.chainName} successfully initialized`
-    );
+    logger.debug(`Deposit chain handler for ${chainConfig.chainName} successfully initialized`);
   } catch (error) {
     logErrorContext('Failed to initialize deposit chain handler:', error);
     return false;
@@ -135,16 +138,13 @@ export const initializeL2RedemptionService = async () => {
       chainConfig.l1Rpc,
       chainConfig.l1BitcoinRedeemerAddress,
       Number(chainConfig.l2WormholeChainId),
-      chainConfig.l2WormholeGatewayAddress
+      chainConfig.l2WormholeGatewayAddress,
     );
     await l2RedemptionService.initialize();
     l2RedemptionService.startListening();
     logger.info('L2RedemptionService initialized and started successfully.');
   } catch (error) {
-    logErrorContext(
-      'Failed to initialize or start L2RedemptionService:',
-      error as Error
-    );
+    logErrorContext('Failed to initialize or start L2RedemptionService:', error as Error);
     return false;
   }
   return true;

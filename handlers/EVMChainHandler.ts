@@ -6,14 +6,8 @@ import { ChainConfig } from '../types/ChainConfig.type.js';
 import { Deposit } from '../types/Deposit.type.js';
 import { FundingTransaction } from '../types/FundingTransaction.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import {
-  getJsonById,
-  writeJson,
-} from '../utils/JsonUtils.js';
-import {
-  createDeposit,
-  getDepositId,
-} from '../utils/Deposits.js';
+import { getJsonById, writeJson } from '../utils/JsonUtils.js';
+import { createDeposit, getDepositId } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
@@ -21,10 +15,7 @@ import { logDepositError } from '../utils/AuditLog.js';
 
 import { BaseChainHandler } from './BaseChainHandler.js';
 
-export class EVMChainHandler
-  extends BaseChainHandler
-  implements ChainHandlerInterface
-{
+export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInterface {
   protected l2Provider: ethers.providers.JsonRpcProvider | undefined;
   protected l2Signer: ethers.Wallet | undefined;
   protected nonceManagerL2: NonceManager | undefined;
@@ -44,14 +35,9 @@ export class EVMChainHandler
       logger.debug(`EVM L2 Provider created for ${this.config.chainName}`);
 
       if (this.config.privateKey) {
-        this.l2Signer = new ethers.Wallet(
-          this.config.privateKey,
-          this.l2Provider
-        );
+        this.l2Signer = new ethers.Wallet(this.config.privateKey, this.l2Provider);
         this.nonceManagerL2 = new NonceManager(this.l2Signer);
-        logger.debug(
-          `EVM L2 Signer and NonceManager created for ${this.config.chainName}`
-        );
+        logger.debug(`EVM L2 Signer and NonceManager created for ${this.config.chainName}`);
       }
 
       if (this.config.l2ContractAddress) {
@@ -59,34 +45,30 @@ export class EVMChainHandler
           this.l2BitcoinDepositor = new ethers.Contract(
             this.config.l2ContractAddress,
             L2BitcoinDepositorABI,
-            this.nonceManagerL2
+            this.nonceManagerL2,
           );
           logger.debug(
-            `EVM L2 BitcoinDepositor contract (for txs) created for ${this.config.chainName}`
+            `EVM L2 BitcoinDepositor contract (for txs) created for ${this.config.chainName}`,
           );
         }
 
         this.l2BitcoinDepositorProvider = new ethers.Contract(
           this.config.l2ContractAddress,
           L2BitcoinDepositorABI,
-          this.l2Provider
+          this.l2Provider,
         );
         logger.debug(
-          `EVM L2 BitcoinDepositorProvider contract (for events) created for ${this.config.chainName}`
+          `EVM L2 BitcoinDepositorProvider contract (for events) created for ${this.config.chainName}`,
         );
       } else {
         logger.warn(
-          `EVM L2 Contract Address not configured for ${this.config.chainName}. L2 contract features disabled.`
+          `EVM L2 Contract Address not configured for ${this.config.chainName}. L2 contract features disabled.`,
         );
       }
     } else {
-      logger.warn(
-        `EVM L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`
-      );
+      logger.warn(`EVM L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`);
     }
-    logger.debug(
-      `EVM L2 components initialization finished for ${this.config.chainName}`
-    );
+    logger.debug(`EVM L2 components initialization finished for ${this.config.chainName}`);
   }
 
   protected async setupL2Listeners(): Promise<void> {
@@ -99,58 +81,47 @@ export class EVMChainHandler
           fundingTx: FundingTransaction,
           reveal: any[],
           l2DepositOwner: string,
-          l2Sender: string
+          l2Sender: string,
         ) => {
           const fundingTxHash = getFundingTxHash(fundingTx);
           const depositId = getDepositId(fundingTxHash, reveal[0]);
           logger.debug(
-            `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`
+            `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
           );
           try {
             const existingDeposit = getJsonById(depositId);
             if (existingDeposit) {
               logger.warn(
-                `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`
+                `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
               );
               return;
             }
 
             logger.debug(`L2 Listener | Creating new deposit | ID: ${depositId}`);
-            const deposit: Deposit = createDeposit(
-              fundingTx,
-              reveal,
-              l2DepositOwner,
-              l2Sender
-            );
+            const deposit: Deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
             writeJson(deposit, deposit.id);
 
-            logger.debug(
-              `L2 Listener | Triggering L1 initializeDeposit | ID: ${deposit.id}`
-            );
+            logger.debug(`L2 Listener | Triggering L1 initializeDeposit | ID: ${deposit.id}`);
             await this.initializeDeposit(deposit);
           } catch (error: any) {
             logErrorContext(
               `L2 Listener | Error in DepositInitialized handler | ID: ${depositId}: ${error.message}`,
-              error
+              error,
             );
             logDepositError(
               depositId,
               `Error processing L2 DepositInitialized event: ${error.message}`,
-              error
+              error,
             );
           }
-        }
+        },
       );
-      logger.debug(
-        `EVM L2 DepositInitialized listener is active for ${this.config.chainName}`
-      );
+      logger.debug(`EVM L2 DepositInitialized listener is active for ${this.config.chainName}`);
     } else if (this.config.useEndpoint) {
-      logger.debug(
-        `EVM L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`
-      );
+      logger.debug(`EVM L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`);
     } else {
       logger.warn(
-        `EVM L2 Listeners skipped for ${this.config.chainName} (L2 provider/contract not configured).`
+        `EVM L2 Listeners skipped for ${this.config.chainName} (L2 provider/contract not configured).`,
       );
     }
   }
@@ -165,7 +136,7 @@ export class EVMChainHandler
     } catch (error) {
       logErrorContext(
         `getLatestBlock | Error fetching latest block for ${this.config.chainName}: ${error}`,
-        error
+        error,
       );
       return 0;
     }
@@ -180,7 +151,7 @@ export class EVMChainHandler
     }
 
     logger.debug(
-      `Checking for past EVM L2 deposits for ${this.config.chainName} (last ${options.pastTimeInMinutes} min)`
+      `Checking for past EVM L2 deposits for ${this.config.chainName} (last ${options.pastTimeInMinutes} min)`,
     );
     try {
       const currentTime = Math.floor(Date.now() / 1000);
@@ -188,57 +159,51 @@ export class EVMChainHandler
 
       const { startBlock, endBlock } = await this._getBlocksByTimestampEVM(
         pastTime,
-        options.latestBlock
+        options.latestBlock,
       );
 
       if (startBlock < 0 || endBlock < startBlock) {
         logger.warn(
-          `checkForPastDeposits | Invalid block range calculated: [${startBlock}, ${endBlock}]. Skipping check.`
+          `checkForPastDeposits | Invalid block range calculated: [${startBlock}, ${endBlock}]. Skipping check.`,
         );
         return;
       }
 
       logger.debug(
-        `checkForPastDeposits | Querying DepositInitialized events between blocks ${startBlock} and ${endBlock}`
+        `checkForPastDeposits | Querying DepositInitialized events between blocks ${startBlock} and ${endBlock}`,
       );
 
       const events = await this.l2BitcoinDepositorProvider.queryFilter(
         this.l2BitcoinDepositorProvider.filters.DepositInitialized(),
         startBlock,
-        endBlock
+        endBlock,
       );
 
       if (events.length > 0) {
         logger.debug(
-          `checkForPastDeposits | Found ${events.length} past DepositInitialized events for ${this.config.chainName}`
+          `checkForPastDeposits | Found ${events.length} past DepositInitialized events for ${this.config.chainName}`,
         );
 
         for (const event of events) {
           if (!event.args) {
-            logger.warn(
-              'checkForPastDeposits | Event args are undefined, skipping event'
-            );
+            logger.warn('checkForPastDeposits | Event args are undefined, skipping event');
             continue;
           }
 
           const { fundingTx, reveal, l2DepositOwner, l2Sender } = event.args;
-          const fundingTxHash = getFundingTxHash(
-            fundingTx as FundingTransaction
-          );
+          const fundingTxHash = getFundingTxHash(fundingTx as FundingTransaction);
           const depositId = getDepositId(fundingTxHash, reveal[0]);
 
           const existingDeposit = getJsonById(depositId);
 
           if (!existingDeposit) {
-            logger.debug(
-              `checkForPastDeposits | Processing missed deposit event: ${depositId}`
-            );
+            logger.debug(`checkForPastDeposits | Processing missed deposit event: ${depositId}`);
 
             const newDeposit = createDeposit(
               fundingTx as FundingTransaction,
               reveal,
               l2DepositOwner,
-              l2Sender
+              l2Sender,
             );
             writeJson(newDeposit, newDeposit.id);
 
@@ -247,32 +212,32 @@ export class EVMChainHandler
         }
       } else {
         logger.debug(
-          `checkForPastDeposits | No missed deposit events found for ${this.config.chainName}`
+          `checkForPastDeposits | No missed deposit events found for ${this.config.chainName}`,
         );
       }
     } catch (error: any) {
       logErrorContext(
         `checkForPastDeposits | Error checking past EVM deposits for ${this.config.chainName}: ${error.message}`,
-        error
+        error,
       );
       logDepositError(
         'past-check-evm',
         `Error checking past EVM deposits: ${error.message}`,
-        error
+        error,
       );
     }
   }
 
   private async _getBlocksByTimestampEVM(
     timestamp: number,
-    latestBlock: number
+    latestBlock: number,
   ): Promise<{
     startBlock: number;
     endBlock: number;
   }> {
     if (!this.l2Provider) {
       logger.warn(
-        `_getBlocksByTimestampEVM | L2 Provider not available for ${this.config.chainName}. Returning default range.`
+        `_getBlocksByTimestampEVM | L2 Provider not available for ${this.config.chainName}. Returning default range.`,
       );
       return {
         startBlock: this.config.l2StartBlock ?? 0,
@@ -288,13 +253,13 @@ export class EVMChainHandler
 
     if (high < low) {
       logger.warn(
-        `_getBlocksByTimestampEVM | latestBlock (${high}) is lower than START_BLOCK (${low}). Using START_BLOCK for both.`
+        `_getBlocksByTimestampEVM | latestBlock (${high}) is lower than START_BLOCK (${low}). Using START_BLOCK for both.`,
       );
       return { startBlock: START_BLOCK, endBlock: START_BLOCK };
     }
 
     logger.debug(
-      `_getBlocksByTimestampEVM | Starting binary search for timestamp ${timestamp} between blocks ${low} and ${high}`
+      `_getBlocksByTimestampEVM | Starting binary search for timestamp ${timestamp} between blocks ${low} and ${high}`,
     );
 
     try {
@@ -329,7 +294,7 @@ export class EVMChainHandler
     } catch (error) {
       logErrorContext(
         `_getBlocksByTimestampEVM | Error during binary search for ${this.config.chainName}: ${error}`,
-        error
+        error,
       );
       startBlock = START_BLOCK;
       currentLatestBlock = latestBlock;
@@ -338,7 +303,7 @@ export class EVMChainHandler
     const endBlock = Math.max(startBlock, currentLatestBlock);
 
     logger.debug(
-      `_getBlocksByTimestampEVM | Binary search result for ${this.config.chainName}: startBlock=${startBlock}, endBlock=${endBlock}`
+      `_getBlocksByTimestampEVM | Binary search result for ${this.config.chainName}: startBlock=${startBlock}, endBlock=${endBlock}`,
     );
     return { startBlock, endBlock };
   }

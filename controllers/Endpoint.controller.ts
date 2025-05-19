@@ -1,9 +1,12 @@
 import { Request, Response } from 'express';
 import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { createDeposit } from '../utils/Deposits.js';
+import { createDeposit, getDepositId } from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { getJsonById } from '../utils/JsonUtils.js';
+import { getFundingTxHash } from '../utils/GetTransactionHash.js';
+import { Reveal } from '../types/Reveal.type.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -40,7 +43,7 @@ export class EndpointController {
           {
             fundingTxHash: fundingTx ? fundingTx.txHash : null,
           },
-          400
+          400,
         );
 
         res.status(400).json({
@@ -49,24 +52,36 @@ export class EndpointController {
         });
         return;
       }
+      const revealArray = Array.isArray(reveal) ? reveal : (Object.values(reveal) as Reveal);
+      const fundingOutputIndex = revealArray[0];
+
+      const fundingTxHash = getFundingTxHash(fundingTx);
+      const depositId = getDepositId(fundingTxHash, fundingOutputIndex);
+      logger.info(
+        `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
+      );
+
+      const existingDeposit = getJsonById(depositId);
+      if (existingDeposit) {
+        logger.warn(
+          `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
+        );
+        return;
+      }
 
       // Create deposit object
-      const deposit = createDeposit(
-        fundingTx,
-        reveal,
-        l2DepositOwner,
-        l2Sender
-      );
+      const deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
       logger.debug(`Created deposit with ID: ${deposit.id}`);
 
       // Initialize the deposit
-      await this.chainHandler.initializeDeposit(deposit);
+      const transactionReceipt = await this.chainHandler.initializeDeposit(deposit);
 
       // Return success
       res.status(200).json({
         success: true,
         depositId: deposit.id,
         message: 'Deposit initialized successfully',
+        receipt: transactionReceipt,
       });
     } catch (error: any) {
       logErrorContext('Error handling reveal endpoint:', error);
