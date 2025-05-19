@@ -20,3 +20,5 @@ redemptions/
 
 *.md
 tasks
+
+prisma/memory:
