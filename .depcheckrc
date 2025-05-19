@@ -1,2 +1,14 @@
-ignores: ["rimraf", "depcheck", "ts-jest", "pino-pretty"]
+# Ignore false-positives
+ignores: [
+    # Used in scripts/CI
+    "rimraf", 
+    "depcheck", 
+    "improved-yarn-audit",
+
+    # Used in tests
+    "ts-jest", 
+
+    # Used in sources
+    "pino-pretty", 
+]
 skip-missing: true

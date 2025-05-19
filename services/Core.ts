@@ -9,21 +9,37 @@ import {
   cleanFinalizedDeposits,
   cleanBridgedDeposits,
 } from './CleanupDeposits.js';
+import { L2RedemptionService } from './L2RedemptionService.js';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
 // ---------------------------------------------------------------
+const requireEnv = (envVar: string) => {
+  if (!process.env[envVar]) {
+    logErrorContext(
+      `Environment variable ${envVar} is not set.`,
+      new Error(`Environment variable ${envVar} is not set.`),
+    );
+    process.exit(1);
+  }
+  return process.env[envVar] as string;
+};
+
 const chainConfig: ChainConfig = {
   chainType: process.env.CHAIN_TYPE as CHAIN_TYPE,
   network: process.env.NETWORK as NETWORK,
   chainName: process.env.CHAIN_NAME || 'Default Chain',
-  l1Rpc: process.env.L1_RPC || '',
-  l2Rpc: process.env.L2_RPC || '',
-  l2WsRpc: process.env.L2_WS_RPC || '',
-  l1ContractAddress: process.env.L1_BITCOIN_DEPOSITOR || '',
-  l2ContractAddress: process.env.L2_BITCOIN_DEPOSITOR || '',
-  vaultAddress: process.env.TBTC_VAULT || '',
-  privateKey: process.env.PRIVATE_KEY || '',
+  l1Rpc: requireEnv('L1_RPC'),
+  l2Rpc: requireEnv('L2_RPC'),
+  l2WsRpc: requireEnv('L2_WS_RPC'),
+  l1ContractAddress: requireEnv('L2_BITCOIN_DEPOSITOR'),
+  l1BitcoinRedeemerAddress: requireEnv('L1_BITCOIN_REDEEMER_ADDRESS'),
+  l2ContractAddress: requireEnv('L2_BITCOIN_DEPOSITOR'),
+  l2BitcoinRedeemerAddress: requireEnv('L2_BITCOIN_REDEEMER_ADDRESS'),
+  l2WormholeGatewayAddress: requireEnv('L2_WORMHOLE_GATEWAY_ADDRESS'),
+  l2WormholeChainId: requireEnv('L2_WORMHOLE_CHAIN_ID'),
+  vaultAddress: requireEnv('TBTC_VAULT'),
+  privateKey: requireEnv('PRIVATE_KEY'),
   useEndpoint: process.env.USE_ENDPOINT === 'true',
   endpointUrl: process.env.ENDPOINT_URL,
   l2StartBlock: process.env.L2_START_BLOCK ? parseInt(process.env.L2_START_BLOCK) : undefined,
@@ -32,9 +48,6 @@ const chainConfig: ChainConfig = {
 
 // Create the appropriate chain handler
 export const chainHandler = ChainHandlerFactory.createHandler(chainConfig);
-
-// Constants
-// export const TIME_TO_RETRY = 1000 * 60 * 5; // Moved to BaseChainHandler
 
 // ---------------------------------------------------------------
 // Cron Jobs
@@ -105,18 +118,34 @@ export const startCronJobs = () => {
  */
 export const initializeChain = async () => {
   try {
-    // Initialize the chain handler
     await chainHandler.initialize();
-
-    // Set up event listeners if not using endpoint
     await chainHandler.setupListeners();
-
-    logger.debug(`Chain handler for ${chainConfig.chainName} successfully initialized`);
-    return true;
+    logger.debug(`Deposit chain handler for ${chainConfig.chainName} successfully initialized`);
   } catch (error) {
-    logErrorContext('Failed to initialize chain handler:', error);
+    logErrorContext('Failed to initialize deposit chain handler:', error);
     return false;
   }
+  return true;
 };
 
-// ---------------------------------------------------------------
+export const initializeL2RedemptionService = async () => {
+  try {
+    logger.info('Attempting to initialize L2RedemptionService...');
+    const l2RedemptionService = new L2RedemptionService(
+      chainConfig.l2Rpc,
+      chainConfig.l2BitcoinRedeemerAddress,
+      chainConfig.privateKey,
+      chainConfig.l1Rpc,
+      chainConfig.l1BitcoinRedeemerAddress,
+      Number(chainConfig.l2WormholeChainId),
+      chainConfig.l2WormholeGatewayAddress,
+    );
+    await l2RedemptionService.initialize();
+    l2RedemptionService.startListening();
+    logger.info('L2RedemptionService initialized and started successfully.');
+  } catch (error) {
+    logErrorContext('Failed to initialize or start L2RedemptionService:', error as Error);
+    return false;
+  }
+  return true;
+};

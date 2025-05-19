@@ -9,9 +9,6 @@ import logger, { logErrorContext } from '../utils/Logger.js';
 import { getJsonById, writeJson } from '../utils/JsonUtils.js';
 import {
   createDeposit,
-  updateToInitializedDeposit,
-  updateToFinalizedDeposit,
-  updateLastActivity,
   getDepositId,
 } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
