@@ -111,8 +111,11 @@ if (!API_ONLY_MODE) {
       logger.info('Attempting to initialize L2 redemption listener...');
       const redemptionSuccess = await initializeL2RedemptionService();
       if (!redemptionSuccess) {
-        logErrorContext('Failed to initialize L2 redemption listener.', new Error('Failed to initialize L2 redemption listener.'));
-        process.exit(1)
+        logErrorContext(
+          'Failed to initialize L2 redemption listener.',
+          new Error('Failed to initialize L2 redemption listener.'),
+        );
+        process.exit(1);
       }
 
       const { startCronJobs } = await import('./services/Core.js');

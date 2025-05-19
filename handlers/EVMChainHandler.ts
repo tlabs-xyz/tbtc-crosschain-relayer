@@ -7,10 +7,7 @@ import { Deposit } from '../types/Deposit.type.js';
 import { FundingTransaction } from '../types/FundingTransaction.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { getJsonById, writeJson } from '../utils/JsonUtils.js';
-import {
-  createDeposit,
-  getDepositId,
-} from '../utils/Deposits.js';
+import { createDeposit, getDepositId } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
