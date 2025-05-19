@@ -17,6 +17,7 @@ const testLogsDir = path.resolve('./tests/logs');
 
 // Setup without using Jest globals in TypeScript
 // This avoids TypeScript errors while still using Jest's functionality
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setupBeforeTests = () => {
   // Create test directories if they don't exist
   if (!fs.existsSync(testDataDir)) {
@@ -31,6 +32,7 @@ const setupBeforeTests = () => {
   initializeAuditLog();
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const cleanupAfterTests = () => {
   // Clean up test data after all tests
   if (fs.existsSync(testDataDir)) {
@@ -51,7 +53,15 @@ const cleanupAfterTests = () => {
 
 // Using eval to avoid TypeScript errors while still using Jest's functionality
 // This is a workaround for TypeScript not recognizing Jest globals
-// @ts-ignore
 eval('beforeAll(setupBeforeTests)');
-// @ts-ignore
 eval('afterAll(cleanupAfterTests)');
+
+// Mock console.log and other console methods
+console.log = jest.fn();
+console.error = jest.fn();
+console.warn = jest.fn();
+console.info = jest.fn();
+console.debug = jest.fn();
+
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
