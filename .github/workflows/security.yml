@@ -27,7 +27,7 @@ jobs:
         run: yarn install --frozen-lockfile --ignore-optional
 
       - name: Run yarn audit
-        run: yarn audit --level high
+        run: yarn run improved-yarn-audit --min-severity high
 
       - name: CodeQL Analysis
         uses: github/codeql-action/init@v2
