@@ -5,10 +5,7 @@ import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import { ChainConfig } from '../types/ChainConfig.type.js';
 import { Deposit } from '../types/Deposit.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import {
-  getJsonById,
-  getAllJsonOperationsByStatus,
-} from '../utils/JsonUtils.js';
+import { DepositStore } from '../utils/DepositStore';
 import {
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
@@ -106,7 +103,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
-          const deposit: Deposit | null = await getJsonById(depositId);
+          const deposit: Deposit | null = await DepositStore.getById(depositId);
           if (deposit) {
             logger.debug(
               `Received OptimisticMintingFinalized event for Deposit ID: ${deposit.id}`
@@ -349,7 +346,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
   // --- Batch Processing Logic ---
   async processInitializeDeposits(): Promise<void> {
-    const depositsToInitialize = await getAllJsonOperationsByStatus(
+    const depositsToInitialize = await DepositStore.getByStatus(
       DepositStatus.QUEUED
     );
     logger.debug(
@@ -420,7 +417,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   }
 
   async processFinalizeDeposits(): Promise<void> {
-    const depositsToFinalize = await getAllJsonOperationsByStatus(
+    const depositsToFinalize = await DepositStore.getByStatus(
       DepositStatus.INITIALIZED
     );
     logger.debug(

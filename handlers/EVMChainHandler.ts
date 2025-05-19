@@ -6,10 +6,7 @@ import { ChainConfig } from '../types/ChainConfig.type.js';
 import { Deposit } from '../types/Deposit.type.js';
 import { FundingTransaction } from '../types/FundingTransaction.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import {
-  getJsonById,
-  writeJson,
-} from '../utils/JsonUtils.js';
+import { DepositStore } from '../utils/DepositStore';
 import {
   createDeposit,
   getDepositId,
@@ -107,7 +104,7 @@ export class EVMChainHandler
             `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`
           );
           try {
-            const existingDeposit = await getJsonById(depositId);
+            const existingDeposit = await DepositStore.getById(depositId);
             if (existingDeposit) {
               logger.warn(
                 `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`
@@ -122,7 +119,7 @@ export class EVMChainHandler
               l2DepositOwner,
               l2Sender
             );
-            writeJson(deposit, deposit.id);
+            DepositStore.create(deposit);
 
             logger.debug(
               `L2 Listener | Triggering L1 initializeDeposit | ID: ${deposit.id}`
@@ -227,7 +224,7 @@ export class EVMChainHandler
           );
           const depositId = getDepositId(fundingTxHash, reveal[0]);
 
-          const existingDeposit = await getJsonById(depositId);
+          const existingDeposit = await DepositStore.getById(depositId);
 
           if (!existingDeposit) {
             logger.debug(
@@ -240,7 +237,7 @@ export class EVMChainHandler
               l2DepositOwner,
               l2Sender
             );
-            writeJson(newDeposit, newDeposit.id);
+            DepositStore.create(newDeposit);
 
             await this.initializeDeposit(newDeposit);
           }

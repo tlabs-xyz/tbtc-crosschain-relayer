@@ -1,15 +1,8 @@
-// Use the test Prisma client for test DB in test environment
-let PrismaClient: any;
-if (process.env.NODE_ENV === 'test') {
-  PrismaClient = require('@prisma/client-test').PrismaClient;
-} else {
-  PrismaClient = require('@prisma/client').PrismaClient;
-}
+import { prisma } from '../utils/prisma';
 import * as fs from 'fs';
 import * as readline from 'readline';
 import path from 'path';
 
-const prisma = new PrismaClient();
 const LOG_FILE = path.resolve('logs/deposit_audit.log');
 
 async function migrateAuditLog({ dry }: { dry: boolean }) {

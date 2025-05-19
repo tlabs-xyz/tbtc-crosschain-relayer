@@ -21,9 +21,9 @@
     "lint:fix": "eslint . --ext .ts --cache --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "migrate:auditlog": "tsx scripts/migrate-auditlog-to-db.ts",
     "prisma:generate:test": "prisma generate --schema=prisma/schema.test.prisma",
     "db:migrate": "npx prisma migrate deploy",
+    "db:migrate:auditlog": "tsx scripts/migrate-auditlog-to-db.ts",
     "db:backup": "pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -F c -b -v -f backup.dump",
     "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump"
   },
@@ -61,6 +61,7 @@
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
     "depcheck": "^1.4.7",
+    "dotenv-cli": "^8.0.0",
     "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.5",

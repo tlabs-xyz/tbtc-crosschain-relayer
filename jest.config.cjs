@@ -17,10 +17,11 @@ module.exports = {
   ],
   coverageDirectory: 'coverage',
   testTimeout: 30000,
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js', '<rootDir>/tests/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   moduleNameMapper: {
     '^(\.{1,2}/.+)\.js$': '$1',
     '^@/(.*)$': '<rootDir>/$1',
   },
   globalSetup: '<rootDir>/jest.global-setup.js',
+  globalTeardown: '<rootDir>/jest.global-teardown.js',
 };

@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import { Deposit } from '../types/Deposit.type.js';
 import { FundingTransaction } from '../types/FundingTransaction.type.js';
 import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
-import { writeJson } from './JsonUtils.js';
+import { DepositStore } from './DepositStore';
 import logger from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import {
@@ -129,7 +129,7 @@ export const updateToFinalizedDeposit = async (
     logStatusChange(deposit, newStatus, oldStatus);
   }
 
-  writeJson(updatedDeposit, deposit.id);
+  DepositStore.create(updatedDeposit);
 
   if (tx) {
     logger.info(
@@ -186,7 +186,7 @@ export const updateToInitializedDeposit = async (
     logStatusChange(deposit, newStatus, oldStatus);
   }
 
-  writeJson(updatedDeposit, deposit.id);
+  DepositStore.create(updatedDeposit);
 
   if (tx) {
     logger.info(
@@ -215,7 +215,7 @@ export const updateLastActivity = (deposit: Deposit) => {
     },
   };
 
-  writeJson(updatedDeposit, deposit.id);
+  DepositStore.create(updatedDeposit);
   return updatedDeposit;
 };
 

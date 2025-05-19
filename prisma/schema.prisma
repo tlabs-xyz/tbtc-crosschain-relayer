@@ -14,7 +14,7 @@ generator clientTest {
 }
 
 datasource db {
-  provider = env("PRISMA_DB_PROVIDER")
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 

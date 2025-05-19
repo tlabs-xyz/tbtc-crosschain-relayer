@@ -1,15 +1,7 @@
-// Use the test Prisma client for test DB in test environment
-let PrismaClient: any;
-if (process.env.NODE_ENV === 'test') {
-  PrismaClient = require('@prisma/client-test').PrismaClient;
-} else {
-  PrismaClient = require('@prisma/client').PrismaClient;
-}
+import { prisma } from './prisma';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { Deposit } from '../types/Deposit.type.js';
-import logger, { logErrorContext } from './Logger.js';
-
-const prisma = new PrismaClient();
+import { logErrorContext } from './Logger.js';
 
 // Event types
 export enum AuditEventType {

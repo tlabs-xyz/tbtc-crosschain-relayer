@@ -1,9 +1,5 @@
 import { Deposit } from '../types/Deposit.type.js';
-import {
-  deleteJson,
-  getAllJsonOperationsByStatus,
-  getJsonById,
-} from '../utils/JsonUtils.js';
+import { DepositStore } from '../utils/DepositStore';
 import logger from '../utils/Logger.js';
 import { logDepositDeleted } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -29,7 +25,7 @@ const REMOVE_QUEUED_TIME_MS: number =
   parseInt(process.env.CLEAN_QUEUED_TIME || '48', 10) * 60 * 60 * 1000;
 
 export const cleanQueuedDeposits = async (): Promise<void> => {
-  const operations: Deposit[] = await getAllJsonOperationsByStatus(
+  const operations: Deposit[] = await DepositStore.getByStatus(
     DepositStatus.QUEUED
   );
   const currentTime = Date.now();
@@ -49,7 +45,7 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
         `Deleting QUEUED ID: ${id} | Created: ${dates.createdAt} | Age: ${ageInHours} hours`
       );
 
-      const deposit = await getJsonById(id);
+      const deposit = await DepositStore.getById(id);
       if (deposit) {
         await logDepositDeleted(
           deposit,
@@ -57,7 +53,7 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
         );
       }
 
-      await deleteJson(id);
+      await DepositStore.delete(id);
     }
   }
 };
@@ -72,7 +68,7 @@ const REMOVE_FINALIZED_TIME_MS: number =
   parseInt(process.env.CLEAN_FINALIZED_TIME || '12', 10) * 60 * 60 * 1000;
 
 export const cleanFinalizedDeposits = async (): Promise<void> => {
-  const operations: Deposit[] = await getAllJsonOperationsByStatus(
+  const operations: Deposit[] = await DepositStore.getByStatus(
     DepositStatus.FINALIZED
   );
   const currentTime = Date.now();
@@ -92,7 +88,7 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
         `Deleting FINALIZED ID: ${id} | Finalized: ${dates.finalizationAt} | Age: ${ageInHours} hours`
       );
 
-      const deposit = await getJsonById(id);
+      const deposit = await DepositStore.getById(id);
       if (deposit) {
         await logDepositDeleted(
           deposit,
@@ -100,7 +96,7 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
         );
       }
 
-      await deleteJson(id);
+      await DepositStore.delete(id);
     }
   }
 };

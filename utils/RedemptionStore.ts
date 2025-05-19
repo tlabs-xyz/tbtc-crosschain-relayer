@@ -1,15 +1,7 @@
-// Use the test Prisma client for test DB in test environment
-let PrismaClient: any;
-if (process.env.NODE_ENV === 'test') {
-  PrismaClient = require('@prisma/client-test').PrismaClient;
-} else {
-  PrismaClient = require('@prisma/client').PrismaClient;
-}
 import { Redemption, RedemptionStatus } from '../types/Redemption.type.js';
 import logger from './Logger.js';
 import { ethers } from 'ethers';
-
-const prisma = new PrismaClient();
+import { prisma } from '../utils/prisma.js';
 
 function serializeRedemption(redemption: Redemption): any {
   const r = JSON.parse(JSON.stringify(redemption));

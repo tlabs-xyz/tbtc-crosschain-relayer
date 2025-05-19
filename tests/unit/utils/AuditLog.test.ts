@@ -12,10 +12,8 @@ import {
   logApiRequest,
   logDepositError,
 } from '../../../utils/AuditLog';
-import { PrismaClient } from '@prisma/client-test';
+import { prisma } from '../../../utils/prisma';
 import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum.js';
-
-const prisma = new PrismaClient();
 
 const testDeposit = {
   id: 'test-id',
