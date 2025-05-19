@@ -2,14 +2,39 @@
 
 /data
 /dist
+/logs
+
+*.log
 
 .env
-.env.dev
 
 .cursor
 
+# Hardhat files
+/cache
+/artifacts
+
+# TypeChain files
+/typechain
+/typechain-types
+
+# solidity-coverage files
 /coverage
+/coverage.json
+
+# Solidity files
+solidity-files-cache.json
+
+# TypeScript tooling
 .eslintcache
 
-/logs
-/data
+# Hardhat Ignition default folder for deployments against a local node
+ignition/deployments/chain-31337
+
+# Test artifacts
+temp_artifacts
+test_artifacts
+
+*.md
+*.xml
+*.diff
