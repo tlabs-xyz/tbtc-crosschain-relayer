@@ -6,6 +6,7 @@ import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { getJsonById } from '../utils/JsonUtils.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
+import { Reveal } from '../types/Reveal.type.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -51,9 +52,11 @@ export class EndpointController {
         });
         return;
       }
+      const revealArray = Array.isArray(reveal) ? reveal : (Object.values(reveal) as Reveal);
+      const fundingOutputIndex = revealArray[0];
 
       const fundingTxHash = getFundingTxHash(fundingTx);
-      const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
+      const depositId = getDepositId(fundingTxHash, fundingOutputIndex);
       logger.info(
         `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
