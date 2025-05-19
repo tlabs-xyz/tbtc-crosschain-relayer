@@ -77,7 +77,10 @@ export class EndpointController {
         if (req.body?.fundingTx?.txHash) {
           depositId = req.body.fundingTx.txHash;
         }
-      } catch (e) {}
+      } catch (e) {
+        // Intentional: Silently ignore errors if depositId cannot be extracted from the request body for logging.
+        // The main error is already caught and will be logged by logDepositError.
+      }
 
       logDepositError(depositId, 'Error handling reveal endpoint', error);
       logApiRequest('/api/reveal', 'POST', depositId, {}, 500);
