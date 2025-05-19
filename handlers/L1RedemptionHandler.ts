@@ -43,7 +43,6 @@ export class L1RedemptionHandler {
             l1Contract: this.l1BitcoinRedeemer.address,
             walletPubKeyHash: redemptionData.walletPubKeyHash,
             mainUtxo: redemptionData.mainUtxo,
-            redeemerOutputScript: redemptionData.redeemerOutputScript,
             amount: redemptionData.amount.toString(),
         }));
 
@@ -61,7 +60,6 @@ export class L1RedemptionHandler {
             const args = [
                 walletPubKeyHashBytes32, 
                 redemptionData.mainUtxo,
-                redemptionData.redeemerOutputScript,
                 redemptionData.amount,
                 encodedVm,
             ];
