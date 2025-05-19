@@ -470,18 +470,19 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
         // Should not happen if local state is INITIALIZED, but handle defensively
         case DepositStatus.QUEUED:
           logger.warn(
-            `FINALIZE | Deposit found as QUEUED on L1 unexpectedly (local status was INITIALIZED) | ID: ${updatedDeposit.id}`
-          );
-          // Revert local state? Log and let processInitializeDeposits handle it?
-          // For now, just log. processInitializeDeposits should eventually correct it.
-          break;
-        case null:
+              `FINALIZE | Deposit found as QUEUED on L1 unexpectedly (local status was INITIALIZED) | ID: ${updatedDeposit.id}`
+            );
+            // Revert local state? Log and let processInitializeDeposits handle it?
+            // For now, just log. processInitializeDeposits should eventually correct it.
+            break;
+          case null: {
           const errorMsg = `Could not fetch L1 status or deposit not found on L1 (local status was INITIALIZED) | ID: ${updatedDeposit.id}`;
           logErrorContext(errorMsg, new Error(errorMsg));
           // Keep local status as INITIALIZED and let retry happen after TIME_TO_RETRY.
           break;
-        default:
-          logger.warn(
+        }
+          default:
+            logger.warn(
             `FINALIZE | Unhandled L1 deposit status (${contractStatus}) for ID: ${updatedDeposit.id}`
           );
           break;

@@ -11,7 +11,7 @@ import { ethers } from 'ethers';
 export class MockChainHandler implements ChainHandlerInterface {
   private initialized: boolean = false;
   private deposits: Map<string, Deposit> = new Map();
-  private listeners: Map<string, Function[]> = new Map();
+  private listeners: Map<string, ((...args: any[]) => void)[]> = new Map();
   private processingDelayMs: number = 100; // Simulate processing delay
 
   constructor(config?: any) {
@@ -266,7 +266,7 @@ export class MockChainHandler implements ChainHandlerInterface {
   /**
    * Register event listener
    */
-  on(event: string, listener: Function): void {
+  on(event: string, listener: (...args: any[]) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
@@ -277,7 +277,7 @@ export class MockChainHandler implements ChainHandlerInterface {
   /**
    * Remove event listener
    */
-  off(event: string, listener: Function): void {
+  off(event: string, listener: (...args: any[]) => void): void {
     if (!this.listeners.has(event)) {
       return;
     }
