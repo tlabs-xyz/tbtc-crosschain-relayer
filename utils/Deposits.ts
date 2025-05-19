@@ -5,14 +5,12 @@ import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
 import { writeJson } from './JsonUtils.js';
 import logger from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-// --- Audit Log Import ---
 import {
   logDepositCreated,
   logStatusChange,
   logDepositInitialized,
   logDepositFinalized,
 } from './AuditLog.js';
-// --- End Import ---
 
 /**
  * @name createDeposit

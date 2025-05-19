@@ -1,8 +1,19 @@
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { AuditEventType, appendToAuditLog, getAuditLogs, getAuditLogsByDepositId, logDepositCreated, logStatusChange, logDepositInitialized, logDepositFinalized, logDepositDeleted, logApiRequest, logDepositError } from '../../../utils/AuditLog';
+import {
+  AuditEventType,
+  appendToAuditLog,
+  getAuditLogs,
+  getAuditLogsByDepositId,
+  logDepositCreated,
+  logStatusChange,
+  logDepositInitialized,
+  logDepositFinalized,
+  logDepositDeleted,
+  logApiRequest,
+  logDepositError,
+} from '../../../utils/AuditLog';
 import { PrismaClient } from '@prisma/client-test';
 import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum.js';
-import { Deposit } from '../../../types/Deposit.type.js';
 
 const prisma = new PrismaClient();
 
