@@ -54,9 +54,6 @@ export interface ChainConfig {
   /** Address of the L1BitcoinRedeemer contract */
   l1BitcoinRedeemerAddress: string;
 
-  /** Address of the L2BitcoinDepositor contract */
-  l2ContractAddress: string;
-
   /** Address of the L2BitcoinRedeemer contract */
   l2BitcoinRedeemerAddress: string;
 
@@ -74,6 +71,9 @@ export interface ChainConfig {
 
   /** Whether to use an HTTP endpoint instead of an L2 contract */
   useEndpoint: boolean;
+
+  /** Address of the L2BitcoinDepositor contract */
+  l2ContractAddress?: string;
 
   /** URL for the HTTP endpoint (if useEndpoint is true) */
   endpointUrl?: string;
