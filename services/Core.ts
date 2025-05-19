@@ -3,8 +3,12 @@ import cron from 'node-cron';
 
 import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
-import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
-import { cleanQueuedDeposits, cleanFinalizedDeposits } from './CleanupDeposits.js';
+import { ChainConfig, CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
+import {
+  cleanQueuedDeposits,
+  cleanFinalizedDeposits,
+  cleanBridgedDeposits,
+} from './CleanupDeposits.js';
 import { L2RedemptionService } from './L2RedemptionService.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
@@ -24,21 +28,24 @@ const requireEnv = (envVar: string) => {
 };
 
 const chainConfig: ChainConfig = {
-  chainType: (process.env.CHAIN_TYPE as ChainType) || ChainType.EVM,
+  chainType: process.env.CHAIN_TYPE as CHAIN_TYPE,
+  network: process.env.NETWORK as NETWORK,
   chainName: process.env.CHAIN_NAME || 'Default Chain',
   l1Rpc: requireEnv('L1_RPC'),
   l2Rpc: requireEnv('L2_RPC'),
-  l1ContractAddress: requireEnv('L2_BITCOIN_DEPOSITOR'),
+  l2WsRpc: requireEnv('L2_WS_RPC'),
+  l1ContractAddress: requireEnv('L1_BITCOIN_DEPOSITOR_ADDRESS'),
   l1BitcoinRedeemerAddress: requireEnv('L1_BITCOIN_REDEEMER_ADDRESS'),
-  l2ContractAddress: requireEnv('L2_BITCOIN_DEPOSITOR'),
   l2BitcoinRedeemerAddress: requireEnv('L2_BITCOIN_REDEEMER_ADDRESS'),
   l2WormholeGatewayAddress: requireEnv('L2_WORMHOLE_GATEWAY_ADDRESS'),
   l2WormholeChainId: parseInt(requireEnv('L2_WORMHOLE_CHAIN_ID')),
-  vaultAddress: requireEnv('TBTCVault'),
+  vaultAddress: requireEnv('TBTC_VAULT_ADDRESS'),
   privateKey: requireEnv('PRIVATE_KEY'),
-  useEndpoint: process.env.USE_ENDPOINT === 'true',
-  endpointUrl: process.env.ENDPOINT_URL,
+  l2ContractAddress:
+    process.env.ENDPOINT_URL === 'true' ? requireEnv('L2_BITCOIN_DEPOSITOR_ADDRESS') : undefined,
+  useEndpoint: process.env.ENDPOINT_URL === 'true',
   l2StartBlock: process.env.L2_START_BLOCK ? parseInt(process.env.L2_START_BLOCK) : undefined,
+  solanaSignerKeyBase: process.env.SOLANA_KEY_BASE,
 };
 
 // Create the appropriate chain handler
@@ -61,6 +68,7 @@ export const startCronJobs = () => {
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
     try {
+      await chainHandler.processWormholeBridging?.();
       await chainHandler.processFinalizeDeposits();
       await chainHandler.processInitializeDeposits();
     } catch (error) {
@@ -81,15 +89,15 @@ export const startCronJobs = () => {
     }
   });
 
-  // Every 5 minutes - check for past deposits
-  cron.schedule('*/5 * * * *', async () => {
+  // Every 60 minutes - check for past deposits
+  cron.schedule('*/60 * * * *', async () => {
     try {
       if (chainHandler.supportsPastDepositCheck()) {
         const latestBlock = await chainHandler.getLatestBlock();
         if (latestBlock > 0) {
           logger.debug(`Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`);
           await chainHandler.checkForPastDeposits({
-            pastTimeInMinutes: 5,
+            pastTimeInMinutes: 60,
             latestBlock: latestBlock,
           });
         } else {
@@ -112,6 +120,7 @@ export const startCronJobs = () => {
     try {
       await cleanQueuedDeposits();
       await cleanFinalizedDeposits();
+      await cleanBridgedDeposits();
     } catch (error) {
       logErrorContext('Error in cleanup cron job:', error);
     }

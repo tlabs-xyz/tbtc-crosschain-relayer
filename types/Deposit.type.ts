@@ -1,6 +1,6 @@
-import { FundingTransaction } from './FundingTransaction.type';
-import { Reveal } from './Reveal.type';
-import { DepositStatus } from './DepositStatus.enum';
+import { FundingTransaction } from './FundingTransaction.type.js';
+import { Reveal } from './Reveal.type.js';
+import { DepositStatus } from './DepositStatus.enum.js';
 
 export type Deposit = {
   id: string;
@@ -14,6 +14,9 @@ export type Deposit = {
       initializeTxHash: string | null;
       finalizeTxHash: string | null;
     };
+    solana: {
+      bridgeTxHash: string | null;
+    };
   };
   receipt: {
     depositor: string;
@@ -24,7 +27,7 @@ export type Deposit = {
     extraData: string;
   };
   owner: string;
-  status: number;
+  status: DepositStatus;
   L1OutputEvent: {
     fundingTx: FundingTransaction;
     reveal: Reveal;
@@ -35,7 +38,14 @@ export type Deposit = {
     createdAt: EpochTimeStamp | null;
     initializationAt: EpochTimeStamp | null;
     finalizationAt: EpochTimeStamp | null;
+    awaitingWormholeVAAMessageSince: EpochTimeStamp | null;
+    bridgedAt: EpochTimeStamp | null;
     lastActivityAt: EpochTimeStamp;
+  };
+  wormholeInfo: {
+    txHash: string | null;
+    transferSequence: string | null;
+    bridgingAttempted: boolean;
   };
   error: string | null;
 };

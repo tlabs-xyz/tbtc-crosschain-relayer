@@ -5,6 +5,7 @@
   "main": "index.ts",
   "type": "module",
   "scripts": {
+    "postinstall": "prisma generate",
     "start": "yarn build && node --env-file .env dist/index.js",
     "start:dev": "yarn build && node dist/index.js",
     "dev": "tsx watch --env-file .env --trace-warnings index.ts",
@@ -31,8 +32,10 @@
   "author": "T-Labs",
   "license": "ISC",
   "dependencies": {
+    "@coral-xyz/anchor": "0.28.0",
     "@ethersproject/experimental": "^5.8.0",
     "@prisma/client": "^6.8.2",
+    "@solana/web3.js": "^1.98.0",
     "@wormhole-foundation/sdk": "^1.18.0",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
@@ -61,7 +64,6 @@
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
     "depcheck": "^1.4.7",
-    "dotenv-cli": "^8.0.0",
     "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.5",

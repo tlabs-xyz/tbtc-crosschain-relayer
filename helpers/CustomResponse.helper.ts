@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { ResponseJson } from '../types/ResponseJson.type';
+import { ResponseJson } from '../types/ResponseJson.type.js';
 
 /**
  * @class CustomResponse

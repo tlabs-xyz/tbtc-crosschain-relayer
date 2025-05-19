@@ -33,12 +33,15 @@ cp .env.example .env
 ```
 
 2. Start the Docker container:
+
 ```bash
 docker compose up --build
 ```
+
 3. Access the application:
-* Once the container is running, the application should be accessible on your host machine at `http://localhost:${PORT}`.
-* The service uses `ts-node-dev` for hot-reloading, so changes you make to your TypeScript source code will automatically trigger a server restart within the container.
+
+- Once the container is running, the application should be accessible on your host machine at `http://localhost:${PORT}`.
+- The service uses `ts-node-dev` for hot-reloading, so changes you make to your TypeScript source code will automatically trigger a server restart within the container.
 
 ## How to Start the Project (Local)
 
@@ -87,6 +90,3 @@ To restore from a backup:
 ```bash
 npm run db:restore
 ```
-
-
-

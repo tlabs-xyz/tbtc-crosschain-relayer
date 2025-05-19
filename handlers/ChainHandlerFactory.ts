@@ -1,7 +1,7 @@
 import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
-import logger from '../utils/Logger.js';
+import { ChainConfig, CHAIN_TYPE } from '../types/ChainConfig.type.js';
 import { EVMChainHandler } from './EVMChainHandler.js';
+import logger from '../utils/Logger.js';
 
 // --- Import New Handlers ---
 import { StarknetChainHandler } from './StarknetChainHandler.js';
@@ -19,20 +19,21 @@ export class ChainHandlerFactory {
    */
   static createHandler(config: ChainConfig): ChainHandlerInterface {
     logger.info(`Attempting to create chain handler for type: ${config.chainType}`);
+
     switch (config.chainType) {
-      case ChainType.EVM:
+      case CHAIN_TYPE.EVM:
         logger.info('Creating EVMChainHandler');
         return new EVMChainHandler(config);
 
-      case ChainType.STARKNET:
+      case CHAIN_TYPE.STARKNET:
         logger.info('Creating StarknetChainHandler');
         return new StarknetChainHandler(config);
 
-      case ChainType.SUI:
+      case CHAIN_TYPE.SUI:
         logger.info('Creating SuiChainHandler');
         return new SuiChainHandler(config);
 
-      case ChainType.SOLANA:
+      case CHAIN_TYPE.SOLANA:
         logger.info('Creating SolanaChainHandler');
         return new SolanaChainHandler(config);
 
