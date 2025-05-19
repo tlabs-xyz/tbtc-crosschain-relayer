@@ -1,8 +1,9 @@
 import { Connection, Keypair } from '@solana/web3.js';
-import { deserialize, serialize, signSendWait, Wormhole } from '@wormhole-foundation/sdk';
+import { signSendWait, Wormhole } from '@wormhole-foundation/sdk';
 import { getSolanaSignAndSendSigner } from '@wormhole-foundation/sdk-solana';
 import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
-import { ethers } from 'ethers'; // For reading the 'transferSequence' from event logs
+import { ethers } from 'ethers';
+import { TransactionReceipt } from '@ethersproject/providers';
 import { AnchorProvider, Idl, Program, setProvider, Wallet } from '@coral-xyz/anchor';
 import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes/index.js';
 
@@ -38,7 +39,7 @@ export class SolanaChainHandler extends BaseChainHandler {
    * Called by `initializeChain()` in Core.ts
    * Sets up Solana connection, Anchor provider, and loads your Wormhole Gateway program.
    */
-  protected async initializeL2(): Promise<void> {
+  protected initializeL2() {
     logger.debug(`Initializing Solana L2 components for ${this.config.chainName}`);
 
     if (!this.config.l2Rpc) {
@@ -131,15 +132,15 @@ export class SolanaChainHandler extends BaseChainHandler {
    *  2) parse Wormhole transferSequence from logs
    *  3) update deposit to AWAITING_WORMHOLE_VAA
    */
-  async finalizeDeposit(deposit: Deposit): Promise<void> {
-    const finalizedDeposit = await super.finalizeDeposit(deposit);
+  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+    const finalizedDepositReceipt = await super.finalizeDeposit(deposit);
 
-    if (!finalizedDeposit?.receipt) {
+    if (!finalizedDepositReceipt) {
       return;
     }
     logger.info(`Finalizing deposit ${deposit.id} on Solana...`);
 
-    const l1Receipt = finalizedDeposit.receipt;
+    const l1Receipt = finalizedDepositReceipt;
     if (!l1Receipt) {
       logger.warn(`No finalize receipt found for deposit ${deposit.id}; cannot parse logs.`);
       return;
@@ -241,19 +242,8 @@ export class SolanaChainHandler extends BaseChainHandler {
       // If no error thrown, we have the VAA.
       logger.info(`VAA found for deposit ${deposit.id}. Posting VAA to Solana...`);
 
-      let unsignedTransactions;
-      if (vaa.payloadLiteral === 'TBTCBridge:GatewayTransfer') {
-        const bridge = await toChain.getTBTCBridge();
-
-        unsignedTransactions = bridge.redeem(sender, vaa);
-      } else {
-        const tokenBridge = await toChain.getTokenBridge();
-
-        // This is really a TokenBridge:Transfer VAA
-        const serialized = serialize(vaa);
-        const tbVaa = deserialize('TokenBridge:Transfer', serialized);
-        unsignedTransactions = tokenBridge.redeem(sender, tbVaa);
-      }
+      const bridge = await toChain.getTBTCBridge();
+      const unsignedTransactions = bridge.redeem(sender, vaa);
 
       const destinationTransactionIds = await signSendWait(
         toChain,

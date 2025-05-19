@@ -6,13 +6,32 @@ import logger from '../../utils/Logger.js';
 import { createTestDeposit } from './BlockchainMock.js';
 import { BigNumber, ethers } from 'ethers';
 
+const mockReceipt = {
+  to: '0x0000000000000000000000000000000000000000',
+  from: '0x0000000000000000000000000000000000000000',
+  contractAddress: '0x0000000000000000000000000000000000000000',
+  transactionIndex: 0,
+  gasUsed: BigNumber.from(21_000),
+  logsBloom: '0x' + '0'.repeat(512),
+  blockHash: '0x' + '0'.repeat(64),
+  transactionHash: '0x' + '0'.repeat(64),
+  logs: [],
+  blockNumber: 1,
+  cumulativeGasUsed: BigNumber.from(21_000),
+  confirmations: 1,
+  effectiveGasPrice: BigNumber.from(1),
+  type: 2,
+  status: 1,
+  byzantium: true,
+};
+
 /**
  * Mock chain handler for testing
  */
 export class MockChainHandler implements ChainHandlerInterface {
   private initialized: boolean = false;
   private deposits: Map<string, Deposit> = new Map();
-  private listeners: Map<string, Function[]> = new Map();
+  private listeners: Map<string, ((...args: any[]) => void)[]> = new Map();
   private processingDelayMs: number = 100; // Simulate processing delay
 
   constructor(config?: any) {
@@ -149,32 +168,14 @@ export class MockChainHandler implements ChainHandlerInterface {
 
       // Emit initialized event if listeners are set up
       this.emitEvent('DepositInitialized', deposit.id);
+      return mockReceipt;
     }
-
-    return {
-      to: '0x0000000000000000000000000000000000000000',
-      from: '0x0000000000000000000000000000000000000000',
-      contractAddress: '0x0000000000000000000000000000000000000000',
-      transactionIndex: 0,
-      gasUsed: BigNumber.from(21_000),
-      logsBloom: '0x' + '0'.repeat(512),
-      blockHash: '0x' + '0'.repeat(64),
-      transactionHash: '0x' + '0'.repeat(64),
-      logs: [],
-      blockNumber: 1,
-      cumulativeGasUsed: BigNumber.from(21_000),
-      confirmations: 1,
-      effectiveGasPrice: BigNumber.from(1),
-      type: 2,
-      status: 1,
-      byzantium: true,
-    };
   }
 
   /**
    * Finalize a deposit
    */
-  async finalizeDeposit(deposit: Deposit): Promise<void> {
+  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     logger.info(`MockChainHandler: Finalizing deposit ${deposit.id}`);
     // Simulate processing
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -203,9 +204,9 @@ export class MockChainHandler implements ChainHandlerInterface {
 
       // Emit finalized event if listeners are set up
       this.emitEvent('DepositFinalized', deposit.id);
-    }
 
-    return Promise.resolve();
+      return mockReceipt;
+    }
   }
 
   /**
@@ -283,7 +284,7 @@ export class MockChainHandler implements ChainHandlerInterface {
   /**
    * Register event listener
    */
-  on(event: string, listener: Function): void {
+  on(event: string, listener: (...args: any[]) => void): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
@@ -294,7 +295,7 @@ export class MockChainHandler implements ChainHandlerInterface {
   /**
    * Remove event listener
    */
-  off(event: string, listener: Function): void {
+  off(event: string, listener: (...args: any[]) => void): void {
     if (!this.listeners.has(event)) {
       return;
     }

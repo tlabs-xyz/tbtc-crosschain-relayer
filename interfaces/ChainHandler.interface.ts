@@ -28,7 +28,7 @@ export interface ChainHandlerInterface {
    * Finalize a deposit on the L1 chain
    * @param deposit The deposit to finalize
    */
-  finalizeDeposit(deposit: Deposit): Promise<void | { receipt: ethers.ContractReceipt | null }>;
+  finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined>;
 
   /**
    * Check the status of a deposit on the chain.

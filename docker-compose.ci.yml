@@ -6,4 +6,5 @@ services:
     build:
       target: production
     command: node dist/index.js
-    volumes: [] # Avoid volumes from the base docker-compose.ym
+    ports: [] # Prevent port mapping in CI
+    volumes: [] # Avoid volumes from the base docker-compose.yml

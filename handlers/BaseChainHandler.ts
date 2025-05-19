@@ -96,7 +96,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     logger.debug(`Base L1 components initialized for ${this.config.chainName}`);
 
     // --- L2 Setup (delegated to subclasses) ---
-    await this.initializeL2();
+    this.initializeL2();
 
     logger.debug(`Chain handler fully initialized for ${this.config.chainName}`);
   }
@@ -216,9 +216,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     }
   }
 
-  async finalizeDeposit(
-    deposit: Deposit,
-  ): Promise<void | { receipt: ethers.ContractReceipt | null }> {
+  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     // Check if already finalized locally
     if (deposit.status === DepositStatus.FINALIZED) {
       logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
@@ -273,7 +271,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
       // Update status upon successful mining
       updateToFinalizedDeposit(deposit, receipt); // Pass only deposit and receipt on success
 
-      return { receipt };
+      return receipt;
     } catch (error: any) {
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
 
@@ -442,7 +440,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
    * Initialize L2-specific components like providers, signers, and contracts.
    * Should be implemented by subclasses (e.g., EVMChainHandler, StarknetChainHandler).
    */
-  protected abstract initializeL2(): Promise<void>;
+  protected abstract initializeL2(): void;
 
   /**
    * Set up L2-specific event listeners (e.g., for DepositInitialized events).
