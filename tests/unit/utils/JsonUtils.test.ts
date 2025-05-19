@@ -18,7 +18,7 @@ import * as JsonUtils from '../../../utils/JsonUtils';
   },
   owner: '0xowner',
       status: DepositStatus.QUEUED,
-  L1OutputEvent: {
+      L1OutputEvent: { 
     fundingTx: {
       version: '1',
       inputVector: 'input',
@@ -28,7 +28,7 @@ import * as JsonUtils from '../../../utils/JsonUtils';
     reveal: [0, 'blinding', 'wallet', 'refund', 'lock', 'extra'],
     l2DepositOwner: '0xowner',
     l2Sender: '0xsender',
-  },
+      },
       dates: {
     createdAt: Date.now(),
         initializationAt: null,

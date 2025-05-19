@@ -49,15 +49,15 @@ export class RedemptionStore {
           data: serializeRedemption(redemption),
         },
       });
-      logger.info(`Redemption created: ${redemption.id}`);
-    } catch (err: any) {
+        logger.info(`Redemption created: ${redemption.id}`);
+      } catch (err: any) {
       if (err.code === 'P2002') {
-        logger.warn(`Redemption already exists: ${redemption.id}`);
-      } else {
-        logger.error(`Failed to create redemption ${redemption.id}: ${err}`);
-        throw err;
+          logger.warn(`Redemption already exists: ${redemption.id}`);
+        } else {
+          logger.error(`Failed to create redemption ${redemption.id}: ${err}`);
+          throw err;
+        }
       }
-    }
   }
 
   static async update(redemption: Redemption): Promise<void> {
@@ -70,11 +70,11 @@ export class RedemptionStore {
           data: serializeRedemption(redemption),
         },
       });
-      logger.info(`Redemption updated: ${redemption.id}`);
-    } catch (err) {
-      logger.error(`Failed to update redemption ${redemption.id}: ${err}`);
-      throw err;
-    }
+        logger.info(`Redemption updated: ${redemption.id}`);
+      } catch (err) {
+        logger.error(`Failed to update redemption ${redemption.id}: ${err}`);
+        throw err;
+      }
   }
 
   static async getById(id: string): Promise<Redemption | null> {
@@ -88,10 +88,10 @@ export class RedemptionStore {
   }
 
   static async getAll(): Promise<Redemption[]> {
-    try {
+      try {
       const records = await prisma.redemption.findMany();
       return records.map((r: any) => deserializeRedemption(r.data));
-    } catch (err) {
+      } catch (err) {
       logger.error(`Failed to fetch all redemptions: ${err}`);
       return [];
     }
@@ -108,16 +108,16 @@ export class RedemptionStore {
   }
 
   static async delete(id: string): Promise<void> {
-    try {
+      try {
       await prisma.redemption.delete({ where: { id } });
-      logger.info(`Redemption deleted: ${id}`);
-    } catch (err: any) {
+        logger.info(`Redemption deleted: ${id}`);
+      } catch (err: any) {
       if (err.code === 'P2025') {
-        logger.warn(`Redemption not found for delete: ${id}`);
-      } else {
-        logger.error(`Failed to delete redemption ${id}: ${err}`);
-        throw err;
+          logger.warn(`Redemption not found for delete: ${id}`);
+        } else {
+          logger.error(`Failed to delete redemption ${id}: ${err}`);
+          throw err;
+        }
       }
-    }
   }
 }

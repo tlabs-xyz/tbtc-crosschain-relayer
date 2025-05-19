@@ -91,9 +91,9 @@ export const getAllJsonOperationsByStatus = async (
  * @returns {Promise<Deposit|null>} The Deposit if it exists, null otherwise
  */
 const getJsonById = async (operationId: string): Promise<Deposit | null> => {
-  try {
+    try {
     return await prisma.deposit.findUnique({ where: { id: operationId } });
-  } catch (error) {
+    } catch (error) {
     logErrorContext(`Error fetching Deposit by ID ${operationId}:`, error);
     return null;
   }
@@ -127,7 +127,7 @@ const writeJson = async (data: Deposit, operationId: string): Promise<boolean> =
 const deleteJson = async (operationId: string): Promise<boolean> => {
   try {
     await prisma.deposit.delete({ where: { id: operationId } });
-    return true;
+      return true;
   } catch (error) {
     logErrorContext(`Error deleting Deposit for ID ${operationId}:`, error);
     return false;
