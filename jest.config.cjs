@@ -17,9 +17,12 @@ module.exports = {
   ],
   coverageDirectory: 'coverage',
   testTimeout: 30000,
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js', '<rootDir>/tests/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts', '<rootDir>/tests/setup.ts'],
   moduleNameMapper: {
     '^(\.{1,2}/.+)\.js$': '$1',
     '^@/(.*)$': '<rootDir>/$1',
+  },
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', { isolatedModules: false }],
   },
 };

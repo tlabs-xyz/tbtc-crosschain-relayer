@@ -5,6 +5,7 @@ import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
 import { ChainConfig, ChainType } from '../types/ChainConfig.type.js';
 import { L2RedemptionService } from './L2RedemptionService';
+import {cleanQueuedDeposits, cleanFinalizedDeposits} from './CleanupDeposits';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
@@ -127,7 +128,7 @@ export const initializeChain = async () => {
 export const initializeL2RedemptionService = async () => {
   try {
     logger.info('Attempting to initialize L2RedemptionService...');
-    const l2RedemptionService = new L2RedemptionService(
+    const redemptionService = new L2RedemptionService(
       chainConfig.l2Rpc,
       chainConfig.l2BitcoinRedeemerAddress,
       chainConfig.privateKey,
@@ -136,8 +137,8 @@ export const initializeL2RedemptionService = async () => {
       Number(chainConfig.l2WormholeChainId),
       chainConfig.l2WormholeGatewayAddress
     );
-    await l2RedemptionService.initialize();
-    l2RedemptionService.startListening();
+    await redemptionService.initialize();
+    redemptionService.startListening();
     logger.info('L2RedemptionService initialized and started successfully.');
   } catch (error) {
     logErrorContext(
