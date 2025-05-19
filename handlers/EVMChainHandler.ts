@@ -107,7 +107,7 @@ export class EVMChainHandler
             `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`
           );
           try {
-            const existingDeposit = getJsonById(depositId);
+            const existingDeposit = await getJsonById(depositId);
             if (existingDeposit) {
               logger.warn(
                 `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`
@@ -227,7 +227,7 @@ export class EVMChainHandler
           );
           const depositId = getDepositId(fundingTxHash, reveal[0]);
 
-          const existingDeposit = getJsonById(depositId);
+          const existingDeposit = await getJsonById(depositId);
 
           if (!existingDeposit) {
             logger.debug(

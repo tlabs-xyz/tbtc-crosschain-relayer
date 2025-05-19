@@ -1,12 +1,15 @@
-import fs from 'fs';
-import path from 'path';
+// Use the test Prisma client for test DB in test environment
+let PrismaClient: any;
+if (process.env.NODE_ENV === 'test') {
+  PrismaClient = require('@prisma/client-test').PrismaClient;
+} else {
+  PrismaClient = require('@prisma/client').PrismaClient;
+}
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { Deposit } from '../types/Deposit.type.js';
 import logger, { logErrorContext } from './Logger.js';
 
-// Constants
-const AUDIT_LOG_DIR = process.env.AUDIT_LOG_DIR || './logs';
-const AUDIT_LOG_FILE = process.env.AUDIT_LOG_FILE || 'deposit_audit.log';
+const prisma = new PrismaClient();
 
 // Event types
 export enum AuditEventType {
@@ -20,98 +23,75 @@ export enum AuditEventType {
   API_REQUEST = 'API_REQUEST',
 }
 
-// Initialize the audit log directory
-export const initializeAuditLog = (): void => {
-  try {
-    // Get absolute path
-    const auditLogDir = path.resolve(AUDIT_LOG_DIR);
-    const auditLogPath = path.resolve(auditLogDir, AUDIT_LOG_FILE);
-
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(auditLogDir)) {
-      fs.mkdirSync(auditLogDir, { recursive: true });
-      logger.info(`Created audit log directory: ${auditLogDir}`);
-    }
-
-    // Create the log file if it doesn't exist
-    if (!fs.existsSync(auditLogPath)) {
-      fs.writeFileSync(auditLogPath, '', 'utf8');
-      logger.info(`Created audit log file: ${auditLogPath}`);
-    }
-  } catch (error) {
-    logErrorContext('Failed to initialize audit log', error);
-  }
-};
-
 /**
- * Append an event to the audit log
+ * Append an event to the audit log (DB)
  * @param eventType Type of the event
  * @param depositId ID of the deposit
  * @param data Additional data to log
  */
-export const appendToAuditLog = (
+export const appendToAuditLog = async (
   eventType: AuditEventType,
-  depositId: string,
-  data: any = {}
-): void => {
+  depositId: string | null,
+  data: any,
+): Promise<void> => {
+  let errorCode: number | undefined = undefined;
+  if (data && typeof data.code === 'number') {
+    errorCode = data.code;
+    // Remove code from data to avoid duplication
+    const { code, ...rest } = data;
+    data = rest;
+  }
+  await prisma.auditLog.create({
+    data: {
+      eventType,
+      depositId,
+      data,
+      errorCode,
+    },
+  });
+};
+
+/**
+ * Get all audit logs
+ */
+export const getAuditLogs = async () => {
   try {
-    // Get absolute paths
-    const auditLogDir = path.resolve(AUDIT_LOG_DIR);
-    const auditLogPath = path.resolve(auditLogDir, AUDIT_LOG_FILE);
-
-    // Ensure directory exists before appending (add a check just in case)
-    if (!fs.existsSync(auditLogDir)) {
-      throw new Error(`Audit log directory does not exist: ${auditLogDir}`);
-    }
-    // Ensure file exists before appending (initializeAuditLog should handle this)
-    if (!fs.existsSync(auditLogPath)) {
-      // Optionally recreate it if missing, or throw error
-      fs.writeFileSync(auditLogPath, '', 'utf8');
-      logger.info(`Audit log file was missing, recreated: ${auditLogPath}`);
-      // OR: throw new Error(`Audit log file does not exist: ${auditLogPath}`);
-    }
-
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-      timestamp,
-      eventType,
-      depositId,
-      data,
-    };
-
-    const logString = JSON.stringify(logEntry) + '\n';
-
-    // Append to log file
-    fs.appendFileSync(auditLogPath, logString, 'utf8');
+    return await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' } });
   } catch (error) {
-    logErrorContext('Failed to write to audit log', error);
-    console.error('AUDIT LOG ENTRY (FALLBACK):', {
-      timestamp: new Date().toISOString(),
-      eventType,
-      depositId,
-      data,
+    logErrorContext('Failed to fetch audit logs', error);
+    return [];
+  }
+};
+
+/**
+ * Get audit logs by depositId
+ */
+export const getAuditLogsByDepositId = async (depositId: string) => {
+  try {
+    return await prisma.auditLog.findMany({
+      where: { depositId },
+      orderBy: { timestamp: 'desc' },
     });
+  } catch (error) {
+    logErrorContext('Failed to fetch audit logs by depositId', error);
+    return [];
   }
 };
 
 /**
  * Log status changes for a deposit
- * @param deposit The deposit object
- * @param oldStatus Previous status (optional)
- * @param newStatus New status
  */
-export const logStatusChange = (
+export const logStatusChange = async (
   deposit: Deposit,
   newStatus: DepositStatus,
-  oldStatus?: DepositStatus
-): void => {
+  oldStatus?: DepositStatus,
+): Promise<void> => {
   const statusMap = {
     [DepositStatus.QUEUED]: 'QUEUED',
     [DepositStatus.INITIALIZED]: 'INITIALIZED',
     [DepositStatus.FINALIZED]: 'FINALIZED',
   };
-
-  appendToAuditLog(AuditEventType.STATUS_CHANGED, deposit.id, {
+  await appendToAuditLog(AuditEventType.STATUS_CHANGED, deposit.id, {
     from: oldStatus !== undefined ? statusMap[oldStatus] : 'UNKNOWN',
     to: statusMap[newStatus],
     deposit: {
@@ -125,10 +105,9 @@ export const logStatusChange = (
 
 /**
  * Log deposit creation
- * @param deposit The deposit object
  */
-export const logDepositCreated = (deposit: Deposit): void => {
-  appendToAuditLog(AuditEventType.DEPOSIT_CREATED, deposit.id, {
+export const logDepositCreated = async (deposit: Deposit): Promise<void> => {
+  await appendToAuditLog(AuditEventType.DEPOSIT_CREATED, deposit.id, {
     deposit: {
       id: deposit.id,
       fundingTxHash: deposit.fundingTxHash,
@@ -142,10 +121,9 @@ export const logDepositCreated = (deposit: Deposit): void => {
 
 /**
  * Log deposit initialization
- * @param deposit The deposit object
  */
-export const logDepositInitialized = (deposit: Deposit): void => {
-  appendToAuditLog(AuditEventType.DEPOSIT_INITIALIZED, deposit.id, {
+export const logDepositInitialized = async (deposit: Deposit): Promise<void> => {
+  await appendToAuditLog(AuditEventType.DEPOSIT_INITIALIZED, deposit.id, {
     deposit: {
       id: deposit.id,
       fundingTxHash: deposit.fundingTxHash,
@@ -160,10 +138,9 @@ export const logDepositInitialized = (deposit: Deposit): void => {
 
 /**
  * Log deposit finalization
- * @param deposit The deposit object
  */
-export const logDepositFinalized = (deposit: Deposit): void => {
-  appendToAuditLog(AuditEventType.DEPOSIT_FINALIZED, deposit.id, {
+export const logDepositFinalized = async (deposit: Deposit): Promise<void> => {
+  await appendToAuditLog(AuditEventType.DEPOSIT_FINALIZED, deposit.id, {
     deposit: {
       id: deposit.id,
       fundingTxHash: deposit.fundingTxHash,
@@ -178,11 +155,9 @@ export const logDepositFinalized = (deposit: Deposit): void => {
 
 /**
  * Log deposit deletion
- * @param deposit The deposit object
- * @param reason Reason for deletion
  */
-export const logDepositDeleted = (deposit: Deposit, reason: string): void => {
-  appendToAuditLog(AuditEventType.DEPOSIT_DELETED, deposit.id, {
+export const logDepositDeleted = async (deposit: Deposit, reason: string): Promise<void> => {
+  await appendToAuditLog(AuditEventType.DEPOSIT_DELETED, deposit.id, {
     deposit: {
       id: deposit.id,
       fundingTxHash: deposit.fundingTxHash,
@@ -199,20 +174,15 @@ export const logDepositDeleted = (deposit: Deposit, reason: string): void => {
 
 /**
  * Log API requests related to deposits
- * @param endpoint API endpoint
- * @param method HTTP method
- * @param depositId Deposit ID (if applicable)
- * @param requestData Request data
- * @param responseStatus Response status code
  */
-export const logApiRequest = (
+export const logApiRequest = async (
   endpoint: string,
   method: string,
   depositId: string | null,
   requestData: any = {},
-  responseStatus: number = 200
-): void => {
-  appendToAuditLog(AuditEventType.API_REQUEST, depositId || 'no-deposit-id', {
+  responseStatus: number = 200,
+): Promise<void> => {
+  await appendToAuditLog(AuditEventType.API_REQUEST, depositId || 'no-deposit-id', {
     endpoint,
     method,
     requestData,
@@ -222,17 +192,12 @@ export const logApiRequest = (
 
 /**
  * Log errors related to deposits
- * @param depositId Deposit ID
- * @param errorMessage Error message
- * @param errorObj Error object
  */
-export const logDepositError = (
+export const logDepositError = async (
   depositId: string,
-  errorMessage: string,
-  errorObj: any = {}
-): void => {
-  appendToAuditLog(AuditEventType.ERROR, depositId, {
-    message: errorMessage,
-    error: errorObj.message || JSON.stringify(errorObj),
-  });
+  message: string,
+  extra?: any,
+): Promise<void> => {
+  const data = { message, ...(extra || {}) };
+  await appendToAuditLog(AuditEventType.ERROR, depositId, data);
 };

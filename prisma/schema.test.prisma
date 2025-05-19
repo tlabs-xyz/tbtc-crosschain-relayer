@@ -1,0 +1,40 @@
+// This is your Prisma schema file for tests
+// Uses SQLite in-memory for fast, isolated test runs
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client-test"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Deposit {
+  id        String   @id
+  fundingTxHash String
+  outputIndex Int
+  hashes    Json
+  receipt   Json
+  owner     String
+  status    Int
+  L1OutputEvent Json?
+  dates     Json
+  error     String?
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  timestamp  DateTime @default(now())
+  eventType  String
+  depositId  String?
+  data       Json
+  errorCode  Int?
+}
+
+model Redemption {
+  id        String   @id
+  status    String
+  data      Json
+} 

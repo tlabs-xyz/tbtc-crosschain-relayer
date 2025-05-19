@@ -22,4 +22,5 @@ module.exports = {
     '^(\.{1,2}/.+)\.js$': '$1',
     '^@/(.*)$': '<rootDir>/$1',
   },
+  globalSetup: '<rootDir>/jest.global-setup.js',
 };

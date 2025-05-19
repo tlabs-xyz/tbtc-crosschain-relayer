@@ -20,13 +20,16 @@
     "lint": "eslint . --ext .ts --cache",
     "lint:fix": "eslint . --ext .ts --cache --fix",
     "format": "prettier --check .",
-    "format:fix": "prettier --write ."
+    "format:fix": "prettier --write .",
+    "migrate:auditlog": "tsx scripts/migrate-auditlog-to-db.ts",
+    "prisma:generate:test": "prisma generate --schema=prisma/schema.test.prisma"
   },
   "keywords": [],
   "author": "T-Labs",
   "license": "ISC",
   "dependencies": {
     "@ethersproject/experimental": "^5.8.0",
+    "@prisma/client": "^6.8.2",
     "@wormhole-foundation/sdk": "^1.18.0",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
@@ -35,6 +38,7 @@
     "helmet": "^7.1.0",
     "node-cron": "^3.0.3",
     "pino": "^9.6.0",
+    "prisma": "^6.8.2",
     "rimraf": "^6.0.1"
   },
   "optionalDependencies": {

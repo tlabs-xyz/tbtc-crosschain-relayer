@@ -102,11 +102,11 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      (minter, depositKey, depositor, optimisticMintingDebt) => {
+      async (minter, depositKey, depositor, optimisticMintingDebt) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
-          const deposit: Deposit | null = getJsonById(depositId);
+          const deposit: Deposit | null = await getJsonById(depositId);
           if (deposit) {
             logger.debug(
               `Received OptimisticMintingFinalized event for Deposit ID: ${deposit.id}`

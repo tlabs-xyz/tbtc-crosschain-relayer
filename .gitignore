@@ -15,3 +15,8 @@
 /data
 
 redemptions/
+
+/generated
+
+*.md
+tasks

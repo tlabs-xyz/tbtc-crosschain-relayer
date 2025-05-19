@@ -1,30 +1,20 @@
+// Use the test Prisma client for test DB in test environment
+let PrismaClient: any;
+if (process.env.NODE_ENV === 'test') {
+  PrismaClient = require('@prisma/client-test').PrismaClient;
+} else {
+  PrismaClient = require('@prisma/client').PrismaClient;
+}
+
 import { Deposit } from '../types/Deposit.type.js';
 import { logErrorContext } from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 
-import fs from 'fs';
-import path from 'path';
+const prisma = new PrismaClient();
 
 // ---------------------------------------------------------------
 // ------------------------- JSON UTILS --------------------------
 // ---------------------------------------------------------------
-
-const JSON_PATH = process.env.JSON_PATH || './data';
-const dirPath = path.resolve('.', JSON_PATH);
-
-const checkAndCreateDataFolder = () => {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath);
-  }
-};
-
-/**
- * Get the filename of a JSON operation
- * @param {String} operationId Operation ID
- * @returns {String} Filename of the JSON operation
- */
-const getFilename = (operationId: string): string =>
-  path.resolve('.', `${JSON_PATH}${operationId}.json`);
 
 /**
  * Check if a JSON object is empty
@@ -48,63 +38,47 @@ const isValidJson = (content: string): boolean => {
 };
 
 /**
- * Check if a JSON operation exists
+ * Check if a Deposit exists by ID
  * @param {String} operationId Operation ID
- * @returns {boolean} True if the JSON operation exists and is valid, false otherwise
+ * @returns {Promise<boolean>} True if the Deposit exists, false otherwise
  */
-const checkIfExistJson = (operationId: string): boolean => {
-  const filename = getFilename(operationId);
+const checkIfExistJson = async (operationId: string): Promise<boolean> => {
   try {
-    if (fs.existsSync(filename)) {
-      const fileContent = fs.readFileSync(filename, 'utf8');
-      return isValidJson(fileContent);
-    }
+    const deposit = await prisma.deposit.findUnique({ where: { id: operationId } });
+    return !!deposit;
   } catch (error) {
-    logErrorContext(`Error checking JSON file existence for ID ${operationId}:`, error);
+    logErrorContext(`Error checking Deposit existence for ID ${operationId}:`, error);
+    return false;
   }
-  return false;
 };
 
 /**
- * Get all JSON files in the JSON directory
- * @returns {Promise<Array<Deposit>>} List of JSON files
+ * Get all Deposits
+ * @returns {Promise<Array<Deposit>>} List of Deposits
  */
 const getAllJsonOperations = async (): Promise<Array<Deposit>> => {
-  checkAndCreateDataFolder();
-
-  const files = await fs.promises.readdir(dirPath);
-  const jsonFiles = files.filter(
-    (file: string) => path.extname(file) === '.json'
-  );
-
-  const promises = jsonFiles.map(async (file: string) => {
-    const filePath = path.join(dirPath, file);
-    const data = await fs.promises.readFile(filePath, 'utf8');
-    if (!isValidJson(data)) {
-      logErrorContext(`Invalid JSON file detected: ${filePath}`, new Error('Invalid JSON content'));
-      return null;
-    }
-    return JSON.parse(data);
-  });
-
-  const results = await Promise.all(promises);
-  // Clean null values
-  return results.filter((result: Deposit) => result !== null);
+  try {
+    return await prisma.deposit.findMany();
+  } catch (error) {
+    logErrorContext('Error fetching all Deposits:', error);
+    return [];
+  }
 };
 
 /**
- * Get all JSON operations by status
- * @param {DepositStatus} status Operation status enum value (NUMERIC)
- * @returns {Array} List of JSON operations by status
+ * Get all Deposits by status
+ * @param {DepositStatus} status Operation status enum value
+ * @returns {Promise<Array<Deposit>>} List of Deposits by status
  */
 export const getAllJsonOperationsByStatus = async (
-  status: DepositStatus // Parameter is still the Enum type
+  status: DepositStatus,
 ): Promise<Array<Deposit>> => {
-  const operations = await getAllJsonOperations(); // operations is Deposit[]
-  // operation.status is now type 'number' (from Deposit interface)
-  // status is type 'DepositStatus' (numeric enum)
-  // This comparison (number === numeric enum) should now pass type checking
-  return operations.filter((operation: Deposit) => operation.status === status);
+  try {
+    return await prisma.deposit.findMany({ where: { status } });
+  } catch (error) {
+    logErrorContext(`Error fetching Deposits by status ${status}:`, error);
+    return [];
+  }
 };
 
 // ---------------------------------------------------------------
@@ -112,66 +86,55 @@ export const getAllJsonOperationsByStatus = async (
 // ---------------------------------------------------------------
 
 /**
- * Get a JSON operation by its ID
+ * Get a Deposit by its ID
  * @param {String} operationId Operation ID
- * @returns {Object|null} The JSON operation if it exists, null otherwise
+ * @returns {Promise<Deposit|null>} The Deposit if it exists, null otherwise
  */
-const getJsonById = (operationId: string): Deposit | null => {
-  if (checkIfExistJson(operationId)) {
-    try {
-      const filename = getFilename(operationId);
-      const fileContent = fs.readFileSync(filename, 'utf8');
-      return JSON.parse(fileContent);
-    } catch (error) {
-      logErrorContext(`Error reading JSON file by ID ${operationId}:`, error);
-    }
+const getJsonById = async (operationId: string): Promise<Deposit | null> => {
+  try {
+    return await prisma.deposit.findUnique({ where: { id: operationId } });
+  } catch (error) {
+    logErrorContext(`Error fetching Deposit by ID ${operationId}:`, error);
+    return null;
   }
-  return null;
 };
 
 /**
- * Write a JSON object to a file
- * @param {Object} data JSON data
+ * Upsert a Deposit
+ * @param {Deposit} data Deposit data
  * @param {String} operationId Operation ID
- * @returns {boolean} True if the JSON data was written successfully, false otherwise
+ * @returns {Promise<boolean>} True if the Deposit was written successfully, false otherwise
  */
-const writeJson = (data: Deposit, operationId: string): boolean => {
-  checkAndCreateDataFolder();
-
-  const filename = getFilename(operationId);
-
+const writeJson = async (data: Deposit, operationId: string): Promise<boolean> => {
   try {
-    const json = JSON.stringify(data, null, 2);
-    fs.writeFileSync(filename, json, 'utf8');
+    await prisma.deposit.upsert({
+      where: { id: operationId },
+      update: { ...data },
+      create: { ...data, id: operationId },
+    });
     return true;
   } catch (error) {
-    logErrorContext(`Error writing JSON file for ID ${operationId}:`, error);
+    logErrorContext(`Error upserting Deposit for ID ${operationId}:`, error);
     return false;
   }
 };
 
 /**
- * Delete a JSON operation by its ID
+ * Delete a Deposit by its ID
  * @param {String} operationId Operation ID
- * @returns {boolean} True if the JSON data was deleted successfully, false otherwise
+ * @returns {Promise<boolean>} True if the Deposit was deleted successfully, false otherwise
  */
-const deleteJson = (operationId: string): boolean => {
-  const filename = getFilename(operationId);
+const deleteJson = async (operationId: string): Promise<boolean> => {
   try {
-    if (fs.existsSync(filename)) {
-      fs.unlinkSync(filename);
-      return true;
-    }
+    await prisma.deposit.delete({ where: { id: operationId } });
+    return true;
   } catch (error) {
-    logErrorContext(`Error deleting JSON file for ID ${operationId}:`, error);
+    logErrorContext(`Error deleting Deposit for ID ${operationId}:`, error);
+    return false;
   }
-  return false;
 };
 
 export {
-  // Create data folder
-  checkAndCreateDataFolder,
-
   // Utils
   isEmptyJson,
   isValidJson,

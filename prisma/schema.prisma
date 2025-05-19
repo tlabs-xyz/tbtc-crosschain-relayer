@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// For testing, you can use SQLite by setting provider = "sqlite" and url = env("DATABASE_URL")
+// Example: provider = "sqlite", url = "file:./test.db" or ":memory:"
+
+model Deposit {
+  id        String   @id
+  fundingTxHash String
+  outputIndex Int
+  hashes    Json
+  receipt   Json
+  owner     String
+  status    Int
+  L1OutputEvent Json?
+  dates     Json
+  error     String?
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  timestamp  DateTime @default(now())
+  eventType  String
+  depositId  String?
+  data       Json
+  errorCode  Int?
+}
+
+model Redemption {
+  id        String   @id
+  status    String
+  data      Json
+}

@@ -34,16 +34,14 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
   );
   const currentTime = Date.now();
 
-  // Filtrar y eliminar depósitos en una sola pasada, verificando que createdAt exista
-  operations.forEach(({ id, dates }) => {
+  for (const { id, dates } of operations) {
     const createdAt = dates?.createdAt
       ? new Date(dates.createdAt).getTime()
       : null;
-    if (!createdAt) return;
+    if (!createdAt) continue;
 
     const ageInMs = currentTime - createdAt;
 
-    // Verifica si createdAt es válido antes de proceder
     if (ageInMs > REMOVE_QUEUED_TIME_MS) {
       const ageInHours = (ageInMs / (60 * 60 * 1000)).toFixed(2);
 
@@ -51,19 +49,17 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
         `Deleting QUEUED ID: ${id} | Created: ${dates.createdAt} | Age: ${ageInHours} hours`
       );
 
-      // Get full deposit to log it before deletion
-      const deposit = getJsonById(id);
+      const deposit = await getJsonById(id);
       if (deposit) {
-        // Log the deletion to the audit log
-        logDepositDeleted(
+        await logDepositDeleted(
           deposit,
           `QUEUED deposit exceeded age limit (${ageInHours} hours)`
         );
       }
 
-      deleteJson(id);
+      await deleteJson(id);
     }
-  });
+  }
 };
 
 /**
@@ -81,12 +77,11 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
   );
   const currentTime = Date.now();
 
-  // Filter and delete deposits in a single pass, checking that finalizationAt exists
-  operations.forEach(({ id, dates }) => {
+  for (const { id, dates } of operations) {
     const finalizationAt = dates?.finalizationAt
       ? new Date(dates.finalizationAt).getTime()
       : null;
-    if (!finalizationAt) return;
+    if (!finalizationAt) continue;
 
     const ageInMs = currentTime - finalizationAt;
 
@@ -97,17 +92,15 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
         `Deleting FINALIZED ID: ${id} | Finalized: ${dates.finalizationAt} | Age: ${ageInHours} hours`
       );
 
-      // Get full deposit to log it before deletion
-      const deposit = getJsonById(id);
+      const deposit = await getJsonById(id);
       if (deposit) {
-        // Log the deletion to the audit log
-        logDepositDeleted(
+        await logDepositDeleted(
           deposit,
           `FINALIZED deposit exceeded age limit (${ageInHours} hours)`
         );
       }
 
-      deleteJson(id);
+      await deleteJson(id);
     }
-  });
+  }
 };
