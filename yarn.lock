@@ -1983,15 +1983,6 @@
     chalk "^5.4.1"
     commander "^13.1.0"
 
-"@solana/spl-token@0.3.8":
-  version "0.3.8"
-  resolved "https://registry.yarnpkg.com/@solana/spl-token/-/spl-token-0.3.8.tgz#8e9515ea876e40a4cc1040af865f61fc51d27edf"
-  integrity sha512-ogwGDcunP9Lkj+9CODOWMiVJEdRtqHAtX2rWF62KxnnSWtMZtV9rDhTrZFshiyJmxDnRL/1nKE1yJHg4jjs3gg==
-  dependencies:
-    "@solana/buffer-layout" "^4.0.0"
-    "@solana/buffer-layout-utils" "^0.2.0"
-    buffer "^6.0.3"
-
 "@solana/spl-token@0.3.9":
   version "0.3.9"
   resolved "https://registry.yarnpkg.com/@solana/spl-token/-/spl-token-0.3.9.tgz#477e703c3638ffb17dd29b82a203c21c3e465851"
@@ -2765,7 +2756,7 @@
     "@mysten/sui" "^1.21.2"
     "@wormhole-foundation/sdk-connect" "1.18.0"
 
-"@wormhole-foundation/sdk@^1.16.1":
+"@wormhole-foundation/sdk@^1.18.0":
   version "1.18.0"
   resolved "https://registry.yarnpkg.com/@wormhole-foundation/sdk/-/sdk-1.18.0.tgz#93047fb900b8c9b824d377ba497d81b96515647d"
   integrity sha512-cUtRui9USOmgzLy4R43Kqb0jHtwb8uYhKoHaaPtI32YPUGLXtCSKvITiAozlfiGg5An/uEWehxi9rK3TyqRBog==
