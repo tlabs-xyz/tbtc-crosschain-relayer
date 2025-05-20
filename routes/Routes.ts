@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import Operations from '../controllers/Operations.controller.js';
 import Utils from '../controllers/Utils.controller.js';
 import { EndpointController } from '../controllers/Endpoint.controller.js';
-import { chainHandler } from '../services/Core.js';
+import { chainHandlers } from '../services/Core.js';
 
 export const router = express.Router();
 
@@ -27,19 +27,27 @@ router.get('/diagnostics/queued', operations.getAllQueuedOperations);
 router.get('/diagnostics/initialized', operations.getAllInitializedOperations);
 router.get('/diagnostics/finalized', operations.getAllFinalizedOperations);
 
-// If using endpoint for receiving reveal data (non-EVM chains without L2 contract)
+// Multi-chain endpoint routes (require chainName as path param)
 if (process.env.USE_ENDPOINT === 'true') {
-  // Use lazy initialization pattern - only create controller when handling requests
-
   // Endpoint for receiving reveal data
-  router.post('/api/reveal', (req: Request, res: Response) => {
-    const endpointController = new EndpointController(chainHandler);
+  router.post('/api/:chainName/reveal', (req: Request, res: Response) => {
+    const { chainName } = req.params;
+    const handler = chainHandlers.get(chainName);
+    if (!handler) {
+      return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
+    }
+    const endpointController = new EndpointController(handler);
     return endpointController.handleReveal(req, res);
   });
 
   // Endpoint for checking deposit status
-  router.get('/api/deposit/:depositId', (req: Request, res: Response) => {
-    const endpointController = new EndpointController(chainHandler);
+  router.get('/api/:chainName/deposit/:depositId', (req: Request, res: Response) => {
+    const { chainName } = req.params;
+    const handler = chainHandlers.get(chainName);
+    if (!handler) {
+      return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
+    }
+    const endpointController = new EndpointController(handler);
     return endpointController.getDepositStatus(req, res);
   });
 }

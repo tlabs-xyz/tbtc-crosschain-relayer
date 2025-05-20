@@ -2,7 +2,7 @@ import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import logger, { logErrorContext } from './Logger.js';
 import { prisma } from '../utils/prisma.js';
-
+is
 function serializeDeposit(deposit: Deposit): any {
   // Only JSON fields need to be stringified for Prisma Json type
   return {

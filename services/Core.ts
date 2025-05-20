@@ -4,7 +4,7 @@ import cron from 'node-cron';
 import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
 import type { ChainConfig } from '../types/ChainConfig.type.js';
-import { CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
+import { loadChainConfigs } from '../utils/ConfigLoader.js';
 import {
   cleanQueuedDeposits,
   cleanFinalizedDeposits,
@@ -14,106 +14,84 @@ import { L2RedemptionService } from './L2RedemptionService.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
 
-// ---------------------------------------------------------------
-// Environment Variables and Configuration
-// ---------------------------------------------------------------
-const requireEnv = (envVar: string) => {
-  if (!process.env[envVar]) {
-    logErrorContext(
-      `Environment variable ${envVar} is not set.`,
-      new Error(`Environment variable ${envVar} is not set.`),
-    );
-    process.exit(1);
-  }
-  return process.env[envVar] as string;
-};
+// Multi-chain configuration and handler initialization
+export const chainHandlers: Map<string, any> = new Map();
+export let chainConfigs: ChainConfig[] = [];
+const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
 
-const chainConfig: ChainConfig = {
-  chainType: process.env.CHAIN_TYPE as CHAIN_TYPE,
-  network: process.env.NETWORK as NETWORK,
-  chainName: process.env.CHAIN_NAME || 'Default Chain',
-  l1Rpc: requireEnv('L1_RPC'),
-  l2Rpc: requireEnv('L2_RPC'),
-  l2WsRpc: requireEnv('L2_WS_RPC'),
-  l1ContractAddress: requireEnv('L1_BITCOIN_DEPOSITOR_ADDRESS'),
-  l1BitcoinRedeemerAddress: requireEnv('L1_BITCOIN_REDEEMER_ADDRESS'),
-  l2BitcoinRedeemerAddress: requireEnv('L2_BITCOIN_REDEEMER_ADDRESS'),
-  l2WormholeGatewayAddress: requireEnv('L2_WORMHOLE_GATEWAY_ADDRESS'),
-  l2WormholeChainId: parseInt(requireEnv('L2_WORMHOLE_CHAIN_ID')),
-  vaultAddress: requireEnv('TBTC_VAULT_ADDRESS'),
-  privateKey: requireEnv('PRIVATE_KEY'),
-  l2ContractAddress:
-    process.env.ENDPOINT_URL === 'true' ? requireEnv('L2_BITCOIN_DEPOSITOR_ADDRESS') : undefined,
-  useEndpoint: process.env.ENDPOINT_URL === 'true',
-  l2StartBlock: process.env.L2_START_BLOCK ? parseInt(process.env.L2_START_BLOCK) : undefined,
-  solanaSignerKeyBase: process.env.SOLANA_KEY_BASE,
-};
+export async function initializeChainHandlers() {
+  chainConfigs = await loadChainConfigs();
+  await Promise.all(
+    chainConfigs.map(async (config) => {
+      const handler = ChainHandlerFactory.createHandler(config);
+      chainHandlers.set(config.chainName, handler);
+      logger.info(`Initialized handler for chain: ${config.chainName}`);
+    })
+  );
+}
 
-// Create the appropriate chain handler
-export const chainHandler = ChainHandlerFactory.createHandler(chainConfig);
-
-// ---------------------------------------------------------------
-// Cron Jobs
-// ---------------------------------------------------------------
-
-let l2RedemptionServiceSingleton: L2RedemptionService | null = null;
-
-/**
- * @name startCronJobs
- * @description Starts the cron jobs for finalizing and initializing deposits.
- */
 export const startCronJobs = () => {
-  // CRONJOBS
-  logger.debug('Starting cron job setup...');
+  logger.debug('Starting multi-chain cron job setup...');
 
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
-    try {
-      await chainHandler.processWormholeBridging?.();
-      await chainHandler.processFinalizeDeposits();
-      await chainHandler.processInitializeDeposits();
-    } catch (error) {
-      logErrorContext('Error in deposit processing cron job:', error);
-    }
+    await Promise.all(
+      Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+        try {
+          await handler.processWormholeBridging?.();
+          await handler.processFinalizeDeposits();
+          await handler.processInitializeDeposits();
+        } catch (error) {
+          logErrorContext(`Error in deposit processing cron job for ${chainName}:`, error);
+        }
+      })
+    );
   });
 
   // Every 2 minutes - process redemptions
   cron.schedule('*/2 * * * *', async () => {
-    try {
-      if (!l2RedemptionServiceSingleton) {
-        l2RedemptionServiceSingleton = await L2RedemptionService.create(chainConfig);
-      }
-      await l2RedemptionServiceSingleton.processPendingRedemptions();
-      await l2RedemptionServiceSingleton.processVaaFetchedRedemptions();
-    } catch (error) {
-      logErrorContext('Error in redemption processing cron job:', error);
-    }
+    await Promise.all(
+      Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+        try {
+          let l2Service = l2RedemptionServices.get(chainName);
+          if (!l2Service) {
+            const config = chainConfigs.find(c => c.chainName === chainName)!;
+            l2Service = await L2RedemptionService.create(config);
+            l2RedemptionServices.set(chainName, l2Service);
+          }
+          await l2Service.processPendingRedemptions();
+          await l2Service.processVaaFetchedRedemptions();
+        } catch (error) {
+          logErrorContext(`Error in redemption processing cron job for ${chainName}:`, error);
+        }
+      })
+    );
   });
 
   // Every 60 minutes - check for past deposits
   cron.schedule('*/60 * * * *', async () => {
-    try {
-      if (chainHandler.supportsPastDepositCheck()) {
-        const latestBlock = await chainHandler.getLatestBlock();
-        if (latestBlock > 0) {
-          logger.debug(`Running checkForPastDeposits (Latest Block/Slot: ${latestBlock})`);
-          await chainHandler.checkForPastDeposits({
-            pastTimeInMinutes: 60,
-            latestBlock: latestBlock,
-          });
-        } else {
-          logger.warn(
-            `Skipping checkForPastDeposits - Invalid latestBlock received: ${latestBlock}`,
-          );
+    await Promise.all(
+      Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+        try {
+          if (handler.supportsPastDepositCheck()) {
+            const latestBlock = await handler.getLatestBlock();
+            if (latestBlock > 0) {
+              logger.debug(`Running checkForPastDeposits for ${chainName} (Latest Block/Slot: ${latestBlock})`);
+              await handler.checkForPastDeposits({
+                pastTimeInMinutes: 60,
+                latestBlock: latestBlock,
+              });
+            } else {
+              logger.warn(`Skipping checkForPastDeposits for ${chainName} - Invalid latestBlock received: ${latestBlock}`);
+            }
+          } else {
+            logger.debug(`Skipping checkForPastDeposits for ${chainName} - Handler does not support it (e.g., using endpoint).`);
+          }
+        } catch (error) {
+          logErrorContext(`Error in past deposits cron job for ${chainName}:`, error);
         }
-      } else {
-        logger.debug(
-          'Skipping checkForPastDeposits - Handler does not support it (e.g., using endpoint).',
-        );
-      }
-    } catch (error) {
-      logErrorContext('Error in past deposits cron job:', error);
-    }
+      })
+    );
   });
 
   // Every 10 minutes - cleanup
@@ -149,34 +127,38 @@ export const startCronJobs = () => {
     }
   });
 
-  logger.debug('Cron job setup complete.');
+  logger.debug('Multi-chain cron job setup complete.');
 };
 
-/**
- * @name initializeChain
- * @description Initialize the chain handler and set up event listeners
- */
-export const initializeChain = async () => {
-  try {
-    await chainHandler.initialize();
-    await chainHandler.setupListeners();
-    logger.debug(`Deposit chain handler for ${chainConfig.chainName} successfully initialized`);
-  } catch (error) {
-    logErrorContext('Failed to initialize deposit chain handler:', error);
-    return false;
-  }
-  return true;
+export const initializeAllChains = async () => {
+  await Promise.all(
+    Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+      try {
+        await handler.initialize();
+        await handler.setupListeners();
+        logger.debug(`Deposit chain handler for ${chainName} successfully initialized`);
+      } catch (error) {
+        logErrorContext(`Failed to initialize deposit chain handler for ${chainName}:`, error);
+      }
+    })
+  );
 };
 
-export const initializeL2RedemptionService = async () => {
-  try {
-    logger.info('Attempting to initialize L2RedemptionService...');
-    const l2RedemptionService = await L2RedemptionService.create(chainConfig);
-    l2RedemptionService.startListening();
-    logger.info('L2RedemptionService initialized and started successfully.');
-  } catch (error) {
-    logErrorContext('Failed to initialize or start L2RedemptionService:', error as Error);
-    return false;
-  }
-  return true;
+export const initializeAllL2RedemptionServices = async () => {
+  await Promise.all(
+    Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+      try {
+        const config = chainConfigs.find(c => c.chainName === chainName)!;
+        let l2Service = l2RedemptionServices.get(chainName);
+        if (!l2Service) {
+          l2Service = await L2RedemptionService.create(config);
+          l2RedemptionServices.set(chainName, l2Service);
+        }
+        l2Service.startListening();
+        logger.info(`L2RedemptionService for ${chainName} initialized and started successfully.`);
+      } catch (error) {
+        logErrorContext(`Failed to initialize or start L2RedemptionService for ${chainName}:`, error);
+      }
+    })
+  );
 };
