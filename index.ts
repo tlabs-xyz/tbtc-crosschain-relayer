@@ -2,7 +2,8 @@
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
 // Express Server
-import express, { Express, RequestHandler } from 'express';
+import express from 'express';
+import type { Express, RequestHandler } from 'express';
 
 // Security
 import cors from 'cors';

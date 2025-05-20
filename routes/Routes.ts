@@ -1,5 +1,5 @@
 import express from 'express';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 
 import Operations from '../controllers/Operations.controller.js';
 import Utils from '../controllers/Utils.controller.js';

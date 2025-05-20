@@ -1,5 +1,5 @@
-import { Deposit } from '../types/Deposit.type.js';
-import { DepositStore } from '../utils/DepositStore';
+import type { Deposit } from '../types/Deposit.type.js';
+import { DepositStore } from '../utils/DepositStore.js';
 import logger from '../utils/Logger.js';
 import { logDepositDeleted } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';

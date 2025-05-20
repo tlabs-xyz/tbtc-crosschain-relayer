@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { L1BitcoinRedeemerABI } from '../interfaces/L1BitcoinRedeemer.js';
-import { RedemptionRequestedEventData } from '../types/Redemption.type.js';
+import type { RedemptionRequestedEventData } from '../types/Redemption.type.js';
 
 const L1_TX_CONFIRMATION_TIMEOUT_MS = parseInt(
   process.env.L1_TX_CONFIRMATION_TIMEOUT_MS || '300000',

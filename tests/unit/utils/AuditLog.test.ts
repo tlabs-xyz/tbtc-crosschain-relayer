@@ -12,7 +12,7 @@ import {
   logApiRequest,
   logDepositError,
 } from '../../../utils/AuditLog';
-import { prisma } from '../../../utils/prisma';
+import { prisma } from '../../../utils/prisma.js';
 import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum.js';
 
 const testDeposit = {

@@ -1,4 +1,4 @@
-import { prisma } from '../utils/prisma';
+import { prisma } from '../utils/prisma.js';
 import * as fs from 'fs';
 import * as readline from 'readline';
 import path from 'path';

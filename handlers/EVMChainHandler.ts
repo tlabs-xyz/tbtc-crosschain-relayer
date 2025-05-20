@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
 import { NonceManager } from '@ethersproject/experimental';
 
-import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { ChainConfig } from '../types/ChainConfig.type.js';
-import { Deposit } from '../types/Deposit.type.js';
-import { FundingTransaction } from '../types/FundingTransaction.type.js';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import type { ChainConfig } from '../types/ChainConfig.type.js';
+import type { Deposit } from '../types/Deposit.type.js';
+import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import { DepositStore } from '../utils/DepositStore';
+import { DepositStore } from '../utils/DepositStore.js';
 import {
   createDeposit,
   getDepositId,

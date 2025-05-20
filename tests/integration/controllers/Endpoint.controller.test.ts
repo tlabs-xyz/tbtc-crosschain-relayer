@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { EndpointController } from '../../../controllers/Endpoint.controller';
 import { MockChainHandler } from '../../mocks/MockChainHandler';
 import { createTestDeposit } from '../../mocks/BlockchainMock';

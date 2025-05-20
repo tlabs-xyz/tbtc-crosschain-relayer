@@ -1,18 +1,18 @@
-import { Network, Wormhole, wormhole } from '@wormhole-foundation/sdk';
+import { type Network, Wormhole, wormhole } from '@wormhole-foundation/sdk';
 
 import solana from '@wormhole-foundation/sdk/solana';
 import sui from '@wormhole-foundation/sdk/sui';
 import evm from '@wormhole-foundation/sdk/evm';
 
 import { BigNumber, ethers } from 'ethers';
-import { TransactionReceipt } from '@ethersproject/providers';
+import type { TransactionReceipt } from '@ethersproject/providers';
 import { NonceManager } from '@ethersproject/experimental';
 
-import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { ChainConfig, NETWORK } from '../types/ChainConfig.type.js';
-import { Deposit } from '../types/Deposit.type.js';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { type ChainConfig, NETWORK } from '../types/ChainConfig.type.js';
+import type { Deposit } from '../types/Deposit.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import { DepositStore } from '../utils/DepositStore';
+import { DepositStore } from '../utils/DepositStore.js';
 import {
   updateToInitializedDeposit,
   updateToFinalizedDeposit,

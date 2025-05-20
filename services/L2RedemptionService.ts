@@ -1,17 +1,17 @@
 import { ethers } from 'ethers';
-import { ChainId } from '@wormhole-foundation/sdk';
+import type { ChainId } from '@wormhole-foundation/sdk';
 import { WormholeVaaService } from './WormholeVaaService.js';
 import { L1RedemptionHandler } from '../handlers/L1RedemptionHandler.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer.js';
-import {
+import type {
   Redemption,
-  RedemptionStatus,
   RedemptionRequestedEventData,
   BitcoinTxUtxo,
 } from '../types/Redemption.type.js';
+import { RedemptionStatus } from '../types/Redemption.type.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
-import { ChainConfig } from '../types/ChainConfig.type.js';
+import type { ChainConfig } from '../types/ChainConfig.type.js';
 
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;

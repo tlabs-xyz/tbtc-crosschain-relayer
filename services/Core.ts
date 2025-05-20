@@ -3,7 +3,8 @@ import cron from 'node-cron';
 
 import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
-import { ChainConfig, CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
+import type { ChainConfig } from '../types/ChainConfig.type.js';
+import { CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
 import {
   cleanQueuedDeposits,
   cleanFinalizedDeposits,

@@ -1,4 +1,4 @@
-import { Deposit } from '../types/Deposit.type.js';
+import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import logger, { logErrorContext } from './Logger.js';
 import { prisma } from '../utils/prisma.js';

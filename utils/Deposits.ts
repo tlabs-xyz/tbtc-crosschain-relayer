@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
-import { Deposit } from '../types/Deposit.type.js';
-import { FundingTransaction } from '../types/FundingTransaction.type.js';
+import { type Deposit } from '../types/Deposit.type.js';
+import { type FundingTransaction } from '../types/FundingTransaction.type.js';
 import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
-import { DepositStore } from './DepositStore';
+import { DepositStore } from './DepositStore.js';
 import logger from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import {
@@ -13,7 +13,7 @@ import {
   logDepositAwaitingWormholeVAA,
   logDepositBridged,
 } from './AuditLog.js';
-import { Reveal } from '../types/Reveal.type.js';
+import { type Reveal } from '../types/Reveal.type.js';
 
 /**
  * @name createDeposit

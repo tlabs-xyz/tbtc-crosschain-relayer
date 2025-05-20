@@ -1,12 +1,6 @@
 services:
   tbtc-relayer-dev:
-    env_file:
-      - .env
-    environment:
-      - API_ONLY_MODE=true
-      - VERBOSE_APP=true
     build:
       target: production
     command: node dist/index.js
-    ports: [] # Prevent port mapping in CI
     volumes: [] # Avoid volumes from the base docker-compose.yml

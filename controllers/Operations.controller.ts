@@ -1,8 +1,8 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import CustomResponse from '../helpers/CustomResponse.helper.js';
-import { DepositStore } from '../utils/DepositStore';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import { Deposit } from '../types/Deposit.type.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import { logErrorContext } from '../utils/Logger.js';
+import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 
 /**

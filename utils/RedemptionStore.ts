@@ -1,4 +1,4 @@
-import { Redemption, RedemptionStatus } from '../types/Redemption.type.js';
+import type { Redemption, RedemptionStatus } from '../types/Redemption.type.js';
 import logger from './Logger.js';
 import { ethers } from 'ethers';
 import { prisma } from '../utils/prisma.js';
