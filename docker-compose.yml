@@ -34,6 +34,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # Overriding the DATABASE_URL to use the postgres service
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     networks:
       - backend

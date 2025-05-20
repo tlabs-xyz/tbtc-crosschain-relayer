@@ -1,9 +1,7 @@
 import type { Request, Response } from 'express';
 import CustomResponse from '../helpers/CustomResponse.helper.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import fs from 'fs';
-import path from 'path';
-import { prisma } from '../utils/prisma.js'; // Import Prisma client
+import { logErrorContext } from '../utils/Logger.js';
+import { prisma } from '../utils/prisma.js';
 
 export default class Utils {
   /**
@@ -96,7 +94,7 @@ export default class Utils {
         // If chainName is not provided or not 'all', it implies an issue as the route expects it.
         // This case should ideally be handled by the router sending a 404 if chainName is missing/invalid.
         // However, adding a safeguard here.
-        // return response.ko('Chain name/ID is required.', 400);
+        return response.ko('Chain name/ID is required.');
         // If 'all' is not a valid chainName from chainHandlerRegistry, the router should catch it.
         // If we want /api/all/audit-logs to work, then we don't filter by chainId.
       }
