@@ -9,7 +9,7 @@
     "start": "yarn build && node --env-file .env dist/index.js",
     "start:dev": "yarn build && node dist/index.js",
     "dev": "tsx watch --env-file .env --trace-warnings index.ts",
-    "test": "jest",
+    "test": "jest --runInBand",
     "test:unit": "jest --testPathPattern=tests/unit",
     "test:integration": "jest --testPathPattern=tests/integration",
     "test:e2e": "jest --testPathPattern=tests/e2e --runInBand",
@@ -27,7 +27,8 @@
     "db:migrate": "npx prisma migrate deploy",
     "db:migrate:auditlog": "tsx scripts/migrate-auditlog-to-db.ts",
     "db:backup": "pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -F c -b -v -f backup.dump",
-    "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump"
+    "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump",
+    "db:reset": "npx prisma db push --force-reset --accept-data-loss"
   },
   "keywords": [],
   "author": "T-Labs",
@@ -35,7 +36,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",
     "@ethersproject/experimental": "^5.8.0",
-    "@prisma/client": "^6.8.2",
+    "@prisma/client": "6.8.2",
     "@solana/web3.js": "^1.98.0",
     "@wormhole-foundation/sdk": "^1.18.0",
     "compression": "^1.7.4",
