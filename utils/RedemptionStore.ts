@@ -20,13 +20,24 @@ function serializeRedemption(redemption: Redemption): any {
   return r;
 }
 
-function deserializeRedemption(obj: any): Redemption {
-  if (obj.event) {
-    if (obj.event.amount && typeof obj.event.amount === 'string') {
-      obj.event.amount = ethers.BigNumber.from(obj.event.amount);
+function deserializeRedemption(dataBlob: any): Omit<Redemption, 'id' | 'chainId' | 'status'> {
+  const partial: any = { ...dataBlob }; // Clone the data blob
+
+  if (partial.event) {
+    if (partial.event.amount && typeof partial.event.amount === 'string') {
+      partial.event.amount = ethers.BigNumber.from(partial.event.amount);
     }
+    // txOutputValue in mainUtxo is intended to be a string representing BigNumber,
+    // so no further deserialization needed here for it.
   }
-  return obj as Redemption;
+  
+  // Remove properties that are now top-level in Prisma model to avoid conflicts
+  // and ensure we use the authoritative top-level values.
+  delete partial.id;
+  delete partial.chainId;
+  delete partial.status;
+
+  return partial as Omit<Redemption, 'id' | 'chainId' | 'status'>;
 }
 
 export class RedemptionStore {
@@ -34,9 +45,9 @@ export class RedemptionStore {
     try {
       await prisma.redemption.create({
         data: {
-          ...serializeRedemption(redemption),
           id: redemption.id,
-          status: redemption.status,
+          chainId: redemption.chainId,
+          status: redemption.status.toString(),
           data: serializeRedemption(redemption),
         },
       });
@@ -56,8 +67,8 @@ export class RedemptionStore {
       await prisma.redemption.update({
         where: { id: redemption.id },
         data: {
-          ...serializeRedemption(redemption),
-          status: redemption.status,
+          chainId: redemption.chainId,
+          status: redemption.status.toString(),
           data: serializeRedemption(redemption),
         },
       });
@@ -71,7 +82,16 @@ export class RedemptionStore {
   static async getById(id: string): Promise<Redemption | null> {
     try {
       const record = await prisma.redemption.findUnique({ where: { id } });
-      return record ? deserializeRedemption(record.data) : null;
+      if (!record) return null;
+      
+      const deserializedBlobParts = deserializeRedemption(record.data);
+      
+      return {
+        id: record.id,
+        chainId: record.chainId,
+        status: record.status as unknown as RedemptionStatus, // Assuming status in DB matches enum values
+        ...deserializedBlobParts,
+      } as Redemption; // Cast to Redemption after combining all parts
     } catch (err) {
       logger.error(`Failed to read redemption ${id}: ${err}`);
       throw err;
@@ -81,19 +101,39 @@ export class RedemptionStore {
   static async getAll(): Promise<Redemption[]> {
       try {
       const records = await prisma.redemption.findMany();
-      return records.map((r: any) => deserializeRedemption(r.data));
+      return records.map((record: any) => {
+        const deserializedBlobParts = deserializeRedemption(record.data);
+        return {
+          id: record.id,
+          chainId: record.chainId,
+          status: record.status as unknown as RedemptionStatus,
+          ...deserializedBlobParts,
+        } as Redemption;
+      });
       } catch (err) {
       logger.error(`Failed to fetch all redemptions: ${err}`);
       return [];
     }
   }
 
-  static async getByStatus(status: RedemptionStatus): Promise<Redemption[]> {
+  static async getByStatus(status: RedemptionStatus, chainId?: string): Promise<Redemption[]> {
     try {
-      const records = await prisma.redemption.findMany({ where: { status } });
-      return records.map((r: any) => deserializeRedemption(r.data));
+      const whereClause: any = { status: status.toString() };
+      if (chainId) {
+        whereClause.chainId = chainId;
+      }
+      const records = await prisma.redemption.findMany({ where: whereClause });
+      return records.map((record: any) => {
+        const deserializedBlobParts = deserializeRedemption(record.data);
+        return {
+          id: record.id,
+          chainId: record.chainId,
+          status: record.status as unknown as RedemptionStatus,
+          ...deserializedBlobParts,
+        } as Redemption;
+      });
     } catch (err) {
-      logger.error(`Failed to fetch redemptions by status: ${err}`);
+      logger.error(`Failed to fetch redemptions by status${chainId ? ` for chain ${chainId}` : ''}: ${err}`);
       return [];
     }
   }

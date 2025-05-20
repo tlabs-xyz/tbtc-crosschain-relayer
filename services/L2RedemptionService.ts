@@ -21,8 +21,10 @@ export class L2RedemptionService {
 
   private l2WormholeChainId: number;
   private l2WormholeGatewayAddress: string; // Emitter address on L2 for VAA fetching
+  private chainConfig: ChainConfig; // Added to store the chainConfig
 
   private constructor(chainConfig: ChainConfig) {
+    this.chainConfig = chainConfig; // Store the chainConfig
     this.l2Provider = new ethers.providers.JsonRpcProvider(chainConfig.l2Rpc);
     this.l2BitcoinRedeemerContract = new ethers.Contract(
       chainConfig.l2BitcoinRedeemerAddress,
@@ -100,6 +102,7 @@ export class L2RedemptionService {
         const now = Date.now();
         const redemption: Redemption = {
           id: redemptionId,
+          chainId: this.chainConfig.chainName,
           event: eventData,
           vaaBytes: null,
           vaaStatus: RedemptionStatus.PENDING,
@@ -133,8 +136,8 @@ export class L2RedemptionService {
   }
 
   public async processPendingRedemptions(): Promise<void> {
-    const pending = await RedemptionStore.getByStatus(RedemptionStatus.PENDING);
-    const vaaFailed = await RedemptionStore.getByStatus(RedemptionStatus.VAA_FAILED);
+    const pending = await RedemptionStore.getByStatus(RedemptionStatus.PENDING, this.chainConfig.chainName);
+    const vaaFailed = await RedemptionStore.getByStatus(RedemptionStatus.VAA_FAILED, this.chainConfig.chainName);
     const toProcess = [...pending, ...vaaFailed];
     for (const redemption of toProcess) {
       try {
@@ -177,7 +180,7 @@ export class L2RedemptionService {
   }
 
   public async processVaaFetchedRedemptions(): Promise<void> {
-    const vaaFetched = await RedemptionStore.getByStatus(RedemptionStatus.VAA_FETCHED);
+    const vaaFetched = await RedemptionStore.getByStatus(RedemptionStatus.VAA_FETCHED, this.chainConfig.chainName);
     for (const redemption of vaaFetched) {
       try {
         if (!redemption.vaaBytes) {
