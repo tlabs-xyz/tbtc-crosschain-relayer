@@ -15,12 +15,6 @@ function serializeDeposit(deposit: Deposit): any {
   };
 }
 
-// Keeping this for consistency with other stores
-function deserializeDeposit(obj: any): Deposit {
-  // Prisma returns JSON fields as objects already
-  return obj as Deposit;
-}
-
 export class DepositStore {
   static async create(deposit: Deposit): Promise<void> {
     try {
@@ -71,12 +65,16 @@ export class DepositStore {
     }
   }
 
-  static async getByStatus(status: DepositStatus): Promise<Deposit[]> {
+  static async getByStatus(status: DepositStatus, chainId?: string): Promise<Deposit[]> {
     try {
-      const records = await prisma.deposit.findMany({ where: { status } });
+      const whereClause: any = { status };
+      if (chainId) {
+        whereClause.chainId = chainId;
+      }
+      const records = await prisma.deposit.findMany({ where: whereClause });
       return records;
     } catch (err) {
-      logErrorContext(`Failed to fetch deposits by status:`, err);
+      logErrorContext(`Failed to fetch deposits by status${chainId ? ` for chain ${chainId}` : ''}:`, err);
       return [];
     }
   }

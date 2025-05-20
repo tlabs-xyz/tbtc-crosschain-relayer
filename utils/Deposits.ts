@@ -26,6 +26,7 @@ import { type Reveal } from '../types/Reveal.type.js';
  * @param {any} reveal - An array containing reveal parameters related to the Bitcoin deposit.
  * @param {any} l2DepositOwner - The owner of the deposit on the L2 network.
  * @param {any} l2Sender - The sender address on the L2 network.
+ * @param {string} chainId - The chain ID of the deposit.
  *
  * @returns {Deposit} A structured deposit object containing detailed information for various uses in the system.
  */
@@ -35,12 +36,14 @@ export const createDeposit = (
   reveal: any,
   l2DepositOwner: any,
   l2Sender: any,
+  chainId: string,
 ): Deposit => {
   const revealArray = Array.isArray(reveal) ? reveal : (Object.values(reveal) as Reveal);
   const fundingTxHash = getFundingTxHash(fundingTx);
   const depositId = getDepositId(fundingTxHash, revealArray[0]);
   const deposit: Deposit = {
     id: depositId,
+    chainId: chainId,
     fundingTxHash: fundingTxHash,
     outputIndex: revealArray[0],
     hashes: {
@@ -139,7 +142,8 @@ export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error
     logStatusChange(deposit, newStatus, oldStatus);
   }
 
-  DepositStore.create(updatedDeposit);
+  // DepositStore.create(updatedDeposit);
+  await DepositStore.update(updatedDeposit);
 
   if (tx) {
     logger.info(`Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`);
@@ -190,7 +194,8 @@ export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, err
     logStatusChange(deposit, newStatus, oldStatus);
   }
 
-  DepositStore.create(updatedDeposit);
+  // DepositStore.create(updatedDeposit);
+  await DepositStore.update(updatedDeposit);
 
   if (tx) {
     logger.info(`Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`);
@@ -325,7 +330,7 @@ export const updateToBridgedDeposit = async (
  * The updated deposit object is then written to the JSON storage.
  * @param {Deposit} deposit - The deposit object to be updated.
  */
-export const updateLastActivity = (deposit: Deposit) => {
+export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => {
   const updatedDeposit: Deposit = {
     ...deposit,
     dates: {
@@ -334,7 +339,8 @@ export const updateLastActivity = (deposit: Deposit) => {
     },
   };
 
-  DepositStore.create(updatedDeposit);
+  // DepositStore.create(updatedDeposit);
+  await DepositStore.update(updatedDeposit);
   return updatedDeposit;
 };
 

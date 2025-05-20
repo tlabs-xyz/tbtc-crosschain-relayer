@@ -279,7 +279,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
       if (reason.includes('Deposit not finalized by the bridge')) {
         logger.warn(`FINALIZE | WAITING (Bridge Delay) | ID: ${deposit.id} | Reason: ${reason}`);
         // Don't mark as error, just update activity to allow retry after TIME_TO_RETRY
-        updateLastActivity(deposit);
+        await updateLastActivity(deposit);
       } else {
         // Handle other errors
         logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
@@ -316,12 +316,12 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
   // --- Batch Processing Logic ---
   async processInitializeDeposits(): Promise<void> {
-    const depositsToInitialize = await DepositStore.getByStatus(DepositStatus.QUEUED);
-    logger.debug(`PROCESS_INIT | Found ${depositsToInitialize.length} deposits in QUEUED state.`);
-    const filteredDeposits = this.filterDepositsActivityTime(depositsToInitialize);
-    logger.debug(
-      `PROCESS_INIT | ${filteredDeposits.length} deposits ready for initialization after time filter.`,
+    logger.debug(`PROCESS INITIALIZE | Running for chain ${this.config.chainName}`);
+    const depositsToInitialize = await DepositStore.getByStatus(
+      DepositStatus.QUEUED,
+      this.config.chainName,
     );
+    const filteredDeposits = this.filterDepositsActivityTime(depositsToInitialize);
 
     if (filteredDeposits.length === 0) {
       return;
@@ -332,7 +332,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     );
 
     for (const deposit of filteredDeposits) {
-      const updatedDeposit = updateLastActivity(deposit); // Update activity time *before* potential async operations
+      const updatedDeposit = await updateLastActivity(deposit); // Update activity time *before* potential async operations
 
       // Check L1 contract status *before* attempting initialization
       const contractStatus = await this.checkDepositStatus(updatedDeposit.id);
@@ -373,14 +373,12 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   }
 
   async processFinalizeDeposits(): Promise<void> {
-    const depositsToFinalize = await DepositStore.getByStatus(DepositStatus.INITIALIZED);
-    logger.debug(
-      `PROCESS_FINALIZE | Found ${depositsToFinalize.length} deposits in INITIALIZED state.`,
+    logger.debug(`PROCESS FINALIZE | Running for chain ${this.config.chainName}`);
+    const depositsToFinalize = await DepositStore.getByStatus(
+      DepositStatus.INITIALIZED,
+      this.config.chainName,
     );
     const filteredDeposits = this.filterDepositsActivityTime(depositsToFinalize);
-    logger.debug(
-      `PROCESS_FINALIZE | ${filteredDeposits.length} deposits ready for finalization after time filter.`,
-    );
 
     if (filteredDeposits.length === 0) {
       return;
@@ -391,7 +389,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     );
 
     for (const deposit of filteredDeposits) {
-      const updatedDeposit = updateLastActivity(deposit); // Update activity time
+      const updatedDeposit = await updateLastActivity(deposit); // Update activity time
 
       // Check L1 contract status *before* attempting finalization
       const contractStatus = await this.checkDepositStatus(updatedDeposit.id);

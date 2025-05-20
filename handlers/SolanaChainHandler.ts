@@ -267,8 +267,11 @@ export class SolanaChainHandler extends BaseChainHandler {
    * This function will attempt to bridge the deposits using the Wormhole protocol.
    */
   public async processWormholeBridging() {
+    if (this.config.chainType !== CHAIN_TYPE.SOLANA) return; // Only for Solana chains
+
     const bridgingDeposits = await DepositStore.getByStatus(
       DepositStatus.AWAITING_WORMHOLE_VAA,
+      this.config.chainName,
     );
     if (bridgingDeposits.length === 0) return;
 

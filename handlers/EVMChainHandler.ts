@@ -101,7 +101,7 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
             }
 
             logger.debug(`L2 Listener | Creating new deposit | ID: ${depositId}`);
-            const deposit: Deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
+            const deposit: Deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender, this.config.chainName);
             DepositStore.create(deposit);
 
             logger.debug(`L2 Listener | Triggering L1 initializeDeposit | ID: ${deposit.id}`);
@@ -207,6 +207,7 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
               reveal,
               l2DepositOwner,
               l2Sender,
+              this.config.chainName,
             );
             DepositStore.create(newDeposit);
 

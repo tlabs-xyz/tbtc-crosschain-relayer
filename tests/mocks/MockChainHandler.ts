@@ -5,6 +5,8 @@ import type { Deposit } from '../../types/Deposit.type.js';
 import logger from '../../utils/Logger.js';
 import { createTestDeposit } from './BlockchainMock.js';
 import { BigNumber, ethers } from 'ethers';
+import type { ChainConfig } from '../../types/ChainConfig.type.js';
+import { CHAIN_NAME, CHAIN_TYPE, NETWORK } from '../../types/ChainConfig.type.js';
 
 const mockReceipt = {
   to: '0x0000000000000000000000000000000000000000',
@@ -29,14 +31,38 @@ const mockReceipt = {
  * Mock chain handler for testing
  */
 export class MockChainHandler implements ChainHandlerInterface {
+  public config: ChainConfig;
   private initialized: boolean = false;
   private deposits: Map<string, Deposit> = new Map();
   private listeners: Map<string, ((...args: any[]) => void)[]> = new Map();
   private processingDelayMs: number = 100; // Simulate processing delay
 
-  constructor(config?: any) {
+  constructor(config?: Partial<ChainConfig>) {
     // Initialize with test deposits
     this.addTestDeposits();
+    // Default mock config
+    this.config = {
+      chainName: config?.chainName ?? 'MockChain',
+      chainType: config?.chainType ?? CHAIN_TYPE.EVM,
+      network: config?.network ?? NETWORK.TESTNET,
+      l1Rpc: config?.l1Rpc ?? 'http://localhost:8545',
+      l1ContractAddress: config?.l1ContractAddress ?? ethers.constants.AddressZero,
+      // Ensure all required fields from ChainConfig are present with defaults
+      l1BitcoinRedeemerAddress: config?.l1BitcoinRedeemerAddress ?? ethers.constants.AddressZero,
+      l2BitcoinRedeemerAddress: config?.l2BitcoinRedeemerAddress ?? ethers.constants.AddressZero,
+      l2WormholeGatewayAddress: config?.l2WormholeGatewayAddress ?? ethers.constants.AddressZero,
+      l2WormholeChainId: config?.l2WormholeChainId ?? 0, // Default to 0 or a common testnet Wormhole chain ID
+      vaultAddress: config?.vaultAddress ?? ethers.constants.AddressZero,
+      privateKey: config?.privateKey ?? ethers.Wallet.createRandom().privateKey,
+      l2Rpc: config?.l2Rpc ?? '', // l2Rpc is required in ChainConfig
+      useEndpoint: config?.useEndpoint ?? false,
+      // Optional fields from ChainConfig can be added if needed for specific tests
+      l2WsRpc: config?.l2WsRpc,
+      l2ContractAddress: config?.l2ContractAddress,
+      endpointUrl: config?.endpointUrl,
+      l2StartBlock: config?.l2StartBlock,
+      solanaSignerKeyBase: config?.solanaSignerKeyBase,
+    };
   }
 
   /**
