@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
 import type { ChainId } from '@wormhole-foundation/sdk';
 import { WormholeVaaService } from './WormholeVaaService.js';
-import { L1RedemptionHandler } from '../handlers/L1RedemptionHandler.js';
+import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
+import type { L1RedemptionHandler } from '../handlers/L1RedemptionHandler.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer.js';
 import type {
@@ -35,11 +36,8 @@ export class L2RedemptionService {
     this.l2WormholeChainId = chainConfig.l2WormholeChainId;
     this.l2WormholeGatewayAddress = chainConfig.l2WormholeGatewayAddress;
 
-    this.l1RedemptionHandler = new L1RedemptionHandler(
-      chainConfig.l1Rpc,
-      chainConfig.l1BitcoinRedeemerAddress,
-      chainConfig.privateKey,
-    );
+    // Get L1RedemptionHandler from the registry
+    this.l1RedemptionHandler = l1RedemptionHandlerRegistry.get(chainConfig);
 
     logger.info(
       `L2RedemptionService initialized for L2 contract ${chainConfig.l2BitcoinRedeemerAddress} on ${chainConfig.l2Rpc}. Listening for 'RedemptionRequested' event.`,
@@ -48,7 +46,7 @@ export class L2RedemptionService {
       `Wormhole VAA Service configured for L2 Wormhole Gateway: ${chainConfig.l2WormholeGatewayAddress} on chain ID: ${chainConfig.l2WormholeChainId}.`,
     );
     logger.info(
-      `L1 Redemption Handler configured for L1BitcoinRedeemer: ${chainConfig.l1BitcoinRedeemerAddress} on ${chainConfig.l1Rpc}.`,
+      `L1 Redemption Handler (via Registry) configured for L1BitcoinRedeemer: ${chainConfig.l1BitcoinRedeemerAddress} on ${chainConfig.l1Rpc}.`,
     );
   }
 
