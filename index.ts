@@ -17,7 +17,7 @@ import Routes from './routes/Routes.js';
 
 // Utils
 import logger from './utils/Logger.js';
-import { initializeChain, initializeL2RedemptionService } from './services/Core.js';
+import { initializeAllChains, initializeAllL2RedemptionServices } from './services/Core.js';
 import { logErrorContext } from './utils/Logger.js';
 
 // -------------------------------------------------------------------------
@@ -96,32 +96,19 @@ if (!API_ONLY_MODE) {
 (async () => {
   if (!API_ONLY_MODE) {
     try {
-      logger.info('Attempting to initialize chain handler...');
-      const success = await initializeChain();
-      if (!success) {
-        logErrorContext(
-          'Failed to initialize chain handler.',
-          new Error('initializeChain returned false'),
-        );
-        process.exit(1);
-      }
-      logger.info('Chain handler initialized successfully.');
+      logger.info('Attempting to initialize all chain handlers...');
+      await initializeAllChains();
+      logger.info('All chain handlers initialized successfully.');
 
-      logger.info('Attempting to initialize L2 redemption listener...');
-      const redemptionSuccess = await initializeL2RedemptionService();
-      if (!redemptionSuccess) {
-        logErrorContext(
-          'Failed to initialize L2 redemption listener.',
-          new Error('Failed to initialize L2 redemption listener.'),
-        );
-        process.exit(1);
-      }
+      logger.info('Attempting to initialize all L2 redemption listeners...');
+      await initializeAllL2RedemptionServices();
+      logger.info('All L2 redemption listeners initialized successfully.');
 
       const { startCronJobs } = await import('./services/Core.js');
       startCronJobs();
       logger.info('Cron jobs started.');
     } catch (error: any) {
-      logErrorContext('FATAL: Failed to initialize chain handler or dependent services:', error);
+      logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);
       process.exit(1);
     }
   } else {

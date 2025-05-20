@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
-import { ChainConfig, CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
+import type { ChainConfig } from '../types/ChainConfig.type.js';
+import { CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
 
 const REQUIRED_FIELDS: (keyof ChainConfig)[] = [
   'chainType',
@@ -90,6 +91,6 @@ export async function loadChainConfigs(): Promise<ChainConfig[]> {
   }
   // Accept either array or single object
   if (!Array.isArray(configs)) configs = [configs];
-  await Promise.all(configs.map(async (c) => validateChainConfig(c)));
+  await Promise.all(configs.map(async (c: any) => validateChainConfig(c)));
   return configs;
 } 
