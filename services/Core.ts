@@ -2,7 +2,7 @@ import { logErrorContext } from '../utils/Logger.js';
 import cron from 'node-cron';
 
 import logger from '../utils/Logger.js';
-import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
+import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
 import type { ChainConfig } from '../types/ChainConfig.type.js';
 import { loadChainConfigs } from '../utils/ConfigLoader.js';
 import {
@@ -13,21 +13,15 @@ import {
 import { L2RedemptionService } from './L2RedemptionService.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
+import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
 
-// Multi-chain configuration and handler initialization
-export const chainHandlers: Map<string, any> = new Map();
 export let chainConfigs: ChainConfig[] = [];
 const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
 
 export async function initializeChainHandlers() {
   chainConfigs = await loadChainConfigs();
-  await Promise.all(
-    chainConfigs.map(async (config) => {
-      const handler = ChainHandlerFactory.createHandler(config);
-      chainHandlers.set(config.chainName, handler);
-      logger.info(`Initialized handler for chain: ${config.chainName}`);
-    })
-  );
+  await chainHandlerRegistry.initialize(chainConfigs);
+  logger.info('ChainHandlerRegistry initialized for all chains.');
 }
 
 export const startCronJobs = () => {
@@ -36,7 +30,8 @@ export const startCronJobs = () => {
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
     await Promise.all(
-      Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler).config.chainName;
         try {
           await handler.processWormholeBridging?.();
           await handler.processFinalizeDeposits();
@@ -51,7 +46,8 @@ export const startCronJobs = () => {
   // Every 2 minutes - process redemptions
   cron.schedule('*/2 * * * *', async () => {
     await Promise.all(
-      Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler).config.chainName;
         try {
           let l2Service = l2RedemptionServices.get(chainName);
           if (!l2Service) {
@@ -71,7 +67,8 @@ export const startCronJobs = () => {
   // Every 60 minutes - check for past deposits
   cron.schedule('*/60 * * * *', async () => {
     await Promise.all(
-      Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler).config.chainName;
         try {
           if (handler.supportsPastDepositCheck()) {
             const latestBlock = await handler.getLatestBlock();
@@ -132,7 +129,8 @@ export const startCronJobs = () => {
 
 export const initializeAllChains = async () => {
   await Promise.all(
-    Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+    chainHandlerRegistry.list().map(async (handler) => {
+      const chainName = (handler as BaseChainHandler).config.chainName;
       try {
         await handler.initialize();
         await handler.setupListeners();
@@ -146,7 +144,8 @@ export const initializeAllChains = async () => {
 
 export const initializeAllL2RedemptionServices = async () => {
   await Promise.all(
-    Array.from(chainHandlers.entries()).map(async ([chainName, handler]) => {
+    chainHandlerRegistry.list().map(async (handler) => {
+      const chainName = (handler as BaseChainHandler).config.chainName;
       try {
         const config = chainConfigs.find(c => c.chainName === chainName)!;
         let l2Service = l2RedemptionServices.get(chainName);

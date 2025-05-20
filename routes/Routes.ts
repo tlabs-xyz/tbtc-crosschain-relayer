@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import Operations from '../controllers/Operations.controller.js';
 import Utils from '../controllers/Utils.controller.js';
 import { EndpointController } from '../controllers/Endpoint.controller.js';
-import { chainHandlers } from '../services/Core.js';
+import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
 
 export const router = express.Router();
 
@@ -32,7 +32,7 @@ if (process.env.USE_ENDPOINT === 'true') {
   // Endpoint for receiving reveal data
   router.post('/api/:chainName/reveal', (req: Request, res: Response) => {
     const { chainName } = req.params;
-    const handler = chainHandlers.get(chainName);
+    const handler = chainHandlerRegistry.get(chainName);
     if (!handler) {
       return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
     }
@@ -43,7 +43,7 @@ if (process.env.USE_ENDPOINT === 'true') {
   // Endpoint for checking deposit status
   router.get('/api/:chainName/deposit/:depositId', (req: Request, res: Response) => {
     const { chainName } = req.params;
-    const handler = chainHandlers.get(chainName);
+    const handler = chainHandlerRegistry.get(chainName);
     if (!handler) {
       return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
     }

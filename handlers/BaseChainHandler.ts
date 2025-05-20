@@ -32,7 +32,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected tbtcVault: ethers.Contract; // For sending L1 txs (though not used currently)
   protected l1BitcoinDepositorProvider: ethers.Contract; // For L1 reads/events
   protected tbtcVaultProvider: ethers.Contract; // For L1 events
-  protected config: ChainConfig;
+  public config: ChainConfig;
   protected wormhole: Wormhole<Network>;
 
   protected readonly TIME_TO_RETRY = 1000 * 60 * 5; // 5 minutes
