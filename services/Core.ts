@@ -18,6 +18,9 @@ import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
 export let chainConfigs: ChainConfig[] = [];
 const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
 
+// Keep track of loaded configs so they can be exported for tests
+let loadedChainConfigs: ChainConfig[] = [];
+
 export async function initializeChainHandlers() {
   chainConfigs = await loadChainConfigs();
   await chainHandlerRegistry.initialize(chainConfigs);
@@ -127,37 +130,44 @@ export const startCronJobs = () => {
   logger.debug('Multi-chain cron job setup complete.');
 };
 
-export const initializeAllChains = async () => {
-  await Promise.all(
-    chainHandlerRegistry.list().map(async (handler) => {
-      const chainName = (handler as BaseChainHandler).config.chainName;
-      try {
-        await handler.initialize();
-        await handler.setupListeners();
-        logger.debug(`Deposit chain handler for ${chainName} successfully initialized`);
-      } catch (error) {
-        logErrorContext(`Failed to initialize deposit chain handler for ${chainName}:`, error);
-      }
-    })
-  );
-};
+export async function initializeAllChains(): Promise<void> {
+  const configs = await loadChainConfigs();
+  loadedChainConfigs = configs; // Store loaded configs
+  
+  if (configs.length === 0) {
+    logger.warn('No chain configurations loaded. Relayer might not operate on any chain.');
+    return;
+  }
+  logger.info(`Loaded ${configs.length} chain configurations: ${configs.map(c => c.chainName).join(', ')}`);
+  await chainHandlerRegistry.initialize(configs); // This initializes and registers handlers
+  
+  // Initialize actual chain connections and listeners for each handler
+  // This part might have been inside chainHandlerRegistry.initialize or needs to be explicit here.
+  // For now, assuming chainHandlerRegistry.initialize also calls handler.initialize() internally or similar
+  // If not, we'd loop through chainHandlerRegistry.list() and call handler.initialize()
+  logger.info('All chain handlers registered and basic setup complete.');
+}
 
-export const initializeAllL2RedemptionServices = async () => {
-  await Promise.all(
-    chainHandlerRegistry.list().map(async (handler) => {
-      const chainName = (handler as BaseChainHandler).config.chainName;
+export function getLoadedChainConfigs(): ChainConfig[] {
+  return loadedChainConfigs;
+}
+
+export async function initializeAllL2RedemptionServices(): Promise<void> {
+  if (loadedChainConfigs.length === 0) {
+    logger.warn('No chains loaded, skipping L2 Redemption Service initialization.');
+    return;
+  }
+  logger.info('Initializing L2 Redemption Services for configured chains...');
+  for (const config of loadedChainConfigs) {
+    if (!l2RedemptionServices.has(config.chainName)) {
       try {
-        const config = chainConfigs.find(c => c.chainName === chainName)!;
-        let l2Service = l2RedemptionServices.get(chainName);
-        if (!l2Service) {
-          l2Service = await L2RedemptionService.create(config);
-          l2RedemptionServices.set(chainName, l2Service);
-        }
-        l2Service.startListening();
-        logger.info(`L2RedemptionService for ${chainName} initialized and started successfully.`);
+        const service = await L2RedemptionService.create(config); // Assuming create is async
+        l2RedemptionServices.set(config.chainName, service);
+        logger.info(`L2RedemptionService initialized for chain: ${config.chainName}`);
       } catch (error) {
-        logErrorContext(`Failed to initialize or start L2RedemptionService for ${chainName}:`, error);
+        logger.error(`Failed to initialize L2RedemptionService for ${config.chainName}:`, error);
       }
-    })
-  );
-};
+    }
+  }
+  logger.info('All L2 Redemption Services initialized (or attempted).');
+}

@@ -17,8 +17,9 @@ import Routes from './routes/Routes.js';
 
 // Utils
 import logger from './utils/Logger.js';
-import { initializeAllChains, initializeAllL2RedemptionServices } from './services/Core.js';
+import { initializeAllChains, initializeAllL2RedemptionServices, getLoadedChainConfigs } from './services/Core.js';
 import { logErrorContext } from './utils/Logger.js';
+import type { ChainConfig } from './types/ChainConfig.type.js';
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
@@ -77,28 +78,22 @@ app.use(Routes);
 logger.info('Application starting...');
 
 if (API_ONLY_MODE) {
-  logger.warn('Application starting in API_ONLY_MODE. Services will not be initialized.');
-}
-
-// Initialize Audit Log System
-if (!API_ONLY_MODE) {
-  try {
-    logger.info('Audit log initialized.');
-  } catch (error: any) {
-    logErrorContext('Failed to initialize audit log:', error);
-    process.exit(1);
-  }
+  logger.warn('Application starting in API_ONLY_MODE. Background services will not be initialized.');
 } else {
-  logger.info('Skipping Audit Log initialization due to API_ONLY_MODE.');
+  logger.info('Audit log system would be initialized here (if implemented as a separate module).');
 }
 
-// Initialize chain handler
-(async () => {
+// Export app for testing BEFORE listen, and chainConfigs after initialization
+// Note: chainConfigs will be populated after the async block
+let chainConfigs: ChainConfig[] = [];
+
+const main = async () => {
   if (!API_ONLY_MODE) {
     try {
       logger.info('Attempting to initialize all chain handlers...');
       await initializeAllChains();
-      logger.info('All chain handlers initialized successfully.');
+      chainConfigs = getLoadedChainConfigs();
+      logger.info(`All chain handlers initialized successfully for: ${chainConfigs.map(c => c.chainName).join(', ')}`);
 
       logger.info('Attempting to initialize all L2 redemption listeners...');
       await initializeAllL2RedemptionServices();
@@ -109,14 +104,31 @@ if (!API_ONLY_MODE) {
       logger.info('Cron jobs started.');
     } catch (error: any) {
       logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);
-      process.exit(1);
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(1);
+      }
+      throw new Error(`Initialization failed in test mode: ${error.message}`);
     }
   } else {
     logger.info('Skipping Chain Handler and Cron Jobs initialization due to API_ONLY_MODE.');
+    if (process.env.NODE_ENV === 'test') {
+        const { loadChainConfigs } = await import('./utils/ConfigLoader.js');
+        try {
+            chainConfigs = await loadChainConfigs();
+            logger.info(`Test mode in API_ONLY: Loaded chain configs for: ${chainConfigs.map(c=>c.chainName).join(', ')}`);
+        } catch (e) {
+            logErrorContext('Test mode in API_ONLY: Failed to load chainConfigs:', e);
+        }
+    }
   }
 
-  app.listen({ port: PORT, host: '0.0.0.0' });
+  if (process.env.NODE_ENV !== 'test' || process.env.RUN_SERVER_IN_TEST === 'true') {
+    app.listen({ port: PORT, host: '0.0.0.0' }, () => {
+      logger.info(`Server listening on port ${PORT}`);
+    });
+  }
+};
 
-  // Log successful initialization
-  logger.info(`Server listening on port ${PORT}`);
-})();
+const initializationPromise = main();
+
+export { app, chainConfigs, initializationPromise };

@@ -29,7 +29,7 @@ export enum CHAIN_NAME {
 /**
  * Interface for chain configuration
  */
-export interface ChainConfig {
+export type ChainConfig = {
   /** Type of blockchain */
   chainType: CHAIN_TYPE;
 
@@ -64,13 +64,13 @@ export interface ChainConfig {
   l2WormholeChainId: number;
 
   /** Address of the TBTCVault contract */
-  vaultAddress: string;
+  vaultAddress?: string;
 
   /** Private key for signing transactions */
   privateKey: string;
 
   /** Whether to use an HTTP endpoint instead of an L2 contract */
-  useEndpoint: boolean;
+  useEndpoint?: boolean;
 
   /** Address of the L2BitcoinDepositor contract */
   l2ContractAddress?: string;
@@ -81,5 +81,9 @@ export interface ChainConfig {
   /** Starting block number for scanning L2 events */
   l2StartBlock?: number;
 
-  solanaSignerKeyBase?: string; // Base64 encoded secret key for Solana
-}
+  solanaPrivateKey?: string;
+
+  solanaCommitment?: 'processed' | 'confirmed' | 'finalized';
+
+  solanaSignerKeyBase?: string;
+};

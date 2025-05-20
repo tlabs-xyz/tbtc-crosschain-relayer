@@ -19,7 +19,10 @@ export class ChainHandlerFactory {
    * @returns An instance of a chain handler
    */
   static createHandler(config: ChainConfig): ChainHandlerInterface {
-    logger.info(`Attempting to create chain handler for type: ${config.chainType}`);
+    logger.info(`Attempting to create chain handler for type: ${config.chainType}, name: ${config.chainName}`);
+
+    // Test mode will be handled by the config pointing to mock services.
+    // No direct MockChainHandler instantiation here to keep factory clean.
 
     switch (config.chainType) {
       case CHAIN_TYPE.EVM:
