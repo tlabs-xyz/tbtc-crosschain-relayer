@@ -94,38 +94,43 @@ export const startCronJobs = () => {
     );
   });
 
-  // Every 10 minutes - cleanup
-  cron.schedule('*/10 * * * *', async () => {
-    try {
-      await cleanQueuedDeposits();
-      await cleanFinalizedDeposits();
-      await cleanBridgedDeposits();
-    } catch (error) {
-      logErrorContext('Error in cleanup cron job:', error);
-    }
-  });
-
-  // Every 60 minutes - cleanup old redemptions
-  cron.schedule('*/60 * * * *', async () => {
-    try {
-      const now = Date.now();
-      const retentionMs = 7 * 24 * 60 * 60 * 1000; // 7 days
-      const allRedemptions = await RedemptionStore.getAll();
-      for (const redemption of allRedemptions) {
-        if (
-          (redemption.status === RedemptionStatus.COMPLETED ||
-            redemption.status === RedemptionStatus.FAILED) &&
-          redemption.dates.completedAt &&
-          now - redemption.dates.completedAt > retentionMs
-        ) {
-          await RedemptionStore.delete(redemption.id);
-          logger.info(`Cleaned up redemption ${redemption.id} (status: ${redemption.status})`);
-        }
+  if (process.env.ENABLE_CLEANUP_CRON === 'true') {
+    // Every 10 minutes - cleanup deposits
+    cron.schedule('*/10 * * * *', async () => {
+      try {
+        await cleanQueuedDeposits();
+        await cleanFinalizedDeposits();
+        await cleanBridgedDeposits();
+      } catch (error) {
+        logErrorContext('Error in cleanup cron job:', error);
       }
-    } catch (error) {
-      logErrorContext('Error in redemption cleanup cron job:', error);
-    }
-  });
+    });
+
+    // Every 60 minutes - cleanup old redemptions
+    cron.schedule('*/60 * * * *', async () => {
+      try {
+        const now = Date.now();
+        const retentionMs = 7 * 24 * 60 * 60 * 1000; // 7 days
+        const allRedemptions = await RedemptionStore.getAll();
+        for (const redemption of allRedemptions) {
+          if (
+            (redemption.status === RedemptionStatus.COMPLETED ||
+              redemption.status === RedemptionStatus.FAILED) &&
+            redemption.dates.completedAt &&
+            now - redemption.dates.completedAt > retentionMs
+          ) {
+            await RedemptionStore.delete(redemption.id);
+            logger.info(`Cleaned up redemption ${redemption.id} (status: ${redemption.status})`);
+          }
+        }
+      } catch (error) {
+        logErrorContext('Error in redemption cleanup cron job:', error);
+      }
+    });
+    logger.info('Cleanup cron jobs ENABLED.');
+  } else {
+    logger.info('Cleanup cron jobs DISABLED by environment variable ENABLE_CLEANUP_CRON.');
+  }
 
   logger.debug('Multi-chain cron job setup complete.');
 };
@@ -140,11 +145,6 @@ export async function initializeAllChains(): Promise<void> {
   }
   logger.info(`Loaded ${configs.length} chain configurations: ${configs.map(c => c.chainName).join(', ')}`);
   await chainHandlerRegistry.initialize(configs); // This initializes and registers handlers
-  
-  // Initialize actual chain connections and listeners for each handler
-  // This part might have been inside chainHandlerRegistry.initialize or needs to be explicit here.
-  // For now, assuming chainHandlerRegistry.initialize also calls handler.initialize() internally or similar
-  // If not, we'd loop through chainHandlerRegistry.list() and call handler.initialize()
   logger.info('All chain handlers registered and basic setup complete.');
 }
 
