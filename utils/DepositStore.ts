@@ -15,6 +15,7 @@ function serializeDeposit(deposit: Deposit): any {
   };
 }
 
+// Keeping this for consistency with other stores
 function deserializeDeposit(obj: any): Deposit {
   // Prisma returns JSON fields as objects already
   return obj as Deposit;
@@ -53,7 +54,7 @@ export class DepositStore {
   static async getById(id: string): Promise<Deposit | null> {
     try {
       const record = await prisma.deposit.findUnique({ where: { id } });
-      return record ? deserializeDeposit(record) : null;
+      return record;
     } catch (err) {
       logErrorContext(`Failed to read deposit ${id}:`, err);
       throw err;
@@ -63,7 +64,7 @@ export class DepositStore {
   static async getAll(): Promise<Deposit[]> {
     try {
       const records = await prisma.deposit.findMany();
-      return records.map((r: any) => deserializeDeposit(r));
+      return records;
     } catch (err) {
       logErrorContext(`Failed to fetch all deposits:`, err);
       return [];
@@ -73,7 +74,7 @@ export class DepositStore {
   static async getByStatus(status: DepositStatus): Promise<Deposit[]> {
     try {
       const records = await prisma.deposit.findMany({ where: { status } });
-      return records.map((r: any) => deserializeDeposit(r));
+      return records;
     } catch (err) {
       logErrorContext(`Failed to fetch deposits by status:`, err);
       return [];

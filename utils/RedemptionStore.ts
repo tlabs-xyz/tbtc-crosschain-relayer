@@ -25,7 +25,6 @@ function deserializeRedemption(obj: any): Redemption {
     if (obj.event.amount && typeof obj.event.amount === 'string') {
       obj.event.amount = ethers.BigNumber.from(obj.event.amount);
     }
-    // txOutputValue is kept as string for now, do not reassign
   }
   return obj as Redemption;
 }

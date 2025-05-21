@@ -40,7 +40,7 @@ const testDeposit = {
   error: null,
 };
 
-describe('AuditLog (DB-backed)', () => {
+describe('AuditLog', () => {
   beforeEach(async () => {
     await prisma.auditLog.deleteMany();
   });
