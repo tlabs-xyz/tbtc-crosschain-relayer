@@ -12,6 +12,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+# TODO: Consider renaming chainId to chainName
+
 model Deposit {
   id        String   @id
   chainId   String

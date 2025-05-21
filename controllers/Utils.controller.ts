@@ -85,18 +85,12 @@ export default class Utils {
 
       const whereClause: any = {};
 
-      // Add chainId filter based on chainName. Assuming chainName is the chainId for AuditLog.
       // If chainName can be 'all', you might want to omit the chainId filter.
       // For now, assuming chainName maps directly to a specific chainId or is required.
       if (chainName && chainName.toLowerCase() !== 'all') {
         whereClause.chainId = chainName;
       } else if (!chainName || chainName.toLowerCase() !== 'all') {
-        // If chainName is not provided or not 'all', it implies an issue as the route expects it.
-        // This case should ideally be handled by the router sending a 404 if chainName is missing/invalid.
-        // However, adding a safeguard here.
-        return response.ko('Chain name/ID is required.');
-        // If 'all' is not a valid chainName from chainHandlerRegistry, the router should catch it.
-        // If we want /api/all/audit-logs to work, then we don't filter by chainId.
+        return response.ko('Chain ID is required.');
       }
 
       if (depositId) {

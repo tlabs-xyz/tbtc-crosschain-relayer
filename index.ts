@@ -130,7 +130,7 @@ const main = async () => {
     }
   }
 
-  if (process.env.NODE_ENV !== 'test' || process.env.RUN_SERVER_IN_TEST === 'true') {
+  if (process.env.NODE_ENV !== 'test') {
     app.listen({ port: PORT, host: '0.0.0.0' }, () => {
       logger.info(`Server listening on port ${PORT}`);
     });
