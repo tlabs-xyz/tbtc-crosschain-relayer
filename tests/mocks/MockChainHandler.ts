@@ -5,8 +5,8 @@ import type { Deposit } from '../../types/Deposit.type.js';
 import logger from '../../utils/Logger.js';
 import { createTestDeposit } from './BlockchainMock.js';
 import { BigNumber, ethers } from 'ethers';
-import type { ChainConfig } from '../../types/ChainConfig.type.js';
-import { CHAIN_NAME, CHAIN_TYPE, NETWORK } from '../../types/ChainConfig.type.js';
+import type { AnyChainConfig } from '../../config/index.js';
+import { CHAIN_TYPE, NETWORK } from '../../config/schemas/chain.common.schema.js';
 
 const mockReceipt = {
   to: '0x0000000000000000000000000000000000000000',
@@ -31,38 +31,39 @@ const mockReceipt = {
  * Mock chain handler for testing
  */
 export class MockChainHandler implements ChainHandlerInterface {
-  public config: ChainConfig;
+  public config: AnyChainConfig;
   private initialized: boolean = false;
   private deposits: Map<string, Deposit> = new Map();
   private listeners: Map<string, ((...args: any[]) => void)[]> = new Map();
   private processingDelayMs: number = 100; // Simulate processing delay
 
-  constructor(config?: Partial<ChainConfig>) {
+  constructor(config?: Partial<AnyChainConfig>) {
     // Initialize with test deposits
     this.addTestDeposits();
     // Default mock config
+    // Ensure this default config satisfies the AnyChainConfig type requirements.
+    // This might require casting or providing defaults for all discriminated union members.
+    // For simplicity, we'll assume a base EVM-like structure for the mock.
     this.config = {
       chainName: config?.chainName ?? 'MockChain',
       chainType: config?.chainType ?? CHAIN_TYPE.EVM,
       network: config?.network ?? NETWORK.TESTNET,
       l1Rpc: config?.l1Rpc ?? 'http://localhost:8545',
       l1ContractAddress: config?.l1ContractAddress ?? ethers.constants.AddressZero,
-      // Ensure all required fields from ChainConfig are present with defaults
       l1BitcoinRedeemerAddress: config?.l1BitcoinRedeemerAddress ?? ethers.constants.AddressZero,
       l2BitcoinRedeemerAddress: config?.l2BitcoinRedeemerAddress ?? ethers.constants.AddressZero,
       l2WormholeGatewayAddress: config?.l2WormholeGatewayAddress ?? ethers.constants.AddressZero,
-      l2WormholeChainId: config?.l2WormholeChainId ?? 0, // Default to 0 or a common testnet Wormhole chain ID
+      l2WormholeChainId: config?.l2WormholeChainId ?? 0,
       vaultAddress: config?.vaultAddress ?? ethers.constants.AddressZero,
       privateKey: config?.privateKey ?? ethers.Wallet.createRandom().privateKey,
-      l2Rpc: config?.l2Rpc ?? '', // l2Rpc is required in ChainConfig
+      l2Rpc: config?.l2Rpc ?? 'http://localhost:8546', // Default for EVM L2
       useEndpoint: config?.useEndpoint ?? false,
-      // Optional fields from ChainConfig can be added if needed for specific tests
-      l2WsRpc: config?.l2WsRpc,
-      l2ContractAddress: config?.l2ContractAddress,
-      endpointUrl: config?.endpointUrl,
-      l2StartBlock: config?.l2StartBlock,
-      solanaSignerKeyBase: config?.solanaSignerKeyBase,
-    };
+      l2ContractAddress: config?.l2ContractAddress ?? ethers.constants.AddressZero,
+      // Add Solana specific fields with defaults if chainType could be SOLANA
+      // solanaPrivateKey: (config as any)?.solanaPrivateKey ?? '',
+      // solanaCommitment: (config as any)?.solanaCommitment ?? 'confirmed',
+      ...(config ?? {}),
+    } as AnyChainConfig; // Type assertion might be needed if defaults don't fully satisfy
   }
 
   /**
@@ -202,9 +203,10 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Finalize a deposit
    */
   async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    logger.info(`MockChainHandler: Finalizing deposit ${deposit.id}`);
-    // Simulate processing
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    logger.info(`Mock chain handler: Finalizing deposit ${deposit.id}`);
+
+    // Simulate processing delay
+    await new Promise((resolve) => setTimeout(resolve, this.processingDelayMs));
     logger.info(`MockChainHandler: Deposit ${deposit.id} finalized.`);
 
     // Update deposit status
@@ -225,12 +227,10 @@ export class MockChainHandler implements ChainHandlerInterface {
           lastActivityAt: Date.now(),
         },
       } as Deposit;
-
       this.deposits.set(deposit.id, updatedDeposit);
 
       // Emit finalized event if listeners are set up
       this.emitEvent('DepositFinalized', deposit.id);
-
       return mockReceipt;
     }
   }
@@ -240,18 +240,12 @@ export class MockChainHandler implements ChainHandlerInterface {
    */
   async processInitializeDeposits(): Promise<void> {
     logger.info('MockChainHandler: Processing initialize deposits...');
-    // Simulate processing
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    logger.info('MockChainHandler: Initialize deposits processed.');
-
-    // Find queued deposits and initialize them
-    for (const [id, deposit] of this.deposits.entries()) {
+    for (const deposit of this.deposits.values()) {
       if (deposit.status === DepositStatus.QUEUED) {
         await this.initializeDeposit(deposit);
       }
     }
-
-    return Promise.resolve();
+    logger.info('MockChainHandler: Initialize deposits processing complete.');
   }
 
   /**
@@ -259,18 +253,12 @@ export class MockChainHandler implements ChainHandlerInterface {
    */
   async processFinalizeDeposits(): Promise<void> {
     logger.info('MockChainHandler: Processing finalize deposits...');
-    // Simulate processing
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    logger.info('MockChainHandler: Finalize deposits processed.');
-
-    // Find initialized deposits and finalize them
-    for (const [id, deposit] of this.deposits.entries()) {
+    for (const deposit of this.deposits.values()) {
       if (deposit.status === DepositStatus.INITIALIZED) {
         await this.finalizeDeposit(deposit);
       }
     }
-
-    return Promise.resolve();
+    logger.info('MockChainHandler: Finalize deposits processing complete.');
   }
 
   /**
@@ -279,17 +267,14 @@ export class MockChainHandler implements ChainHandlerInterface {
   async checkDepositStatus(depositId: string): Promise<DepositStatus | null> {
     logger.info(`MockChainHandler: Checking status for deposit ${depositId}`);
     const deposit = this.deposits.get(depositId);
-    if (deposit) {
-      return deposit.status;
-    }
-    logger.warn(`MockChainHandler: Deposit ID ${depositId} not found during checkDepositStatus.`);
-    return null;
+    return deposit ? deposit.status : null;
   }
 
   /**
    * Add a new test deposit
    */
   addDeposit(deposit: Deposit): void {
+    logger.info(`MockChainHandler: Adding deposit ${deposit.id}`);
     this.deposits.set(deposit.id, deposit);
   }
 
@@ -297,6 +282,7 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Get a deposit by ID
    */
   getDeposit(depositId: string): Deposit | undefined {
+    logger.info(`MockChainHandler: Getting deposit ${depositId}`);
     return this.deposits.get(depositId);
   }
 
@@ -304,6 +290,7 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Get all deposits
    */
   getAllDeposits(): Deposit[] {
+    logger.info('MockChainHandler: Getting all deposits');
     return Array.from(this.deposits.values());
   }
 
@@ -311,26 +298,24 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Register event listener
    */
   on(event: string, listener: (...args: any[]) => void): void {
+    logger.info(`MockChainHandler: Registering listener for event ${event}`);
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
-
-    this.listeners.get(event)!.push(listener);
+    this.listeners.get(event)?.push(listener);
   }
 
   /**
    * Remove event listener
    */
   off(event: string, listener: (...args: any[]) => void): void {
-    if (!this.listeners.has(event)) {
-      return;
-    }
-
-    const listeners = this.listeners.get(event)!;
-    const index = listeners.indexOf(listener);
-
-    if (index !== -1) {
-      listeners.splice(index, 1);
+    logger.info(`MockChainHandler: Unregistering listener for event ${event}`);
+    const eventListeners = this.listeners.get(event);
+    if (eventListeners) {
+      const index = eventListeners.indexOf(listener);
+      if (index > -1) {
+        eventListeners.splice(index, 1);
+      }
     }
   }
 
@@ -338,14 +323,16 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Emit event
    */
   private emitEvent(event: string, ...args: any[]): void {
-    if (!this.listeners.has(event)) {
-      return;
-    }
-
-    const listeners = this.listeners.get(event)!;
-
-    for (const listener of listeners) {
-      listener(...args);
+    logger.info(`MockChainHandler: Emitting event ${event} with args:`, args);
+    const eventListeners = this.listeners.get(event);
+    if (eventListeners) {
+      eventListeners.forEach((listener) => {
+        try {
+          listener(...args);
+        } catch (error) {
+          logger.error(`Error in listener for event ${event}:`, error);
+        }
+      });
     }
   }
 
@@ -353,6 +340,7 @@ export class MockChainHandler implements ChainHandlerInterface {
    * Set processing delay
    */
   setProcessingDelay(delayMs: number): void {
+    logger.info(`MockChainHandler: Setting processing delay to ${delayMs}ms`);
     this.processingDelayMs = delayMs;
   }
 

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import CustomResponse from '../helpers/CustomResponse.helper.js';
 import { logErrorContext } from '../utils/Logger.js';
 import { prisma } from '../utils/prisma.js';
+import { appConfig } from '../config/index.js';
 
 export default class Utils {
   /**
@@ -12,14 +13,8 @@ export default class Utils {
    */
   defaultController = (req: Request, res: Response): void => {
     const response = new CustomResponse(res);
-
-    // Get API version
-    const version = process.env.APP_VERSION || '1.0.0';
-
-    // Get API name
-    const name = process.env.APP_NAME || 'Unknown API';
-
-    // Send response
+    const version = appConfig.APP_VERSION;
+    const name = appConfig.APP_NAME;
     return response.ok('API Information: ', {
       name,
       version,
@@ -128,9 +123,8 @@ export default class Utils {
           eventType,
           startDate: startDateISO,
           endDate: endDateISO,
-        }
+        },
       });
-
     } catch (error: any) {
       logErrorContext('Error retrieving audit logs:', error);
       return response.custom(500, 'Error retrieving audit logs: ' + error.message, error);

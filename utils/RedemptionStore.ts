@@ -30,7 +30,7 @@ function deserializeRedemption(dataBlob: any): Omit<Redemption, 'id' | 'chainId'
     // txOutputValue in mainUtxo is intended to be a string representing BigNumber,
     // so no further deserialization needed here for it.
   }
-  
+
   // Remove properties that are now top-level in Prisma model to avoid conflicts
   // and ensure we use the authoritative top-level values.
   delete partial.id;
@@ -51,15 +51,15 @@ export class RedemptionStore {
           data: serializeRedemption(redemption),
         },
       });
-        logger.info(`Redemption created: ${redemption.id}`);
-      } catch (err: any) {
+      logger.info(`Redemption created: ${redemption.id}`);
+    } catch (err: any) {
       if (err.code === 'P2002') {
-          logger.warn(`Redemption already exists: ${redemption.id}`);
-        } else {
-          logger.error(`Failed to create redemption ${redemption.id}: ${err}`);
-          throw err;
-        }
+        logger.warn(`Redemption already exists: ${redemption.id}`);
+      } else {
+        logger.error(`Failed to create redemption ${redemption.id}: ${err}`);
+        throw err;
       }
+    }
   }
 
   static async update(redemption: Redemption): Promise<void> {
@@ -72,20 +72,20 @@ export class RedemptionStore {
           data: serializeRedemption(redemption),
         },
       });
-        logger.info(`Redemption updated: ${redemption.id}`);
-      } catch (err) {
-        logger.error(`Failed to update redemption ${redemption.id}: ${err}`);
-        throw err;
-      }
+      logger.info(`Redemption updated: ${redemption.id}`);
+    } catch (err) {
+      logger.error(`Failed to update redemption ${redemption.id}: ${err}`);
+      throw err;
+    }
   }
 
   static async getById(id: string): Promise<Redemption | null> {
     try {
       const record = await prisma.redemption.findUnique({ where: { id } });
       if (!record) return null;
-      
+
       const deserializedBlobParts = deserializeRedemption(record.data);
-      
+
       return {
         id: record.id,
         chainId: record.chainId,
@@ -99,7 +99,7 @@ export class RedemptionStore {
   }
 
   static async getAll(): Promise<Redemption[]> {
-      try {
+    try {
       const records = await prisma.redemption.findMany();
       return records.map((record: any) => {
         const deserializedBlobParts = deserializeRedemption(record.data);
@@ -110,7 +110,7 @@ export class RedemptionStore {
           ...deserializedBlobParts,
         } as Redemption;
       });
-      } catch (err) {
+    } catch (err) {
       logger.error(`Failed to fetch all redemptions: ${err}`);
       return [];
     }
@@ -133,22 +133,24 @@ export class RedemptionStore {
         } as Redemption;
       });
     } catch (err) {
-      logger.error(`Failed to fetch redemptions by status${chainId ? ` for chain ${chainId}` : ''}: ${err}`);
+      logger.error(
+        `Failed to fetch redemptions by status${chainId ? ` for chain ${chainId}` : ''}: ${err}`,
+      );
       return [];
     }
   }
 
   static async delete(id: string): Promise<void> {
-      try {
+    try {
       await prisma.redemption.delete({ where: { id } });
-        logger.info(`Redemption deleted: ${id}`);
-      } catch (err: any) {
+      logger.info(`Redemption deleted: ${id}`);
+    } catch (err: any) {
       if (err.code === 'P2025') {
-          logger.warn(`Redemption not found for delete: ${id}`);
-        } else {
-          logger.error(`Failed to delete redemption ${id}: ${err}`);
-          throw err;
-        }
+        logger.warn(`Redemption not found for delete: ${id}`);
+      } else {
+        logger.error(`Failed to delete redemption ${id}: ${err}`);
+        throw err;
       }
+    }
   }
 }

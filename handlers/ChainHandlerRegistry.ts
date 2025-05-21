@@ -1,6 +1,6 @@
-import type { ChainConfig } from '../types/ChainConfig.type.js';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import { ChainHandlerFactory } from './ChainHandlerFactory.js';
+import type { AnyChainConfig } from '../config/index.js';
 
 class ChainHandlerRegistry {
   private handlers: Map<string, ChainHandlerInterface> = new Map();
@@ -26,15 +26,14 @@ class ChainHandlerRegistry {
   }
 
   // Initialize handlers from configs (idempotent)
-  async initialize(configs: ChainConfig[]): Promise<void> {
-    await Promise.all(
-      configs.map(async (config) => {
-        if (!this.handlers.has(config.chainName)) {
-          const handler = ChainHandlerFactory.createHandler(config);
-          this.register(config.chainName, handler);
-        }
-      })
-    );
+  async initialize(configs: AnyChainConfig[]): Promise<void> {
+    for (const config of configs) {
+      const handler = ChainHandlerFactory.createHandler(config);
+      const handlerExists = this.get(config.chainName) !== undefined;
+      if (handler && !handlerExists) {
+        this.register(config.chainName, handler);
+      }
+    }
   }
 
   // For testability: clear all handlers
@@ -43,4 +42,5 @@ class ChainHandlerRegistry {
   }
 }
 
-export { ChainHandlerRegistry }; 
+export const chainHandlerRegistry = new ChainHandlerRegistry();
+export type { ChainHandlerRegistry };

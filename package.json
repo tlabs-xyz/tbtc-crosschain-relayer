@@ -41,6 +41,7 @@
     "@wormhole-foundation/sdk": "^1.18.0",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
     "ethers": "5.8.0",
     "express": "^4.18.2",
     "helmet": "^7.1.0",
@@ -48,7 +49,8 @@
     "p-limit": "^6.2.0",
     "pino": "^9.6.0",
     "prisma": "^6.8.2",
-    "rimraf": "^6.0.1"
+    "rimraf": "^6.0.1",
+    "zod": "^3.25.16"
   },
   "optionalDependencies": {
     "fsevents": "^2.3.2"
@@ -69,6 +71,7 @@
     "depcheck": "^1.4.7",
     "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-prettier": "^5.2.5",
     "globals": "^16.1.0",
     "improved-yarn-audit": "^3.0.3",

@@ -1,15 +1,12 @@
-import type { ChainConfig } from '../types/ChainConfig.type.js';
-import { CHAIN_TYPE } from '../types/ChainConfig.type.js';
+import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
 import logger from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 
 // Placeholder for StarkNet specific imports (e.g., starknet.js)
 
 export class StarknetChainHandler extends BaseChainHandler {
-  // Define StarkNet specific properties if needed (e.g., Provider, SequencerProvider)
-  // private starknetProvider: any;
-
-  constructor(config: ChainConfig) {
+  constructor(config: StarknetChainConfig) {
     super(config);
     logger.info(`Constructing StarknetChainHandler for ${this.config.chainName}`);
     if (config.chainType !== CHAIN_TYPE.STARKNET) {
@@ -22,7 +19,7 @@ export class StarknetChainHandler extends BaseChainHandler {
     if (this.config.l2Rpc) {
       // TODO: Initialize StarkNet provider (e.g., using starknet.js)
       // const { RpcProvider } = await import('starknet');
-      // this.starknetProvider = new RpcProvider({ nodeUrl: this.config.l2Rpc });
+      // this.starknetProvider = new RpcProvider({ nodeUrl: this.l2Config.l2Rpc });
       logger.warn(
         `StarkNet L2 provider initialization NOT YET IMPLEMENTED for ${this.config.chainName}.`,
       );
@@ -54,7 +51,7 @@ export class StarknetChainHandler extends BaseChainHandler {
     return 0; // Placeholder
   }
 
-  async checkForPastDeposits(options: {
+  async checkForPastDeposits(_options: {
     pastTimeInMinutes: number;
     latestBlock: number; // Represents block number
   }): Promise<void> {

@@ -7,7 +7,8 @@ import type { TransactionReceipt } from '@ethersproject/providers';
 import { AnchorProvider, type Idl, Program, setProvider, Wallet } from '@coral-xyz/anchor';
 import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes/index.js';
 
-import { CHAIN_NAME, type ChainConfig, CHAIN_TYPE } from '../types/ChainConfig.type.js';
+import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import type { SolanaChainConfig } from '../config/schemas/solana.chain.schema.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 import { type Deposit } from '../types/Deposit.type.js';
@@ -30,8 +31,9 @@ export class SolanaChainHandler extends BaseChainHandler {
   private wormholeGatewayProgram?: Program<Idl>;
   private wallet: Wallet;
   private ethereumWormholeContext: ChainContext<'Mainnet' | 'Testnet' | 'Devnet', Chain>;
+  public l2Config: SolanaChainConfig;
 
-  constructor(config: ChainConfig) {
+  constructor(config: SolanaChainConfig) {
     super(config);
     logger.debug(`Constructing SolanaChainHandler for ${this.config.chainName}`);
     if (config.chainType !== CHAIN_TYPE.SOLANA) {
@@ -44,26 +46,26 @@ export class SolanaChainHandler extends BaseChainHandler {
    * Sets up Solana connection, Anchor provider, and loads your Wormhole Gateway program.
    */
   protected initializeL2() {
-    logger.debug(`Initializing Solana L2 components for ${this.config.chainName}`);
+    logger.debug(`Initializing Solana L2 components for ${this.l2Config.chainName}`);
 
-    if (!this.config.l2Rpc) {
+    if (!this.l2Config.l2Rpc) {
       logger.warn(
-        `Solana L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`,
+        `Solana L2 RPC not configured for ${this.l2Config.chainName}. L2 features disabled.`,
       );
       return;
     }
 
     try {
-      this.connection = new Connection(this.config.l2Rpc, {
-        commitment: DEFAULT_COMMITMENT_LEVEL,
+      this.connection = new Connection(this.l2Config.l2Rpc, {
+        commitment: 'confirmed',
         disableRetryOnRateLimit: true,
-        wsEndpoint: this.config.l2WsRpc,
+        wsEndpoint: this.l2Config.l2WsRpc,
       });
 
-      const secretKeyBase64 = this.config.solanaSignerKeyBase;
+      const secretKeyBase64 = this.l2Config.solanaSignerKeyBase;
       if (!secretKeyBase64) throw new Error('Missing solanaSignerKeyBase');
 
-      const secretKeyBytes = new Uint8Array(secretKeyBase64.split(',').map(Number));
+      const secretKeyBytes = new Uint8Array((secretKeyBase64 as string).split(',').map(Number));
       const keypair = Keypair.fromSecretKey(secretKeyBytes);
       const wallet = new Wallet(keypair);
       this.wallet = wallet;
@@ -79,12 +81,12 @@ export class SolanaChainHandler extends BaseChainHandler {
       );
 
       logger.info(
-        `Solana L2/Anchor provider and Wormhole Gateway program loaded for ${this.config.chainName}`,
+        `Solana L2/Anchor provider and Wormhole Gateway program loaded for ${this.l2Config.chainName}`,
       );
 
-      this.ethereumWormholeContext = this.wormhole.getChain(CHAIN_NAME.ETHEREUM as Chain);
+      this.ethereumWormholeContext = this.wormhole.getChain('Ethereum' as Chain);
     } catch (error: any) {
-      logErrorContext(`Error initializing Solana L2 for ${this.config.chainName}`, error);
+      logErrorContext(`Error initializing Solana L2 for ${this.l2Config.chainName}`, error);
       throw error;
     }
   }
@@ -94,18 +96,18 @@ export class SolanaChainHandler extends BaseChainHandler {
    * If you plan to do L2 event listening, implement it here.
    */
   protected async setupL2Listeners(): Promise<void> {
-    if (this.config.useEndpoint) {
-      logger.warn(`Solana L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`);
+    if (this.l2Config.useEndpoint) {
+      logger.warn(`Solana L2 Listeners skipped for ${this.l2Config.chainName} (using Endpoint).`);
       return;
     }
-    logger.warn(`Solana L2 Listener setup NOT YET IMPLEMENTED for ${this.config.chainName}.`);
+    logger.warn(`Solana L2 Listener setup NOT YET IMPLEMENTED for ${this.l2Config.chainName}.`);
   }
 
   /**
    * Get the latest Solana slot (block) if you need to do on-chain queries for missed deposits.
    */
   async getLatestBlock(): Promise<number> {
-    if (this.config.useEndpoint) return 0;
+    if (this.l2Config.useEndpoint) return 0; // Skip if using endpoint mode
     if (!this.connection) {
       logger.warn(`No Solana connection established. Returning 0.`);
       return 0;
@@ -122,13 +124,12 @@ export class SolanaChainHandler extends BaseChainHandler {
    * Example "checkForPastDeposits" if you wanted to scan logs or transactions on Solana.
    * Not yet implemented in this skeleton.
    */
-  async checkForPastDeposits(options: {
+  async checkForPastDeposits(_options: {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void> {
-    if (this.config.useEndpoint) return;
-    logger.error(`Solana checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
-    throw new Error('Solana checkForPastDeposits NOT YET IMPLEMENTED');
+    if (this.l2Config.useEndpoint) return; // no direct chain scanning
+    logger.warn(`Solana checkForPastDeposits NOT YET IMPLEMENTED for ${this.l2Config.chainName}.`);
   }
 
   /**
@@ -189,10 +190,10 @@ export class SolanaChainHandler extends BaseChainHandler {
 
     if (deposit.status !== DepositStatus.AWAITING_WORMHOLE_VAA) return;
 
-    const secretKeyBase64 = this.config.solanaSignerKeyBase;
+    const secretKeyBase64 = this.l2Config.solanaSignerKeyBase;
     if (!secretKeyBase64) throw new Error('Missing solanaSignerKeyBase');
 
-    const signerSecretKeyBytes = new Uint8Array(secretKeyBase64.split(',').map(Number));
+    const signerSecretKeyBytes = new Uint8Array((secretKeyBase64 as string).split(',').map(Number));
     const signerKeypair = Keypair.fromSecretKey(signerSecretKeyBytes);
     const signerSecretKeyBase58 = bs58.encode(signerKeypair.secretKey);
     const wormholeSolanaSigner = await getSolanaSignAndSendSigner(
@@ -217,7 +218,7 @@ export class SolanaChainHandler extends BaseChainHandler {
       wormholeSolanaSigner.address(),
     );
 
-    const toChain = this.wormhole.getChain(CHAIN_NAME.SOLANA as Chain);
+    const toChain = this.wormhole.getChain('Solana' as Chain);
 
     logger.info(`Bridging deposit ${deposit.id} on Solana...`);
 
@@ -269,11 +270,11 @@ export class SolanaChainHandler extends BaseChainHandler {
    * This function will attempt to bridge the deposits using the Wormhole protocol.
    */
   public async processWormholeBridging() {
-    if (this.config.chainType !== CHAIN_TYPE.SOLANA) return;
+    if (this.l2Config.chainType !== CHAIN_TYPE.SOLANA) return; // Only for Solana chains
 
     const bridgingDeposits = await DepositStore.getByStatus(
       DepositStatus.AWAITING_WORMHOLE_VAA,
-      this.config.chainName,
+      this.l2Config.chainName,
     );
     if (bridgingDeposits.length === 0) return;
 

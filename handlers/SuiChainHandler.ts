@@ -1,15 +1,10 @@
-import type { ChainConfig } from '../types/ChainConfig.type.js';
-import { CHAIN_TYPE } from '../types/ChainConfig.type.js';
+import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
 import logger from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 
-// Placeholder for Sui specific imports (e.g., @mysten/sui.js)
-
 export class SuiChainHandler extends BaseChainHandler {
-  // Define Sui specific properties if needed (e.g., SuiClient)
-  // private suiClient: any;
-
-  constructor(config: ChainConfig) {
+  constructor(config: SuiChainConfig) {
     super(config);
     logger.debug(`Constructing SuiChainHandler for ${this.config.chainName}`);
     if (config.chainType !== CHAIN_TYPE.SUI) {
@@ -51,7 +46,7 @@ export class SuiChainHandler extends BaseChainHandler {
     return 0; // Placeholder
   }
 
-  async checkForPastDeposits(options: {
+  async checkForPastDeposits(_options: {
     pastTimeInMinutes: number;
     latestBlock: number; // Represents checkpoint sequence number
   }): Promise<void> {

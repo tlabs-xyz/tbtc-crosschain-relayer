@@ -7,6 +7,7 @@ import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import { DepositStore } from '../utils/DepositStore.js';
+import type { AnyChainConfig } from '../config/index.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -70,7 +71,13 @@ export class EndpointController {
       }
 
       // Create deposit object
-      const deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender, this.chainHandler.config.chainName);
+      const deposit = createDeposit(
+        fundingTx,
+        reveal,
+        l2DepositOwner,
+        l2Sender,
+        this.chainHandler.config.chainName,
+      );
       logger.debug(`Created deposit with ID: ${deposit.id}`);
 
       // Initialize the deposit
@@ -92,7 +99,10 @@ export class EndpointController {
         if (req.body?.fundingTx?.txHash) {
           depositId = req.body.fundingTx.txHash;
         }
-      } catch (e) {}
+      } catch /* (e) */ {
+        // Intentionally empty: if we can't get a depositId, we log with 'unknown'
+        logger.error('Error getting depositId for reveal endpoint:', error);
+      }
 
       logDepositError(depositId, 'Error handling reveal endpoint', error);
       logApiRequest('/api/reveal', 'POST', depositId, {}, 500);

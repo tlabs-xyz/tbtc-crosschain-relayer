@@ -1,16 +1,20 @@
 import { L1RedemptionHandler } from './L1RedemptionHandler.js';
-import type { ChainConfig } from '../types/ChainConfig.type.js';
+import type { AnyChainConfig } from '../config/index.js';
 import logger from '../utils/Logger.js';
 import { ethers } from 'ethers';
 
 class L1RedemptionHandlerRegistry {
   private handlers: Map<string, L1RedemptionHandler> = new Map();
 
-  private generateKey(l1RpcUrl: string, l1ContractAddress: string, l1SignerAddress: string): string {
+  private generateKey(
+    l1RpcUrl: string,
+    l1ContractAddress: string,
+    l1SignerAddress: string,
+  ): string {
     return `${l1RpcUrl.toLowerCase()}-${l1ContractAddress.toLowerCase()}-${l1SignerAddress.toLowerCase()}`;
   }
 
-  public get(chainConfig: ChainConfig): L1RedemptionHandler {
+  public get(chainConfig: AnyChainConfig): L1RedemptionHandler {
     const l1SignerAddress = new ethers.Wallet(chainConfig.privateKey).address;
     const key = this.generateKey(chainConfig.l1Rpc, chainConfig.l1ContractAddress, l1SignerAddress);
 
@@ -38,4 +42,4 @@ class L1RedemptionHandlerRegistry {
   }
 }
 
-export const l1RedemptionHandlerRegistry = new L1RedemptionHandlerRegistry(); 
+export const l1RedemptionHandlerRegistry = new L1RedemptionHandlerRegistry();

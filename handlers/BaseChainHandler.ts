@@ -9,7 +9,7 @@ import type { TransactionReceipt } from '@ethersproject/providers';
 import { NonceManager } from '@ethersproject/experimental';
 
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { type ChainConfig, NETWORK } from '../types/ChainConfig.type.js';
+import { NETWORK } from '../config/schemas/chain.common.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { DepositStore } from '../utils/DepositStore.js';
@@ -22,6 +22,7 @@ import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
+import type { AnyChainConfig } from '../config/index.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
 
@@ -33,11 +34,11 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected tbtcVault: ethers.Contract; // For sending L1 txs (though not used currently)
   protected l1BitcoinDepositorProvider: ethers.Contract; // For L1 reads/events
   protected tbtcVaultProvider: ethers.Contract; // For L1 events
-  public config: ChainConfig;
+  public config: AnyChainConfig;
   protected wormhole: Wormhole<Network>;
 
 
-  constructor(config: ChainConfig) {
+  constructor(config: AnyChainConfig) {
     this.config = config;
     logger.debug(`Constructing BaseChainHandler for ${this.config.chainName}`);
   }
@@ -57,7 +58,9 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     }
 
     const ethereumNetwork =
-      this.config.network === NETWORK.DEVNET ? NETWORK.TESTNET : this.config.network;
+      (this.config.network as NETWORK) === NETWORK.DEVNET
+        ? NETWORK.TESTNET
+        : (this.config.network as NETWORK);
 
     this.wormhole = await wormhole(ethereumNetwork, [evm, solana, sui], {
       chains: {
@@ -113,7 +116,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      async (_minter: any, depositKey: any, _depositor: any, _optimisticMintingDebt: any) => {
+      async (minter, depositKey, _depositor, _optimisticMintingDebt) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
@@ -377,7 +380,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     logger.debug(`PROCESS FINALIZE | Running for chain ${this.config.chainName}`);
     const depositsToFinalize = await DepositStore.getByStatus(
       DepositStatus.INITIALIZED,
-      this.config.chainName,
+      this.config.chainName as string | undefined,
     );
     const filteredDeposits = this.filterDepositsActivityTime(depositsToFinalize);
 

@@ -3,6 +3,7 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import prettierPlugin from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
+import importPlugin from 'eslint-plugin-import';
 import globals from 'globals';
 
 export default [
@@ -15,15 +16,36 @@ export default [
       'coverage/',
       'logs/',
       '*.log',
-      'jest.config.js', // Often uses require (matches .eslintrc.js)
+      'jest.config.cjs',
       'jest.setup.js',
-      '.eslintrc.js', // Old ESLint config file (matches .eslintrc.js)
     ],
   },
-  // Base JS config (applies to .js files not caught by TS config)
+  // Config for Jest global setup/teardown files
+  {
+    files: ['jest.global-setup.js', 'jest.global-teardown.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.jest, // Jest might inject some globals here too
+        module: 'readonly',
+        require: 'readonly',
+        process: 'readonly',
+      },
+      sourceType: 'commonjs',
+    },
+    rules: {
+      'no-undef': 'error', // These files should have well-defined globals
+      // Add any other specific rules if needed
+    },
+  },
   js.configs.recommended,
   {
-    files: ['.js'], // Specifically target JS files for JS globals
+    files: ['.js', '*.config.js'],
+    ignores: [
+      'jest.global-setup.js', 
+      'jest.global-teardown.js', 
+      'eslint.config.js'
+    ],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -59,6 +81,7 @@ export default [
     plugins: {
       '@typescript-eslint': tsPlugin, // Loads the plugin "@typescript-eslint/eslint-plugin" (from .eslintrc.js)
       prettier: prettierPlugin, // Loads the plugin "eslint-plugin-prettier" (from .eslintrc.js)
+      import: importPlugin, // Use the imported plugin object
     },
     rules: {
       // Start with recommended rules and override as needed
