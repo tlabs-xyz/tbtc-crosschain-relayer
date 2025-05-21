@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import CustomResponse from '../helpers/CustomResponse.helper.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import fs from 'fs';

@@ -1,12 +1,12 @@
-import { Request, Response } from 'express';
-import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import type { Request, Response } from 'express';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import { createDeposit, getDepositId } from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { getJsonById } from '../utils/JsonUtils.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
-import { Reveal } from '../types/Reveal.type.js';
+import type { Reveal } from '../types/Reveal.type.js';
+import { DepositStore } from '../utils/DepositStore.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -61,7 +61,7 @@ export class EndpointController {
         `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
 
-      const existingDeposit = getJsonById(depositId);
+      const existingDeposit = await DepositStore.getById(depositId);
       if (existingDeposit) {
         logger.warn(
           `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,

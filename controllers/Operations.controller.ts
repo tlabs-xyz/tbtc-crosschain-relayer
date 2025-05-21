@@ -1,12 +1,8 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import CustomResponse from '../helpers/CustomResponse.helper.js';
-import {
-  getAllJsonOperations,
-  getAllJsonOperationsByStatus,
-  getJsonById,
-} from '../utils/JsonUtils.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import { Deposit } from '../types/Deposit.type.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import { logErrorContext } from '../utils/Logger.js';
+import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 
 /**
@@ -26,7 +22,7 @@ export default class Operations {
   getAllOperations = async (req: Request, res: Response): Promise<void> => {
     const response = new CustomResponse(res);
     try {
-      const operations: Array<Deposit> = await getAllJsonOperations();
+      const operations: Array<Deposit> = await DepositStore.getAll();
       response.ok('OK - Retrieved all operations', operations);
     } catch (err) {
       logErrorContext('Error fetching all operations:', err);
@@ -47,7 +43,7 @@ export default class Operations {
     const response = new CustomResponse(res);
 
     try {
-      const operations: Array<Deposit> = await getAllJsonOperationsByStatus(DepositStatus.QUEUED);
+      const operations: Array<Deposit> = await DepositStore.getByStatus(DepositStatus.QUEUED);
       return response.ok('OK - Retrieved all queued operations', operations);
     } catch (err) {
       logErrorContext('Error fetching queued operations:', err);
@@ -68,7 +64,7 @@ export default class Operations {
     const response = new CustomResponse(res);
 
     try {
-      const operations: Array<Deposit> = await getAllJsonOperationsByStatus(
+      const operations: Array<Deposit> = await DepositStore.getByStatus(
         DepositStatus.INITIALIZED,
       );
       return response.ok('OK - Retrieved all initialized operations', operations);
@@ -91,7 +87,7 @@ export default class Operations {
     const response = new CustomResponse(res);
 
     try {
-      const operations: Array<Deposit> = await getAllJsonOperationsByStatus(
+      const operations: Array<Deposit> = await DepositStore.getByStatus(
         DepositStatus.FINALIZED,
       );
       return response.ok('OK - Retrieved all finalized operations', operations);

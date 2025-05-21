@@ -1,18 +1,18 @@
-import { Network, Wormhole, wormhole } from '@wormhole-foundation/sdk';
+import { type Network, Wormhole, wormhole } from '@wormhole-foundation/sdk';
 
 import solana from '@wormhole-foundation/sdk/solana';
 import sui from '@wormhole-foundation/sdk/sui';
 import evm from '@wormhole-foundation/sdk/evm';
 
 import { BigNumber, ethers } from 'ethers';
-import { TransactionReceipt } from '@ethersproject/providers';
+import type { TransactionReceipt } from '@ethersproject/providers';
 import { NonceManager } from '@ethersproject/experimental';
 
-import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { ChainConfig, NETWORK } from '../types/ChainConfig.type.js';
-import { Deposit } from '../types/Deposit.type.js';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { type ChainConfig, NETWORK } from '../types/ChainConfig.type.js';
+import type { Deposit } from '../types/Deposit.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import { getJsonById, getAllJsonOperationsByStatus } from '../utils/JsonUtils.js';
+import { DepositStore } from '../utils/DepositStore.js';
 import {
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
@@ -113,11 +113,11 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      (minter, depositKey, depositor, optimisticMintingDebt) => {
+      async (minter, depositKey, depositor, optimisticMintingDebt) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
-          const deposit: Deposit | null = getJsonById(depositId);
+          const deposit: Deposit | null = await DepositStore.getById(depositId);
           if (deposit) {
             logger.debug(`Received OptimisticMintingFinalized event for Deposit ID: ${deposit.id}`);
             // Check if already finalized to avoid redundant calls/logs
@@ -316,7 +316,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
   // --- Batch Processing Logic ---
   async processInitializeDeposits(): Promise<void> {
-    const depositsToInitialize = await getAllJsonOperationsByStatus(DepositStatus.QUEUED);
+    const depositsToInitialize = await DepositStore.getByStatus(DepositStatus.QUEUED);
     logger.debug(`PROCESS_INIT | Found ${depositsToInitialize.length} deposits in QUEUED state.`);
     const filteredDeposits = this.filterDepositsActivityTime(depositsToInitialize);
     logger.debug(
@@ -373,7 +373,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   }
 
   async processFinalizeDeposits(): Promise<void> {
-    const depositsToFinalize = await getAllJsonOperationsByStatus(DepositStatus.INITIALIZED);
+    const depositsToFinalize = await DepositStore.getByStatus(DepositStatus.INITIALIZED);
     logger.debug(
       `PROCESS_FINALIZE | Found ${depositsToFinalize.length} deposits in INITIALIZED state.`,
     );

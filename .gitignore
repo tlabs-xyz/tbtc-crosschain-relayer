@@ -13,3 +13,12 @@
 
 /logs
 /data
+
+redemptions/
+
+/generated
+
+*.md
+tasks
+
+prisma/memory:

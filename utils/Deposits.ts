@@ -1,11 +1,10 @@
 import { ethers } from 'ethers';
-import { Deposit } from '../types/Deposit.type.js';
-import { FundingTransaction } from '../types/FundingTransaction.type.js';
+import { type Deposit } from '../types/Deposit.type.js';
+import { type FundingTransaction } from '../types/FundingTransaction.type.js';
 import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
-import { writeJson } from './JsonUtils.js';
+import { DepositStore } from './DepositStore.js';
 import logger from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-// --- Audit Log Import ---
 import {
   logDepositCreated,
   logStatusChange,
@@ -14,8 +13,7 @@ import {
   logDepositAwaitingWormholeVAA,
   logDepositBridged,
 } from './AuditLog.js';
-import { Reveal } from '../types/Reveal.type.js';
-// --- End Import ---
+import { type Reveal } from '../types/Reveal.type.js';
 
 /**
  * @name createDeposit
@@ -141,7 +139,7 @@ export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error
     logStatusChange(deposit, newStatus, oldStatus);
   }
 
-  writeJson(updatedDeposit, deposit.id);
+  DepositStore.create(updatedDeposit);
 
   if (tx) {
     logger.info(`Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`);
@@ -192,7 +190,7 @@ export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, err
     logStatusChange(deposit, newStatus, oldStatus);
   }
 
-  writeJson(updatedDeposit, deposit.id);
+  DepositStore.create(updatedDeposit);
 
   if (tx) {
     logger.info(`Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`);
@@ -253,7 +251,7 @@ export const updateToAwaitingWormholeVAA = async (
   }
 
   // Write to JSON file
-  writeJson(updatedDeposit, deposit.id);
+  await DepositStore.update(updatedDeposit);
 
   logger.info(
     `Deposit has been moved to AWAITING_WORMHOLE_VAA | ID: ${deposit.id} | sequence: ${transferSequence}`,
@@ -313,7 +311,7 @@ export const updateToBridgedDeposit = async (
   }
 
   // Write to JSON file
-  writeJson(updatedDeposit, deposit.id);
+  await DepositStore.update(updatedDeposit);
 
   logger.info(`Deposit has been moved to BRIDGED | ID: ${deposit.id}`);
 
@@ -336,7 +334,7 @@ export const updateLastActivity = (deposit: Deposit) => {
     },
   };
 
-  writeJson(updatedDeposit, deposit.id);
+  DepositStore.create(updatedDeposit);
   return updatedDeposit;
 };
 

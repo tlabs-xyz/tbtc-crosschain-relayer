@@ -82,6 +82,15 @@ export default [
         { 'ts-expect-error': 'allow-with-description' },
       ],
       'no-empty': ['error', { allowEmptyCatch: true }],
+      // Enforce .js extension for all local imports
+      'import/extensions': [
+        'error',
+        'ignorePackages',
+        {
+          'js': 'always',
+          'ts': 'never',
+        },
+      ],
     },
   },
 ];

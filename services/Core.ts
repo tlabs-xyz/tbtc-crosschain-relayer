@@ -3,13 +3,16 @@ import cron from 'node-cron';
 
 import logger from '../utils/Logger.js';
 import { ChainHandlerFactory } from '../handlers/ChainHandlerFactory.js';
-import { ChainConfig, CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
+import type { ChainConfig } from '../types/ChainConfig.type.js';
+import { CHAIN_TYPE, NETWORK } from '../types/ChainConfig.type.js';
 import {
   cleanQueuedDeposits,
   cleanFinalizedDeposits,
   cleanBridgedDeposits,
 } from './CleanupDeposits.js';
 import { L2RedemptionService } from './L2RedemptionService.js';
+import { RedemptionStore } from '../utils/RedemptionStore.js';
+import { RedemptionStatus } from '../types/Redemption.type.js';
 
 // ---------------------------------------------------------------
 // Environment Variables and Configuration
@@ -36,7 +39,7 @@ const chainConfig: ChainConfig = {
   l1BitcoinRedeemerAddress: requireEnv('L1_BITCOIN_REDEEMER_ADDRESS'),
   l2BitcoinRedeemerAddress: requireEnv('L2_BITCOIN_REDEEMER_ADDRESS'),
   l2WormholeGatewayAddress: requireEnv('L2_WORMHOLE_GATEWAY_ADDRESS'),
-  l2WormholeChainId: requireEnv('L2_WORMHOLE_CHAIN_ID'),
+  l2WormholeChainId: parseInt(requireEnv('L2_WORMHOLE_CHAIN_ID')),
   vaultAddress: requireEnv('TBTC_VAULT_ADDRESS'),
   privateKey: requireEnv('PRIVATE_KEY'),
   l2ContractAddress:
@@ -52,6 +55,8 @@ export const chainHandler = ChainHandlerFactory.createHandler(chainConfig);
 // ---------------------------------------------------------------
 // Cron Jobs
 // ---------------------------------------------------------------
+
+let l2RedemptionServiceSingleton: L2RedemptionService | null = null;
 
 /**
  * @name startCronJobs
@@ -69,6 +74,19 @@ export const startCronJobs = () => {
       await chainHandler.processInitializeDeposits();
     } catch (error) {
       logErrorContext('Error in deposit processing cron job:', error);
+    }
+  });
+
+  // Every 2 minutes - process redemptions
+  cron.schedule('*/2 * * * *', async () => {
+    try {
+      if (!l2RedemptionServiceSingleton) {
+        l2RedemptionServiceSingleton = await L2RedemptionService.create(chainConfig);
+      }
+      await l2RedemptionServiceSingleton.processPendingRedemptions();
+      await l2RedemptionServiceSingleton.processVaaFetchedRedemptions();
+    } catch (error) {
+      logErrorContext('Error in redemption processing cron job:', error);
     }
   });
 
@@ -109,6 +127,28 @@ export const startCronJobs = () => {
     }
   });
 
+  // Every 60 minutes - cleanup old redemptions
+  cron.schedule('*/60 * * * *', async () => {
+    try {
+      const now = Date.now();
+      const retentionMs = 7 * 24 * 60 * 60 * 1000; // 7 days
+      const allRedemptions = await RedemptionStore.getAll();
+      for (const redemption of allRedemptions) {
+        if (
+          (redemption.status === RedemptionStatus.COMPLETED ||
+            redemption.status === RedemptionStatus.FAILED) &&
+          redemption.dates.completedAt &&
+          now - redemption.dates.completedAt > retentionMs
+        ) {
+          await RedemptionStore.delete(redemption.id);
+          logger.info(`Cleaned up redemption ${redemption.id} (status: ${redemption.status})`);
+        }
+      }
+    } catch (error) {
+      logErrorContext('Error in redemption cleanup cron job:', error);
+    }
+  });
+
   logger.debug('Cron job setup complete.');
 };
 
@@ -131,16 +171,7 @@ export const initializeChain = async () => {
 export const initializeL2RedemptionService = async () => {
   try {
     logger.info('Attempting to initialize L2RedemptionService...');
-    const l2RedemptionService = new L2RedemptionService(
-      chainConfig.l2Rpc,
-      chainConfig.l2BitcoinRedeemerAddress,
-      chainConfig.privateKey,
-      chainConfig.l1Rpc,
-      chainConfig.l1BitcoinRedeemerAddress,
-      Number(chainConfig.l2WormholeChainId),
-      chainConfig.l2WormholeGatewayAddress,
-    );
-    await l2RedemptionService.initialize();
+    const l2RedemptionService = await L2RedemptionService.create(chainConfig);
     l2RedemptionService.startListening();
     logger.info('L2RedemptionService initialized and started successfully.');
   } catch (error) {

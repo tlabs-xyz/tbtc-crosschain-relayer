@@ -4,9 +4,9 @@ import {
   Wormhole,
   UniversalAddress,
   type Network,
-  ChainId,
+  type ChainId,
   chainIdToChain,
-  WormholeMessageId,
+  type WormholeMessageId,
   type Chain,
   type VAA,
 } from '@wormhole-foundation/sdk';

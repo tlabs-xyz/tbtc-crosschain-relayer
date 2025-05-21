@@ -1,7 +1,7 @@
-import { TransactionReceipt } from '@ethersproject/providers';
-import { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface.js';
+import type { TransactionReceipt } from '@ethersproject/providers';
+import type { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface.js';
 import { DepositStatus } from '../../types/DepositStatus.enum.js';
-import { Deposit } from '../../types/Deposit.type.js';
+import type { Deposit } from '../../types/Deposit.type.js';
 import logger from '../../utils/Logger.js';
 import { createTestDeposit } from './BlockchainMock.js';
 import { BigNumber, ethers } from 'ethers';

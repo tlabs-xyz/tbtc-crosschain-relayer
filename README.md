@@ -12,6 +12,11 @@ Based on [L2 tBTC SDK Relayer Implementation](https://thresholdnetwork.notion.si
     - [Development Mode](#development-mode)
   - [Project Scripts](#project-scripts)
   - [CI - GitHub Actions](#ci---github-actions)
+  - [Database Management](#database-management)
+    - [Automatic Migrations](#automatic-migrations)
+    - [Manual Migration](#manual-migration)
+    - [Backup Database](#backup-database)
+    - [Restore Database](#restore-database)
 
 ## Project Overview
 
@@ -61,4 +66,27 @@ You can run the CI workflow locally by running:
 
 ```bash
 gh act
+```
+
+## Database Management
+
+### Automatic Migrations
+Migrations are run automatically when the app starts in Docker (production mode) using an entrypoint script.
+
+### Manual Migration
+To run migrations manually:
+```bash
+npm run db:migrate
+```
+
+### Backup Database
+To create a backup (PostgreSQL):
+```bash
+npm run db:backup
+```
+
+### Restore Database
+To restore from a backup:
+```bash
+npm run db:restore
 ```

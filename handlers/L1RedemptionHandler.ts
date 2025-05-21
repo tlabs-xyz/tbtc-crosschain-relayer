@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
-import { RedemptionRequestedEventData } from '../services/L2RedemptionService.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { L1BitcoinRedeemerABI } from '../interfaces/L1BitcoinRedeemer.js';
+import type { RedemptionRequestedEventData } from '../types/Redemption.type.js';
 
 const L1_TX_CONFIRMATION_TIMEOUT_MS = parseInt(
   process.env.L1_TX_CONFIRMATION_TIMEOUT_MS || '300000',
@@ -37,7 +37,7 @@ export class L1RedemptionHandler {
   public async submitRedemptionDataToL1(
     redemptionData: RedemptionRequestedEventData,
     signedVaa: Uint8Array,
-  ): Promise<boolean> {
+  ): Promise<string | null> {
     logger.info(
       JSON.stringify({
         // Stringify complex object
@@ -129,7 +129,7 @@ export class L1RedemptionHandler {
             l1BlockNumber: receipt.blockNumber,
           }),
         );
-        return true;
+        return tx.hash;
       } else {
         logErrorContext(
           JSON.stringify({
@@ -142,7 +142,7 @@ export class L1RedemptionHandler {
           }),
           new Error(`L1 tx ${tx.hash} reverted`),
         );
-        return false;
+        return null;
       }
     } catch (error: any) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -160,7 +160,7 @@ export class L1RedemptionHandler {
         }),
         err,
       );
-      return false;
+      return null;
     }
   }
 }

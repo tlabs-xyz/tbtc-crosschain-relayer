@@ -1,13 +1,16 @@
 import { ethers } from 'ethers';
 import { NonceManager } from '@ethersproject/experimental';
 
-import { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { ChainConfig } from '../types/ChainConfig.type.js';
-import { Deposit } from '../types/Deposit.type.js';
-import { FundingTransaction } from '../types/FundingTransaction.type.js';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import type { ChainConfig } from '../types/ChainConfig.type.js';
+import type { Deposit } from '../types/Deposit.type.js';
+import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import { getJsonById, writeJson } from '../utils/JsonUtils.js';
-import { createDeposit, getDepositId } from '../utils/Deposits.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import {
+  createDeposit,
+  getDepositId,
+} from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
@@ -89,7 +92,7 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
             `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
           );
           try {
-            const existingDeposit = getJsonById(depositId);
+            const existingDeposit = await DepositStore.getById(depositId);
             if (existingDeposit) {
               logger.warn(
                 `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
@@ -99,7 +102,7 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
 
             logger.debug(`L2 Listener | Creating new deposit | ID: ${depositId}`);
             const deposit: Deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
-            writeJson(deposit, deposit.id);
+            DepositStore.create(deposit);
 
             logger.debug(`L2 Listener | Triggering L1 initializeDeposit | ID: ${deposit.id}`);
             await this.initializeDeposit(deposit);
@@ -194,7 +197,7 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
           const fundingTxHash = getFundingTxHash(fundingTx as FundingTransaction);
           const depositId = getDepositId(fundingTxHash, reveal[0]);
 
-          const existingDeposit = getJsonById(depositId);
+          const existingDeposit = await DepositStore.getById(depositId);
 
           if (!existingDeposit) {
             logger.debug(`checkForPastDeposits | Processing missed deposit event: ${depositId}`);
@@ -205,7 +208,7 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
               l2DepositOwner,
               l2Sender,
             );
-            writeJson(newDeposit, newDeposit.id);
+            DepositStore.create(newDeposit);
 
             await this.initializeDeposit(newDeposit);
           }

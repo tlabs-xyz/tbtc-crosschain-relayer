@@ -2,7 +2,8 @@
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
 // Express Server
-import express, { Express, RequestHandler } from 'express';
+import express from 'express';
+import type { Express, RequestHandler } from 'express';
 
 // Security
 import cors from 'cors';
@@ -17,7 +18,6 @@ import Routes from './routes/Routes.js';
 // Utils
 import logger from './utils/Logger.js';
 import { initializeChain, initializeL2RedemptionService } from './services/Core.js';
-import { initializeAuditLog } from './utils/AuditLog.js';
 import { logErrorContext } from './utils/Logger.js';
 
 // -------------------------------------------------------------------------
@@ -83,7 +83,6 @@ if (API_ONLY_MODE) {
 // Initialize Audit Log System
 if (!API_ONLY_MODE) {
   try {
-    initializeAuditLog();
     logger.info('Audit log initialized.');
   } catch (error: any) {
     logErrorContext('Failed to initialize audit log:', error);

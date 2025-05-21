@@ -1,4 +1,5 @@
-import { ChainConfig, CHAIN_TYPE } from '../types/ChainConfig.type.js';
+import type { ChainConfig } from '../types/ChainConfig.type.js';
+import { CHAIN_TYPE } from '../types/ChainConfig.type.js';
 import logger from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 
