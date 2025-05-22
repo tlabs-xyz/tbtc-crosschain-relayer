@@ -16,7 +16,7 @@ datasource db {
 
 model Deposit {
   id        String   @id
-  chainId   String
+  chainName String
   fundingTxHash String
   outputIndex Int
   hashes    Json
@@ -27,7 +27,7 @@ model Deposit {
   dates     Json
   error     String?
 
-  @@index([chainId])
+  @@index([chainName])
 }
 
 model AuditLog {
@@ -37,16 +37,17 @@ model AuditLog {
   depositId  String?
   data       Json
   errorCode  Int?
-  chainId    String?
+  // TODO: Consider making chainName non-nullable for consistent querying.
+  chainName  String?
 
-  @@index([chainId])
+  @@index([chainName])
 }
 
 model Redemption {
   id        String   @id
-  chainId   String
+  chainName String
   status    String
   data      Json
 
-  @@index([chainId])
+  @@index([chainName])
 }

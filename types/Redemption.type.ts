@@ -28,13 +28,14 @@ export type RedemptionRequestedEventData = {
 
 export type Redemption = {
   id: string; // Unique identifier, e.g., l2TransactionHash
-  chainId: string;
+  chainName: string; // Changed from chainId
   event: RedemptionRequestedEventData;
   vaaBytes: string | null; // Hex string or base64
   vaaStatus: RedemptionStatus;
   l1SubmissionTxHash: string | null;
   status: RedemptionStatus;
   error: string | null;
+  version: number; // Added for optimistic locking
   dates: {
     createdAt: number;
     vaaFetchedAt: number | null;
