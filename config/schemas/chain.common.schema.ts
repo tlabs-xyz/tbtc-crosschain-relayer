@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EthereumAddressSchema } from './shared.js';
 
 export enum NETWORK {
   MAINNET = 'Mainnet',
@@ -12,8 +13,6 @@ export enum CHAIN_TYPE {
   SUI = 'Sui',
   SOLANA = 'Solana',
 }
-
-// TODO: Add regex for address format
 
 // This schema defines fields that are common to all chain configurations and typically have defaults.
 // Specific chain schemas will merge this and can override these defaults.
@@ -51,24 +50,23 @@ export const CommonChainConfigSchema = z.object({
   l2Rpc: z.string().url('l2Rpc must be a valid URL'),
   l2WsRpc: z.string().url('l2WsRpc must be a valid WebSocket URL'),
 
-  l1ContractAddress: z.string().min(1, 'l1ContractAddress is required'),
-  l2ContractAddress: z.string(),
+  l1ContractAddress: EthereumAddressSchema,
+  l2ContractAddress: EthereumAddressSchema,
 
-  l1BitcoinRedeemerAddress: z.string().min(1, 'l1BitcoinRedeemerAddress is required'),
-
+  l1BitcoinRedeemerAddress: EthereumAddressSchema,
   /**
    * Optional address of the L2BitcoinRedeemer contract/program.
    * Not all chains will have L2 redemption functionality, or it may be deployed
    * later than minting. Non-EVM chains, for example, might initially lack a
    * specific L2BitcoinRedeemer program while still supporting tBTC minting.
    */
-  l2BitcoinRedeemerAddress: z.string().min(1, 'l2BitcoinRedeemerAddress is required').optional(),
+  l2BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
 
-  l2WormholeGatewayAddress: z.string().min(1, 'l2WormholeGatewayAddress is required'),
+  l2WormholeGatewayAddress: EthereumAddressSchema,
   l2WormholeChainId: z.coerce.number().int().nonnegative(),
 
   l2StartBlock: z.coerce.number().int().nonnegative(),
-  vaultAddress: z.string(),
+  vaultAddress: EthereumAddressSchema,
 });
 
 export type CommonChainConfig = z.infer<typeof CommonChainConfigSchema>;

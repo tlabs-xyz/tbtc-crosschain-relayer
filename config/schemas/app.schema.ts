@@ -1,6 +1,12 @@
 import { z } from 'zod';
-import { NodeEnv } from '../../types/AppConfig.type.js';
 
+export enum NodeEnv {
+  DEVELOPMENT = 'development',
+  TEST = 'test',
+  PRODUCTION = 'production',
+}
+
+// Using UPPERCASE for environment variables for easier parsing from dotenv
 export const AppConfigSchema = z.object({
   NODE_ENV: z.nativeEnum(NodeEnv).default(NodeEnv.DEVELOPMENT),
   APP_NAME: z.string().min(1, 'APP_NAME is required'),

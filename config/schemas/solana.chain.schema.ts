@@ -15,15 +15,15 @@ const SolanaChainBaseSchema = z.object({
     .min(1, 'SOLANA_PRIVATE_KEY must not be empty.'),
   solanaCommitment: z.enum(['processed', 'confirmed', 'finalized']).default('confirmed'),
   solanaSignerKeyBase: z.string().optional(), // TODO: Optional?
-
-  // TODO: Is there a better way to get rid of `privateKey` here?
-  privateKey: z.string().optional(), // Unused, will be shadowed by solanaPrivateKey
 });
 
-export const SolanaChainConfigSchema = SolanaChainBaseSchema.merge(CommonChainConfigSchema)
+const CommonConfigForSolana = CommonChainConfigSchema.omit({ privateKey: true });
+
+export const SolanaChainConfigSchema = CommonConfigForSolana.merge(SolanaChainBaseSchema)
   .extend({
-    // Make sure chainType is not overridden by common
     chainType: SolanaChainBaseSchema.shape.chainType,
+    chainName: SolanaChainBaseSchema.shape.chainName,
+    solanaPrivateKey: SolanaChainBaseSchema.shape.solanaPrivateKey,
   })
   .refine((data) => data.chainType === CHAIN_TYPE.SOLANA, {
     message: 'Chain type must be Solana for SolanaChainConfigSchema.',

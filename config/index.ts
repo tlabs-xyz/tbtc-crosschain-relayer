@@ -8,25 +8,14 @@ import {
 } from './schemas/starknet.chain.schema.js';
 import { SuiChainConfigSchema, type SuiChainConfig } from './schemas/sui.chain.schema.js';
 import { sepoliaTestnetChainInput } from './chain/sepolia.chain.js';
-import logger from '../utils/Logger.js';
 import { solanaDevnetChainInput } from './chain/solana.chain.js';
 import { starknetTestnetChainInput } from './chain/starknet.chain.js';
 import { suiTestnetChainInput } from './chain/sui.chain.js';
+import logger from '../utils/Logger.js';
 
-export const appConfig: AppConfig = (() => {
-  try {
-    return AppConfigSchema.parse(process.env);
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      logger.error('Application configuration validation failed:', error.flatten());
-    } else {
-      logger.error('An unexpected error occurred while loading application configuration:', error);
-    }
-    process.exit(1);
-  }
-})();
 
-logger.info('Application configuration loaded successfully using Zod.');
+
+logger.info('Application configuration loaded successfully.');
 
 export type AnyChainConfig =
   | EvmChainConfig
@@ -54,7 +43,7 @@ const chainSchemaRegistry = {
 export const chainConfigs: AllChainConfigs = {};
 let hasChainConfigErrors = false;
 
-logger.info('Loading chain configurations using Zod...');
+logger.info('Loading chain configurations...');
 
 for (const [key, entry] of Object.entries(chainSchemaRegistry)) {
   try {
@@ -64,9 +53,9 @@ for (const [key, entry] of Object.entries(chainSchemaRegistry)) {
     chainConfigs[key] = entry.schema.parse(entry.input);
     logger.info(`Successfully loaded configuration for chain: ${key}`);
   } catch (error: any) {
-    hasChainConfigErrors = true; // Corrected variable name
+    hasChainConfigErrors = true;
     if (error instanceof z.ZodError) {
-      logger.error(`Chain configuration validation failed for '${key}':`, error.flatten());
+      logger.error(`Config validation failed for '${key}'. Flattened errors:`, error.flatten());
     } else {
       logger.error(
         `An unexpected error occurred while loading chain configuration for '${key}':`,

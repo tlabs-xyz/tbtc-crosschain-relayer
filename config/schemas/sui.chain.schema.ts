@@ -16,10 +16,13 @@ const SuiChainBaseSchema = z.object({
   suiGasObjectId: z.string().optional(),
 });
 
-export const SuiChainConfigSchema = SuiChainBaseSchema.merge(CommonChainConfigSchema)
+const CommonConfigForSui = CommonChainConfigSchema.omit({ privateKey: true });
+
+export const SuiChainConfigSchema = CommonConfigForSui.merge(SuiChainBaseSchema)
   .extend({
-    // Ensure chainType is not overridden by common schema's default
     chainType: SuiChainBaseSchema.shape.chainType,
+    chainName: SuiChainBaseSchema.shape.chainName,
+    suiPrivateKey: SuiChainBaseSchema.shape.suiPrivateKey,
   })
   .refine((data) => data.chainType === CHAIN_TYPE.SUI, {
     message: 'Chain type must be Sui for SuiChainConfigSchema.',

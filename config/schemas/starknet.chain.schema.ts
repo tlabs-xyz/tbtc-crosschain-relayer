@@ -15,10 +15,13 @@ const StarknetChainBaseSchema = z.object({
     .min(1, 'STARKNET_PRIVATE_KEY must not be empty.'),
 });
 
-export const StarknetChainConfigSchema = StarknetChainBaseSchema.merge(CommonChainConfigSchema)
+const CommonConfigForStarknet = CommonChainConfigSchema.omit({ privateKey: true });
+
+export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetChainBaseSchema)
   .extend({
-    // Ensure chainType is not overridden by common schema's default
     chainType: StarknetChainBaseSchema.shape.chainType,
+    chainName: StarknetChainBaseSchema.shape.chainName,
+    starknetPrivateKey: StarknetChainBaseSchema.shape.starknetPrivateKey,
   })
   .refine((data) => data.chainType === CHAIN_TYPE.STARKNET, {
     message: 'Chain type must be Starknet for StarknetChainConfigSchema.',

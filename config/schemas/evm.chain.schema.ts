@@ -8,7 +8,6 @@ const EvmChainBaseSchema = z.object({
 
 export const EvmChainConfigSchema = EvmChainBaseSchema.merge(CommonChainConfigSchema)
   .extend({
-    // Make sure chainType is not overridden by common
     chainType: EvmChainBaseSchema.shape.chainType,
   })
   .refine((data) => data.chainType === CHAIN_TYPE.EVM, {
