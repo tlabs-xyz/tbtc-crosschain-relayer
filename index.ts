@@ -17,9 +17,11 @@ import Routes from './routes/Routes.js';
 
 // Utils
 import logger from './utils/Logger.js';
-import { initializeAllChains, initializeAllL2RedemptionServices, getLoadedChainConfigs } from './services/Core.js';
+import { initializeAllChains, initializeAllL2RedemptionServices, getLoadedChainConfigs, startCronJobs } from './services/Core.js';
 import { logErrorContext } from './utils/Logger.js';
 import type { ChainConfig } from './types/ChainConfig.type.js';
+import { ChainHandlerRegistry } from './handlers/ChainHandlerRegistry.js';
+import { setChainHandlerRegistry } from './handlers/ChainHandlerRegistryContext.js';
 
 // -------------------------------------------------------------------------
 // |                            APP CONFIG                                 |
@@ -88,19 +90,25 @@ if (API_ONLY_MODE) {
 let chainConfigs: ChainConfig[] = [];
 
 const main = async () => {
+  const localChainHandlerRegistry = new ChainHandlerRegistry();
+  setChainHandlerRegistry(localChainHandlerRegistry);
+
   if (!API_ONLY_MODE) {
     try {
       logger.info('Attempting to initialize all chain handlers...');
-      await initializeAllChains();
-      chainConfigs = getLoadedChainConfigs();
-      logger.info(`All chain handlers initialized successfully for: ${chainConfigs.map(c => c.chainName).join(', ')}`);
+      const loadedConfigs = await initializeAllChains(localChainHandlerRegistry);
+      chainConfigs = loadedConfigs;
+      if (chainConfigs.length > 0) {
+        logger.info(`All chain handlers initialized successfully for: ${chainConfigs.map(c => c.chainName).join(', ')}`);
+      } else {
+        logger.warn('No chain handlers were initialized. This might be expected if no configurations were found.');
+      }
 
       logger.info('Attempting to initialize all L2 redemption listeners...');
       await initializeAllL2RedemptionServices();
       logger.info('All L2 redemption listeners initialized successfully.');
 
-      const { startCronJobs } = await import('./services/Core.js');
-      startCronJobs();
+      startCronJobs(localChainHandlerRegistry);
       logger.info('Cron jobs started.');
     } catch (error: any) {
       logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);

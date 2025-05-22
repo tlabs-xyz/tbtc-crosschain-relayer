@@ -43,5 +43,4 @@ class ChainHandlerRegistry {
   }
 }
 
-export const chainHandlerRegistry = new ChainHandlerRegistry();
-export type { ChainHandlerRegistry }; 
+export { ChainHandlerRegistry }; 

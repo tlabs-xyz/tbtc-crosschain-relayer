@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import Operations from '../controllers/Operations.controller.js';
 import Utils from '../controllers/Utils.controller.js';
 import { EndpointController } from '../controllers/Endpoint.controller.js';
-import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
+import { getChainHandlerRegistry } from '../handlers/ChainHandlerRegistryContext.js';
 
 export const router = express.Router();
 
@@ -21,9 +21,8 @@ router.get('/status', utils.pingController);
 // Audit logs route for a specific chain
 router.get('/api/:chainName/audit-logs', (req: Request, res: Response) => {
   const { chainName } = req.params;
-  // We might not need a full handler here if the controller just needs the chainName for DB queries.
-  // However, for consistency and future use where a handler might be needed, we can check its existence.
-  const handler = chainHandlerRegistry.get(chainName);
+  const registry = getChainHandlerRegistry();
+  const handler = registry.get(chainName);
   if (!handler && chainName !== 'all') { // Allow 'all' as a special keyword if desired later, or enforce valid handler
     return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
   }
@@ -34,7 +33,8 @@ router.get('/api/:chainName/audit-logs', (req: Request, res: Response) => {
 // Diagnostic routes for a specific chain
 router.get('/api/:chainName/diagnostics', (req: Request, res: Response) => {
   const { chainName } = req.params;
-  const handler = chainHandlerRegistry.get(chainName);
+  const registry = getChainHandlerRegistry();
+  const handler = registry.get(chainName);
   if (!handler && chainName !== 'all') {
     return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
   }
@@ -43,7 +43,8 @@ router.get('/api/:chainName/diagnostics', (req: Request, res: Response) => {
 
 router.get('/api/:chainName/diagnostics/queued', (req: Request, res: Response) => {
   const { chainName } = req.params;
-  const handler = chainHandlerRegistry.get(chainName);
+  const registry = getChainHandlerRegistry();
+  const handler = registry.get(chainName);
   if (!handler && chainName !== 'all') {
     return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
   }
@@ -52,7 +53,8 @@ router.get('/api/:chainName/diagnostics/queued', (req: Request, res: Response) =
 
 router.get('/api/:chainName/diagnostics/initialized', (req: Request, res: Response) => {
   const { chainName } = req.params;
-  const handler = chainHandlerRegistry.get(chainName);
+  const registry = getChainHandlerRegistry();
+  const handler = registry.get(chainName);
   if (!handler && chainName !== 'all') {
     return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
   }
@@ -61,7 +63,8 @@ router.get('/api/:chainName/diagnostics/initialized', (req: Request, res: Respon
 
 router.get('/api/:chainName/diagnostics/finalized', (req: Request, res: Response) => {
   const { chainName } = req.params;
-  const handler = chainHandlerRegistry.get(chainName);
+  const registry = getChainHandlerRegistry();
+  const handler = registry.get(chainName);
   if (!handler && chainName !== 'all') {
     return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
   }
@@ -73,7 +76,8 @@ if (process.env.USE_ENDPOINT === 'true') {
   // Endpoint for receiving reveal data
   router.post('/api/:chainName/reveal', (req: Request, res: Response) => {
     const { chainName } = req.params;
-    const handler = chainHandlerRegistry.get(chainName);
+    const registry = getChainHandlerRegistry();
+    const handler = registry.get(chainName);
     if (!handler) {
       return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
     }
@@ -84,7 +88,8 @@ if (process.env.USE_ENDPOINT === 'true') {
   // Endpoint for checking deposit status
   router.get('/api/:chainName/deposit/:depositId', (req: Request, res: Response) => {
     const { chainName } = req.params;
-    const handler = chainHandlerRegistry.get(chainName);
+    const registry = getChainHandlerRegistry();
+    const handler = registry.get(chainName);
     if (!handler) {
       return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
     }
