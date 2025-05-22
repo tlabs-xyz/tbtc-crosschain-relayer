@@ -93,8 +93,9 @@ export class EndpointController {
       logErrorContext('Error handling reveal endpoint:', error);
 
       // Log error to audit log
-      logDepositError('unknown', 'Error handling reveal endpoint', error);
-      logApiRequest('/api/reveal', 'POST', 'unknown', {}, 500);
+      const depositId = req.body.fundingTx?.txHash || 'unknown';
+      logDepositError(depositId, 'Error handling reveal endpoint', error);
+      logApiRequest('/api/reveal', 'POST', depositId, {}, 500);
 
       res.status(500).json({
         success: false,

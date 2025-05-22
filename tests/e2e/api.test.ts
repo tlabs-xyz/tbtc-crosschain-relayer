@@ -17,9 +17,7 @@ beforeAll(async () => {
 
   testChainNames = activeChainConfigsArray.map((c) => c.chainName);
   if (testChainNames.length === 0) {
-    throw new Error(
-      'No test chains loaded after initialization. Check config and loading logic.',
-    );
+    throw new Error('No test chains loaded after initialization. Check config and loading logic.');
   }
 });
 
@@ -52,8 +50,7 @@ describe('API Endpoints - Multi-Chain', () => {
   });
 
   // Test data for reveal endpoint - this might need to be adjusted per chain type (EVM vs Solana)
-  const getValidRevealDataForChain = (/* chainName: string */) => {
-    // Removed unused chainName parameter
+  const getValidRevealDataForChain = () => {
     // Basic EVM-like reveal data, can be customized if MockSolana1 needs different structure
     return {
       fundingTx: {
@@ -81,7 +78,7 @@ describe('API Endpoints - Multi-Chain', () => {
 
   testChainNames.forEach((chainName) => {
     describe(`Endpoints for chain: ${chainName}`, () => {
-      const validRevealData = getValidRevealDataForChain(/* chainName */);
+      const validRevealData = getValidRevealDataForChain();
       const chainConfig = activeChainConfigsArray.find((c) => c.chainName === chainName);
 
       // Tests for POST /api/:chainName/reveal

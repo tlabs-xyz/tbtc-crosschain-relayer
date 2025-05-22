@@ -121,7 +121,7 @@ export class RedemptionStore {
       });
     } catch (err) {
       logErrorContext(`Failed to fetch all redemptions:`, err);
-      throw err; // Or return []
+      throw err;
     }
   }
 
@@ -146,7 +146,7 @@ export class RedemptionStore {
         `Failed to fetch redemptions by status ${status}${chainId ? ` for chain ${chainId}` : ''}:`,
         err,
       );
-      throw err; // Or return []
+      throw err;
     }
   }
 

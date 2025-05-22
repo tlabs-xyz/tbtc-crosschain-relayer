@@ -30,7 +30,7 @@ export const startCronJobs = () => {
   cron.schedule('* * * * *', async () => {
     await Promise.all(
       chainHandlerRegistry.list().map(async (handler) => {
-        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName as string;
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
         try {
           await handler.processWormholeBridging?.();
           await handler.processFinalizeDeposits();
@@ -46,7 +46,7 @@ export const startCronJobs = () => {
   cron.schedule('*/2 * * * *', async () => {
     await Promise.all(
       chainHandlerRegistry.list().map(async (handler) => {
-        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName as string;
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
         try {
           const l2Service = l2RedemptionServices.get(chainName);
           if (!l2Service) {
@@ -68,7 +68,7 @@ export const startCronJobs = () => {
   cron.schedule('*/60 * * * *', async () => {
     await Promise.all(
       chainHandlerRegistry.list().map(async (handler) => {
-        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName as string;
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
         try {
           if (handler.supportsPastDepositCheck()) {
             const latestBlock = await handler.getLatestBlock();
@@ -185,6 +185,7 @@ export async function initializeAllL2RedemptionServices(): Promise<void> {
     return;
   }
 
+  logger.info('Initializing L2 Redemption Services for configured EVM chains...');
   for (const config of evmChainConfigs) {
     const chainName = config.chainName as string;
     if (config.enableL2Redemption) {
@@ -204,7 +205,7 @@ export async function initializeAllL2RedemptionServices(): Promise<void> {
       logger.info(`L2RedemptionService disabled for ${chainName} by configuration.`);
     }
   }
-  logger.info('All L2 redemption services initialized.');
+  logger.info('All L2 redemption services initialized (or skipped if disabled/not EVM).');
 }
 
 // Export for testing or specific access if needed, though registry is preferred
