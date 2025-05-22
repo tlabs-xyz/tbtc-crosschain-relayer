@@ -4,6 +4,16 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
+  moduleFileExtensions: [
+    'js',
+    'mjs',
+    'cjs',
+    'ts',
+    'mts',
+    'cts',
+    'json',
+    'node',
+  ],
   verbose: true,
   collectCoverageFrom: [
     'controllers/**/*.ts',
