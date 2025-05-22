@@ -85,5 +85,5 @@ export type ChainConfig = {
 
   solanaCommitment?: 'processed' | 'confirmed' | 'finalized';
 
-  solanaSignerKeyBase?: string;
+  solanaSignerKeyBase?: string; // Base64 encoded secret key for Solana
 };

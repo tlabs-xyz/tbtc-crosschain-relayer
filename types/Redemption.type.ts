@@ -28,7 +28,7 @@ export type RedemptionRequestedEventData = {
 
 export type Redemption = {
   id: string; // Unique identifier, e.g., l2TransactionHash
-  chainId: string; // Added chainId
+  chainId: string;
   event: RedemptionRequestedEventData;
   vaaBytes: string | null; // Hex string or base64
   vaaStatus: RedemptionStatus;

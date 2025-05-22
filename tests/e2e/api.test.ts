@@ -1,22 +1,13 @@
 import request from 'supertest';
-// import express from 'express'; // No longer manually creating express app here
-// import { Router } from 'express'; // No longer manually creating router here
 import { ethers } from 'ethers';
-// import { EndpointController } from '../../controllers/Endpoint.controller'; // Controller is part of the app
-// import { MockChainHandler } from '../mocks/MockChainHandler'; // Handlers are part of the app
-import { createTestDeposit } from '../mocks/BlockchainMock';
 import { DepositStatus } from '../../types/DepositStatus.enum.js';
-import { app, chainConfigs as importedChainConfigs, initializationPromise } from '../../index.js'; // Import the actual app and loaded chainConfigs
-
-// Mock environment variables - ensure USE_ENDPOINT is set if your test config relies on it
-// process.env.USE_ENDPOINT = 'true'; // This might be set per chain in test-chain-config.json now
+import { app, chainConfigs as importedChainConfigs, initializationPromise } from '../../index.js';
 
 let testChainNames: string[] = [];
 let chainConfigs: import('../../types/ChainConfig.type.js').ChainConfig[] = [];
 
 beforeAll(async () => {
   await initializationPromise;
-  // Now that initialization is complete, we can safely use the imported chainConfigs
   chainConfigs = importedChainConfigs;
   testChainNames = chainConfigs.map(c => c.chainName);
   if (testChainNames.length === 0) {
@@ -25,10 +16,6 @@ beforeAll(async () => {
 });
 
 describe('API Endpoints - Multi-Chain', () => {
-  // beforeEach can be removed if no per-test setup of the app itself is needed
-  // The app is imported and should be running/listening if index.ts handles that.
-  // For supertest, it doesn't need to be listening globally, request(app) works.
-
   describe('GET /', () => {
     test('should return 200 and a welcome message', async () => {
       const response = await request(app).get('/');

@@ -142,7 +142,6 @@ export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error
     logStatusChange(deposit, newStatus, oldStatus);
   }
 
-  // DepositStore.create(updatedDeposit);
   await DepositStore.update(updatedDeposit);
 
   if (tx) {
@@ -194,7 +193,6 @@ export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, err
     logStatusChange(deposit, newStatus, oldStatus);
   }
 
-  // DepositStore.create(updatedDeposit);
   await DepositStore.update(updatedDeposit);
 
   if (tx) {
@@ -339,7 +337,6 @@ export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => 
     },
   };
 
-  // DepositStore.create(updatedDeposit);
   await DepositStore.update(updatedDeposit);
   return updatedDeposit;
 };

@@ -21,7 +21,7 @@ function serializeRedemption(redemption: Redemption): any {
 }
 
 function deserializeRedemption(dataBlob: any): Omit<Redemption, 'id' | 'chainId' | 'status'> {
-  const partial: any = { ...dataBlob }; // Clone the data blob
+  const partial: any = { ...dataBlob };
 
   if (partial.event) {
     if (partial.event.amount && typeof partial.event.amount === 'string') {
@@ -89,7 +89,7 @@ export class RedemptionStore {
       return {
         id: record.id,
         chainId: record.chainId,
-        status: record.status as unknown as RedemptionStatus, // Assuming status in DB matches enum values
+        status: record.status as unknown as RedemptionStatus,
         ...deserializedBlobParts,
       } as Redemption; // Cast to Redemption after combining all parts
     } catch (err) {

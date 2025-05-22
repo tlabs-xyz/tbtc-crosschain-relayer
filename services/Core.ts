@@ -161,7 +161,7 @@ export async function initializeAllL2RedemptionServices(): Promise<void> {
   for (const config of loadedChainConfigs) {
     if (!l2RedemptionServices.has(config.chainName)) {
       try {
-        const service = await L2RedemptionService.create(config); // Assuming create is async
+        const service = await L2RedemptionService.create(config);
         l2RedemptionServices.set(config.chainName, service);
         logger.info(`L2RedemptionService initialized for chain: ${config.chainName}`);
       } catch (error) {

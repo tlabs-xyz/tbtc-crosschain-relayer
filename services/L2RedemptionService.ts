@@ -22,10 +22,10 @@ export class L2RedemptionService {
 
   private l2WormholeChainId: number;
   private l2WormholeGatewayAddress: string; // Emitter address on L2 for VAA fetching
-  private chainConfig: ChainConfig; // Added to store the chainConfig
+  private chainConfig: ChainConfig;
 
   private constructor(chainConfig: ChainConfig) {
-    this.chainConfig = chainConfig; // Store the chainConfig
+    this.chainConfig = chainConfig;
     this.l2Provider = new ethers.providers.JsonRpcProvider(chainConfig.l2Rpc);
     this.l2BitcoinRedeemerContract = new ethers.Contract(
       chainConfig.l2BitcoinRedeemerAddress,
@@ -35,8 +35,6 @@ export class L2RedemptionService {
 
     this.l2WormholeChainId = chainConfig.l2WormholeChainId;
     this.l2WormholeGatewayAddress = chainConfig.l2WormholeGatewayAddress;
-
-    // Get L1RedemptionHandler from the registry
     this.l1RedemptionHandler = l1RedemptionHandlerRegistry.get(chainConfig);
 
     logger.info(
@@ -46,7 +44,7 @@ export class L2RedemptionService {
       `Wormhole VAA Service configured for L2 Wormhole Gateway: ${chainConfig.l2WormholeGatewayAddress} on chain ID: ${chainConfig.l2WormholeChainId}.`,
     );
     logger.info(
-      `L1 Redemption Handler (via Registry) configured for L1BitcoinRedeemer: ${chainConfig.l1BitcoinRedeemerAddress} on ${chainConfig.l1Rpc}.`,
+      `L1 Redemption Handler configured for L1BitcoinRedeemer: ${chainConfig.l1BitcoinRedeemerAddress} on ${chainConfig.l1Rpc}.`,
     );
   }
 
