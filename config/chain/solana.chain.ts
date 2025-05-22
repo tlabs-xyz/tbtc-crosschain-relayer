@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CHAIN_TYPE, NETWORK } from '../schemas/chain.common.schema.js';
+import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
 import type { SolanaChainConfigSchema } from '../schemas/solana.chain.schema.js';
 import { getEnv } from '../../utils/Env.js';
 import { commonChainInput } from './common.chain.js';

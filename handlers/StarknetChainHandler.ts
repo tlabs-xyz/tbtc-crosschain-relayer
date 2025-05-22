@@ -1,4 +1,4 @@
-import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
 import logger from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';

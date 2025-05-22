@@ -7,7 +7,7 @@ import type { TransactionReceipt } from '@ethersproject/providers';
 import { AnchorProvider, type Idl, Program, setProvider, Wallet } from '@coral-xyz/anchor';
 import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes/index.js';
 
-import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { SolanaChainConfig } from '../config/schemas/solana.chain.schema.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';

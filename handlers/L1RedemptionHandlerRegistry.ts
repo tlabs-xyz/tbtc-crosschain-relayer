@@ -2,7 +2,7 @@ import { L1RedemptionHandler } from './L1RedemptionHandler.js';
 import type { AnyChainConfig } from '../config/index.js';
 import logger from '../utils/Logger.js';
 import { ethers } from 'ethers';
-import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
 /**

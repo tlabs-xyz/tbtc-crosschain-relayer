@@ -6,7 +6,7 @@ import logger from '../../utils/Logger.js';
 import { createTestDeposit } from './BlockchainMock.js';
 import { BigNumber, ethers } from 'ethers';
 import type { AnyChainConfig } from '../../config/index.js';
-import { CHAIN_TYPE, NETWORK } from '../../config/schemas/chain.common.schema.js';
+import { CHAIN_TYPE, NETWORK } from '../../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
 import type { SolanaChainConfig } from '../../config/schemas/solana.chain.schema.js';
 import type { SuiChainConfig } from '../../config/schemas/sui.chain.schema.js';

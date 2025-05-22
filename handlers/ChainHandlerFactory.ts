@@ -1,5 +1,5 @@
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import logger from '../utils/Logger.js';
 
 import { EVMChainHandler } from './EVMChainHandler.js';

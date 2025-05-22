@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CHAIN_TYPE, NETWORK } from '../schemas/chain.common.schema.js';
+import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
 import type { SuiChainConfigSchema } from '../schemas/sui.chain.schema.js';
 import { commonChainInput } from './common.chain.js';
 import { getEnv } from '../../utils/Env.js';

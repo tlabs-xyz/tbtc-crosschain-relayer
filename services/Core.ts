@@ -15,7 +15,7 @@ import { L2RedemptionService } from './L2RedemptionService.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
 import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
-import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 
 const chainConfigsArray = Object.values(chainConfigs).filter(
   (config): config is AnyChainConfig => config !== null && config !== undefined,
@@ -156,7 +156,7 @@ export async function initializeAllChains(): Promise<void> {
   const initLimit = pLimit(5); // Limit concurrency for initialization
   const initializationPromises = chainHandlerRegistry.list().map((handler) =>
     initLimit(async () => {
-      const chainName = (handler as BaseChainHandler).config.chainName as string;
+      const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName as string;
       try {
         await handler.initialize();
         logger.info(`Successfully initialized handler for ${chainName}`);

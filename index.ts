@@ -26,7 +26,8 @@ import { logErrorContext } from './utils/Logger.js';
 
 import 'dotenv/config';
 
-import { appConfig, chainConfigs } from './config/index.js';
+import { chainConfigs } from './config/index.js';
+import { appConfig } from './config/app.config.js';
 
 // -------------------------------------------------------------------------
 // |                            APP INSTANCE                               |
@@ -61,7 +62,11 @@ const main = async () => {
     }
   } catch (error) {
     logErrorContext('FATAL: Failed during initial setup after config loading:', error);
-    process.exit(1);
+    if (appConfig.NODE_ENV !== 'test') {
+      process.exit(1);
+    }
+    // If in test mode, rethrow the error so test frameworks can catch it
+    throw error;
   }
 
   // -------------------------------------------------------------------------
