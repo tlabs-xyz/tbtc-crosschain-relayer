@@ -22,7 +22,6 @@ export const AppConfigSchema = z.object({
     .url('CORS_URL must be a valid URL')
     .min(1, 'CORS_URL is required if CORS_ENABLED is true')
     .optional(),
-  JSON_PATH: z.string().optional(), // TODO: Deprecated
   CLEAN_QUEUED_TIME: z.coerce.number().int().positive().default(48),
   CLEAN_FINALIZED_TIME: z.coerce.number().int().positive().default(12),
   CLEAN_BRIDGED_TIME: z.coerce.number().int().positive().default(12),

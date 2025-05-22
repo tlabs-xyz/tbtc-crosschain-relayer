@@ -17,9 +17,55 @@ import { RedemptionStatus } from '../types/Redemption.type.js';
 import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 
-const chainConfigsArray = Object.values(chainConfigs).filter(
-  (config): config is AnyChainConfig => config !== null && config !== undefined,
-);
+let effectiveChainConfigs: AnyChainConfig[] = [];
+
+const supportedChainsEnv = process.env.SUPPORTED_CHAINS;
+
+if (supportedChainsEnv && supportedChainsEnv.trim() !== '') {
+  const supportedChainKeys = supportedChainsEnv
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  if (supportedChainKeys.length > 0) {
+    logger.info(
+      `SUPPORTED_CHAINS environment variable set. Attempting to load: ${supportedChainKeys.join(', ')}`,
+    );
+    supportedChainKeys.forEach((chainKey) => {
+      const config = chainConfigs[chainKey];
+      if (config) {
+        effectiveChainConfigs.push(config);
+      } else {
+        logger.warn(
+          `Configuration for chain key '${chainKey}' specified in SUPPORTED_CHAINS not found in loaded chainConfigs. Skipping.`,
+        );
+      }
+    });
+
+    if (effectiveChainConfigs.length === 0) {
+      logger.error(
+        'No valid chain configurations were loaded based on SUPPORTED_CHAINS. The relayer may not operate as expected. Please check your SUPPORTED_CHAINS environment variable and individual chain configuration files.',
+      );
+      // Consider process.exit(1) for non-test, non-API_ONLY_MODE environments
+    }
+  } else {
+    logger.warn(
+      'SUPPORTED_CHAINS environment variable is set but resulted in an empty list of chains after parsing. All loaded chain configurations will be used.',
+    );
+    effectiveChainConfigs = Object.values(chainConfigs).filter(
+      (config): config is AnyChainConfig => config !== null && config !== undefined,
+    );
+  }
+} else {
+  logger.info(
+    'SUPPORTED_CHAINS environment variable not set or is empty. All loaded chain configurations will be used.',
+  );
+  effectiveChainConfigs = Object.values(chainConfigs).filter(
+    (config): config is AnyChainConfig => config !== null && config !== undefined,
+  );
+}
+
+const chainConfigsArray: AnyChainConfig[] = effectiveChainConfigs;
 
 const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
 
