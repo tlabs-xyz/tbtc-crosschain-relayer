@@ -7,6 +7,10 @@ import { createTestDeposit } from './BlockchainMock.js';
 import { BigNumber, ethers } from 'ethers';
 import type { AnyChainConfig } from '../../config/index.js';
 import { CHAIN_TYPE, NETWORK } from '../../config/schemas/chain.common.schema.js';
+import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
+import type { SolanaChainConfig } from '../../config/schemas/solana.chain.schema.js';
+import type { SuiChainConfig } from '../../config/schemas/sui.chain.schema.js';
+import type { StarknetChainConfig } from '../../config/schemas/starknet.chain.schema.js';
 
 const mockReceipt = {
   to: '0x0000000000000000000000000000000000000000',
@@ -37,33 +41,99 @@ export class MockChainHandler implements ChainHandlerInterface {
   private listeners: Map<string, ((...args: any[]) => void)[]> = new Map();
   private processingDelayMs: number = 100; // Simulate processing delay
 
-  constructor(config?: Partial<AnyChainConfig>) {
-    // Initialize with test deposits
+  constructor(config: Partial<AnyChainConfig> = {}) {
     this.addTestDeposits();
-    // Default mock config
-    // Ensure this default config satisfies the AnyChainConfig type requirements.
-    // This might require casting or providing defaults for all discriminated union members.
-    // For simplicity, we'll assume a base EVM-like structure for the mock.
-    this.config = {
-      chainName: config?.chainName ?? 'MockChain',
-      chainType: config?.chainType ?? CHAIN_TYPE.EVM,
-      network: config?.network ?? NETWORK.TESTNET,
-      l1Rpc: config?.l1Rpc ?? 'http://localhost:8545',
-      l1ContractAddress: config?.l1ContractAddress ?? ethers.constants.AddressZero,
-      l1BitcoinRedeemerAddress: config?.l1BitcoinRedeemerAddress ?? ethers.constants.AddressZero,
-      l2BitcoinRedeemerAddress: config?.l2BitcoinRedeemerAddress ?? ethers.constants.AddressZero,
-      l2WormholeGatewayAddress: config?.l2WormholeGatewayAddress ?? ethers.constants.AddressZero,
-      l2WormholeChainId: config?.l2WormholeChainId ?? 0,
-      vaultAddress: config?.vaultAddress ?? ethers.constants.AddressZero,
-      privateKey: config?.privateKey ?? ethers.Wallet.createRandom().privateKey,
-      l2Rpc: config?.l2Rpc ?? 'http://localhost:8546', // Default for EVM L2
-      useEndpoint: config?.useEndpoint ?? false,
-      l2ContractAddress: config?.l2ContractAddress ?? ethers.constants.AddressZero,
-      // Add Solana specific fields with defaults if chainType could be SOLANA
-      // solanaPrivateKey: (config as any)?.solanaPrivateKey ?? '',
-      // solanaCommitment: (config as any)?.solanaCommitment ?? 'confirmed',
-      ...(config ?? {}),
-    } as AnyChainConfig; // Type assertion might be needed if defaults don't fully satisfy
+
+    const determinedChainType = config?.chainType ?? CHAIN_TYPE.EVM;
+
+    // Base properties common to all or having sensible defaults
+    const baseProperties = {
+      chainName: 'MockChain',
+      network: NETWORK.TESTNET,
+      useEndpoint: false,
+      l1Rpc: 'http://localhost:8545',
+      l2Rpc: 'http://localhost:8546',
+      l2WsRpc: 'ws://localhost:8547',
+      l1ContractAddress: ethers.constants.AddressZero,
+      l2ContractAddress: ethers.constants.AddressZero,
+      l1BitcoinRedeemerAddress: ethers.constants.AddressZero,
+      l2BitcoinRedeemerAddress: ethers.constants.AddressZero,
+      l2WormholeGatewayAddress: ethers.constants.AddressZero,
+      l2WormholeChainId: 0,
+      vaultAddress: ethers.constants.AddressZero,
+      blockExplorerUrl: '',
+      tokenBridgeAddress: ethers.constants.AddressZero,
+      wormholeRelayerAddress: ethers.constants.AddressZero,
+      relayerFee: 0,
+      maxRetries: 5,
+      retryDelay: 5000,
+      requestTimeout: 60000,
+      pastEventsQueryLimit: 1000,
+      startBlockOffset: 0,
+      solanaCommitment: 'confirmed' as const,
+      defaultGasLimit: 500000,
+      ...config
+    };
+
+
+    let finalConfig: AnyChainConfig;
+
+    switch (determinedChainType) {
+      case CHAIN_TYPE.EVM: {
+        const evmConfig = {
+          ...baseProperties,
+          chainType: CHAIN_TYPE.EVM,
+          privateKey: (config as EvmChainConfig).privateKey || ethers.Wallet.createRandom().privateKey,
+          l2WsRpc: (config as EvmChainConfig).l2WsRpc || baseProperties.l2WsRpc,
+          l2ContractAddress: (config as EvmChainConfig).l2ContractAddress || baseProperties.l2ContractAddress,
+          l2BitcoinRedeemerAddress: (config as EvmChainConfig).l2BitcoinRedeemerAddress || baseProperties.l2BitcoinRedeemerAddress,
+          l2WormholeGatewayAddress: (config as EvmChainConfig).l2WormholeGatewayAddress || baseProperties.l2WormholeGatewayAddress,
+          l2WormholeChainId: (config as EvmChainConfig).l2WormholeChainId || baseProperties.l2WormholeChainId,
+          l2StartBlock: (config as EvmChainConfig).l2StartBlock,
+          endpointUrl: (config as EvmChainConfig).endpointUrl,
+        };
+        finalConfig = evmConfig as EvmChainConfig;
+        break;
+      }
+      case CHAIN_TYPE.SOLANA: {
+        const solanaConfig = {
+          ...baseProperties,
+          chainType: CHAIN_TYPE.SOLANA,
+          solanaPrivateKey: (config as SolanaChainConfig).solanaPrivateKey || 'mockSolanaPrivKey',
+          solanaCommitment: (config as SolanaChainConfig).solanaCommitment || 'confirmed',
+        };
+        finalConfig = solanaConfig as unknown as SolanaChainConfig;
+        break;
+      }
+      case CHAIN_TYPE.SUI: {
+        const suiConfig = {
+          ...baseProperties,
+          chainType: CHAIN_TYPE.SUI,
+          suiPrivateKey: (config as SuiChainConfig).suiPrivateKey || 'mockSuiPrivKey',
+          suiGasObjectId: (config as SuiChainConfig).suiGasObjectId,
+        };
+        finalConfig = suiConfig as unknown as SuiChainConfig;
+        break;
+      }
+      case CHAIN_TYPE.STARKNET: {
+        const starknetConfig = {
+          ...baseProperties,
+          chainType: CHAIN_TYPE.STARKNET,
+          starknetPrivateKey: (config as StarknetChainConfig).starknetPrivateKey || 'mockStarknetPrivKey',
+        };
+        finalConfig = starknetConfig as unknown as StarknetChainConfig;
+        break;
+      }
+      default:
+        logger.warn('MockChainHandler: Unknown chainType in config, defaulting to EVM.');
+        finalConfig = {
+          ...baseProperties,
+          chainType: CHAIN_TYPE.EVM,
+          privateKey: ethers.Wallet.createRandom().privateKey,
+        } as EvmChainConfig;
+    }
+
+    this.config = finalConfig;
   }
 
   /**

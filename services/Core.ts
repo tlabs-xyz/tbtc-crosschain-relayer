@@ -30,7 +30,7 @@ export const startCronJobs = () => {
   cron.schedule('* * * * *', async () => {
     await Promise.all(
       chainHandlerRegistry.list().map(async (handler) => {
-        const chainName = (handler as BaseChainHandler).config.chainName as string;
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName as string;
         try {
           await handler.processWormholeBridging?.();
           await handler.processFinalizeDeposits();
@@ -46,7 +46,7 @@ export const startCronJobs = () => {
   cron.schedule('*/2 * * * *', async () => {
     await Promise.all(
       chainHandlerRegistry.list().map(async (handler) => {
-        const chainName = (handler as BaseChainHandler).config.chainName as string;
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName as string;
         try {
           const l2Service = l2RedemptionServices.get(chainName);
           if (!l2Service) {
@@ -68,7 +68,7 @@ export const startCronJobs = () => {
   cron.schedule('*/60 * * * *', async () => {
     await Promise.all(
       chainHandlerRegistry.list().map(async (handler) => {
-        const chainName = (handler as BaseChainHandler).config.chainName as string;
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName as string;
         try {
           if (handler.supportsPastDepositCheck()) {
             const latestBlock = await handler.getLatestBlock();
@@ -140,7 +140,7 @@ export const startCronJobs = () => {
 
 export async function initializeAllChains(): Promise<void> {
   if (chainConfigsArray.length === 0) {
-    logger.warn('No chain configurations loaded via Zod. Relayer might not operate on any chain.');
+    logger.warn('No chain configurations loaded. Relayer might not operate on any chain.');
     return;
   }
   logger.info(

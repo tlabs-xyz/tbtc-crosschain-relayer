@@ -1,33 +1,24 @@
 import request from 'supertest';
 import { ethers } from 'ethers';
-// import { createTestDeposit } from '../mocks/BlockchainMock.js'; // Removed unused import
 import { DepositStatus } from '../../types/DepositStatus.enum.js';
 import { app, initializationPromise } from '../../index.js';
-import { chainConfigs as loadedChainConfigs, type AnyChainConfig } from '../../config/index.js'; // Updated to AnyChainConfig
-
-// Mock environment variables - ensure USE_ENDPOINT is set if your test config relies on it
-// process.env.USE_ENDPOINT = 'true'; // This might be set per chain in test-chain-config.json now
+import { chainConfigs as loadedChainConfigs, type AnyChainConfig } from '../../config/index.js';
 
 let testChainNames: string[] = [];
-// Corrected type: use AnyChainConfig or a compatible one if available from config/index.js, or keep as is for now
-let activeChainConfigsArray: AnyChainConfig[] = []; // Using AnyChainConfig now
+let activeChainConfigsArray: AnyChainConfig[] = [];
 
 beforeAll(async () => {
   await initializationPromise;
-  // Convert the loadedChainConfigs object map to an array of AnyChainConfig
   activeChainConfigsArray = Object.values(loadedChainConfigs)
     .filter((config): config is AnyChainConfig => config !== undefined)
     .map((config: AnyChainConfig) => {
-      // The mapping is now simpler as we directly use AnyChainConfig
-      // However, the test logic might still expect fields that were specific to the old ChainConfig
-      // This might require further adjustments in the test logic itself if it breaks
       return config;
     });
 
   testChainNames = activeChainConfigsArray.map((c) => c.chainName);
   if (testChainNames.length === 0) {
     throw new Error(
-      'No test chains loaded after initialization. Check Zod config and loading logic.',
+      'No test chains loaded after initialization. Check config and loading logic.',
     );
   }
 });

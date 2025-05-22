@@ -1,10 +1,26 @@
 import type { Redemption, RedemptionStatus } from '../types/Redemption.type.js';
-import logger from './Logger.js';
+import logger, { logErrorContext } from './Logger.js';
 import { ethers } from 'ethers';
 import { prisma } from '../utils/prisma.js';
 
-function serializeRedemption(redemption: Redemption): any {
-  const r = JSON.parse(JSON.stringify(redemption));
+// It's better to define this in a shared errors file and import it
+export class VersionMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VersionMismatchError';
+  }
+}
+
+function serializeRedemptionData(redemption: Redemption): any {
+  // Clone the redemption object and remove top-level fields that are separate columns in Prisma
+  const dataBlob: Partial<Redemption> = { ...redemption };
+  delete dataBlob.id;
+  delete dataBlob.chainName;
+  delete dataBlob.status;
+  delete dataBlob.version; // Ensure version is not part of the JSON blob
+
+  // Handle BigNumber serialization within the remaining dataBlob parts
+  const r = JSON.parse(JSON.stringify(dataBlob)); // Basic deep clone for further manipulation
   if (r.event) {
     if (r.event.amount && ethers.BigNumber.isBigNumber(r.event.amount)) {
       r.event.amount = r.event.amount.toString();
@@ -17,11 +33,11 @@ function serializeRedemption(redemption: Redemption): any {
       r.event.mainUtxo.txOutputValue = r.event.mainUtxo.txOutputValue.toString();
     }
   }
-  return r;
+  return r; // This is the object to be stored in the 'data' JSON field
 }
 
-function deserializeRedemption(dataBlob: any): Omit<Redemption, 'id' | 'chainId' | 'status'> {
-  const partial: any = { ...dataBlob };
+function deserializeRedemptionData(dataBlob: any): Omit<Redemption, 'id' | 'chainName' | 'status' | 'version'> {
+  const partial: any = { ...dataBlob }; // Clone the data blob from DB
 
   if (partial.event) {
     if (partial.event.amount && typeof partial.event.amount === 'string') {
@@ -30,25 +46,21 @@ function deserializeRedemption(dataBlob: any): Omit<Redemption, 'id' | 'chainId'
     // txOutputValue in mainUtxo is intended to be a string representing BigNumber,
     // so no further deserialization needed here for it.
   }
-
-  // Remove properties that are now top-level in Prisma model to avoid conflicts
-  // and ensure we use the authoritative top-level values.
-  delete partial.id;
-  delete partial.chainId;
-  delete partial.status;
-
-  return partial as Omit<Redemption, 'id' | 'chainId' | 'status'>;
+  // id, chainName, status, version are already top-level, so dataBlob doesn't contain them directly.
+  return partial as Omit<Redemption, 'id' | 'chainName' | 'status' | 'version'>;
 }
 
 export class RedemptionStore {
-  static async create(redemption: Redemption): Promise<void> {
+  static async create(redemption: Omit<Redemption, 'version'> & { version?: number }): Promise<void> {
     try {
+      // Prisma handles the default version: 1 from schema
       await prisma.redemption.create({
         data: {
           id: redemption.id,
-          chainId: redemption.chainId,
+          chainName: redemption.chainName,
           status: redemption.status.toString(),
-          data: serializeRedemption(redemption),
+          data: serializeRedemptionData(redemption as Redemption), // Pass the full object for serialization logic
+          // version will be defaulted by Prisma
         },
       });
       logger.info(`Redemption created: ${redemption.id}`);
@@ -56,25 +68,51 @@ export class RedemptionStore {
       if (err.code === 'P2002') {
         logger.warn(`Redemption already exists: ${redemption.id}`);
       } else {
-        logger.error(`Failed to create redemption ${redemption.id}: ${err}`);
+        logErrorContext(`Failed to create redemption ${redemption.id}:`, err);
         throw err;
       }
     }
   }
 
   static async update(redemption: Redemption): Promise<void> {
+    if (typeof redemption.version !== 'number') {
+      const errMsg = `Redemption update for ${redemption.id} is missing version number. Optimistic locking requires version.`;
+      logger.error(errMsg);
+      throw new Error(errMsg);
+    }
     try {
-      await prisma.redemption.update({
-        where: { id: redemption.id },
+      const result = await prisma.redemption.updateMany({
+        where: {
+          id: redemption.id,
+          version: redemption.version,
+        },
         data: {
-          chainId: redemption.chainId,
+          chainName: redemption.chainName,
           status: redemption.status.toString(),
-          data: serializeRedemption(redemption),
+          data: serializeRedemptionData(redemption),
+          version: redemption.version + 1,
         },
       });
-      logger.info(`Redemption updated: ${redemption.id}`);
+
+      if (result.count === 0) {
+        const existingRedemption = await prisma.redemption.findUnique({ where: { id: redemption.id } });
+        if (existingRedemption) {
+          throw new VersionMismatchError(
+            `Redemption ${redemption.id} update failed due to version mismatch. Expected ${redemption.version}, found ${existingRedemption.version}.`,
+          );
+        } else {
+          throw new Error(
+            `Redemption ${redemption.id} update failed. Record not found (it may have been deleted).`,
+          );
+        }
+      }
+      logger.info(`Redemption updated: ${redemption.id} to version ${redemption.version + 1}`);
     } catch (err) {
-      logger.error(`Failed to update redemption ${redemption.id}: ${err}`);
+      if (err instanceof VersionMismatchError) {
+        logErrorContext(`Version mismatch for redemption ${redemption.id}:`, err);
+        throw err;
+      }
+      logErrorContext(`Failed to update redemption ${redemption.id}:`, err);
       throw err;
     }
   }
@@ -84,16 +122,17 @@ export class RedemptionStore {
       const record = await prisma.redemption.findUnique({ where: { id } });
       if (!record) return null;
 
-      const deserializedBlobParts = deserializeRedemption(record.data);
+      const deserializedBlobParts = deserializeRedemptionData(record.data);
 
       return {
         id: record.id,
-        chainId: record.chainId,
+        chainName: record.chainName,
         status: record.status as unknown as RedemptionStatus,
+        version: record.version, // Add version from the top-level field
         ...deserializedBlobParts,
-      } as Redemption; // Cast to Redemption after combining all parts
+      } as Redemption;
     } catch (err) {
-      logger.error(`Failed to read redemption ${id}: ${err}`);
+      logErrorContext(`Failed to read redemption ${id}:`, err);
       throw err;
     }
   }
@@ -102,53 +141,57 @@ export class RedemptionStore {
     try {
       const records = await prisma.redemption.findMany();
       return records.map((record: any) => {
-        const deserializedBlobParts = deserializeRedemption(record.data);
+        const deserializedBlobParts = deserializeRedemptionData(record.data);
         return {
           id: record.id,
-          chainId: record.chainId,
+          chainName: record.chainName,
           status: record.status as unknown as RedemptionStatus,
+          version: record.version, // Add version
           ...deserializedBlobParts,
         } as Redemption;
       });
     } catch (err) {
-      logger.error(`Failed to fetch all redemptions: ${err}`);
-      return [];
+      logErrorContext(`Failed to fetch all redemptions:`, err);
+      throw err; // Or return []
     }
   }
 
-  static async getByStatus(status: RedemptionStatus, chainId?: string): Promise<Redemption[]> {
+  static async getByStatus(status: RedemptionStatus, chainName?: string): Promise<Redemption[]> {
     try {
       const whereClause: any = { status: status.toString() };
-      if (chainId) {
-        whereClause.chainId = chainId;
+      if (chainName) {
+        whereClause.chainName = chainName;
       }
       const records = await prisma.redemption.findMany({ where: whereClause });
       return records.map((record: any) => {
-        const deserializedBlobParts = deserializeRedemption(record.data);
+        const deserializedBlobParts = deserializeRedemptionData(record.data);
         return {
           id: record.id,
-          chainId: record.chainId,
+          chainName: record.chainName,
           status: record.status as unknown as RedemptionStatus,
+          version: record.version, // Add version
           ...deserializedBlobParts,
         } as Redemption;
       });
     } catch (err) {
-      logger.error(
-        `Failed to fetch redemptions by status${chainId ? ` for chain ${chainId}` : ''}: ${err}`,
+      logErrorContext(
+        `Failed to fetch redemptions by status ${status}${chainName ? ` for chain ${chainName}` : ''}:`,
+        err,
       );
-      return [];
+      throw err; // Or return []
     }
   }
 
   static async delete(id: string): Promise<void> {
+    // Deletion doesn't typically need version locking, but one could be added if necessary.
     try {
       await prisma.redemption.delete({ where: { id } });
       logger.info(`Redemption deleted: ${id}`);
     } catch (err: any) {
-      if (err.code === 'P2025') {
+      if (err.code === 'P2025') { // Record to delete does not exist
         logger.warn(`Redemption not found for delete: ${id}`);
       } else {
-        logger.error(`Failed to delete redemption ${id}: ${err}`);
+        logErrorContext(`Failed to delete redemption ${id}:`, err);
         throw err;
       }
     }

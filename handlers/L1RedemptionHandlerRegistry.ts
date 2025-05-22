@@ -2,7 +2,14 @@ import { L1RedemptionHandler } from './L1RedemptionHandler.js';
 import type { AnyChainConfig } from '../config/index.js';
 import logger from '../utils/Logger.js';
 import { ethers } from 'ethers';
+import { CHAIN_TYPE } from '../config/schemas/chain.common.schema.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
+/**
+ * Manages L1RedemptionHandler instances.
+ * Uses a composite key based on L1 RPC URL, L1 contract address, and L1 signer address
+ * to reuse handlers for chains sharing the same L1 configuration.
+ */
 class L1RedemptionHandlerRegistry {
   private handlers: Map<string, L1RedemptionHandler> = new Map();
 
@@ -15,15 +22,29 @@ class L1RedemptionHandlerRegistry {
   }
 
   public get(chainConfig: AnyChainConfig): L1RedemptionHandler {
-    const l1SignerAddress = new ethers.Wallet(chainConfig.privateKey).address;
-    const key = this.generateKey(chainConfig.l1Rpc, chainConfig.l1ContractAddress, l1SignerAddress);
+    if (chainConfig.chainType !== CHAIN_TYPE.EVM) {
+      const errorMsg = `L1RedemptionHandler is only applicable to EVM chains. Chain ${chainConfig.chainName} is of type ${chainConfig.chainType}.`;
+      logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+    // Now we know it's an EVM chain
+    const evmConfig = chainConfig as EvmChainConfig;
+
+    if (!evmConfig.privateKey) {
+      const errorMsg = `Private key is missing for EVM chain ${evmConfig.chainName} in L1RedemptionHandlerRegistry.`;
+      logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const l1SignerAddress = new ethers.Wallet(evmConfig.privateKey).address;
+    const key = this.generateKey(evmConfig.l1Rpc, evmConfig.l1ContractAddress, l1SignerAddress);
 
     if (!this.handlers.has(key)) {
       logger.info(`Creating new L1RedemptionHandler instance for key: ${key}`);
       const handler = new L1RedemptionHandler(
-        chainConfig.l1Rpc,
-        chainConfig.l1ContractAddress,
-        chainConfig.privateKey,
+        evmConfig.l1Rpc,
+        evmConfig.l1ContractAddress,
+        evmConfig.privateKey,
       );
       this.handlers.set(key, handler);
       return handler;

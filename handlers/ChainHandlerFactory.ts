@@ -20,7 +20,7 @@ export class ChainHandlerFactory {
   /**
    * Create a chain handler based on the provided configuration
    * @param config Configuration for the chain
-   * @returns An instance of a chain handler, or null if creation fails (e.g. missing l1Config)
+   * @returns An instance of a chain handler
    */
   static createHandler(config: AnyChainConfig): ChainHandlerInterface | null {
     logger.info(

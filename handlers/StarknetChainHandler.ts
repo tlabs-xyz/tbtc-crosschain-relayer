@@ -5,7 +5,7 @@ import { BaseChainHandler } from './BaseChainHandler.js';
 
 // Placeholder for StarkNet specific imports (e.g., starknet.js)
 
-export class StarknetChainHandler extends BaseChainHandler {
+export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {
   constructor(config: StarknetChainConfig) {
     super(config);
     logger.info(`Constructing StarknetChainHandler for ${this.config.chainName}`);
