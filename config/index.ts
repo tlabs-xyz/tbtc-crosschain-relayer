@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { AppConfigSchema, type AppConfig } from './schemas/app.schema.js';
 import { EvmChainConfigSchema, type EvmChainConfig } from './schemas/evm.chain.schema.js';
 import { SolanaChainConfigSchema, type SolanaChainConfig } from './schemas/solana.chain.schema.js';
 import {
@@ -12,8 +11,6 @@ import { solanaDevnetChainInput } from './chain/solana.chain.js';
 import { starknetTestnetChainInput } from './chain/starknet.chain.js';
 import { suiTestnetChainInput } from './chain/sui.chain.js';
 import logger from '../utils/Logger.js';
-
-
 
 logger.info('Application configuration loaded successfully.');
 
