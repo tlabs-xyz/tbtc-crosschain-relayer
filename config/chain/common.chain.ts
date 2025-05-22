@@ -1,4 +1,4 @@
-import type { CommonChainConfigSchema } from '../schemas/chain.common.schema.js';
+import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
 import { z } from 'zod';
 import { getEnv } from '../../utils/Env.js';
 

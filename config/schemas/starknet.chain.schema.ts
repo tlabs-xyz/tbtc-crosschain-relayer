@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CHAIN_TYPE } from './chain.common.schema.js';
-import { CommonChainConfigSchema } from './chain.common.schema.js';
+import { CHAIN_TYPE } from './common.schema.js';
+import { CommonChainConfigSchema } from './common.schema.js';
 
 // Base schema for fields that are specific to Starknet chains.
 const StarknetChainBaseSchema = z.object({

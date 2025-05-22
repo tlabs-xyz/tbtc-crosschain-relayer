@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CHAIN_TYPE } from './chain.common.schema.js';
-import { CommonChainConfigSchema } from './chain.common.schema.js';
+import { CHAIN_TYPE } from './common.schema.js';
+import { CommonChainConfigSchema } from './common.schema.js';
 
 // Base schema for fields that are specific to Solana chains.
 const SolanaChainBaseSchema = z.object({
@@ -34,5 +34,4 @@ export const SolanaChainConfigSchema = CommonConfigForSolana.merge(SolanaChainBa
     path: ['solanaPrivateKey'],
   });
 
-// Infer the TypeScript type from the schema
 export type SolanaChainConfig = z.infer<typeof SolanaChainConfigSchema>;
