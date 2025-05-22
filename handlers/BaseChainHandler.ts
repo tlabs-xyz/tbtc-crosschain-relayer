@@ -19,10 +19,11 @@ import {
   updateLastActivity,
 } from '../utils/Deposits.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
+
+export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
 
 export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
@@ -35,7 +36,6 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   public config: ChainConfig;
   protected wormhole: Wormhole<Network>;
 
-  protected readonly TIME_TO_RETRY = 1000 * 60 * 5; // 5 minutes
 
   constructor(config: ChainConfig) {
     this.config = config;
@@ -113,7 +113,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      async (minter, depositKey, depositor, optimisticMintingDebt) => {
+      async (_minter: any, depositKey: any, _depositor: any, _optimisticMintingDebt: any) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
@@ -122,7 +122,8 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
             logger.debug(`Received OptimisticMintingFinalized event for Deposit ID: ${deposit.id}`);
             // Check if already finalized to avoid redundant calls/logs
             if (deposit.status !== DepositStatus.FINALIZED) {
-              this.finalizeDeposit(deposit); // Call finalizeDeposit to handle the process
+              logger.debug(`Finalizing deposit ${deposit.id}...`);
+              this.finalizeDeposit(deposit); 
             } else {
               logger.debug(`Deposit ${deposit.id} already finalized locally. Ignoring event.`);
             }
@@ -468,6 +469,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
    * Helper to determine if this handler supports checking for past L2 deposits based on its configuration.
    * Defaults to true if L2 is configured and endpoint is not used, override in subclasses for specific logic.
    */
+  // TODO: Consider removing this and always run full-configuration with support of all features
   supportsPastDepositCheck(): boolean {
     // True only if L2 is configured (implying L2 watcher capability) AND endpoint is not used.
     const supports = !!(
@@ -479,14 +481,13 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     return supports;
   }
 
-  // --- Helper Methods ---
   protected filterDepositsActivityTime(deposits: Array<Deposit>): Array<Deposit> {
     const now = Date.now();
     return deposits.filter((deposit) => {
       // If lastActivityAt doesn't exist yet (e.g., freshly created via listener/endpoint), process immediately
       if (!deposit.dates.lastActivityAt) return true;
       // Otherwise, process only if enough time has passed since last activity
-      return now - deposit.dates.lastActivityAt > this.TIME_TO_RETRY;
+      return now - deposit.dates.lastActivityAt > DEFAULT_DEPOSIT_RETRY_MS;
     });
   }
 }
