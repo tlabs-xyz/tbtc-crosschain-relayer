@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
 import type { ChainId } from '@wormhole-foundation/sdk';
 import { WormholeVaaService } from './WormholeVaaService.js';
-import { L1RedemptionHandler } from '../handlers/L1RedemptionHandler.js';
+import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
+import type { L1RedemptionHandler } from '../handlers/L1RedemptionHandler.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer.js';
 import type {
@@ -15,35 +16,39 @@ import type { ChainConfig } from '../types/ChainConfig.type.js';
 
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;
-  private l2BitcoinRedeemerContract: ethers.Contract;
-  private wormholeVaaService: WormholeVaaService;
+  private l2BitcoinRedeemerContract?: ethers.Contract;
+  private wormholeVaaService!: WormholeVaaService;
   private l1RedemptionHandler: L1RedemptionHandler;
 
   private l2WormholeChainId: number;
   private l2WormholeGatewayAddress: string; // Emitter address on L2 for VAA fetching
+  private chainConfig: ChainConfig;
 
   private constructor(chainConfig: ChainConfig) {
+    this.chainConfig = chainConfig;
     this.l2Provider = new ethers.providers.JsonRpcProvider(chainConfig.l2Rpc);
-    this.l2BitcoinRedeemerContract = new ethers.Contract(
-      chainConfig.l2BitcoinRedeemerAddress,
-      L2BitcoinRedeemerABI,
-      this.l2Provider,
-    );
+
+    if (chainConfig.l2BitcoinRedeemerAddress) {
+      this.l2BitcoinRedeemerContract = new ethers.Contract(
+        chainConfig.l2BitcoinRedeemerAddress,
+        L2BitcoinRedeemerABI,
+        this.l2Provider,
+      );
+      logger.info(
+        `L2RedemptionService initialized for L2 contract ${chainConfig.l2BitcoinRedeemerAddress} on ${chainConfig.l2Rpc}. Listening for 'RedemptionRequested' event.`,
+      );
+    } else {
+      logger.warn(
+        `L2RedemptionService: l2BitcoinRedeemerAddress is not configured for chain ${chainConfig.chainName}. L2 redemption event listening will be disabled for this chain.`,
+      );
+    }
 
     this.l2WormholeChainId = chainConfig.l2WormholeChainId;
     this.l2WormholeGatewayAddress = chainConfig.l2WormholeGatewayAddress;
-
-    this.l1RedemptionHandler = new L1RedemptionHandler(
-      chainConfig.l1Rpc,
-      chainConfig.l1BitcoinRedeemerAddress,
-      chainConfig.privateKey,
-    );
+    this.l1RedemptionHandler = l1RedemptionHandlerRegistry.get(chainConfig);
 
     logger.info(
-      `L2RedemptionService initialized for L2 contract ${chainConfig.l2BitcoinRedeemerAddress} on ${chainConfig.l2Rpc}. Listening for 'RedemptionRequested' event.`,
-    );
-    logger.info(
-      `Wormhole VAA Service configured for L2 Wormhole Gateway: ${chainConfig.l2WormholeGatewayAddress} on chain ID: ${chainConfig.l2WormholeChainId}.`,
+      `Wormhole VAA Service will be configured for L2 Wormhole Gateway: ${chainConfig.l2WormholeGatewayAddress} on chain ID: ${chainConfig.l2WormholeChainId}.`,
     );
     logger.info(
       `L1 Redemption Handler configured for L1BitcoinRedeemer: ${chainConfig.l1BitcoinRedeemerAddress} on ${chainConfig.l1Rpc}.`,
@@ -62,6 +67,12 @@ export class L2RedemptionService {
   }
 
   public startListening(): void {
+    if (!this.l2BitcoinRedeemerContract) {
+      logger.info(
+        `Skipping 'RedemptionRequested' event listening for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
+      );
+      return;
+    }
     if (!this.l2BitcoinRedeemerContract.interface.events['RedemptionRequested']) {
       logErrorContext(
         "L2 contract ABI does not seem to contain 'RedemptionRequested' event. Cannot listen for events.",
@@ -100,6 +111,7 @@ export class L2RedemptionService {
         const now = Date.now();
         const redemption: Redemption = {
           id: redemptionId,
+          chainId: this.chainConfig.chainName,
           event: eventData,
           vaaBytes: null,
           vaaStatus: RedemptionStatus.PENDING,
@@ -126,6 +138,12 @@ export class L2RedemptionService {
   }
 
   public stopListening(): void {
+    if (!this.l2BitcoinRedeemerContract) {
+      logger.info(
+        `Skipping stopListening for 'RedemptionRequested' events for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
+      );
+      return;
+    }
     logger.info(
       `Stopping 'RedemptionRequested' event listener for ${this.l2BitcoinRedeemerContract.address}.`,
     );
@@ -133,8 +151,8 @@ export class L2RedemptionService {
   }
 
   public async processPendingRedemptions(): Promise<void> {
-    const pending = await RedemptionStore.getByStatus(RedemptionStatus.PENDING);
-    const vaaFailed = await RedemptionStore.getByStatus(RedemptionStatus.VAA_FAILED);
+    const pending = await RedemptionStore.getByStatus(RedemptionStatus.PENDING, this.chainConfig.chainName);
+    const vaaFailed = await RedemptionStore.getByStatus(RedemptionStatus.VAA_FAILED, this.chainConfig.chainName);
     const toProcess = [...pending, ...vaaFailed];
     for (const redemption of toProcess) {
       try {
@@ -177,7 +195,7 @@ export class L2RedemptionService {
   }
 
   public async processVaaFetchedRedemptions(): Promise<void> {
-    const vaaFetched = await RedemptionStore.getByStatus(RedemptionStatus.VAA_FETCHED);
+    const vaaFetched = await RedemptionStore.getByStatus(RedemptionStatus.VAA_FETCHED, this.chainConfig.chainName);
     for (const redemption of vaaFetched) {
       try {
         if (!redemption.vaaBytes) {

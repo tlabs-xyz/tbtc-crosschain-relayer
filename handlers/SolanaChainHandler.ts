@@ -1,4 +1,4 @@
-import { Connection, Keypair } from '@solana/web3.js';
+import { Connection, Keypair, type Commitment, PublicKey } from '@solana/web3.js';
 import { signSendWait, Wormhole } from '@wormhole-foundation/sdk';
 import { getSolanaSignAndSendSigner } from '@wormhole-foundation/sdk-solana';
 import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
@@ -15,11 +15,15 @@ import { DepositStatus } from '../types/DepositStatus.enum.js';
 import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json' assert { type: 'json' };
 import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import { WORMHOLE_GATEWAY_PROGRAM_ID } from '../utils/Constants.js';
 
+const WORMHOLE_GATEWAY_PROGRAM_ID = new PublicKey(
+  '87MEvHZCXE3ML5rrmh5uX1FbShHmRXXS32xJDGbQ7h5t',
+);
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
   'TokensTransferredWithPayload(uint256,bytes32,uint64)',
-);
+); 
+const DEFAULT_COMMITMENT_LEVEL: Commitment = 'confirmed';
+
 export class SolanaChainHandler extends BaseChainHandler {
   private connection?: Connection;
   private provider?: AnchorProvider;
@@ -51,9 +55,9 @@ export class SolanaChainHandler extends BaseChainHandler {
 
     try {
       this.connection = new Connection(this.config.l2Rpc, {
-        commitment: 'confirmed',
+        commitment: DEFAULT_COMMITMENT_LEVEL,
         disableRetryOnRateLimit: true,
-        wsEndpoint: this.config.l2WsRpc, // TODO: Populate this with the correct WebSocket URL from Alchemy
+        wsEndpoint: this.config.l2WsRpc,
       });
 
       const secretKeyBase64 = this.config.solanaSignerKeyBase;
@@ -101,13 +105,13 @@ export class SolanaChainHandler extends BaseChainHandler {
    * Get the latest Solana slot (block) if you need to do on-chain queries for missed deposits.
    */
   async getLatestBlock(): Promise<number> {
-    if (this.config.useEndpoint) return 0; // Skip if using endpoint mode
+    if (this.config.useEndpoint) return 0;
     if (!this.connection) {
       logger.warn(`No Solana connection established. Returning 0.`);
       return 0;
     }
     try {
-      return await this.connection.getSlot('confirmed');
+      return await this.connection.getSlot(DEFAULT_COMMITMENT_LEVEL);
     } catch (error: any) {
       logErrorContext('Error getting latest Solana slot', error);
       return 0;
@@ -122,8 +126,9 @@ export class SolanaChainHandler extends BaseChainHandler {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void> {
-    if (this.config.useEndpoint) return; // no direct chain scanning
-    logger.warn(`Solana checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
+    if (this.config.useEndpoint) return;
+    logger.error(`Solana checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
+    throw new Error('Solana checkForPastDeposits NOT YET IMPLEMENTED');
   }
 
   /**
@@ -173,7 +178,6 @@ export class SolanaChainHandler extends BaseChainHandler {
 
   public async bridgeSolanaDeposit(deposit: Deposit): Promise<void> {
     if (!this.connection || !this.provider || !this.wallet) {
-      // Solana connection not initialized
       logger.warn(`Solana connection not initialized. Cannot bridge deposit ${deposit.id}.`);
       return;
     }
@@ -239,7 +243,6 @@ export class SolanaChainHandler extends BaseChainHandler {
         return;
       }
 
-      // If no error thrown, we have the VAA.
       logger.info(`VAA found for deposit ${deposit.id}. Posting VAA to Solana...`);
 
       const bridge = await toChain.getTBTCBridge();
@@ -256,7 +259,6 @@ export class SolanaChainHandler extends BaseChainHandler {
 
       updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid);
     } catch (error: any) {
-      // Either the VAA isn't available yet, or some other bridging error occurred
       const reason = error.message || 'Unknown bridging error';
       logger.warn(`Wormhole bridging not ready for deposit ${deposit.id}: ${reason}`);
     }
@@ -267,8 +269,11 @@ export class SolanaChainHandler extends BaseChainHandler {
    * This function will attempt to bridge the deposits using the Wormhole protocol.
    */
   public async processWormholeBridging() {
+    if (this.config.chainType !== CHAIN_TYPE.SOLANA) return;
+
     const bridgingDeposits = await DepositStore.getByStatus(
       DepositStatus.AWAITING_WORMHOLE_VAA,
+      this.config.chainName,
     );
     if (bridgingDeposits.length === 0) return;
 

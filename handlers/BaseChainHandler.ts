@@ -19,10 +19,11 @@ import {
   updateLastActivity,
 } from '../utils/Deposits.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
+
+export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
 
 export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
@@ -32,10 +33,9 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected tbtcVault: ethers.Contract; // For sending L1 txs (though not used currently)
   protected l1BitcoinDepositorProvider: ethers.Contract; // For L1 reads/events
   protected tbtcVaultProvider: ethers.Contract; // For L1 events
-  protected config: ChainConfig;
+  public config: ChainConfig;
   protected wormhole: Wormhole<Network>;
 
-  protected readonly TIME_TO_RETRY = 1000 * 60 * 5; // 5 minutes
 
   constructor(config: ChainConfig) {
     this.config = config;
@@ -113,7 +113,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      async (minter, depositKey, depositor, optimisticMintingDebt) => {
+      async (_minter: any, depositKey: any, _depositor: any, _optimisticMintingDebt: any) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
@@ -122,7 +122,8 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
             logger.debug(`Received OptimisticMintingFinalized event for Deposit ID: ${deposit.id}`);
             // Check if already finalized to avoid redundant calls/logs
             if (deposit.status !== DepositStatus.FINALIZED) {
-              this.finalizeDeposit(deposit); // Call finalizeDeposit to handle the process
+              logger.debug(`Finalizing deposit ${deposit.id}...`);
+              this.finalizeDeposit(deposit); 
             } else {
               logger.debug(`Deposit ${deposit.id} already finalized locally. Ignoring event.`);
             }
@@ -279,7 +280,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
       if (reason.includes('Deposit not finalized by the bridge')) {
         logger.warn(`FINALIZE | WAITING (Bridge Delay) | ID: ${deposit.id} | Reason: ${reason}`);
         // Don't mark as error, just update activity to allow retry after TIME_TO_RETRY
-        updateLastActivity(deposit);
+        await updateLastActivity(deposit);
       } else {
         // Handle other errors
         logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
@@ -316,12 +317,12 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
 
   // --- Batch Processing Logic ---
   async processInitializeDeposits(): Promise<void> {
-    const depositsToInitialize = await DepositStore.getByStatus(DepositStatus.QUEUED);
-    logger.debug(`PROCESS_INIT | Found ${depositsToInitialize.length} deposits in QUEUED state.`);
-    const filteredDeposits = this.filterDepositsActivityTime(depositsToInitialize);
-    logger.debug(
-      `PROCESS_INIT | ${filteredDeposits.length} deposits ready for initialization after time filter.`,
+    logger.debug(`PROCESS INITIALIZE | Running for chain ${this.config.chainName}`);
+    const depositsToInitialize = await DepositStore.getByStatus(
+      DepositStatus.QUEUED,
+      this.config.chainName,
     );
+    const filteredDeposits = this.filterDepositsActivityTime(depositsToInitialize);
 
     if (filteredDeposits.length === 0) {
       return;
@@ -332,7 +333,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     );
 
     for (const deposit of filteredDeposits) {
-      const updatedDeposit = updateLastActivity(deposit); // Update activity time *before* potential async operations
+      const updatedDeposit = await updateLastActivity(deposit); // Update activity time *before* potential async operations
 
       // Check L1 contract status *before* attempting initialization
       const contractStatus = await this.checkDepositStatus(updatedDeposit.id);
@@ -373,14 +374,12 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   }
 
   async processFinalizeDeposits(): Promise<void> {
-    const depositsToFinalize = await DepositStore.getByStatus(DepositStatus.INITIALIZED);
-    logger.debug(
-      `PROCESS_FINALIZE | Found ${depositsToFinalize.length} deposits in INITIALIZED state.`,
+    logger.debug(`PROCESS FINALIZE | Running for chain ${this.config.chainName}`);
+    const depositsToFinalize = await DepositStore.getByStatus(
+      DepositStatus.INITIALIZED,
+      this.config.chainName,
     );
     const filteredDeposits = this.filterDepositsActivityTime(depositsToFinalize);
-    logger.debug(
-      `PROCESS_FINALIZE | ${filteredDeposits.length} deposits ready for finalization after time filter.`,
-    );
 
     if (filteredDeposits.length === 0) {
       return;
@@ -391,7 +390,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     );
 
     for (const deposit of filteredDeposits) {
-      const updatedDeposit = updateLastActivity(deposit); // Update activity time
+      const updatedDeposit = await updateLastActivity(deposit); // Update activity time
 
       // Check L1 contract status *before* attempting finalization
       const contractStatus = await this.checkDepositStatus(updatedDeposit.id);
@@ -470,6 +469,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
    * Helper to determine if this handler supports checking for past L2 deposits based on its configuration.
    * Defaults to true if L2 is configured and endpoint is not used, override in subclasses for specific logic.
    */
+  // TODO: Consider removing this and always run full-configuration with support of all features
   supportsPastDepositCheck(): boolean {
     // True only if L2 is configured (implying L2 watcher capability) AND endpoint is not used.
     const supports = !!(
@@ -481,14 +481,13 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     return supports;
   }
 
-  // --- Helper Methods ---
   protected filterDepositsActivityTime(deposits: Array<Deposit>): Array<Deposit> {
     const now = Date.now();
     return deposits.filter((deposit) => {
       // If lastActivityAt doesn't exist yet (e.g., freshly created via listener/endpoint), process immediately
       if (!deposit.dates.lastActivityAt) return true;
       // Otherwise, process only if enough time has passed since last activity
-      return now - deposit.dates.lastActivityAt > this.TIME_TO_RETRY;
+      return now - deposit.dates.lastActivityAt > DEFAULT_DEPOSIT_RETRY_MS;
     });
   }
 }

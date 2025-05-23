@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
 import CustomResponse from '../helpers/CustomResponse.helper.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import fs from 'fs';
-import path from 'path';
+import { logErrorContext } from '../utils/Logger.js';
+import { prisma } from '../utils/prisma.js';
 
 export default class Utils {
   /**
@@ -49,14 +48,14 @@ export default class Utils {
    * @param req Express request
    * @param res Express response
    */
-  public auditLogsController = async (req: Request, res: Response) => {
+  public auditLogsController = async (req: Request, res: Response, chainName: string) => {
+    const response = new CustomResponse(res);
     try {
-      const AUDIT_LOG_DIR = process.env.AUDIT_LOG_DIR || './logs';
-      const AUDIT_LOG_FILE = process.env.AUDIT_LOG_FILE || 'deposit_audit.log';
-      const AUDIT_LOG_PATH = path.join(AUDIT_LOG_DIR, AUDIT_LOG_FILE);
-
       // Check if limit is specified in query
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      if (isNaN(limit) || limit <= 0) {
+        return response.ko('Invalid limit parameter. Must be a positive integer.');
+      }
 
       // Check if depositId filter is specified
       const depositId = req.query.depositId as string;
@@ -65,72 +64,82 @@ export default class Utils {
       const eventType = req.query.eventType as string;
 
       // Check if start date is specified
-      const startDate = req.query.startDate
-        ? new Date(req.query.startDate as string).toISOString()
-        : undefined;
-
-      // Check if end date is specified
-      const endDate = req.query.endDate
-        ? new Date(req.query.endDate as string).toISOString()
-        : undefined;
-
-      // Check if file exists
-      if (!fs.existsSync(AUDIT_LOG_PATH)) {
-        return res.status(404).json({
-          message: 'Audit log file not found',
-        });
+      let startDateISO: string | undefined;
+      if (req.query.startDate) {
+        const parsedStartDate = new Date(req.query.startDate as string);
+        if (isNaN(parsedStartDate.getTime())) {
+          return response.ko('Invalid startDate parameter. Must be a valid date string.');
+        }
+        startDateISO = parsedStartDate.toISOString();
       }
 
-      // Read file line by line
-      const data = fs.readFileSync(AUDIT_LOG_PATH, 'utf8');
-      const lines = data.split('\n').filter((line) => line.trim() !== '');
+      // Check if end date is specified
+      let endDateISO: string | undefined;
+      if (req.query.endDate) {
+        const parsedEndDate = new Date(req.query.endDate as string);
+        if (isNaN(parsedEndDate.getTime())) {
+          return response.ko('Invalid endDate parameter. Must be a valid date string.');
+        }
+        endDateISO = parsedEndDate.toISOString();
+      }
 
-      // Parse JSON and filter
-      const logs = lines
-        .map((line) => {
-          try {
-            return JSON.parse(line);
-          } catch (e) {
-            return null;
-          }
-        })
-        .filter((log) => log !== null)
-        .filter((log) => {
-          // Apply depositId filter if specified
-          if (depositId && log.depositId !== depositId) {
-            return false;
-          }
+      const whereClause: any = {};
 
-          // Apply eventType filter if specified
-          if (eventType && log.eventType !== eventType) {
-            return false;
-          }
+      // Add chainId filter based on chainName. Assuming chainName is the chainId for AuditLog.
+      // If chainName can be 'all', you might want to omit the chainId filter.
+      // For now, assuming chainName maps directly to a specific chainId or is required.
+      if (chainName && chainName.toLowerCase() !== 'all') {
+        whereClause.chainId = chainName;
+      } else if (!chainName || chainName.toLowerCase() !== 'all') {
+        // If chainName is not provided or not 'all', it implies an issue as the route expects it.
+        // This case should ideally be handled by the router sending a 404 if chainName is missing/invalid.
+        // However, adding a safeguard here.
+        return response.ko('Chain name/ID is required.');
+        // If 'all' is not a valid chainName from chainHandlerRegistry, the router should catch it.
+        // If we want /api/all/audit-logs to work, then we don't filter by chainId.
+      }
 
-          // Apply date range filter if specified
-          if (startDate && log.timestamp < startDate) {
-            return false;
-          }
+      if (depositId) {
+        whereClause.depositId = depositId;
+      }
+      if (eventType) {
+        whereClause.eventType = eventType;
+      }
+      if (startDateISO) {
+        whereClause.timestamp = { ...whereClause.timestamp, gte: startDateISO };
+      }
+      if (endDateISO) {
+        whereClause.timestamp = { ...whereClause.timestamp, lte: endDateISO };
+      }
 
-          if (endDate && log.timestamp > endDate) {
-            return false;
-          }
+      const logs = await prisma.auditLog.findMany({
+        where: whereClause,
+        orderBy: {
+          timestamp: 'desc',
+        },
+        take: limit,
+      });
 
-          return true;
-        })
-        .slice(-limit); // Get the most recent logs up to the limit
+      const total = await prisma.auditLog.count({ where: whereClause });
 
       // Return the logs
-      return res.status(200).json({
+      return response.ok('Audit logs retrieved successfully', {
         logs,
-        total: logs.length,
+        total,
         limit,
+        fetchedCount: logs.length,
+        filters: {
+          chainName: whereClause.chainId, // Reflects the actual chainId used in query
+          depositId,
+          eventType,
+          startDate: startDateISO,
+          endDate: endDateISO,
+        }
       });
+
     } catch (error: any) {
       logErrorContext('Error retrieving audit logs:', error);
-      return res.status(500).json({
-        message: 'Error retrieving audit logs',
-        error: error.message,
-      });
+      return response.custom(500, 'Error retrieving audit logs: ' + error.message, error);
     }
   };
 }

@@ -4,6 +4,7 @@ import { DepositStatus } from './DepositStatus.enum.js';
 
 export type Deposit = {
   id: string;
+  chainId: string;
   fundingTxHash: string;
   outputIndex: number;
   hashes: {

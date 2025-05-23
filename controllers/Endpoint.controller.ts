@@ -70,7 +70,7 @@ export class EndpointController {
       }
 
       // Create deposit object
-      const deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender);
+      const deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender, this.chainHandler.config.chainName);
       logger.debug(`Created deposit with ID: ${deposit.id}`);
 
       // Initialize the deposit

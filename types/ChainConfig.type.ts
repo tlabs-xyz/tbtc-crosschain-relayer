@@ -29,7 +29,7 @@ export enum CHAIN_NAME {
 /**
  * Interface for chain configuration
  */
-export interface ChainConfig {
+export type ChainConfig = {
   /** Type of blockchain */
   chainType: CHAIN_TYPE;
 
@@ -54,8 +54,13 @@ export interface ChainConfig {
   /** Address of the L1BitcoinRedeemer contract */
   l1BitcoinRedeemerAddress: string;
 
-  /** Address of the L2BitcoinRedeemer contract */
-  l2BitcoinRedeemerAddress: string;
+  /**
+   * Optional address of the L2BitcoinRedeemer contract/program.
+   * Not all chains will have L2 redemption functionality, or it may be deployed
+   * later than minting. Non-EVM chains, for example, might initially lack a
+   * specific L2BitcoinRedeemer program while still supporting tBTC minting.
+   */
+  l2BitcoinRedeemerAddress?: string;
 
   /** Address of the L2WormholeGateway contract */
   l2WormholeGatewayAddress: string;
@@ -64,13 +69,19 @@ export interface ChainConfig {
   l2WormholeChainId: number;
 
   /** Address of the TBTCVault contract */
-  vaultAddress: string;
+  vaultAddress?: string;
 
   /** Private key for signing transactions */
   privateKey: string;
 
-  /** Whether to use an HTTP endpoint instead of an L2 contract */
-  useEndpoint: boolean;
+  /**
+   * Determines if the relayer should use HTTP endpoints for deposit processing
+   * instead of direct L2 event listeners.
+   * When true, L2 listeners are disabled, and routes like /api/:chainName/reveal
+   * and /api/:chainName/deposit/:depositId become available.
+   * Defaults to false.
+   */
+  useEndpoint?: boolean;
 
   /** Address of the L2BitcoinDepositor contract */
   l2ContractAddress?: string;
@@ -81,5 +92,21 @@ export interface ChainConfig {
   /** Starting block number for scanning L2 events */
   l2StartBlock?: number;
 
-  solanaSignerKeyBase?: string; // Base64 encoded secret key for Solana
-}
+  /** Private key for Solana */
+  solanaPrivateKey?: string;
+
+  /** Base64 encoded secret key for Solana */
+  solanaSignerKeyBase?: string;
+
+  /**
+   * When `useEndpoint` is true, this flag specifically controls whether the
+   * POST /api/:chainName/reveal endpoint is active for this chain.
+   * If `useEndpoint` is true but this is false, the reveal endpoint will return a 405 error.
+   * This allows enabling the general endpoint mode while selectively disabling the reveal intake.
+   * Defaults to false.
+   */
+  supportsRevealDepositAPI?: boolean;
+
+  /** Solana commitment level for transactions */
+  solanaCommitment?: 'processed' | 'confirmed' | 'finalized';
+};

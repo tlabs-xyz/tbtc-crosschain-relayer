@@ -1,12 +1,10 @@
 const { execSync } = require('child_process');
 
 module.exports = async () => {
-  // Ensure the in-memory SQLite schema is up to date before tests
-  execSync('npx prisma db push --force-reset --schema=prisma/schema.prisma', {
+  // Ensure the Postgres schema is up to date before tests
+  // Using `db push` as a more direct way to ensure schema matches for tests.
+  execSync('npx prisma db push --force-reset --accept-data-loss', {
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      DATABASE_URL: 'file:memory:?cache=shared',
-    },
+    env: { ...process.env },
   });
 }; 

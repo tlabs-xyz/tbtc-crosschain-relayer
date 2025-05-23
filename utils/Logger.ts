@@ -38,3 +38,22 @@ export const logErrorContext = (message: string, error: any) => {
   }
   logger.error(logDetails, message);
 };
+
+/**
+ * Logs a standardized error message for chain-specific cron jobs.
+ * @param chainName - The name of the chain where the error occurred.
+ * @param cronJobName - A descriptive name of the cron job (e.g., "deposit processing", "redemption processing").
+ * @param error - The error object.
+ */
+export function logChainCronError(chainName: string, cronJobName: string, error: any): void {
+  logErrorContext(`Error in ${cronJobName} cron job for chain ${chainName}:`, error);
+}
+
+/**
+ * Logs a standardized error message for global (non-chain-specific) cron jobs.
+ * @param cronJobName - A descriptive name of the cron job (e.g., "deposit cleanup").
+ * @param error - The error object.
+ */
+export function logGlobalCronError(cronJobName: string, error: any): void {
+  logErrorContext(`Error in global ${cronJobName} cron job:`, error);
+}
