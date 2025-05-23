@@ -12,7 +12,6 @@ const REQUIRED_FIELDS: (keyof ChainConfig)[] = [
   'l2Rpc',
   'l1ContractAddress',
   'l1BitcoinRedeemerAddress',
-  'l2BitcoinRedeemerAddress',
   'l2WormholeGatewayAddress',
   'l2WormholeChainId',
   'privateKey',

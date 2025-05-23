@@ -54,8 +54,13 @@ export type ChainConfig = {
   /** Address of the L1BitcoinRedeemer contract */
   l1BitcoinRedeemerAddress: string;
 
-  /** Address of the L2BitcoinRedeemer contract */
-  l2BitcoinRedeemerAddress: string;
+  /**
+   * Optional address of the L2BitcoinRedeemer contract/program.
+   * Not all chains will have L2 redemption functionality, or it may be deployed
+   * later than minting. Non-EVM chains, for example, might initially lack a
+   * specific L2BitcoinRedeemer program while still supporting tBTC minting.
+   */
+  l2BitcoinRedeemerAddress?: string;
 
   /** Address of the L2WormholeGateway contract */
   l2WormholeGatewayAddress: string;

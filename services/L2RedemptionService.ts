@@ -16,8 +16,8 @@ import type { ChainConfig } from '../types/ChainConfig.type.js';
 
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;
-  private l2BitcoinRedeemerContract: ethers.Contract;
-  private wormholeVaaService: WormholeVaaService;
+  private l2BitcoinRedeemerContract?: ethers.Contract;
+  private wormholeVaaService!: WormholeVaaService;
   private l1RedemptionHandler: L1RedemptionHandler;
 
   private l2WormholeChainId: number;
@@ -27,21 +27,28 @@ export class L2RedemptionService {
   private constructor(chainConfig: ChainConfig) {
     this.chainConfig = chainConfig;
     this.l2Provider = new ethers.providers.JsonRpcProvider(chainConfig.l2Rpc);
-    this.l2BitcoinRedeemerContract = new ethers.Contract(
-      chainConfig.l2BitcoinRedeemerAddress,
-      L2BitcoinRedeemerABI,
-      this.l2Provider,
-    );
+
+    if (chainConfig.l2BitcoinRedeemerAddress) {
+      this.l2BitcoinRedeemerContract = new ethers.Contract(
+        chainConfig.l2BitcoinRedeemerAddress,
+        L2BitcoinRedeemerABI,
+        this.l2Provider,
+      );
+      logger.info(
+        `L2RedemptionService initialized for L2 contract ${chainConfig.l2BitcoinRedeemerAddress} on ${chainConfig.l2Rpc}. Listening for 'RedemptionRequested' event.`,
+      );
+    } else {
+      logger.warn(
+        `L2RedemptionService: l2BitcoinRedeemerAddress is not configured for chain ${chainConfig.chainName}. L2 redemption event listening will be disabled for this chain.`,
+      );
+    }
 
     this.l2WormholeChainId = chainConfig.l2WormholeChainId;
     this.l2WormholeGatewayAddress = chainConfig.l2WormholeGatewayAddress;
     this.l1RedemptionHandler = l1RedemptionHandlerRegistry.get(chainConfig);
 
     logger.info(
-      `L2RedemptionService initialized for L2 contract ${chainConfig.l2BitcoinRedeemerAddress} on ${chainConfig.l2Rpc}. Listening for 'RedemptionRequested' event.`,
-    );
-    logger.info(
-      `Wormhole VAA Service configured for L2 Wormhole Gateway: ${chainConfig.l2WormholeGatewayAddress} on chain ID: ${chainConfig.l2WormholeChainId}.`,
+      `Wormhole VAA Service will be configured for L2 Wormhole Gateway: ${chainConfig.l2WormholeGatewayAddress} on chain ID: ${chainConfig.l2WormholeChainId}.`,
     );
     logger.info(
       `L1 Redemption Handler configured for L1BitcoinRedeemer: ${chainConfig.l1BitcoinRedeemerAddress} on ${chainConfig.l1Rpc}.`,
@@ -60,6 +67,12 @@ export class L2RedemptionService {
   }
 
   public startListening(): void {
+    if (!this.l2BitcoinRedeemerContract) {
+      logger.info(
+        `Skipping 'RedemptionRequested' event listening for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
+      );
+      return;
+    }
     if (!this.l2BitcoinRedeemerContract.interface.events['RedemptionRequested']) {
       logErrorContext(
         "L2 contract ABI does not seem to contain 'RedemptionRequested' event. Cannot listen for events.",
@@ -125,6 +138,12 @@ export class L2RedemptionService {
   }
 
   public stopListening(): void {
+    if (!this.l2BitcoinRedeemerContract) {
+      logger.info(
+        `Skipping stopListening for 'RedemptionRequested' events for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
+      );
+      return;
+    }
     logger.info(
       `Stopping 'RedemptionRequested' event listener for ${this.l2BitcoinRedeemerContract.address}.`,
     );
