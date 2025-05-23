@@ -75,10 +75,10 @@ describe('API Endpoints - Multi-Chain', () => {
       const validRevealData = getValidRevealDataForChain(chainName);
       const chainConfig = chainConfigs.find(c => c.chainName === chainName);
 
-      // Skip reveal tests for chains configured with useEndpoint = true as /api/:chainName/reveal might not exist
-      if (!chainConfig?.useEndpoint) {
-        describe(`POST /api/${chainName}/reveal`, () => {
-          test('should return 200 and deposit ID for valid data', async () => {
+      // Tests for POST /api/:chainName/reveal
+      describe(`POST /api/${chainName}/reveal`, () => {
+        if (chainConfig?.supportsRevealDepositAPI) {
+          test('should return 200 and deposit ID for valid data when API is supported', async () => {
             const response = await request(app).post(`/api/${chainName}/reveal`).send(validRevealData);
             expect(response.status).toBe(200);
             expect(response.body).toEqual(
@@ -90,7 +90,7 @@ describe('API Endpoints - Multi-Chain', () => {
             );
           });
 
-          test('should return 400 for missing required fields', async () => {
+          test('should return 400 for missing required fields when API is supported', async () => {
             const incompleteRevealData = { fundingTx: validRevealData.fundingTx }; 
             const response = await request(app)
               .post(`/api/${chainName}/reveal`)
@@ -104,25 +104,32 @@ describe('API Endpoints - Multi-Chain', () => {
               }),
             );
           });
-        });
-      }
+        } else {
+          test('should return 405 when API is not supported for this chain', async () => {
+            const response = await request(app).post(`/api/${chainName}/reveal`).send(validRevealData);
+            expect(response.status).toBe(405);
+            expect(response.body).toEqual(
+              expect.objectContaining({
+                success: false,
+                error: `Reveal deposit API is not supported or enabled for chain: ${chainName}`,
+              }),
+            );
+          });
+        }
+      });
 
+      // Conditional GET /api/:chainName/deposit/:depositId tests
+      // These depend on whether reveal was possible, so we use supportsRevealDepositAPI
       describe(`GET /api/${chainName}/deposit/:depositId`, () => {
-        test('should return 200 and deposit status for valid ID', async () => {
-          // This test needs a deposit to exist for this chain. 
-          // We need a way to create a deposit via API or pre-populate in MockChainHandler for this specific chain.
-          // For now, let's assume a deposit can be created first if reveal endpoint exists for the chain
+        test('should return 200 and deposit status for valid ID (if reveal supported and successful)', async () => {
           let depositIdToTest: string | null = null;
 
-          if (!chainConfig?.useEndpoint) {
+          if (chainConfig?.supportsRevealDepositAPI) {
             const revealResponse = await request(app).post(`/api/${chainName}/reveal`).send(validRevealData);
             if (revealResponse.body.success) {
               depositIdToTest = revealResponse.body.depositId;
             }
           }
-          // If reveal endpoint isn't used or failed, this test part will be skipped or needs alternative setup.
-          // For a chain using an endpoint, the deposit is created externally, so we'd need a known test deposit ID.
-          // This part of the test needs more robust setup based on chainConfig.useEndpoint
 
           if (depositIdToTest) {
             const response = await request(app).get(`/api/${chainName}/deposit/${depositIdToTest}`);
@@ -130,15 +137,13 @@ describe('API Endpoints - Multi-Chain', () => {
             expect(response.body).toEqual({
               success: true,
               depositId: depositIdToTest,
-              status: expect.any(Number), // Status can be QUEUED or INITIALIZED
             });
             expect([DepositStatus.QUEUED, DepositStatus.INITIALIZED]).toContain(response.body.status);
           } else {
-            if (!chainConfig?.useEndpoint) {
-                 console.warn(`Skipping GET /api/${chainName}/deposit/:depositId test because prerequisite reveal failed or was skipped.`);
+            if (chainConfig?.supportsRevealDepositAPI) {
+                 console.warn(`Skipping GET /api/${chainName}/deposit/:depositId test because prerequisite reveal failed or was not applicable.`);
             } else {
-                // For endpoint chains, we would need a predefined testable deposit ID
-                console.warn(`Skipping GET /api/${chainName}/deposit/:depositId for endpoint chain - needs predefined test ID.`);
+                console.warn(`Skipping GET /api/${chainName}/deposit/:depositId because reveal API is not supported for this chain.`);
             }
           }
         });
@@ -146,14 +151,14 @@ describe('API Endpoints - Multi-Chain', () => {
         test('should return 404 for non-existent deposit ID', async () => {
           const nonExistentId = 'nonExistentDepositIdForSure';
           const response = await request(app).get(`/api/${chainName}/deposit/${nonExistentId}`);
-          expect(response.status).toBe(404); // Assuming 404 for not found
+          expect(response.status).toBe(404); 
           expect(response.body).toEqual(expect.objectContaining({ success: false, error: 'Deposit not found' }));
         });
       });
 
-      // Full deposit lifecycle test per chain
-      if (!chainConfig?.useEndpoint) {
-        describe(`Full deposit lifecycle on ${chainName}`, () => {
+      // Full deposit lifecycle test per chain, also conditional on API support
+      if (chainConfig?.supportsRevealDepositAPI) {
+        describe(`Full deposit lifecycle on ${chainName} (when API supported)`, () => {
           test('should process a deposit through the reveal and initial status check', async () => {
             const createResponse = await request(app).post(`/api/${chainName}/reveal`).send(validRevealData);
             expect(createResponse.status).toBe(200);
@@ -164,8 +169,6 @@ describe('API Endpoints - Multi-Chain', () => {
             const statusResponse = await request(app).get(`/api/${chainName}/deposit/${depositId}`);
             expect(statusResponse.status).toBe(200);
             expect([DepositStatus.QUEUED, DepositStatus.INITIALIZED]).toContain(statusResponse.body.status);
-            // Further lifecycle steps (initialization, finalization) depend on mock chain processing, 
-            // which happens asynchronously. Testing those would require more complex test orchestration.
           });
         });
       }

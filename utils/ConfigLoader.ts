@@ -42,6 +42,17 @@ function validateChainConfig(config: any): ChainConfig {
   if (config.useEndpoint === undefined) {
     config.useEndpoint = false;
   }
+
+  // Default and validate supportsRevealDepositAPI
+  if (config.supportsRevealDepositAPI === undefined) {
+    config.supportsRevealDepositAPI = false;
+  }
+  if (typeof config.supportsRevealDepositAPI !== 'boolean') {
+    const errorMsg = `Invalid type for supportsRevealDepositAPI for chain ${config.chainName || '(unknown name)'}: Expected boolean, got ${typeof config.supportsRevealDepositAPI}`;
+    logger.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
   return config as ChainConfig;
 }
 
@@ -98,6 +109,7 @@ function getMockChainConfig(chainName = 'MockEVM', chainType: CHAIN_TYPE = CHAIN
     privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
     l2Rpc: chainType === CHAIN_TYPE.EVM ? 'http://localhost:8546' : 'http://localhost:8899',
     useEndpoint: false, // Default to false for mocks
+    supportsRevealDepositAPI: chainType === CHAIN_TYPE.EVM, // Default to true for EVM mocks, false otherwise for testing
     // vaultAddress is not included as it's optional
   };
 

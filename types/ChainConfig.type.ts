@@ -69,7 +69,13 @@ export type ChainConfig = {
   /** Private key for signing transactions */
   privateKey: string;
 
-  /** Whether to use an HTTP endpoint instead of an L2 contract */
+  /**
+   * Determines if the relayer should use HTTP endpoints for deposit processing
+   * instead of direct L2 event listeners.
+   * When true, L2 listeners are disabled, and routes like /api/:chainName/reveal
+   * and /api/:chainName/deposit/:depositId become available.
+   * Defaults to false.
+   */
   useEndpoint?: boolean;
 
   /** Address of the L2BitcoinDepositor contract */
@@ -81,9 +87,21 @@ export type ChainConfig = {
   /** Starting block number for scanning L2 events */
   l2StartBlock?: number;
 
+  /** Private key for Solana */
   solanaPrivateKey?: string;
 
-  solanaCommitment?: 'processed' | 'confirmed' | 'finalized';
+  /** Base64 encoded secret key for Solana */
+  solanaSignerKeyBase?: string;
 
-  solanaSignerKeyBase?: string; // Base64 encoded secret key for Solana
+  /**
+   * When `useEndpoint` is true, this flag specifically controls whether the
+   * POST /api/:chainName/reveal endpoint is active for this chain.
+   * If `useEndpoint` is true but this is false, the reveal endpoint will return a 405 error.
+   * This allows enabling the general endpoint mode while selectively disabling the reveal intake.
+   * Defaults to false.
+   */
+  supportsRevealDepositAPI?: boolean;
+
+  /** Solana commitment level for transactions */
+  solanaCommitment?: 'processed' | 'confirmed' | 'finalized';
 };

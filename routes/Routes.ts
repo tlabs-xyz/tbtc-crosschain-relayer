@@ -5,6 +5,8 @@ import Operations from '../controllers/Operations.controller.js';
 import Utils from '../controllers/Utils.controller.js';
 import { EndpointController } from '../controllers/Endpoint.controller.js';
 import { getChainHandlerRegistry } from '../handlers/ChainHandlerRegistryContext.js';
+import type { ChainConfig } from '../types/ChainConfig.type.js';
+import logger from '../utils/Logger.js';
 
 export const router = express.Router();
 
@@ -81,6 +83,17 @@ if (process.env.USE_ENDPOINT === 'true') {
     if (!handler) {
       return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
     }
+
+    const chainConfig = (handler as any).config as ChainConfig | undefined;
+
+    if (!chainConfig?.supportsRevealDepositAPI) {
+      logger.warn(`Reveal deposit API called for chain ${chainName}, but it's not supported/enabled in config.`);
+      return res.status(405).json({
+        success: false,
+        error: `Reveal deposit API is not supported or enabled for chain: ${chainName}`
+      });
+    }
+
     const endpointController = new EndpointController(handler);
     return endpointController.handleReveal(req, res);
   });
