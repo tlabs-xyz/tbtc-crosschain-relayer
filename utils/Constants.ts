@@ -1,4 +1,4 @@
-import type { NETWORK } from '../config/schemas/chain.common.schema.js';
+import type { NETWORK } from "../config/schemas/common.schema";
 
 export const DEFAULT_APP_NAME = 'tBTC Cross-Chain Relayer';
 
