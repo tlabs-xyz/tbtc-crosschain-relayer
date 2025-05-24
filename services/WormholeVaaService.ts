@@ -13,6 +13,7 @@ import {
 import evmPlatform from '@wormhole-foundation/sdk/platforms/evm';
 import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana';
 import logger, { logErrorContext } from '../utils/Logger.js';
+import { stringifyWithBigInt } from '../utils/Numbers.js';
 
 type SignedVaa = Uint8Array;
 type ParsedVaaWithPayload = VAA<'TokenBridge:Transfer'> | VAA<'TokenBridge:TransferWithPayload'>;
@@ -77,7 +78,7 @@ export class WormholeVaaService {
       }
       if (receipt.status === 0) {
         logErrorContext(
-          `L2 transaction ${l2TransactionHash} failed (reverted), cannot fetch VAA. Receipt: ${JSON.stringify(receipt)}`,
+          `L2 transaction ${l2TransactionHash} failed (reverted), cannot fetch VAA. Receipt: ${stringifyWithBigInt(receipt)}`,
           new Error('L2 tx reverted'),
         );
         return null;
@@ -107,7 +108,7 @@ export class WormholeVaaService {
 
       if (!messageId) {
         logErrorContext(
-          `Could not find Wormhole message from emitter ${emitterAddress} on chain ${emitterChainName} in L2 transaction ${l2TransactionHash}. Found messages: ${JSON.stringify(wormholeMessageIds)}`,
+          `Could not find Wormhole message from emitter ${emitterAddress} on chain ${emitterChainName} in L2 transaction ${l2TransactionHash}. Found messages: ${stringifyWithBigInt(wormholeMessageIds)}`,
           new Error('Relevant WormholeMessageId not found'),
         );
         return null;
@@ -118,25 +119,35 @@ export class WormholeVaaService {
       );
 
       // TODO: Which discriminator to use? Test it
-      const discriminator = 'TokenBridge:TransferWithPayload';
-      // const discriminator = "TokenBridge:Transfer";
+      const discriminatorsToTry: Array<'TokenBridge:TransferWithPayload' | 'TokenBridge:Transfer'> =
+        ['TokenBridge:TransferWithPayload', 'TokenBridge:Transfer'];
 
       let fetchedParsedVaa: ParsedVaaWithPayload | null = null;
-      try {
-        const vaa = await this.wh.getVaa(messageId, discriminator, GET_VAA_TIMEOUT_MS);
-        fetchedParsedVaa = vaa as ParsedVaaWithPayload;
-      } catch (e: any) {
-        logErrorContext(
-          `Error fetching VAA using this.wh.getVaa with discriminator: ${discriminator}: ${e.message}`,
-          e,
-        );
-        return null;
+      let lastGetVaaError: any = null;
+
+      for (const disc of discriminatorsToTry) {
+        try {
+          logger.info(`Attempting to fetch VAA with discriminator: ${disc}`);
+          const vaa = await this.wh.getVaa(messageId, disc, GET_VAA_TIMEOUT_MS);
+          if (vaa) {
+            fetchedParsedVaa = vaa as ParsedVaaWithPayload;
+            logger.info(`Successfully fetched VAA with discriminator: ${disc}`);
+            break; // Found a VAA
+          }
+        } catch (e: any) {
+          lastGetVaaError = e;
+          logErrorContext(
+            `Error fetching VAA using this.wh.getVaa with discriminator: ${disc}: ${e.message}`,
+            e,
+          );
+          // Continue to try the next discriminator
+        }
       }
 
       if (!fetchedParsedVaa) {
         logErrorContext(
-          `this.wh.getVaa did not return a VAA for message ID ${JSON.stringify(messageId)} (tried TokenBridge discriminators)`,
-          new Error('this.wh.getVaa failed or returned null VAA'),
+          `this.wh.getVaa did not return a VAA for message ID ${stringifyWithBigInt(messageId)} after trying all discriminators. Last error: ${lastGetVaaError?.message}`,
+          new Error('this.wh.getVaa failed or returned null VAA after all retries'),
         );
         return null;
       }
@@ -187,7 +198,7 @@ export class WormholeVaaService {
 
       if (!signedVaaBytes || signedVaaBytes.length === 0) {
         logErrorContext(
-          `Could not extract VAA bytes from fetched VAA object (tried .bytes and .serialize()). VAA: ${JSON.stringify(fetchedParsedVaa)}`,
+          `Could not extract VAA bytes from fetched VAA object (tried .bytes and .serialize()). VAA: ${stringifyWithBigInt(fetchedParsedVaa)}`,
           new Error('VAA bytes extraction failed'),
         );
         return null;
@@ -217,7 +228,7 @@ export class WormholeVaaService {
     const actualEmitterChainName = parsedVaa.emitterChain as Chain;
 
     logger.info(
-      `Attempting to verify parsed VAA. Expected Emitter: ${expectedEmitterChainName} / ${expectedEmitterAddress}. Actual Emitter: ${actualEmitterChainName} / ${parsedVaa.emitterAddress.toString()}`,
+      `Attempting to verify parsed VAA. Expected Emitter: ${expectedEmitterChainName} / ${expectedEmitterAddress}. Actual Emitter: ${actualEmitterChainName} / ${parsedVaa.emitterAddress.toString()}. Protocol: ${parsedVaa.protocolName}, Payload: ${parsedVaa.payloadName}`,
     );
 
     if (actualEmitterChainName !== expectedEmitterChainName) {
@@ -233,6 +244,22 @@ export class WormholeVaaService {
       logErrorContext(
         `VAA verification failed: Emitter address mismatch. Expected: ${expectedEmitterAddress} (Native: ${expectedEmitterUA.toNative(expectedEmitterChainName).toString()}), Got: ${parsedVaa.emitterAddress.toString()} (Native: ${parsedVaa.emitterAddress.toNative(actualEmitterChainName).toString()})`,
         new Error('VAA emitter address mismatch'),
+      );
+      return false;
+    }
+
+    if (parsedVaa.protocolName !== 'TokenBridge') {
+      logErrorContext(
+        `VAA verification failed: Protocol name mismatch. Expected: 'TokenBridge', Got: '${parsedVaa.protocolName}'`,
+        new Error('VAA protocol name mismatch'),
+      );
+      return false;
+    }
+
+    if (parsedVaa.payloadName !== 'Transfer' && parsedVaa.payloadName !== 'TransferWithPayload') {
+      logErrorContext(
+        `VAA verification failed: Payload name mismatch. Expected: 'Transfer' or 'TransferWithPayload', Got: '${parsedVaa.payloadName}'`,
+        new Error('VAA payload name mismatch'),
       );
       return false;
     }
