@@ -24,26 +24,35 @@ export class EndpointController {
   async handleReveal(req: Request, res: Response): Promise<void> {
     try {
       logger.debug('Received reveal data via endpoint');
+      const chainName = this.chainHandler.config.chainName;
 
       // Extract data from request body
       const { fundingTx, reveal, l2DepositOwner, l2Sender } = req.body;
 
       // Log API request
-      logApiRequest('/api/reveal', 'POST', null, {
-        fundingTxHash: fundingTx ? fundingTx.txHash : null,
-      });
+      logApiRequest(
+        `/api/${chainName}/reveal`,
+        'POST',
+        null,
+        {
+          fundingTxHash: fundingTx ? fundingTx.txHash : null,
+        },
+        200,
+        chainName,
+      );
 
       // Validate required fields
       if (!fundingTx || !reveal || !l2DepositOwner || !l2Sender) {
         const error = 'Missing required fields in request body';
         logApiRequest(
-          '/api/reveal',
+          `/api/${chainName}/reveal`,
           'POST',
           null,
           {
             fundingTxHash: fundingTx ? fundingTx.txHash : null,
           },
           400,
+          chainName,
         );
 
         res.status(400).json({
@@ -90,11 +99,12 @@ export class EndpointController {
       });
     } catch (error: any) {
       logErrorContext('Error handling reveal endpoint:', error);
+      const chainName = this.chainHandler.config.chainName;
 
       // Log error to audit log
       const depositId = req.body.fundingTx?.txHash || 'unknown';
-      logDepositError(depositId, 'Error handling reveal endpoint', error);
-      logApiRequest('/api/reveal', 'POST', depositId, {}, 500);
+      logDepositError(depositId, 'Error handling reveal endpoint', error, chainName);
+      logApiRequest(`/api/${chainName}/reveal`, 'POST', depositId, {}, 500, chainName);
 
       res.status(500).json({
         success: false,
@@ -109,12 +119,20 @@ export class EndpointController {
   async getDepositStatus(req: Request, res: Response): Promise<void> {
     try {
       const { depositId } = req.params;
+      const chainName = this.chainHandler.config.chainName;
 
       // Log API request
-      logApiRequest('/api/deposit/:depositId', 'GET', depositId);
+      logApiRequest(`/api/${chainName}/deposit/${depositId}`, 'GET', depositId, {}, 200, chainName);
 
       if (!depositId) {
-        logApiRequest('/api/deposit/:depositId', 'GET', 'missing-id', {}, 400);
+        logApiRequest(
+          `/api/${chainName}/deposit/:depositId`,
+          'GET',
+          'missing-id',
+          {},
+          400,
+          chainName,
+        );
 
         res.status(400).json({
           success: false,
@@ -138,11 +156,19 @@ export class EndpointController {
       });
     } catch (error: any) {
       logErrorContext('Error getting deposit status:', error);
+      const chainName = this.chainHandler.config.chainName;
 
       // Log error to audit log
-      const depositId = req.params.depositId || 'unknown';
-      logDepositError(depositId, 'Error getting deposit status', error);
-      logApiRequest('/api/deposit/:depositId', 'GET', depositId, {}, 500);
+      const depositIdFromParam = req.params.depositId || 'unknown';
+      logDepositError(depositIdFromParam, 'Error getting deposit status', error, chainName);
+      logApiRequest(
+        `/api/${chainName}/deposit/${depositIdFromParam}`,
+        'GET',
+        depositIdFromParam,
+        {},
+        500,
+        chainName,
+      );
 
       res.status(500).json({
         success: false,

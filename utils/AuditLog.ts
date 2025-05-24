@@ -22,11 +22,13 @@ export enum AuditEventType {
  * @param eventType Type of the event
  * @param depositId ID of the deposit
  * @param data Additional data to log
+ * @param chainName Optional chain name
  */
 export const appendToAuditLog = async (
   eventType: AuditEventType,
   depositId: string | null,
   data: any,
+  chainName?: string,
 ): Promise<void> => {
   let errorCode: number | undefined = undefined;
   if (data && typeof data.code === 'number') {
@@ -41,6 +43,7 @@ export const appendToAuditLog = async (
       depositId,
       data,
       errorCode,
+      chainName,
     },
   });
 };
@@ -87,85 +90,110 @@ export const logStatusChange = async (
     [DepositStatus.AWAITING_WORMHOLE_VAA]: 'AWAITING_WORMHOLE_VAA',
     [DepositStatus.BRIDGED]: 'BRIDGED',
   };
-  await appendToAuditLog(AuditEventType.STATUS_CHANGED, deposit.id, {
-    from: oldStatus !== undefined ? statusMap[oldStatus] : 'UNKNOWN',
-    to: statusMap[newStatus],
-    deposit: {
-      id: deposit.id,
-      fundingTxHash: deposit.fundingTxHash,
-      owner: deposit.owner,
-      dates: deposit.dates,
+  await appendToAuditLog(
+    AuditEventType.STATUS_CHANGED,
+    deposit.id,
+    {
+      from: oldStatus !== undefined ? statusMap[oldStatus] : 'UNKNOWN',
+      to: statusMap[newStatus],
+      deposit: {
+        id: deposit.id,
+        fundingTxHash: deposit.fundingTxHash,
+        owner: deposit.owner,
+        dates: deposit.dates,
+      },
     },
-  });
+    deposit.chainName,
+  );
 };
 
 /**
  * Log deposit creation
  */
 export const logDepositCreated = async (deposit: Deposit): Promise<void> => {
-  await appendToAuditLog(AuditEventType.DEPOSIT_CREATED, deposit.id, {
-    deposit: {
-      id: deposit.id,
-      fundingTxHash: deposit.fundingTxHash,
-      owner: deposit.owner,
-      l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
-      status: 'QUEUED',
-      createdAt: deposit.dates.createdAt,
+  await appendToAuditLog(
+    AuditEventType.DEPOSIT_CREATED,
+    deposit.id,
+    {
+      deposit: {
+        id: deposit.id,
+        fundingTxHash: deposit.fundingTxHash,
+        owner: deposit.owner,
+        l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
+        status: 'QUEUED',
+        createdAt: deposit.dates.createdAt,
+      },
     },
-  });
+    deposit.chainName,
+  );
 };
 
 /**
  * Log deposit initialization
  */
 export const logDepositInitialized = async (deposit: Deposit): Promise<void> => {
-  await appendToAuditLog(AuditEventType.DEPOSIT_INITIALIZED, deposit.id, {
-    deposit: {
-      id: deposit.id,
-      fundingTxHash: deposit.fundingTxHash,
-      owner: deposit.owner,
-      l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
-      status: 'INITIALIZED',
-      initializedAt: deposit.dates.initializationAt,
+  await appendToAuditLog(
+    AuditEventType.DEPOSIT_INITIALIZED,
+    deposit.id,
+    {
+      deposit: {
+        id: deposit.id,
+        fundingTxHash: deposit.fundingTxHash,
+        owner: deposit.owner,
+        l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
+        status: 'INITIALIZED',
+        initializedAt: deposit.dates.initializationAt,
+      },
+      txHash: deposit.hashes.eth.initializeTxHash,
     },
-    txHash: deposit.hashes.eth.initializeTxHash,
-  });
+    deposit.chainName,
+  );
 };
 
 /**
  * Log deposit finalization
  */
 export const logDepositFinalized = async (deposit: Deposit): Promise<void> => {
-  await appendToAuditLog(AuditEventType.DEPOSIT_FINALIZED, deposit.id, {
-    deposit: {
-      id: deposit.id,
-      fundingTxHash: deposit.fundingTxHash,
-      owner: deposit.owner,
-      l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
-      status: 'FINALIZED',
-      finalizedAt: deposit.dates.finalizationAt,
+  await appendToAuditLog(
+    AuditEventType.DEPOSIT_FINALIZED,
+    deposit.id,
+    {
+      deposit: {
+        id: deposit.id,
+        fundingTxHash: deposit.fundingTxHash,
+        owner: deposit.owner,
+        l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
+        status: 'FINALIZED',
+        finalizedAt: deposit.dates.finalizationAt,
+      },
+      txHash: deposit.hashes.eth.finalizeTxHash,
     },
-    txHash: deposit.hashes.eth.finalizeTxHash,
-  });
+    deposit.chainName,
+  );
 };
 
 /**
  * Log deposit deletion
  */
 export const logDepositDeleted = async (deposit: Deposit, reason: string): Promise<void> => {
-  await appendToAuditLog(AuditEventType.DEPOSIT_DELETED, deposit.id, {
-    deposit: {
-      id: deposit.id,
-      fundingTxHash: deposit.fundingTxHash,
-      owner: deposit.owner,
-      l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
-      status: deposit.status,
-      createdAt: deposit.dates.createdAt,
-      initializedAt: deposit.dates.initializationAt,
-      finalizedAt: deposit.dates.finalizationAt,
+  await appendToAuditLog(
+    AuditEventType.DEPOSIT_DELETED,
+    deposit.id,
+    {
+      deposit: {
+        id: deposit.id,
+        fundingTxHash: deposit.fundingTxHash,
+        owner: deposit.owner,
+        l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
+        status: deposit.status,
+        createdAt: deposit.dates.createdAt,
+        initializedAt: deposit.dates.initializationAt,
+        finalizedAt: deposit.dates.finalizationAt,
+      },
+      reason,
     },
-    reason,
-  });
+    deposit.chainName,
+  );
 };
 
 /**
@@ -177,13 +205,19 @@ export const logApiRequest = async (
   depositId: string | null,
   requestData: any = {},
   responseStatus: number = 200,
+  chainName?: string,
 ): Promise<void> => {
-  await appendToAuditLog(AuditEventType.API_REQUEST, depositId || 'no-deposit-id', {
-    endpoint,
-    method,
-    requestData,
-    responseStatus,
-  });
+  await appendToAuditLog(
+    AuditEventType.API_REQUEST,
+    depositId || 'no-deposit-id',
+    {
+      endpoint,
+      method,
+      requestData,
+      responseStatus,
+    },
+    chainName,
+  );
 };
 
 /**
@@ -193,9 +227,10 @@ export const logDepositError = async (
   depositId: string,
   message: string,
   extra?: any,
+  chainName?: string,
 ): Promise<void> => {
   const data = { message, ...(extra || {}) };
-  await appendToAuditLog(AuditEventType.ERROR, depositId, data);
+  await appendToAuditLog(AuditEventType.ERROR, depositId, data, chainName);
 };
 
 /**
@@ -203,17 +238,22 @@ export const logDepositError = async (
  * @param deposit The deposit object
  */
 export const logDepositAwaitingWormholeVAA = (deposit: Deposit): void => {
-  appendToAuditLog(AuditEventType.DEPOSIT_AWAITING_WORMHOLE_VAA, deposit.id, {
-    deposit: {
-      id: deposit.id,
-      fundingTxHash: deposit.fundingTxHash,
-      owner: deposit.owner,
-      l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
-      status: 'AWAITING_WORMHOLE_VAA',
-      awaitingWormholeVAAMessageSince: deposit.dates.awaitingWormholeVAAMessageSince,
+  appendToAuditLog(
+    AuditEventType.DEPOSIT_AWAITING_WORMHOLE_VAA,
+    deposit.id,
+    {
+      deposit: {
+        id: deposit.id,
+        fundingTxHash: deposit.fundingTxHash,
+        owner: deposit.owner,
+        l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
+        status: 'AWAITING_WORMHOLE_VAA',
+        awaitingWormholeVAAMessageSince: deposit.dates.awaitingWormholeVAAMessageSince,
+      },
+      txHash: deposit.hashes.eth.finalizeTxHash,
     },
-    txHash: deposit.hashes.eth.finalizeTxHash,
-  });
+    deposit.chainName,
+  );
 };
 
 /**
@@ -221,15 +261,20 @@ export const logDepositAwaitingWormholeVAA = (deposit: Deposit): void => {
  * @param deposit The deposit object
  */
 export const logDepositBridged = (deposit: Deposit): void => {
-  appendToAuditLog(AuditEventType.DEPOSIT_BRIDGED, deposit.id, {
-    deposit: {
-      id: deposit.id,
-      fundingTxHash: deposit.fundingTxHash,
-      owner: deposit.owner,
-      l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
-      status: 'BRIDGED',
-      bridgedAt: deposit.dates.bridgedAt,
+  appendToAuditLog(
+    AuditEventType.DEPOSIT_BRIDGED,
+    deposit.id,
+    {
+      deposit: {
+        id: deposit.id,
+        fundingTxHash: deposit.fundingTxHash,
+        owner: deposit.owner,
+        l2DepositOwner: deposit.L1OutputEvent?.l2DepositOwner,
+        status: 'BRIDGED',
+        bridgedAt: deposit.dates.bridgedAt,
+      },
+      txHash: deposit.hashes.solana.bridgeTxHash,
     },
-    txHash: deposit.hashes.solana.bridgeTxHash,
-  });
+    deposit.chainName,
+  );
 };

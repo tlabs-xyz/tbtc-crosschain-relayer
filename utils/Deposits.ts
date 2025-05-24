@@ -26,7 +26,7 @@ import { type Reveal } from '../types/Reveal.type.js';
  * @param {Reveal} reveal - An object containing reveal parameters related to the Bitcoin deposit.
  * @param {any} l2DepositOwner - The owner of the deposit on the L2 network.
  * @param {any} l2Sender - The sender address on the L2 network.
- * @param {string} chainId - The chain ID of the deposit.
+ * @param {string} chainName - The chain name of the deposit.
  *
  * @returns {Deposit} A structured deposit object containing detailed information for various uses in the system.
  */
@@ -36,13 +36,13 @@ export const createDeposit = (
   reveal: Reveal,
   l2DepositOwner: any,
   l2Sender: any,
-  chainId: string,
+  chainName: string,
 ): Deposit => {
   const fundingTxHash = getFundingTxHash(fundingTx);
   const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
   const deposit: Deposit = {
     id: depositId,
-    chainId: chainId,
+    chainName: chainName,
     fundingTxHash: fundingTxHash,
     outputIndex: reveal.fundingOutputIndex,
     hashes: {

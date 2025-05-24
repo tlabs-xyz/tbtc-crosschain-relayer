@@ -164,9 +164,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             error,
           );
           logDepositError(
-            'unknown',
+            depositKey?.toString() ?? 'unknown-deposit-key',
             `Error processing OptimisticMintingFinalized event for key ${depositKey?.toString()}`,
             error,
+            this.config.chainName,
           );
         }
       },
@@ -194,7 +195,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         `INITIALIZE | ERROR | Missing L1OutputEvent data | ID: ${deposit.id}`,
         new Error(errorMsg),
       );
-      logDepositError(deposit.id, errorMsg, new Error(errorMsg));
+      logDepositError(deposit.id, errorMsg, new Error(errorMsg), deposit.chainName);
       updateToInitializedDeposit(deposit, null, 'Missing L1OutputEvent data'); // Mark as error
       return;
     }
@@ -237,7 +238,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       // Error Handling - Check if it's a specific revert reason or common issue
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
       logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
-      logDepositError(deposit.id, `Failed to initialize deposit: ${reason}`, error);
+      logDepositError(
+        deposit.id,
+        `Failed to initialize deposit: ${reason}`,
+        error,
+        deposit.chainName,
+      );
       // Update status to reflect error, preventing immediate retries unless logic changes
       updateToInitializedDeposit(deposit, null, `Error: ${reason}`);
     }
@@ -256,7 +262,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
         new Error(errorMsg),
       );
-      logDepositError(deposit.id, errorMsg, new Error('Invalid status for finalize'));
+      logDepositError(
+        deposit.id,
+        errorMsg,
+        new Error('Invalid status for finalize'),
+        deposit.chainName,
+      );
       // Optionally mark with error? updateToFinalizedDeposit(deposit, null, 'Invalid status for finalize')? Or just let process loop retry?
       // For now, just return, assuming the process loop or event handler called this correctly.
       return;
@@ -310,7 +321,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       } else {
         // Handle other errors
         logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
-        logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, error);
+        logDepositError(
+          deposit.id,
+          `Failed to finalize deposit: ${reason}`,
+          error,
+          deposit.chainName,
+        );
         // Mark as error to potentially prevent immediate retries depending on cleanup logic
         updateToFinalizedDeposit(deposit, null, `Error: ${reason}`);
       }
@@ -495,7 +511,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
    * Helper to determine if this handler supports checking for past L2 deposits based on its configuration.
    * Defaults to true if L2 is configured and endpoint is not used, override in subclasses for specific logic.
    */
-  // TODO: Consider removing this and always run full-configuration with support of all features
   supportsPastDepositCheck(): boolean {
     // True only if L2 is configured (implying L2 watcher capability) AND endpoint is not used.
     const supports = !!(

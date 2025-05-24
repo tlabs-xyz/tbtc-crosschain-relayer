@@ -122,6 +122,7 @@ export class EVMChainHandler
               depositId,
               `Error processing L2 DepositInitialized event: ${error.message}`,
               error,
+              this.config.chainName,
             );
           }
         },
@@ -235,6 +236,7 @@ export class EVMChainHandler
         'past-check-evm',
         `Error checking past EVM deposits: ${error.message}`,
         error,
+        this.config.chainName,
       );
     }
   }

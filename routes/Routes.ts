@@ -1,5 +1,6 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 
 import Operations from '../controllers/Operations.controller.js';
 import Utils from '../controllers/Utils.controller.js';
@@ -7,44 +8,108 @@ import { EndpointController } from '../controllers/Endpoint.controller.js';
 import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import logger from '../utils/Logger.js';
+import type { AnyChainConfig } from '../config/index.js';
 
 // Custom Request Interface
 export interface RequestWithChainInfo extends Request {
-  chainName: string;
-  chainHandler: ChainHandlerInterface | null; // null if chainName is 'all' and allowed
+  chainName?: string;
+  chainHandler?: ChainHandlerInterface;
+  chainConfig?: AnyChainConfig;
 }
 
 // Middleware factory for chain validation
-type ChainValidationOptions = {
+interface ChainValidationOptions {
   allowAllKeyword?: boolean;
-};
+}
 
+// Helper function to create the chain validation middleware
 const createChainValidator = (options: ChainValidationOptions = {}) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const expressReq = req as RequestWithChainInfo;
     const { chainName } = req.params as { chainName: string };
 
     expressReq.chainName = chainName;
     const handler = chainHandlerRegistry.get(chainName);
 
-    if (options.allowAllKeyword && chainName === 'all') {
-      expressReq.chainHandler = null; // Special case for 'all'
-      return next();
-    }
-
     if (!handler) {
-      return res.status(404).json({ success: false, error: `Unknown chain: ${chainName}` });
+      return res.status(404).send(`Unknown chain: ${chainName}`);
     }
 
-    expressReq.chainHandler = handler as ChainHandlerInterface;
-    return next();
+    expressReq.chainHandler = handler;
+    expressReq.chainConfig = handler.config;
+    next();
   };
 };
 
-const validateChainAllowAll = createChainValidator({ allowAllKeyword: true });
-const validateChainStrict = createChainValidator({ allowAllKeyword: false });
+// Define the chainSpecificRouter that handles endpoints after :chainName is validated
+const chainSpecificRouter = Router({ mergeParams: true }); // mergeParams is important for nested routers
 
-export const router = express.Router();
+// Define the validation middlewares
+const validateChainStrict = createChainValidator();
+const validateChainAllowAll = createChainValidator({ allowAllKeyword: true });
+
+chainSpecificRouter.post('/reveal', (req: Request, res: Response) => {
+  const { chainHandler } = req as RequestWithChainInfo;
+  const endpointController = new EndpointController(chainHandler!);
+  return endpointController.handleReveal(req, res);
+});
+chainSpecificRouter.get('/deposit/:depositId', (req: Request, res: Response) => {
+  const { chainHandler } = req as RequestWithChainInfo;
+  const endpointController = new EndpointController(chainHandler!);
+  return endpointController.getDepositStatus(req, res);
+});
+// Add other chain-specific routes here if any
+
+let routerInstanceIdCounter = 0;
+
+class RoutesSingleton {
+  public router: Router;
+  private readonly instanceId: number;
+  private static instance: RoutesSingleton;
+
+  private constructor() {
+    this.instanceId = ++routerInstanceIdCounter;
+    console.log(
+      `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] CREATING ROUTER`,
+    );
+    this.router = Router();
+    this.initializeRoutes();
+  }
+
+  public static getInstance(): RoutesSingleton {
+    if (!RoutesSingleton.instance) {
+      RoutesSingleton.instance = new RoutesSingleton();
+    }
+    return RoutesSingleton.instance;
+  }
+
+  public getInstanceId(): number {
+    return this.instanceId;
+  }
+
+  private initializeRoutes(): void {
+    console.log(
+      `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] Initializing routes...`,
+    );
+    const utils = new Utils(); // Instantiated Utils here for clarity for these routes
+    const validateChainAndGetHandler = createChainValidator({ allowAllKeyword: true });
+
+    // Mount the chain-specific router under /api/:chainName, AFTER validation middleware
+    this.router.use('/api/:chainName', validateChainAndGetHandler, chainSpecificRouter);
+    console.log(
+      `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] MOUNTED /api/:chainName with chainSpecificRouter`,
+    );
+
+    this.router.get('/', utils.defaultController); // Corrected to use utils.defaultController
+    this.router.get('/status', utils.pingController); // Corrected to use utils.pingController
+    console.log(
+      `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] All routes initialized.`,
+    );
+  }
+}
+
+export const mainRoutes = RoutesSingleton.getInstance();
+export const router = mainRoutes.router;
 
 // Controllers
 const utils = new Utils();
@@ -60,13 +125,13 @@ router.get('/status', utils.pingController);
 router.get('/api/:chainName/audit-logs', validateChainAllowAll, (req: Request, res: Response) => {
   const { chainName } = req as RequestWithChainInfo;
   // The controller expects chainName as a third argument.
-  return utils.auditLogsController(req, res, chainName);
+  return utils.auditLogsController(req, res, chainName!); // Added non-null assertion
 });
 
 // Diagnostic routes for a specific chain
 router.get('/api/:chainName/diagnostics', validateChainAllowAll, (req: Request, res: Response) => {
   const { chainName } = req as RequestWithChainInfo;
-  return operations.getAllOperations(req, res, chainName);
+  return operations.getAllOperations(req, res, chainName!); // Added non-null assertion
 });
 
 router.get(
@@ -74,7 +139,7 @@ router.get(
   validateChainAllowAll,
   (req: Request, res: Response) => {
     const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllQueuedOperations(req, res, chainName);
+    return operations.getAllQueuedOperations(req, res, chainName!); // Added non-null assertion
   },
 );
 
@@ -83,7 +148,7 @@ router.get(
   validateChainAllowAll,
   (req: Request, res: Response) => {
     const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllInitializedOperations(req, res, chainName);
+    return operations.getAllInitializedOperations(req, res, chainName!); // Added non-null assertion
   },
 );
 
@@ -92,7 +157,7 @@ router.get(
   validateChainAllowAll,
   (req: Request, res: Response) => {
     const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllFinalizedOperations(req, res, chainName);
+    return operations.getAllFinalizedOperations(req, res, chainName!); // Added non-null assertion
   },
 );
 

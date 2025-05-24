@@ -12,8 +12,8 @@ import {
 } from '@wormhole-foundation/sdk';
 import evmPlatform from '@wormhole-foundation/sdk/platforms/evm';
 import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import { stringifyWithBigInt } from '../utils/Numbers.js';
+import logger, { logErrorContext } from '../utils/Logger';
+import { stringifyWithBigInt } from '../utils/Numbers';
 
 type SignedVaa = Uint8Array;
 type ParsedVaaWithPayload = VAA<'TokenBridge:Transfer'> | VAA<'TokenBridge:TransferWithPayload'>;
@@ -118,7 +118,6 @@ export class WormholeVaaService {
         `Successfully parsed Wormhole message ID: Chain: ${messageId.chain}, Emitter: ${messageId.emitter.toString()}, Sequence: ${messageId.sequence}.`,
       );
 
-      // TODO: Which discriminator to use? Test it
       const discriminatorsToTry: Array<'TokenBridge:TransferWithPayload' | 'TokenBridge:Transfer'> =
         ['TokenBridge:TransferWithPayload', 'TokenBridge:Transfer'];
 
