@@ -21,8 +21,9 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   moduleNameMapper: {
     // eslint-disable-next-line no-useless-escape
-    '^(\.{1,2}/.+)\.js$': '$1',
+    // '^(\\.{1,2}/.+)\\.js$': '$1', // Commented out to allow standard TS import resolution
     '^@/(.*)$': '<rootDir>/$1',
+    '^#ansi-styles$': 'ansi-styles',
   },
   globalSetup: '<rootDir>/jest.global-setup.js',
   globalTeardown: '<rootDir>/jest.global-teardown.js',
