@@ -10,6 +10,9 @@ import { sepoliaTestnetChainInput } from './chain/sepolia.chain.js';
 import { solanaDevnetChainInput } from './chain/solana.chain.js';
 import { starknetTestnetChainInput } from './chain/starknet.chain.js';
 import { suiTestnetChainInput } from './chain/sui.chain.js';
+import { mockEvm1Config } from './chain/mockEvm1.chain.js';
+import { mockEvm2Config } from './chain/mockEvm2.chain.js';
+import { faultyMockEvmConfig } from './chain/faultyMockEvm.chain.js';
 import logger from '../utils/Logger.js';
 
 logger.info('Application configuration loaded successfully.');
@@ -25,6 +28,9 @@ export interface AllChainConfigs {
   solanaDevnet?: SolanaChainConfig;
   starknetTestnet?: StarknetChainConfig;
   suiTestnet?: SuiChainConfig;
+  mockEVM1?: EvmChainConfig;
+  mockEVM2?: EvmChainConfig;
+  faultyMockEVM?: EvmChainConfig;
   [key: string]: AnyChainConfig | undefined;
 }
 
@@ -35,6 +41,9 @@ const chainSchemaRegistry = {
   solanaDevnet: { schema: SolanaChainConfigSchema, input: solanaDevnetChainInput },
   starknetTestnet: { schema: StarknetChainConfigSchema, input: starknetTestnetChainInput },
   suiTestnet: { schema: SuiChainConfigSchema, input: suiTestnetChainInput },
+  mockEVM1: { schema: EvmChainConfigSchema, input: mockEvm1Config },
+  mockEVM2: { schema: EvmChainConfigSchema, input: mockEvm2Config },
+  faultyMockEVM: { schema: EvmChainConfigSchema, input: faultyMockEvmConfig },
 };
 
 export const chainConfigs: AllChainConfigs = {};
@@ -42,11 +51,45 @@ let hasChainConfigErrors = false;
 
 logger.info('Loading chain configurations...');
 
-for (const [key, entry] of Object.entries(chainSchemaRegistry)) {
+// Determine which chains to load based on SUPPORTED_CHAINS env var
+const supportedChainsEnv = process.env.SUPPORTED_CHAINS;
+let chainsToLoad: string[] | null = null;
+
+if (supportedChainsEnv && supportedChainsEnv.trim() !== '') {
+  chainsToLoad = supportedChainsEnv
+    .split(',')
+    .map((chain) => chain.trim())
+    .filter((chain) => chain.length > 0);
+  logger.info(
+    `SUPPORTED_CHAINS set. Will attempt to load configurations for: ${chainsToLoad.join(', ')}`,
+  );
+} else {
+  logger.info(
+    'SUPPORTED_CHAINS is not set. Will attempt to load all defined chain configurations.',
+  );
+}
+
+const effectiveChainSchemaRegistry: Partial<typeof chainSchemaRegistry> = {};
+for (const key in chainSchemaRegistry) {
+  if (Object.prototype.hasOwnProperty.call(chainSchemaRegistry, key)) {
+    if (chainsToLoad) {
+      if (chainsToLoad.includes(key)) {
+        effectiveChainSchemaRegistry[key as keyof typeof chainSchemaRegistry] =
+          chainSchemaRegistry[key as keyof typeof chainSchemaRegistry];
+      }
+    } else {
+      // Load all if chainsToLoad is null
+      effectiveChainSchemaRegistry[key as keyof typeof chainSchemaRegistry] =
+        chainSchemaRegistry[key as keyof typeof chainSchemaRegistry];
+    }
+  }
+}
+
+for (const [key, entry] of Object.entries(effectiveChainSchemaRegistry)) {
+  if (!entry) continue;
+
   try {
     logger.info(`Attempting to load configuration for chain: ${key}`);
-    // The 'input' field from the registry is passed to .parse()
-    // If input is an empty object, Zod relies on defaults and preprocessors
     chainConfigs[key] = entry.schema.parse(entry.input);
     logger.info(`Successfully loaded configuration for chain: ${key}`);
   } catch (error: any) {
