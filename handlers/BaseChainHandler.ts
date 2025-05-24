@@ -9,7 +9,7 @@ import type { TransactionReceipt } from '@ethersproject/providers';
 import { NonceManager } from '@ethersproject/experimental';
 
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { type ChainConfig, NETWORK } from '../types/ChainConfig.type.js';
+import { NETWORK } from '../config/schemas/common.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { DepositStore } from '../utils/DepositStore.js';
@@ -22,10 +22,13 @@ import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
+import type { AnyChainConfig } from '../config/index.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
 
-export abstract class BaseChainHandler implements ChainHandlerInterface {
+export abstract class BaseChainHandler<T extends AnyChainConfig> implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
   protected l1Signer: ethers.Wallet;
   protected nonceManagerL1: NonceManager;
@@ -33,11 +36,11 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected tbtcVault: ethers.Contract; // For sending L1 txs (though not used currently)
   protected l1BitcoinDepositorProvider: ethers.Contract; // For L1 reads/events
   protected tbtcVaultProvider: ethers.Contract; // For L1 events
-  public config: ChainConfig;
+  public config: T;
   protected wormhole: Wormhole<Network>;
 
 
-  constructor(config: ChainConfig) {
+  constructor(config: T) {
     this.config = config;
     logger.debug(`Constructing BaseChainHandler for ${this.config.chainName}`);
   }
@@ -46,18 +49,54 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
     logger.debug(`Initializing Base L1 components for ${this.config.chainName}`);
 
     // --- L1 Setup ---
+    // Common L1 configuration checks
     if (
       !this.config.l1Rpc ||
-      !this.config.privateKey ||
       !this.config.l1ContractAddress ||
       !this.config.vaultAddress ||
       !this.config.network
     ) {
-      throw new Error(`Missing required L1 configuration for ${this.config.chainName}`);
+      throw new Error(`Missing required L1 RPC/Contract/Vault/Network configuration for ${this.config.chainName}`);
+    }
+
+    // Initialize L1 provider first as it's needed by the signer
+    this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc);
+
+    // EVM-specific L1 setup (Signer)
+    if (this.config.chainType === CHAIN_TYPE.EVM) {
+      const evmConfig = this.config as EvmChainConfig;
+      if (!evmConfig.privateKey) {
+        throw new Error(`Missing privateKey for EVM chain ${this.config.chainName}`);
+      }
+      this.l1Signer = new ethers.Wallet(evmConfig.privateKey, this.l1Provider);
+      this.nonceManagerL1 = new NonceManager(this.l1Signer);
+
+      // L1 Contracts for transactions (require signer)
+      this.l1BitcoinDepositor = new ethers.Contract(
+        this.config.l1ContractAddress,
+        L1BitcoinDepositorABI,
+        this.nonceManagerL1,
+      );
+      this.tbtcVault = new ethers.Contract( // Keep for completeness, though not sending txs currently
+        this.config.vaultAddress,
+        TBTCVaultABI,
+        this.l1Signer, // Use l1Signer here, not nonceManagerL1 unless needed
+      );
+    } else {
+      // For non-EVM chains, l1Signer and related contracts might not be needed
+      // or would require a different setup.
+      // For now, we ensure they are not initialized if privateKey is not applicable.
+      logger.warn(
+        `L1 Signer and transaction-capable contracts not initialized for non-EVM chain ${this.config.chainName} in BaseChainHandler. This might be expected.`,
+      );
+      // Ensure these are undefined or handled appropriately if accessed later
+      // For instance, methods requiring l1Signer should check its existence or chainType.
     }
 
     const ethereumNetwork =
-      this.config.network === NETWORK.DEVNET ? NETWORK.TESTNET : this.config.network;
+      (this.config.network as NETWORK) === NETWORK.DEVNET
+        ? NETWORK.TESTNET
+        : (this.config.network as NETWORK);
 
     this.wormhole = await wormhole(ethereumNetwork, [evm, solana, sui], {
       chains: {
@@ -66,23 +105,9 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
         },
       },
     });
-    this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc);
-    this.l1Signer = new ethers.Wallet(this.config.privateKey, this.l1Provider);
-    this.nonceManagerL1 = new NonceManager(this.l1Signer);
+    // this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc); // Moved up
 
-    // L1 Contracts for transactions
-    this.l1BitcoinDepositor = new ethers.Contract(
-      this.config.l1ContractAddress,
-      L1BitcoinDepositorABI,
-      this.nonceManagerL1,
-    );
-    this.tbtcVault = new ethers.Contract( // Keep for completeness, though not sending txs currently
-      this.config.vaultAddress,
-      TBTCVaultABI,
-      this.l1Signer, // Use l1Signer here, not nonceManagerL1 unless needed
-    );
-
-    // L1 Contracts for reading/listening
+    // L1 Contracts for reading/listening (do not require signer)
     this.l1BitcoinDepositorProvider = new ethers.Contract(
       this.config.l1ContractAddress,
       L1BitcoinDepositorABI,
@@ -113,7 +138,7 @@ export abstract class BaseChainHandler implements ChainHandlerInterface {
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      async (_minter: any, depositKey: any, _depositor: any, _optimisticMintingDebt: any) => {
+      async (minter, depositKey, _depositor, _optimisticMintingDebt) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();

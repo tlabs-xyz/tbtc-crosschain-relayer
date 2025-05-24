@@ -11,7 +11,7 @@ import {
   logDepositDeleted,
   logApiRequest,
   logDepositError,
-} from '../../../utils/AuditLog';
+} from '../../../utils/AuditLog.js';
 import { prisma } from '../../../utils/prisma.js';
 import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum.js';
 
@@ -81,7 +81,11 @@ describe('AuditLog', () => {
   });
 
   test('logStatusChange writes correct event', async () => {
-    await logStatusChange(testDeposit as any, DepositStatusEnum.INITIALIZED, DepositStatusEnum.QUEUED);
+    await logStatusChange(
+      testDeposit as any,
+      DepositStatusEnum.INITIALIZED,
+      DepositStatusEnum.QUEUED,
+    );
     const logs = await prisma.auditLog.findMany({ where: { depositId: testDeposit.id } });
     expect(logs.length).toBe(1);
     expect(logs[0].eventType).toBe(AuditEventType.STATUS_CHANGED);
@@ -109,7 +113,7 @@ describe('AuditLog', () => {
   });
 
   test('logApiRequest writes correct event', async () => {
-    await logApiRequest('/api/test', 'POST', testDeposit.id, { test: 'payload'}, 201);
+    await logApiRequest('/api/test', 'POST', testDeposit.id, { test: 'payload' }, 201);
     const logs = await prisma.auditLog.findMany({ where: { depositId: testDeposit.id } });
     expect(logs.length).toBe(1);
     expect(logs[0].eventType).toBe(AuditEventType.API_REQUEST);

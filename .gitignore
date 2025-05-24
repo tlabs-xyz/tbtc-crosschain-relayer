@@ -22,3 +22,5 @@ redemptions/
 tasks
 
 prisma/memory:
+
+*.diff

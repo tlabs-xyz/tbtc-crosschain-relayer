@@ -1,11 +1,11 @@
-import { logErrorContext, logChainCronError, logGlobalCronError } from '../utils/Logger.js';
+import { logErrorContext } from '../utils/Logger.js';
 import cron from 'node-cron';
 import pLimit from 'p-limit';
 
 import logger from '../utils/Logger.js';
-import { ChainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
-import type { ChainConfig } from '../types/ChainConfig.type.js';
-import { loadChainConfigs } from '../utils/ConfigLoader.js';
+import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
+import { chainConfigs, type AnyChainConfig } from '../config/index.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import {
   cleanQueuedDeposits,
   cleanFinalizedDeposits,
@@ -15,99 +15,131 @@ import { L2RedemptionService } from './L2RedemptionService.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
 import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 
-export let chainConfigs: ChainConfig[] = [];
-const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
+let effectiveChainConfigs: AnyChainConfig[] = [];
 
-// Keep track of loaded configs so they can be exported for tests
-let loadedChainConfigs: ChainConfig[] = [];
+const supportedChainsEnv = process.env.SUPPORTED_CHAINS;
 
-const cronConcurrencyLimit = pLimit(3); // Concurrency limit for cron job tasks
+if (supportedChainsEnv && supportedChainsEnv.trim() !== '') {
+  const supportedChainKeys = supportedChainsEnv
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
-export async function initializeChainHandlers(
-  chainHandlerRegistry: ChainHandlerRegistry,
-  configs: ChainConfig[]
-) {
-  chainConfigs = configs;
-  await chainHandlerRegistry.initialize(configs);
-  logger.info('ChainHandlerRegistry initialized for all chains.');
+  if (supportedChainKeys.length > 0) {
+    logger.info(
+      `SUPPORTED_CHAINS environment variable set. Attempting to load: ${supportedChainKeys.join(', ')}`,
+    );
+    supportedChainKeys.forEach((chainKey) => {
+      const config = chainConfigs[chainKey];
+      if (config) {
+        effectiveChainConfigs.push(config);
+      } else {
+        logger.warn(
+          `Configuration for chain key '${chainKey}' specified in SUPPORTED_CHAINS not found in loaded chainConfigs. Skipping.`,
+        );
+      }
+    });
+
+    if (effectiveChainConfigs.length === 0) {
+      logger.error(
+        'No valid chain configurations were loaded based on SUPPORTED_CHAINS. The relayer may not operate as expected. Please check your SUPPORTED_CHAINS environment variable and individual chain configuration files.',
+      );
+      // Consider process.exit(1) for non-test, non-API_ONLY_MODE environments
+    }
+  } else {
+    logger.warn(
+      'SUPPORTED_CHAINS environment variable is set but resulted in an empty list of chains after parsing. All loaded chain configurations will be used.',
+    );
+    effectiveChainConfigs = Object.values(chainConfigs).filter(
+      (config): config is AnyChainConfig => config !== null && config !== undefined,
+    );
+  }
+} else {
+  logger.info(
+    'SUPPORTED_CHAINS environment variable not set or is empty. All loaded chain configurations will be used.',
+  );
+  effectiveChainConfigs = Object.values(chainConfigs).filter(
+    (config): config is AnyChainConfig => config !== null && config !== undefined,
+  );
 }
 
-export const startCronJobs = (chainHandlerRegistry: ChainHandlerRegistry) => {
+const chainConfigsArray: AnyChainConfig[] = effectiveChainConfigs;
+
+const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
+
+export const startCronJobs = () => {
   logger.debug('Starting multi-chain cron job setup...');
 
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
     await Promise.all(
-      chainHandlerRegistry.list().map(async (handler) =>
-        cronConcurrencyLimit(async () => {
-          const chainName = (handler as BaseChainHandler).config.chainName;
-          try {
-            await handler.processWormholeBridging?.();
-            await handler.processFinalizeDeposits();
-            await handler.processInitializeDeposits();
-          } catch (error) {
-            logChainCronError(chainName, 'deposit processing', error);
-          }
-        })
-      )
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
+        try {
+          await handler.processWormholeBridging?.();
+          await handler.processFinalizeDeposits();
+          await handler.processInitializeDeposits();
+        } catch (error) {
+          logErrorContext(`Error in deposit processing cron job for ${chainName}:`, error);
+        }
+      }),
     );
   });
 
   // Every 2 minutes - process redemptions
   cron.schedule('*/2 * * * *', async () => {
     await Promise.all(
-      chainHandlerRegistry.list().map(async (handler) =>
-        cronConcurrencyLimit(async () => {
-          const chainName = (handler as BaseChainHandler).config.chainName;
-          try {
-            const l2Service = l2RedemptionServices.get(chainName);
-            if (!l2Service) {
-              // If the service is not found, it means it failed during explicit initialization.
-              // Log an error and skip processing for this chain in this cycle.
-              logChainCronError(
-                chainName,
-                'redemption processing',
-                new Error(`L2RedemptionService not found. It may have failed during initialization.`)
-              );
-              return; // Skip this chain for this cron cycle
-            }
-            await l2Service.processPendingRedemptions();
-            await l2Service.processVaaFetchedRedemptions();
-          } catch (error) {
-            logChainCronError(chainName, 'redemption processing', error);
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
+        try {
+          const l2Service = l2RedemptionServices.get(chainName);
+          if (!l2Service) {
+            logger.error(
+              `Config not found for chain ${chainName} in L2 redemption cron. Skipping.`,
+            );
+            return;
           }
-        })
-      )
+          await l2Service.processPendingRedemptions();
+          await l2Service.processVaaFetchedRedemptions();
+        } catch (error) {
+          logErrorContext(`Error in redemption processing cron job for ${chainName}:`, error);
+        }
+      }),
     );
   });
 
   // Every 60 minutes - check for past deposits
   cron.schedule('*/60 * * * *', async () => {
     await Promise.all(
-      chainHandlerRegistry.list().map(async (handler) =>
-        cronConcurrencyLimit(async () => {
-          const chainName = (handler as BaseChainHandler).config.chainName;
-          try {
-            if (handler.supportsPastDepositCheck()) {
-              const latestBlock = await handler.getLatestBlock();
-              if (latestBlock > 0) {
-                logger.debug(`Running checkForPastDeposits for ${chainName} (Latest Block/Slot: ${latestBlock})`);
-                await handler.checkForPastDeposits({
-                  pastTimeInMinutes: 60,
-                  latestBlock: latestBlock,
-                });
-              } else {
-                logger.warn(`Skipping checkForPastDeposits for ${chainName} - Invalid latestBlock received: ${latestBlock}`);
-              }
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
+        try {
+          if (handler.supportsPastDepositCheck()) {
+            const latestBlock = await handler.getLatestBlock();
+            if (latestBlock > 0) {
+              logger.debug(
+                `Running checkForPastDeposits for ${chainName} (Latest Block/Slot: ${latestBlock})`,
+              );
+              await handler.checkForPastDeposits({
+                pastTimeInMinutes: 60,
+                latestBlock: latestBlock,
+              });
             } else {
-              logger.debug(`Skipping checkForPastDeposits for ${chainName} - Handler does not support it (e.g., using endpoint).`);
+              logger.warn(
+                `Skipping checkForPastDeposits for ${chainName} - Invalid latestBlock received: ${latestBlock}`,
+              );
             }
-          } catch (error) {
-            logChainCronError(chainName, 'past deposits check', error);
+          } else {
+            logger.debug(
+              `Skipping checkForPastDeposits for ${chainName} - Handler does not support it (e.g., using endpoint).`,
+            );
           }
-        })
-      )
+        } catch (error) {
+          logErrorContext(`Error in past deposits cron job for ${chainName}:`, error);
+        }
+      }),
     );
   });
 
@@ -119,7 +151,7 @@ export const startCronJobs = (chainHandlerRegistry: ChainHandlerRegistry) => {
         await cleanFinalizedDeposits();
         await cleanBridgedDeposits();
       } catch (error) {
-        logGlobalCronError('deposit cleanup', error);
+        logErrorContext('Error in deposit cleanup cron job', error);
       }
     });
 
@@ -141,7 +173,7 @@ export const startCronJobs = (chainHandlerRegistry: ChainHandlerRegistry) => {
           }
         }
       } catch (error) {
-        logGlobalCronError('redemption cleanup', error);
+        logErrorContext('Error in redemption cleanup cron job', error);
       }
     });
     logger.info('Cleanup cron jobs ENABLED.');
@@ -152,45 +184,77 @@ export const startCronJobs = (chainHandlerRegistry: ChainHandlerRegistry) => {
   logger.debug('Multi-chain cron job setup complete.');
 };
 
-export async function initializeAllChains(
-  chainHandlerRegistry: ChainHandlerRegistry
-): Promise<ChainConfig[]> {
-  const configs = await loadChainConfigs();
-  loadedChainConfigs = configs; // Store loaded configs
-  
-  if (configs.length === 0) {
+export async function initializeAllChains(): Promise<void> {
+  if (chainConfigsArray.length === 0) {
     logger.warn('No chain configurations loaded. Relayer might not operate on any chain.');
-    return [];
+    return;
   }
-  logger.info(`Loaded ${configs.length} chain configurations: ${configs.map(c => c.chainName).join(', ')}`);
-  // Pass the already loaded configs to initializeChainHandlers
-  await initializeChainHandlers(chainHandlerRegistry, configs); 
-  logger.info('All chain handlers registered and basic setup complete.');
-  return configs;
-}
+  logger.info(
+    `Loaded ${chainConfigsArray.length} chain configurations: ${chainConfigsArray
+      .map((c) => c.chainName)
+      .join(', ')}`,
+  );
 
-export function getLoadedChainConfigs(): ChainConfig[] {
-  return loadedChainConfigs;
+  await chainHandlerRegistry.initialize(chainConfigsArray);
+  logger.info('ChainHandlerRegistry initialized for all chains.');
+
+  // Initialize handlers and setup listeners concurrently
+  const initLimit = pLimit(5); // Limit concurrency for initialization
+  const initializationPromises = chainHandlerRegistry.list().map((handler) =>
+    initLimit(async () => {
+      const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName as string;
+      try {
+        await handler.initialize();
+        logger.info(`Successfully initialized handler for ${chainName}`);
+        await handler.setupListeners();
+        logger.info(`Successfully set up listeners for ${chainName}`);
+      } catch (error: any) {
+        logErrorContext(`Failed to initialize or set up listeners for ${chainName}:`, error);
+        // Decide if we should exit or continue without this chain
+        // For now, logging the error and continuing
+      }
+    }),
+  );
+  await Promise.all(initializationPromises);
+  logger.info('All available chain handlers initialized and listeners set up.');
 }
 
 export async function initializeAllL2RedemptionServices(): Promise<void> {
-  if (loadedChainConfigs.length === 0) {
-    logger.warn('No chains loaded, skipping L2 Redemption Service initialization.');
+  const evmChainConfigs = chainConfigsArray.filter(
+    (config) => config.chainType === CHAIN_TYPE.EVM,
+  ) as EvmChainConfig[];
+
+  if (evmChainConfigs.length === 0) {
+    logger.warn(
+      'No EVM chain configurations found, L2RedemptionService will not be initialized for any chain.',
+    );
     return;
   }
-  logger.info('Initializing L2 Redemption Services for configured chains...');
-  for (const config of loadedChainConfigs) {
-    if (!l2RedemptionServices.has(config.chainName)) {
-      try {
-        const service = await L2RedemptionService.create(config);
-        l2RedemptionServices.set(config.chainName, service);
-        logger.info(`L2RedemptionService initialized for chain: ${config.chainName}`);
-      } catch (error) {
-        // If a service fails, log and re-throw to halt startup.
-        logger.error(`FATAL: Failed to initialize L2RedemptionService for ${config.chainName}:`, error);
-        throw error; 
+
+  logger.info('Initializing L2 Redemption Services for configured EVM chains...');
+  for (const config of evmChainConfigs) {
+    const chainName = config.chainName as string;
+    if (config.enableL2Redemption) {
+      if (!l2RedemptionServices.has(chainName)) {
+        logger.info(`Initializing L2RedemptionService for ${chainName}...`);
+        try {
+          const service = await L2RedemptionService.create(config);
+          l2RedemptionServices.set(chainName, service);
+          logger.info(`L2RedemptionService for ${chainName} initialized and listeners set up.`);
+        } catch (error) {
+          logErrorContext(`Failed to initialize L2RedemptionService for ${chainName}:`, error);
+        }
+      } else {
+        logger.debug(`L2RedemptionService for ${chainName} already initialized.`);
       }
+    } else {
+      logger.info(`L2RedemptionService disabled for ${chainName} by configuration.`);
     }
   }
-  logger.info('All L2 Redemption Services initialized (or attempted and failed, halting startup).');
+  logger.info('All L2 redemption services initialized (or skipped if disabled/not EVM).');
+}
+
+// Export for testing or specific access if needed, though registry is preferred
+export function getL2RedemptionService(chainName: string): L2RedemptionService | undefined {
+  return l2RedemptionServices.get(chainName);
 }

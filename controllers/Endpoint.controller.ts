@@ -70,7 +70,13 @@ export class EndpointController {
       }
 
       // Create deposit object
-      const deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender, this.chainHandler.config.chainName);
+      const deposit = createDeposit(
+        fundingTx,
+        reveal,
+        l2DepositOwner,
+        l2Sender,
+        this.chainHandler.config.chainName,
+      );
       logger.debug(`Created deposit with ID: ${deposit.id}`);
 
       // Initialize the deposit
@@ -87,13 +93,7 @@ export class EndpointController {
       logErrorContext('Error handling reveal endpoint:', error);
 
       // Log error to audit log
-      let depositId = 'unknown';
-      try {
-        if (req.body?.fundingTx?.txHash) {
-          depositId = req.body.fundingTx.txHash;
-        }
-      } catch (e) {}
-
+      const depositId = req.body.fundingTx?.txHash || 'unknown';
       logDepositError(depositId, 'Error handling reveal endpoint', error);
       logApiRequest('/api/reveal', 'POST', depositId, {}, 500);
 

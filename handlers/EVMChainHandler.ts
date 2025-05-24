@@ -2,15 +2,12 @@ import { ethers } from 'ethers';
 import { NonceManager } from '@ethersproject/experimental';
 
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import type { ChainConfig } from '../types/ChainConfig.type.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import {
-  createDeposit,
-  getDepositId,
-} from '../utils/Deposits.js';
+import { createDeposit, getDepositId } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
@@ -18,14 +15,17 @@ import { logDepositError } from '../utils/AuditLog.js';
 
 import { BaseChainHandler } from './BaseChainHandler.js';
 
-export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInterface {
+export class EVMChainHandler
+  extends BaseChainHandler<EvmChainConfig>
+  implements ChainHandlerInterface
+{
   protected l2Provider: ethers.providers.JsonRpcProvider | undefined;
   protected l2Signer: ethers.Wallet | undefined;
   protected nonceManagerL2: NonceManager | undefined;
   protected l2BitcoinDepositor: ethers.Contract | undefined;
   protected l2BitcoinDepositorProvider: ethers.Contract | undefined;
 
-  constructor(config: ChainConfig) {
+  constructor(config: EvmChainConfig) {
     super(config);
     logger.debug(`Constructing EVMChainHandler for ${this.config.chainName}`);
   }
@@ -101,7 +101,13 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
             }
 
             logger.debug(`L2 Listener | Creating new deposit | ID: ${depositId}`);
-            const deposit: Deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender, this.config.chainName);
+            const deposit: Deposit = createDeposit(
+              fundingTx,
+              reveal,
+              l2DepositOwner,
+              l2Sender,
+              this.config.chainName,
+            );
             DepositStore.create(deposit);
 
             logger.debug(`L2 Listener | Triggering L1 initializeDeposit | ID: ${deposit.id}`);
@@ -249,7 +255,7 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
       };
     }
 
-    const START_BLOCK = this.config.l2StartBlock ?? 0;
+    const START_BLOCK = (this.config.l2StartBlock as number | undefined) ?? 0;
     let startBlock = -1;
     let low = START_BLOCK;
     let high = latestBlock;
@@ -257,7 +263,7 @@ export class EVMChainHandler extends BaseChainHandler implements ChainHandlerInt
 
     if (high < low) {
       logger.warn(
-        `_getBlocksByTimestampEVM | latestBlock (${high}) is lower than START_BLOCK (${low}). Using START_BLOCK for both.`,
+        `_getBlocksByTimestampEVM | latestBlock (${high}) is less than START_BLOCK (${low}). Returning START_BLOCK for both range ends.`,
       );
       return { startBlock: START_BLOCK, endBlock: START_BLOCK };
     }

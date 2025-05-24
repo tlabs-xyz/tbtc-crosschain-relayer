@@ -4,6 +4,16 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
+  moduleFileExtensions: [
+    'js',
+    'mjs',
+    'cjs',
+    'ts',
+    'mts',
+    'cts',
+    'json',
+    'node',
+  ],
   verbose: true,
   collectCoverageFrom: [
     'controllers/**/*.ts',
@@ -19,6 +29,7 @@ module.exports = {
   testTimeout: 30000,
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   moduleNameMapper: {
+    // eslint-disable-next-line no-useless-escape
     '^(\.{1,2}/.+)\.js$': '$1',
     '^@/(.*)$': '<rootDir>/$1',
   },

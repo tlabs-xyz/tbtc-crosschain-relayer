@@ -81,7 +81,10 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
 
       const deposit = await DepositStore.getById(id);
       if (deposit) {
-        await logDepositDeleted(deposit, `FINALIZED deposit exceeded age limit (${ageInHours} hours)`);
+        await logDepositDeleted(
+          deposit,
+          `FINALIZED deposit exceeded age limit (${ageInHours} hours)`,
+        );
       }
 
       await DepositStore.delete(id);
@@ -117,7 +120,10 @@ export const cleanBridgedDeposits = async (): Promise<void> => {
 
       const deposit = await DepositStore.getById(id);
       if (deposit) {
-        await logDepositDeleted(deposit, `BRIDGED deposit exceeded age limit (${ageInHours} hours)`);
+        await logDepositDeleted(
+          deposit,
+          `BRIDGED deposit exceeded age limit (${ageInHours} hours)`,
+        );
       }
 
       await DepositStore.delete(id);

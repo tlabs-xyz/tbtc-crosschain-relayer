@@ -47,7 +47,11 @@ export default class Operations {
    * @method GET
    * @returns {Array<Deposit>} A promise that resolves to an array of deposits.
    */
-  getAllQueuedOperations = async (req: Request, res: Response, chainName: string): Promise<void> => {
+  getAllQueuedOperations = async (
+    req: Request,
+    res: Response,
+    chainName: string,
+  ): Promise<void> => {
     const response = new CustomResponse(res);
     try {
       const whereClause: any = { status: DepositStatus.QUEUED };
@@ -75,7 +79,11 @@ export default class Operations {
    * @method GET
    * @returns {Promise<Array<Deposit>>} A promise that resolves to an array of deposits.
    */
-  getAllInitializedOperations = async (req: Request, res: Response, chainName: string): Promise<void> => {
+  getAllInitializedOperations = async (
+    req: Request,
+    res: Response,
+    chainName: string,
+  ): Promise<void> => {
     const response = new CustomResponse(res);
     try {
       const whereClause: any = { status: DepositStatus.INITIALIZED };
@@ -103,7 +111,11 @@ export default class Operations {
    * @method GET
    * @returns {Promise<Array<Deposit>>} A promise that resolves to an array of deposits.
    */
-  getAllFinalizedOperations = async (req: Request, res: Response, chainName: string): Promise<void> => {
+  getAllFinalizedOperations = async (
+    req: Request,
+    res: Response,
+    chainName: string,
+  ): Promise<void> => {
     const response = new CustomResponse(res);
     try {
       const whereClause: any = { status: DepositStatus.FINALIZED };
