@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
-import CustomResponse from '../helpers/CustomResponse.helper.js';
-import { logErrorContext } from '../utils/Logger.js';
-import type { Deposit } from '../types/Deposit.type.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { prisma } from '../utils/prisma.js';
+import CustomResponse from '../helpers/CustomResponse.helper';
+import { logErrorContext } from '../utils/Logger';
+import type { Deposit } from '../types/Deposit.type';
+import { DepositStatus } from '../types/DepositStatus.enum';
+import { prisma } from '../utils/prisma';
 
 /**
  * @name Operations

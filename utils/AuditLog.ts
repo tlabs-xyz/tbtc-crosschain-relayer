@@ -1,7 +1,7 @@
-import { prisma } from './prisma.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
-import type { Deposit } from '../types/Deposit.type.js';
-import { logErrorContext } from './Logger.js';
+import { prisma } from './prisma';
+import { DepositStatus } from '../types/DepositStatus.enum';
+import type { Deposit } from '../types/Deposit.type';
+import { logErrorContext } from './Logger';
 
 // Event types
 export enum AuditEventType {

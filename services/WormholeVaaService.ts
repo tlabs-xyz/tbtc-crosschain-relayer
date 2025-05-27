@@ -33,18 +33,30 @@ export class WormholeVaaService {
   private l2Provider: ethers.providers.JsonRpcProvider;
   private wh!: Wormhole<Network>;
 
-  private constructor(l2Rpc: string) {
-    this.l2Provider = new ethers.providers.JsonRpcProvider(l2Rpc);
+  private constructor(l2RpcOrProvider: string | ethers.providers.JsonRpcProvider) {
+    if (typeof l2RpcOrProvider === 'string') {
+      this.l2Provider = new ethers.providers.JsonRpcProvider(l2RpcOrProvider);
+    } else {
+      this.l2Provider = l2RpcOrProvider;
+    }
   }
 
   public static async create(
-    l2Rpc: string,
+    l2RpcOrProvider: string | ethers.providers.JsonRpcProvider,
     network: Network = DEFAULT_WORMHOLE_NETWORK,
     platformModules: any[] = DEFAULT_SDK_PLATFORMS_MODULES,
   ): Promise<WormholeVaaService> {
-    const service = new WormholeVaaService(l2Rpc);
-    service.wh = await wormhole(network, platformModules);
-    logger.info(`WormholeVaaService created. L2 RPC: ${l2Rpc}, Wormhole Network: ${network}`);
+    console.log('[REAL WormholeVaaService.create CALLED] Args:', { l2RpcOrProvider, network, platformModules });
+    const service = new WormholeVaaService(l2RpcOrProvider);
+    try {
+      service.wh = await wormhole(network, platformModules);
+      console.log('[REAL WormholeVaaService.create] service.wh initialized:', service.wh ? 'OK' : 'UNDEFINED');
+    } catch (e) {
+      console.error('[REAL WormholeVaaService.create] Error initializing wormhole SDK:', e);
+      throw e; // Re-throw to ensure failure is visible
+    }
+    const l2Location = typeof l2RpcOrProvider === 'string' ? l2RpcOrProvider : 'provided_instance';
+    logger.info(`WormholeVaaService created. L2 Provider: ${l2Location}, Wormhole Network: ${network}`);
     return service;
   }
 
@@ -62,6 +74,16 @@ export class WormholeVaaService {
     emitterAddress: string,
     targetL1ChainId: ChainId = DEFAULT_TARGET_L1_CHAIN_ID,
   ): Promise<{ vaaBytes: SignedVaa; parsedVaa: ParsedVaaWithPayload } | null> {
+    console.log(
+      `[REAL WormholeVaaService.fetchAndVerifyVaaForL2Event CALLED] L2 Tx: ${l2TransactionHash}. this.wh is ${this.wh ? 'DEFINED' : 'UNDEFINED'}`,
+    );
+    if (!this.wh) {
+      console.error(
+        '[REAL WormholeVaaService.fetchAndVerifyVaaForL2Event] CRITICAL: this.wh is undefined before getChain call.',
+      );
+      // Potentially throw here or return early to avoid undefined access
+      throw new Error('[REAL Service] this.wh is undefined, cannot proceed.');
+    }
     const emitterChainName = chainIdToChain(emitterChainId);
     logger.info(
       `Attempting to fetch VAA for L2 transaction: ${l2TransactionHash}, EmitterChain: ${emitterChainName}, EmitterAddr: ${emitterAddress}`,

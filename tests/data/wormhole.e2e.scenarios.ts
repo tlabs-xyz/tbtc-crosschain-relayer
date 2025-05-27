@@ -6,11 +6,11 @@ export const L2_CHAIN_ID_SUI = toChainId('Sui');
 export const TARGET_CHAIN_ID_ARB = toChainId('Arbitrum');
 export const L1_WORMHOLE_TOKEN_BRIDGE_EMITTER_ADDRESS = '0x' + '1'.repeat(40);
 
-export const L2_RPC_URL = 'http://mock-l2-rpc.com';
+export const MOCK_SUI_RPC_URL = 'http://sui-mock-l2-rpc.com';
 export const TEST_NETWORK: Network = 'Testnet';
 
 export const L2_CHAIN_ID_AVAX = toChainId('Avalanche');
-export const MOCK_AVAX_RPC_URL = 'http://mock-avax-l2-rpc.com';
+export const MOCK_AVAX_RPC_URL = 'http://avax-mock-l2-rpc.com';
 // TARGET_CHAIN_ID_ETH is the same as L1_CHAIN_ID_ETH, defined above.
 
 export interface TestScenario {
@@ -28,7 +28,7 @@ export const testScenarios: TestScenario[] = [
     description: 'Sui (L2) -> Arbitrum (L1)',
     l2ChainName: 'Sui',
     l2ChainId: L2_CHAIN_ID_SUI,
-    l2RpcUrl: L2_RPC_URL,
+    l2RpcUrl: MOCK_SUI_RPC_URL,
     targetL1ChainName: 'Arbitrum',
     targetL1ChainId: TARGET_CHAIN_ID_ARB,
     expectedEmitterAddress: L1_WORMHOLE_TOKEN_BRIDGE_EMITTER_ADDRESS,
@@ -46,7 +46,7 @@ export const testScenarios: TestScenario[] = [
     description: 'Sui (L2) -> Ethereum (L1)',
     l2ChainName: 'Sui',
     l2ChainId: L2_CHAIN_ID_SUI,
-    l2RpcUrl: L2_RPC_URL,
+    l2RpcUrl: MOCK_SUI_RPC_URL,
     targetL1ChainName: 'Ethereum',
     targetL1ChainId: L1_CHAIN_ID_ETH,
     expectedEmitterAddress: L1_WORMHOLE_TOKEN_BRIDGE_EMITTER_ADDRESS,

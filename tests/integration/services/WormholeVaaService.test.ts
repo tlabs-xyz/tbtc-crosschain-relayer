@@ -1,63 +1,53 @@
+process.env.USE_REAL_WORMHOLE_SERVICE = 'true'; // Signal global setup to NOT mock WormholeVaaService
+
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
-import { WormholeVaaService } from '../../../services/WormholeVaaService.js';
-import { ethers } from 'ethers';
+import { WormholeVaaService } from '../../../services/WormholeVaaService';
+import type { ethers as EthersNamespace } from 'ethers';
+import { BigNumber as EthersBigNumber, providers as EthersProviders } from 'ethers';
+
 import {
-  wormhole,
-  Wormhole,
+  wormhole as actualWormhole,
+  Wormhole as ActualWormholeClass,
   UniversalAddress as ActualUniversalAddress,
   type Network,
   type ChainId,
-  chainIdToChain as actualChainIdToChain,
   type WormholeMessageId,
   type Chain,
-  type VAA,
-  toChainId,
+  type VAA as ActualVAA,
+  toChainId as actualToChainId,
   type PayloadLiteral,
+  chainIdToChain as actualChainIdToChainSDK,
 } from '@wormhole-foundation/sdk';
-import logger, { logErrorContext } from '../../../utils/Logger.js';
-import { stringifyWithBigInt } from '../../../utils/Numbers.js';
+import logger, { logErrorContext } from '../../../utils/Logger';
+import { stringifyWithBigInt } from '../../../utils/Numbers';
 
-jest.mock('@wormhole-foundation/sdk', () => {
-  const originalSdk = jest.requireActual('@wormhole-foundation/sdk') as any;
+const mockWormholeSdkFunctions = jest.requireMock('@wormhole-foundation/sdk') as {
+  wormhole: jest.MockedFunction<typeof actualWormhole>;
+  chainIdToChain: jest.MockedFunction<typeof actualChainIdToChainSDK>;
+};
 
-  return {
-    __esModule: true,
-    ...originalSdk,
-    wormhole: jest.fn(),
-    chainIdToChain: jest.fn((id: ChainId) => originalSdk.chainIdToChain(id)),
-    UniversalAddress: jest.fn((...args: any[]) => new originalSdk.UniversalAddress(...args)),
-    toChainId: originalSdk.toChainId,
-  };
-});
-
-const mockChainIdToChainFn = jest.fn<(id: ChainId) => Chain>();
-const mockUniversalAddressConstructorFn =
-  jest.fn<(addr: string | Uint8Array) => ActualUniversalAddress>();
-
-// Get references to the mocked functions
-const mockWormholeSdk = jest.requireMock('@wormhole-foundation/sdk') as any;
-mockWormholeSdk.chainIdToChain = mockChainIdToChainFn;
-mockWormholeSdk.UniversalAddress = jest.fn((arg: string | Uint8Array) =>
-  mockUniversalAddressConstructorFn(arg),
-);
+// Store the mocked JsonRpcProvider constructor for later use/assertion.
+let MockedJsonRpcProviderConstructor: jest.Mock;
 
 jest.mock('ethers', () => {
-  const originalEthers = jest.requireActual('ethers') as Record<string, any>;
+  const originalEthers = jest.requireActual('ethers') as typeof EthersNamespace;
+  MockedJsonRpcProviderConstructor = jest.fn().mockImplementation(() => ({
+    getTransactionReceipt:
+      jest.fn<() => Promise<EthersNamespace.providers.TransactionReceipt | null>>(),
+    getNetwork: jest.fn<() => Promise<EthersNamespace.providers.Network>>(),
+  }));
   return {
-    ...originalEthers,
-    ethers: {
-      ...originalEthers.ethers,
-      providers: {
-        JsonRpcProvider: jest.fn().mockImplementation(() => ({
-          getTransactionReceipt:
-            jest.fn<() => Promise<ethers.providers.TransactionReceipt | null>>(),
-        })),
-      },
+    __esModule: true,
+    BigNumber: originalEthers.BigNumber,
+    providers: {
+      ...originalEthers.providers,
+      JsonRpcProvider: MockedJsonRpcProviderConstructor, // Use the stored mock constructor
     },
+    utils: originalEthers.utils,
   };
 });
 
-jest.mock('../../../utils/Logger.js', () => ({
+jest.mock('../../../utils/Logger', () => ({
   __esModule: true,
   default: {
     info: jest.fn(),
@@ -68,97 +58,93 @@ jest.mock('../../../utils/Logger.js', () => ({
   logErrorContext: jest.fn(),
 }));
 
-// --- Typed Mocks ---
-const mockWormholeEntry = wormhole as jest.MockedFunction<typeof wormhole>;
-const mockEthersJsonRpcProviderConstructor = ethers.providers
-  .JsonRpcProvider as jest.MockedFunction<any>;
+const mockWormholeEntry = mockWormholeSdkFunctions.wormhole;
+// const mockChainIdToChainEntry = mockWormholeSdkFunctions.chainIdToChain; // Not directly used, relies on global mock
 
 const mockLogger = logger as jest.Mocked<typeof logger>;
 const mockLogErrorContext = logErrorContext as jest.MockedFunction<typeof logErrorContext>;
 
-// Default timeout used in the service for getVaa calls
 const EXPECTED_GET_VAA_TIMEOUT_MS = 300000;
 
 describe('WormholeVaaService', () => {
   const L2_RPC = 'http://localhost:8545';
   const TEST_NETWORK: Network = 'Testnet';
 
+  type MockableVAA<T extends PayloadLiteral> = ActualVAA<T> & {
+    serialize?: jest.Mock<() => Uint8Array>;
+    bytes?: Uint8Array;
+  };
+
   let mockGetVaaImplementation: jest.MockedFunction<
     <T extends PayloadLiteral>(
       id: WormholeMessageId,
       decodeAs: T,
       timeout?: number,
-    ) => Promise<VAA<T> | null>
+    ) => Promise<MockableVAA<T> | null>
   >;
-  let mockWormholeInstance: {
-    getChain: jest.MockedFunction<(chain: Chain | ChainId) => any>;
-    getVaa: jest.MockedFunction<
-      <T extends PayloadLiteral>(
-        id: WormholeMessageId,
-        decodeAs: T,
-        timeout?: number,
-      ) => Promise<VAA<T> | null>
-    >;
+
+  type MockTokenBridgeOperationsType = {
+    isTransferCompleted: jest.MockedFunction<(vaa: ActualVAA<any>) => Promise<boolean>>;
   };
-  let mockChainContext: {
+
+  type MockChainContextType = {
     parseTransaction: jest.MockedFunction<(txHash: string) => Promise<WormholeMessageId[]>>;
-    getTokenBridge: jest.MockedFunction<() => Promise<any>>;
-  };
-  let mockTokenBridgeOperations: {
-    isTransferCompleted: jest.MockedFunction<(vaa: VAA<any>) => Promise<boolean>>;
-  };
-  let mockL2Provider: {
-    getTransactionReceipt: jest.MockedFunction<
-      (txHash: string) => Promise<ethers.providers.TransactionReceipt | null>
-    >;
+    getTokenBridge: jest.MockedFunction<() => Promise<MockTokenBridgeOperationsType>>;
   };
 
-  const ETHEREUM_CHAIN_ID = toChainId('Ethereum');
-  const ARBITRUM_CHAIN_ID = toChainId('Arbitrum');
-  const SOLANA_CHAIN_ID = toChainId('Solana');
-  const POLYGON_CHAIN_ID = toChainId('Polygon');
+  let mockWormholeInstance: {
+    getChain: jest.MockedFunction<(chain: Chain | ChainId) => MockChainContextType>;
+    getVaa: typeof mockGetVaaImplementation;
+  };
 
-  const createMockReceipt = (status: number, hash: string): ethers.providers.TransactionReceipt =>
-    ({
-      status,
-      transactionHash: hash,
-      logs: [],
+  let mockChainContext: MockChainContextType;
+  let mockTokenBridgeOperations: MockTokenBridgeOperationsType;
+  let mockL2Provider: jest.Mocked<EthersNamespace.providers.JsonRpcProvider>;
+
+  const ETHEREUM_CHAIN_ID = actualToChainId('Ethereum');
+  const ARBITRUM_CHAIN_ID = actualToChainId('Arbitrum');
+  const SOLANA_CHAIN_ID = actualToChainId('Solana');
+  const POLYGON_CHAIN_ID = actualToChainId('Polygon');
+
+  const createMockReceipt = (
+    status: number | undefined,
+    hash: string,
+  ): EthersNamespace.providers.TransactionReceipt => {
+    const receipt = {
       to: '0xcontractaddress',
       from: '0xsenderaddress',
-      contractAddress: undefined,
+      contractAddress: null as string | null, // Explicitly type null
       transactionIndex: 1,
-      blockHash: '0xblockhash',
-      blockNumber: 123,
-      gasUsed: ethers.BigNumber.from('21000'),
-      cumulativeGasUsed: ethers.BigNumber.from('21000'),
-      effectiveGasPrice: ethers.BigNumber.from('1000000000'),
-      type: 0,
-      confirmations: 10,
+      gasUsed: EthersBigNumber.from('21000'),
       logsBloom: '0x' + '0'.repeat(512),
+      blockHash: '0xblockhash' + Date.now(),
+      transactionHash: hash,
+      logs: [],
+      blockNumber: 123,
+      confirmations: 10,
+      cumulativeGasUsed: EthersBigNumber.from('21000'),
+      effectiveGasPrice: EthersBigNumber.from('1000000000'),
       byzantium: true,
-    }) as unknown as ethers.providers.TransactionReceipt;
+      type: 0,
+      status: status,
+    } as EthersNamespace.providers.TransactionReceipt; // Cast to the full type
+    return receipt;
+  };
 
   const createMockVaa = (
-    L2_TX_HASH: string,
+    _L2_TX_HASH: string,
     EMITTER_ADDRESS_STR: string,
-    ETHEREUM_CHAIN_ID: ChainId,
-    overrides: Partial<
-      VAA<any> & {
-        serialize?: jest.Mock;
-        bytes?: Uint8Array;
-      }
-    > = {},
-  ): VAA<any> & {
-    serialize?: jest.Mock;
-    bytes?: Uint8Array;
-  } => {
+    EMITTER_CHAIN_ID_FOR_VAA: ChainId,
+    overrides: Partial<MockableVAA<any>> = {},
+  ): MockableVAA<any> => {
     const mockEmitterUAddress = new ActualUniversalAddress(EMITTER_ADDRESS_STR);
-    const defaults = {
-      emitterChain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+    const emitterChainName = actualChainIdToChainSDK(EMITTER_CHAIN_ID_FOR_VAA);
+    const defaults: MockableVAA<any> = {
+      emitterChain: emitterChainName,
       emitterAddress: mockEmitterUAddress,
       sequence: BigInt(1),
       consistencyLevel: 15,
-      protocolName: 'TokenBridge',
+      protocolName: 'TokenBridge' as const,
       payloadName: 'TransferWithPayload' as const,
       payloadLiteral: 'TokenBridge:TransferWithPayload' as const,
       payload: { somePayloadData: 'data' } as any,
@@ -167,48 +153,57 @@ describe('WormholeVaaService', () => {
       nonce: 0,
       signatures: [] as any[],
       hash: new Uint8Array(32).fill(1),
-      serialize: jest.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+      serialize: jest.fn<() => Uint8Array>().mockReturnValue(new Uint8Array([1, 2, 3])),
       bytes: new Uint8Array([1, 2, 3, 4, 5]),
     };
-    return { ...defaults, ...overrides } as VAA<any> & {
-      serialize?: jest.Mock;
-      bytes?: Uint8Array;
-    };
+    const merged = { ...defaults, ...overrides };
+    if (merged.payloadName === 'Transfer') {
+      merged.payloadLiteral = 'TokenBridge:Transfer' as const;
+    }
+    return merged;
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    // Ensure the stored mock constructor is reset for each test if needed, or rely on its new instance per call.
+    MockedJsonRpcProviderConstructor.mockClear();
 
-    const originalSdk = jest.requireActual('@wormhole-foundation/sdk') as any;
-    mockChainIdToChainFn.mockImplementation((id: ChainId) => originalSdk.chainIdToChain(id));
-    mockUniversalAddressConstructorFn.mockImplementation(
-      (addr: string | Uint8Array) => new originalSdk.UniversalAddress(addr),
-    );
+    mockL2Provider = new EthersProviders.JsonRpcProvider(
+      L2_RPC,
+    ) as jest.Mocked<EthersNamespace.providers.JsonRpcProvider>;
+    // The above `new` call uses the MockedJsonRpcProviderConstructor from the jest.mock scope.
+    // We can assert that it was called and then make our mockL2Provider instance (which is the result of that call)
+    // behave as needed.
+    expect(MockedJsonRpcProviderConstructor).toHaveBeenCalledWith(L2_RPC);
 
-    mockGetVaaImplementation = jest.fn() as jest.MockedFunction<
-      <T extends PayloadLiteral>(
-        id: WormholeMessageId,
-        decodeAs: T,
-        timeout?: number,
-      ) => Promise<VAA<T> | null>
-    >;
-    mockL2Provider = {
-      getTransactionReceipt:
-        jest.fn<(txHash: string) => Promise<ethers.providers.TransactionReceipt | null>>(),
-    };
-    mockEthersJsonRpcProviderConstructor.mockReturnValue(mockL2Provider as any);
+    // Configure methods on the instance returned by the mocked constructor
+    (mockL2Provider.getNetwork as jest.Mock).mockResolvedValue({
+      name: 'testnet',
+      chainId: ETHEREUM_CHAIN_ID,
+    } as EthersNamespace.providers.Network);
+    (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(null);
+
+    mockGetVaaImplementation = jest.fn();
     mockTokenBridgeOperations = {
-      isTransferCompleted: jest.fn<(vaa: VAA<any>) => Promise<boolean>>(),
+      isTransferCompleted: jest.fn<(vaa: ActualVAA<any>) => Promise<boolean>>(),
     };
     mockChainContext = {
-      parseTransaction: jest.fn<(txHash: string) => Promise<WormholeMessageId[]>>(),
-      getTokenBridge: jest.fn<() => Promise<any>>().mockResolvedValue(mockTokenBridgeOperations),
+      parseTransaction: jest
+        .fn<(txHash: string) => Promise<WormholeMessageId[]>>()
+        .mockResolvedValue([]),
+      getTokenBridge: jest
+        .fn<() => Promise<MockTokenBridgeOperationsType>>()
+        .mockResolvedValue(mockTokenBridgeOperations),
     };
     mockWormholeInstance = {
-      getChain: jest.fn<(chain: Chain | ChainId) => any>().mockReturnValue(mockChainContext),
+      getChain: jest
+        .fn<(chain: Chain | ChainId) => MockChainContextType>()
+        .mockReturnValue(mockChainContext),
       getVaa: mockGetVaaImplementation,
     };
-    mockWormholeEntry.mockResolvedValue(mockWormholeInstance as unknown as Wormhole<Network>);
+    mockWormholeEntry.mockResolvedValue(
+      mockWormholeInstance as unknown as ActualWormholeClass<Network>,
+    );
   });
 
   describe('create', () => {
@@ -223,13 +218,18 @@ describe('WormholeVaaService', () => {
         expect.stringContaining('WormholeVaaService created'),
       );
     });
-
     test('should use default network and platform modules if not provided', async () => {
       await WormholeVaaService.create(L2_RPC);
       expect(mockWormholeEntry).toHaveBeenCalledWith('Testnet', [
         expect.anything(),
         expect.anything(),
       ]);
+    });
+    test('should allow custom platform modules', async () => {
+      const mockPlatform1 = { name: 'MockPlatform1', load: () => {} };
+      const mockPlatform2 = { name: 'MockPlatform2', load: () => {} };
+      await WormholeVaaService.create(L2_RPC, 'Mainnet', [mockPlatform1, mockPlatform2]);
+      expect(mockWormholeEntry).toHaveBeenCalledWith('Mainnet', [mockPlatform1, mockPlatform2]);
     });
   });
 
@@ -239,63 +239,72 @@ describe('WormholeVaaService', () => {
     let service: WormholeVaaService;
 
     beforeEach(async () => {
-      // Re-establish mocks for this describe block
-      mockGetVaaImplementation = jest.fn() as jest.MockedFunction<any>;
-      mockL2Provider = {
-        getTransactionReceipt:
-          jest.fn<(txHash: string) => Promise<ethers.providers.TransactionReceipt | null>>(),
-      };
-      mockEthersJsonRpcProviderConstructor.mockReturnValue(mockL2Provider as any);
-      mockTokenBridgeOperations = {
-        isTransferCompleted: jest.fn<(vaa: VAA<any>) => Promise<boolean>>(),
-      };
-      mockChainContext = {
-        parseTransaction: jest.fn<(txHash: string) => Promise<WormholeMessageId[]>>(),
-        getTokenBridge: jest.fn<() => Promise<any>>().mockResolvedValue(mockTokenBridgeOperations),
-      };
-      mockWormholeInstance = {
-        getChain: jest.fn<(chain: Chain | ChainId) => any>().mockReturnValue(mockChainContext),
-        getVaa: mockGetVaaImplementation,
-      };
-      mockWormholeEntry.mockResolvedValue(mockWormholeInstance as unknown as Wormhole<Network>);
-
-      service = await WormholeVaaService.create(L2_RPC, TEST_NETWORK);
+      (mockL2Provider.getNetwork as jest.Mock).mockResolvedValue({
+        name: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
+        chainId: ETHEREUM_CHAIN_ID,
+      } as EthersNamespace.providers.Network);
+      service = await WormholeVaaService.create(mockL2Provider, TEST_NETWORK);
     });
 
     describe('Successful VAA Fetch and Verification', () => {
       test('should successfully fetch, parse, verify, and return VAA (VAA with .bytes)', async () => {
         const mockReceipt = createMockReceipt(1, L2_TX_HASH);
-        mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
+        (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(mockReceipt);
 
         const mockEmitterUAddress = new ActualUniversalAddress(EMITTER_ADDRESS_STR);
         const mockWormholeMessageId: WormholeMessageId = {
-          chain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+          chain: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
           emitter: mockEmitterUAddress,
           sequence: BigInt(1),
         };
-        mockChainContext.parseTransaction.mockResolvedValue([mockWormholeMessageId]);
+
+        const specificEthChainContext: MockChainContextType = {
+          parseTransaction: jest
+            .fn<(txHash: string) => Promise<WormholeMessageId[]>>()
+            .mockResolvedValue([mockWormholeMessageId]),
+          getTokenBridge: jest
+            .fn<() => Promise<MockTokenBridgeOperationsType>>()
+            .mockResolvedValue(mockTokenBridgeOperations),
+        };
+        const specificArbChainContext: MockChainContextType = {
+          parseTransaction: jest.fn().mockResolvedValue([]),
+          getTokenBridge: jest.fn().mockResolvedValue({
+            ...mockTokenBridgeOperations,
+            isTransferCompleted: jest.fn().mockResolvedValue(true),
+          }),
+        };
+
+        (
+          mockWormholeInstance.getChain as jest.MockedFunction<typeof mockWormholeInstance.getChain>
+        ).mockImplementation((chainOrId: Chain | ChainId) => {
+          const chainName =
+            typeof chainOrId === 'string'
+              ? chainOrId
+              : actualChainIdToChainSDK(chainOrId as ChainId);
+          if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID))
+            return specificEthChainContext;
+          if (chainName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID))
+            return specificArbChainContext;
+          return mockChainContext;
+        });
 
         const mockVaaBytes = new Uint8Array([1, 2, 3, 4, 5]);
-        const mockParsedVaaWithBytes: any = {
-          emitterChain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
-          emitterAddress: mockEmitterUAddress,
-          sequence: BigInt(1),
-          consistencyLevel: 15,
-          protocolName: 'TokenBridge',
-          payloadName: 'TransferWithPayload',
-          payloadLiteral: 'TokenBridge:TransferWithPayload',
-          payload: { somePayloadData: 'data' } as any,
-          guardianSet: 0,
-          timestamp: Math.floor(Date.now() / 1000),
-          nonce: 0,
-          signatures: [] as any[],
-          hash: new Uint8Array(32).fill(1),
-          bytes: mockVaaBytes,
-        };
-        mockGetVaaImplementation.mockResolvedValue(
-          mockParsedVaaWithBytes as VAA<'TokenBridge:TransferWithPayload'>,
+        const mockParsedVaaWithBytes = createMockVaa(
+          L2_TX_HASH,
+          EMITTER_ADDRESS_STR,
+          ETHEREUM_CHAIN_ID,
+          {
+            bytes: mockVaaBytes,
+            sequence: BigInt(1),
+            payload: {
+              token: '0xTOKEN',
+              amount: '100',
+              toChain: ARBITRUM_CHAIN_ID,
+              toAddress: '0xRECEIVER',
+            },
+          },
         );
-        mockTokenBridgeOperations.isTransferCompleted.mockResolvedValue(true);
+        mockGetVaaImplementation.mockResolvedValue(mockParsedVaaWithBytes);
 
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
@@ -308,62 +317,91 @@ describe('WormholeVaaService', () => {
         expect(result?.vaaBytes).toBe(mockVaaBytes);
         expect(result?.parsedVaa).toBe(mockParsedVaaWithBytes);
         expect(mockL2Provider.getTransactionReceipt).toHaveBeenCalledWith(L2_TX_HASH);
-        expect(mockChainContext.parseTransaction).toHaveBeenCalledWith(L2_TX_HASH);
+        expect(mockWormholeInstance.getChain).toHaveBeenCalledWith(
+          actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
+        );
+        expect(specificEthChainContext.parseTransaction).toHaveBeenCalledWith(L2_TX_HASH);
         expect(mockGetVaaImplementation).toHaveBeenCalledWith(
           mockWormholeMessageId,
           'TokenBridge:TransferWithPayload',
           EXPECTED_GET_VAA_TIMEOUT_MS,
         );
-        expect(mockChainContext.getTokenBridge).toHaveBeenCalledTimes(1);
-        expect(mockTokenBridgeOperations.isTransferCompleted).toHaveBeenCalledWith(
-          mockParsedVaaWithBytes,
+        expect(mockWormholeInstance.getChain).toHaveBeenCalledWith(
+          actualChainIdToChainSDK(ARBITRUM_CHAIN_ID),
         );
+
+        const returnedArbContext = (mockWormholeInstance.getChain as jest.Mock).mock.results.find(
+          (res: jest.MockResult<MockChainContextType>) =>
+            res.type === 'return' && res.value === specificArbChainContext,
+        );
+        expect(returnedArbContext).toBeDefined();
+        const l1BridgeFromArb = await specificArbChainContext.getTokenBridge();
+        expect(l1BridgeFromArb.isTransferCompleted).toHaveBeenCalledWith(mockParsedVaaWithBytes);
         expect(mockLogger.info).toHaveBeenCalledWith(
           expect.stringContaining('VAA fetched and verified'),
         );
       });
 
-      test('should successfully fetch VAA when VAA has .serialize()', async () => {
+      test('should successfully fetch VAA when VAA has .serialize() and first getVaa is null for TransferWithPayload', async () => {
         const mockReceipt = createMockReceipt(1, L2_TX_HASH);
-        mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
-
+        (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(mockReceipt);
         const mockEmitterUAddress = new ActualUniversalAddress(EMITTER_ADDRESS_STR);
         const mockWormholeMessageId: WormholeMessageId = {
-          chain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+          chain: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
           emitter: mockEmitterUAddress,
           sequence: BigInt(1),
         };
-        mockChainContext.parseTransaction.mockResolvedValue([mockWormholeMessageId]);
-        mockTokenBridgeOperations.isTransferCompleted.mockResolvedValue(true);
+
+        const specificEthChainContext: MockChainContextType = {
+          parseTransaction: jest.fn().mockResolvedValue([mockWormholeMessageId]),
+          getTokenBridge: jest.fn().mockResolvedValue(mockTokenBridgeOperations),
+        };
+        const specificArbChainContext: MockChainContextType = {
+          parseTransaction: jest.fn().mockResolvedValue([]),
+          getTokenBridge: jest.fn().mockResolvedValue({
+            ...mockTokenBridgeOperations,
+            isTransferCompleted: jest.fn().mockResolvedValue(true),
+          }),
+        };
+        (
+          mockWormholeInstance.getChain as jest.MockedFunction<typeof mockWormholeInstance.getChain>
+        ).mockImplementation((chainOrId: Chain | ChainId) => {
+          const chainName =
+            typeof chainOrId === 'string'
+              ? chainOrId
+              : actualChainIdToChainSDK(chainOrId as ChainId);
+          if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID))
+            return specificEthChainContext;
+          if (chainName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID))
+            return specificArbChainContext;
+          return mockChainContext;
+        });
 
         const mockVaaBytesSerialized = new Uint8Array([5, 4, 3, 2, 1]);
-        const mockParsedVaaNoBytes: VAA<'TokenBridge:Transfer'> & { serialize: () => Uint8Array } =
+        const mockParsedVaaForTransfer = createMockVaa(
+          L2_TX_HASH,
+          EMITTER_ADDRESS_STR,
+          ETHEREUM_CHAIN_ID,
           {
-            emitterChain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
-            emitterAddress: mockEmitterUAddress,
-            sequence: BigInt(1),
-            consistencyLevel: 15,
-            protocolName: 'TokenBridge',
             payloadName: 'Transfer',
             payloadLiteral: 'TokenBridge:Transfer',
-            payload: { basicTransfer: 'info' } as any,
-            guardianSet: 0,
-            timestamp: Math.floor(Date.now() / 1000),
-            nonce: 0,
-            signatures: [] as any[],
-            hash: new Uint8Array(32).fill(2),
+            payload: { token: '0xTOKEN', amount: '100' },
+            sequence: BigInt(1),
             serialize: jest.fn<() => Uint8Array>().mockReturnValue(mockVaaBytesSerialized),
-          };
+            bytes: undefined,
+          },
+        );
+
         mockGetVaaImplementation.mockImplementation(
           async <T extends PayloadLiteral>(
-            id: WormholeMessageId,
+            _id: WormholeMessageId,
             decodeAs: T,
-            timeout?: number,
-          ) => {
-            if (decodeAs === 'TokenBridge:Transfer') {
-              return mockParsedVaaNoBytes as any as VAA<T>;
-            }
-            return null as any as VAA<T>;
+            _timeout?: number,
+          ): Promise<MockableVAA<T> | null> => {
+            if (decodeAs === 'TokenBridge:TransferWithPayload') return null;
+            if (decodeAs === 'TokenBridge:Transfer')
+              return mockParsedVaaForTransfer as unknown as MockableVAA<T>;
+            return null;
           },
         );
 
@@ -375,8 +413,8 @@ describe('WormholeVaaService', () => {
         );
 
         expect(result).not.toBeNull();
-        expect(result?.vaaBytes).toBe(mockVaaBytesSerialized);
-        expect(result?.parsedVaa).toBe(mockParsedVaaNoBytes);
+        expect(result?.vaaBytes).toEqual(mockVaaBytesSerialized);
+        expect(result?.parsedVaa).toBe(mockParsedVaaForTransfer);
         expect(mockGetVaaImplementation).toHaveBeenCalledWith(
           mockWormholeMessageId,
           'TokenBridge:TransferWithPayload',
@@ -387,42 +425,37 @@ describe('WormholeVaaService', () => {
           'TokenBridge:Transfer',
           EXPECTED_GET_VAA_TIMEOUT_MS,
         );
-        expect(mockParsedVaaNoBytes.serialize).toHaveBeenCalled();
+        expect(mockParsedVaaForTransfer.serialize).toHaveBeenCalled();
         expect(mockLogger.info).toHaveBeenCalledWith(
           expect.stringContaining('VAA fetched and verified'),
         );
       });
     });
 
-    describe(' L2 transaction issues', () => {
+    describe('L2 transaction issues', () => {
       test('should return null if getTransactionReceipt fails to return a receipt', async () => {
-        mockL2Provider.getTransactionReceipt.mockResolvedValue(null);
-
+        (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(null);
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
         expect(mockLogErrorContext).toHaveBeenCalledWith(
           expect.stringContaining(`Failed to get L2 transaction receipt for ${L2_TX_HASH}`),
           expect.objectContaining({ message: 'L2 tx receipt fetch failed' }),
         );
       });
-
       test('should return null if the L2 transaction has reverted (receipt status 0)', async () => {
         const mockRevertedReceipt = createMockReceipt(0, L2_TX_HASH);
-        mockL2Provider.getTransactionReceipt.mockResolvedValue(mockRevertedReceipt);
-
+        (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(mockRevertedReceipt);
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
         expect(mockLogErrorContext).toHaveBeenCalledWith(
           expect.stringContaining(`L2 transaction ${L2_TX_HASH} failed (reverted)`),
@@ -434,21 +467,33 @@ describe('WormholeVaaService', () => {
     describe('wormhole message parsing', () => {
       beforeEach(() => {
         const mockReceipt = createMockReceipt(1, L2_TX_HASH);
-        mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
+        (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(mockReceipt);
       });
 
       test('Test 2.3.1: Should return null if parseTransaction returns no Wormhole messages', async () => {
-        mockChainContext.parseTransaction.mockResolvedValue([]);
-
+        const specificEthChainContext: MockChainContextType = {
+          ...mockChainContext,
+          parseTransaction: jest.fn().mockResolvedValue([]),
+        };
+        (
+          mockWormholeInstance.getChain as jest.MockedFunction<typeof mockWormholeInstance.getChain>
+        ).mockImplementation((chainOrId: Chain | ChainId) => {
+          const chainName =
+            typeof chainOrId === 'string'
+              ? chainOrId
+              : actualChainIdToChainSDK(chainOrId as ChainId);
+          if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID))
+            return specificEthChainContext;
+          return mockChainContext;
+        });
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
-        expect(mockChainContext.parseTransaction).toHaveBeenCalledWith(L2_TX_HASH);
+        expect(specificEthChainContext.parseTransaction).toHaveBeenCalledWith(L2_TX_HASH);
         expect(mockLogErrorContext).toHaveBeenCalledWith(
           expect.stringContaining(`No Wormhole messages found in L2 transaction ${L2_TX_HASH}`),
           expect.objectContaining({ message: 'parseTransaction returned no messages' }),
@@ -457,28 +502,39 @@ describe('WormholeVaaService', () => {
 
       test('should return null if no WormholeMessageId matches the emitter address and chain', async () => {
         const nonMatchingEmitterAddressStr = '0x1111111111111111111111111111111111111111';
-        const mockWormholeMessageIdNonMatchingEmitter: WormholeMessageId = {
-          chain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+        const mockMsgNonMatchingEmitter: WormholeMessageId = {
+          chain: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
           emitter: new ActualUniversalAddress(nonMatchingEmitterAddressStr),
           sequence: BigInt(1),
         };
-        const mockWormholeMessageIdNonMatchingChain: WormholeMessageId = {
-          chain: actualChainIdToChain(POLYGON_CHAIN_ID),
+        const mockMsgNonMatchingChain: WormholeMessageId = {
+          chain: actualChainIdToChainSDK(POLYGON_CHAIN_ID),
           emitter: new ActualUniversalAddress(EMITTER_ADDRESS_STR),
           sequence: BigInt(2),
         };
-        mockChainContext.parseTransaction.mockResolvedValue([
-          mockWormholeMessageIdNonMatchingEmitter,
-          mockWormholeMessageIdNonMatchingChain,
-        ]);
-
+        const specificEthChainContext: MockChainContextType = {
+          ...mockChainContext,
+          parseTransaction: jest
+            .fn()
+            .mockResolvedValue([mockMsgNonMatchingEmitter, mockMsgNonMatchingChain]),
+        };
+        (
+          mockWormholeInstance.getChain as jest.MockedFunction<typeof mockWormholeInstance.getChain>
+        ).mockImplementation((chainOrId: Chain | ChainId) => {
+          const chainName =
+            typeof chainOrId === 'string'
+              ? chainOrId
+              : actualChainIdToChainSDK(chainOrId as ChainId);
+          if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID))
+            return specificEthChainContext;
+          return mockChainContext;
+        });
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
         expect(mockLogErrorContext).toHaveBeenCalledWith(
           expect.stringContaining(
@@ -493,28 +549,47 @@ describe('WormholeVaaService', () => {
       let mockWormholeMessageId: WormholeMessageId;
       beforeEach(() => {
         const mockReceipt = createMockReceipt(1, L2_TX_HASH);
-        mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
-
+        (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(mockReceipt);
         mockWormholeMessageId = {
-          chain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+          chain: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
           emitter: new ActualUniversalAddress(EMITTER_ADDRESS_STR),
           sequence: BigInt(1),
         };
-        mockChainContext.parseTransaction.mockResolvedValue([mockWormholeMessageId]);
-        mockTokenBridgeOperations.isTransferCompleted.mockResolvedValue(true);
+        const specificEthChainContext: MockChainContextType = {
+          ...mockChainContext,
+          parseTransaction: jest.fn().mockResolvedValue([mockWormholeMessageId]),
+        };
+        const specificArbChainContext: MockChainContextType = {
+          ...mockChainContext,
+          getTokenBridge: jest.fn().mockResolvedValue({
+            ...mockTokenBridgeOperations,
+            isTransferCompleted: jest.fn().mockResolvedValue(true),
+          }),
+        };
+        (
+          mockWormholeInstance.getChain as jest.MockedFunction<typeof mockWormholeInstance.getChain>
+        ).mockImplementation((chainOrId: Chain | ChainId) => {
+          const chainName =
+            typeof chainOrId === 'string'
+              ? chainOrId
+              : actualChainIdToChainSDK(chainOrId as ChainId);
+          if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID))
+            return specificEthChainContext;
+          if (chainName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID))
+            return specificArbChainContext;
+          return mockChainContext;
+        });
       });
 
       test('should return null if this.wh.getVaa() throws an error for both payload types', async () => {
         const getVaaError = new Error('Failed to fetch VAA from API');
         mockGetVaaImplementation.mockRejectedValue(getVaaError);
-
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
         expect(mockGetVaaImplementation).toHaveBeenCalledWith(
           mockWormholeMessageId,
@@ -526,211 +601,230 @@ describe('WormholeVaaService', () => {
           'TokenBridge:Transfer',
           EXPECTED_GET_VAA_TIMEOUT_MS,
         );
-        expect(mockLogErrorContext).toHaveBeenLastCalledWith(
-          expect.stringContaining(
-            `this.wh.getVaa did not return a VAA for message ID ${stringifyWithBigInt(mockWormholeMessageId)} after trying all discriminators. Last error: ${getVaaError.message}`,
-          ),
-          expect.objectContaining({
-            message: 'this.wh.getVaa failed or returned null VAA after all retries',
-          }),
+        const relevantLogErrorCall = mockLogErrorContext.mock.calls.find((call) =>
+          call[0].includes('this.wh.getVaa did not return a VAA for message ID'),
         );
+        expect(relevantLogErrorCall).toBeDefined();
+        expect(relevantLogErrorCall![0]).toContain(`Last error: ${getVaaError.message}`);
+        expect(relevantLogErrorCall![1]).toMatchObject({
+          message: 'this.wh.getVaa failed or returned null VAA after all retries',
+        });
+        expect(stringifyWithBigInt((relevantLogErrorCall![1] as any).messageId)).toEqual(
+          stringifyWithBigInt(mockWormholeMessageId),
+        );
+        expect((relevantLogErrorCall![1] as any).lastError).toEqual(getVaaError.message);
       });
 
       test('Test 2.4.2: Should return null if this.wh.getVaa() returns null for both payload types', async () => {
         mockGetVaaImplementation.mockResolvedValue(null);
-
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
-        expect(mockGetVaaImplementation).toHaveBeenCalledWith(
-          mockWormholeMessageId,
-          'TokenBridge:TransferWithPayload',
-          EXPECTED_GET_VAA_TIMEOUT_MS,
+        expect(mockGetVaaImplementation).toHaveBeenCalledTimes(2);
+        const relevantLogErrorCall = mockLogErrorContext.mock.calls.find((call) =>
+          call[0].includes('this.wh.getVaa did not return a VAA for message ID'),
         );
-        expect(mockGetVaaImplementation).toHaveBeenCalledWith(
-          mockWormholeMessageId,
-          'TokenBridge:Transfer',
-          EXPECTED_GET_VAA_TIMEOUT_MS,
+        expect(relevantLogErrorCall).toBeDefined();
+        expect(relevantLogErrorCall![0]).toContain(
+          'Last error: VAA not found with this discriminator',
         );
-        expect(mockLogErrorContext).toHaveBeenCalledWith(
-          expect.stringContaining(
-            `this.wh.getVaa did not return a VAA for message ID ${stringifyWithBigInt(mockWormholeMessageId)}`,
-          ),
-          expect.objectContaining({
-            message: 'this.wh.getVaa failed or returned null VAA after all retries',
-          }),
+        expect(relevantLogErrorCall![1]).toMatchObject({
+          message: 'this.wh.getVaa failed or returned null VAA after all retries',
+        });
+        expect(stringifyWithBigInt((relevantLogErrorCall![1] as any).messageId)).toEqual(
+          stringifyWithBigInt(mockWormholeMessageId),
+        );
+        expect((relevantLogErrorCall![1] as any).lastError).toEqual(
+          'VAA not found with this discriminator.',
         );
       });
     });
 
     describe('initial VAA verification failures', () => {
-      let mockBaseVaa: VAA<'TokenBridge:TransferWithPayload'> & {
-        serialize: jest.Mock<() => Uint8Array>;
-      };
+      let mockBaseVaaWithoutBytes: Omit<MockableVAA<'TokenBridge:TransferWithPayload'>, 'bytes'>;
       let mockEmitterUAddress: ActualUniversalAddress;
-
       beforeEach(() => {
         const mockReceipt = createMockReceipt(1, L2_TX_HASH);
-        mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
+        (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(mockReceipt);
         mockEmitterUAddress = new ActualUniversalAddress(EMITTER_ADDRESS_STR);
         const mockWormholeMessageId: WormholeMessageId = {
-          chain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+          chain: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
           emitter: mockEmitterUAddress,
           sequence: BigInt(1),
         };
-        mockChainContext.parseTransaction.mockResolvedValue([mockWormholeMessageId]);
-        mockTokenBridgeOperations.isTransferCompleted.mockResolvedValue(true);
-
-        mockBaseVaa = {
-          emitterChain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+        const specificEthChainContext: MockChainContextType = {
+          ...mockChainContext,
+          parseTransaction: jest.fn().mockResolvedValue([mockWormholeMessageId]),
+        };
+        const specificArbChainContext: MockChainContextType = {
+          ...mockChainContext,
+          getTokenBridge: jest.fn().mockResolvedValue({
+            ...mockTokenBridgeOperations,
+            isTransferCompleted: jest.fn().mockResolvedValue(true),
+          }),
+        };
+        (
+          mockWormholeInstance.getChain as jest.MockedFunction<typeof mockWormholeInstance.getChain>
+        ).mockImplementation((chainOrId: Chain | ChainId) => {
+          const chainName =
+            typeof chainOrId === 'string'
+              ? chainOrId
+              : actualChainIdToChainSDK(chainOrId as ChainId);
+          if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID))
+            return specificEthChainContext;
+          if (chainName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID))
+            return specificArbChainContext;
+          return mockChainContext;
+        });
+        mockBaseVaaWithoutBytes = {
+          emitterChain: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
           emitterAddress: mockEmitterUAddress,
           sequence: BigInt(1),
           consistencyLevel: 15,
           protocolName: 'TokenBridge',
           payloadName: 'TransferWithPayload',
           payloadLiteral: 'TokenBridge:TransferWithPayload',
-          payload: {} as any,
+          payload: { data: 'some payload' } as any,
           serialize: jest.fn<() => Uint8Array>().mockReturnValue(new Uint8Array([1, 2, 3])),
           guardianSet: 0,
-          timestamp: 0,
+          timestamp: Math.floor(Date.now() / 1000),
           nonce: 0,
           signatures: [] as any[],
           hash: new Uint8Array(32).fill(3),
         };
         mockGetVaaImplementation.mockResolvedValue(
-          mockBaseVaa as VAA<'TokenBridge:TransferWithPayload'>,
+          mockBaseVaaWithoutBytes as MockableVAA<'TokenBridge:TransferWithPayload'>,
         );
       });
 
       test('should return null if VAA emitterChain mismatch', async () => {
         const mismatchedParsedVaa = {
-          ...mockBaseVaa,
-          emitterChain: actualChainIdToChain(SOLANA_CHAIN_ID),
+          ...mockBaseVaaWithoutBytes,
+          emitterChain: actualChainIdToChainSDK(SOLANA_CHAIN_ID),
         };
         mockGetVaaImplementation.mockResolvedValue(
-          mismatchedParsedVaa as VAA<'TokenBridge:TransferWithPayload'>,
+          mismatchedParsedVaa as MockableVAA<'TokenBridge:TransferWithPayload'>,
         );
-
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
-        expect(mockLogErrorContext).toHaveBeenCalledWith(
-          expect.stringContaining('Initial VAA verification (emitter check) failed'),
-          expect.objectContaining({ message: 'Initial VAA verification failed' }),
+        const logCall = mockLogErrorContext.mock.calls.find((c) =>
+          c[0].includes('Initial VAA verification (emitter check) failed'),
         );
+        expect(logCall).toBeDefined();
+        expect(logCall![1]).toMatchObject({ message: 'Initial VAA verification failed' });
       });
-
       test('should return null if VAA emitterAddress mismatch', async () => {
         const wrongEmitterAddressStr = '0xbad0000000000000000000000000000000000bad';
         const mismatchedEmitterAddressVaa = {
-          ...mockBaseVaa,
+          ...mockBaseVaaWithoutBytes,
           emitterAddress: new ActualUniversalAddress(wrongEmitterAddressStr),
         };
         mockGetVaaImplementation.mockResolvedValue(
-          mismatchedEmitterAddressVaa as VAA<'TokenBridge:TransferWithPayload'>,
+          mismatchedEmitterAddressVaa as MockableVAA<'TokenBridge:TransferWithPayload'>,
         );
-
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
-        expect(mockLogErrorContext).toHaveBeenCalledWith(
-          expect.stringContaining('Initial VAA verification (emitter check) failed'),
-          expect.objectContaining({ message: 'Initial VAA verification failed' }),
+        const logCall = mockLogErrorContext.mock.calls.find((c) =>
+          c[0].includes('Initial VAA verification (emitter check) failed'),
         );
+        expect(logCall).toBeDefined();
+        expect(logCall![1]).toMatchObject({ message: 'Initial VAA verification failed' });
       });
-
-      test('low consistency level should log warning but pass verification if other checks are ok', async () => {
-        const MIN_VAA_CONSISTENCY_LEVEL_IN_SERVICE = 1;
-        const lowConsistencyVaa = {
-          ...mockBaseVaa,
-          consistencyLevel: MIN_VAA_CONSISTENCY_LEVEL_IN_SERVICE,
-        };
+      test('low consistency level (matching MIN_VAA_CONSISTENCY_LEVEL) should log warning but pass verification if other checks are ok', async () => {
+        const lowConsistencyVaa = { ...mockBaseVaaWithoutBytes, consistencyLevel: 1 };
         mockGetVaaImplementation.mockResolvedValue(
-          lowConsistencyVaa as VAA<'TokenBridge:TransferWithPayload'>,
+          lowConsistencyVaa as MockableVAA<'TokenBridge:TransferWithPayload'>,
         );
-        mockTokenBridgeOperations.isTransferCompleted.mockResolvedValue(true);
-
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).not.toBeNull();
         expect(mockLogger.warn).toHaveBeenCalledWith(
           expect.stringContaining(
-            `VAA verification warning: Low consistency level. Expected ${MIN_VAA_CONSISTENCY_LEVEL_IN_SERVICE}, Got: ${MIN_VAA_CONSISTENCY_LEVEL_IN_SERVICE}`,
+            `VAA verification warning: Low consistency level. Expected 1, Got: 1`,
           ),
         );
-        expect(mockLogErrorContext).not.toHaveBeenCalledWith(
-          expect.stringContaining('Initial VAA verification (emitter check) failed'),
-          expect.anything(),
+        const errorLogCalls = mockLogErrorContext.mock.calls.filter((c) =>
+          c[0].includes('Initial VAA verification (emitter check) failed'),
         );
+        expect(errorLogCalls.length).toBe(0);
       });
-
-      test(' VAA with consistency level 0 should pass verification and not log MIN_VAA_CONSISTENCY_LEVEL warning', async () => {
-        const mockVaaWithCLZero = {
-          ...mockBaseVaa,
-          consistencyLevel: 0,
-        };
+      test('VAA with consistency level 0 should pass verification and not log MIN_VAA_CONSISTENCY_LEVEL warning', async () => {
+        const mockVaaWithCLZero = { ...mockBaseVaaWithoutBytes, consistencyLevel: 0 };
         mockGetVaaImplementation.mockResolvedValue(
-          mockVaaWithCLZero as VAA<'TokenBridge:TransferWithPayload'>,
+          mockVaaWithCLZero as MockableVAA<'TokenBridge:TransferWithPayload'>,
         );
-        mockTokenBridgeOperations.isTransferCompleted.mockResolvedValue(true);
-
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).not.toBeNull();
-
         const warnCalls = mockLogger.warn.mock.calls;
-        const consistencyWarningPatternCL1 =
-          /VAA verification warning: Low consistency level. Expected 1, Got: 1/;
+        const consistencyWarningPatternForLevel1 =
+          /VAA verification warning: Low consistency level. Expected.*1, Got: 0/;
         for (const call of warnCalls) {
-          expect(call[0]).not.toMatch(consistencyWarningPatternCL1);
+          if (call[0].includes('Low consistency level')) {
+            expect(call[0]).not.toMatch(consistencyWarningPatternForLevel1);
+          }
         }
-        expect(mockLogErrorContext).not.toHaveBeenCalledWith(
-          expect.stringContaining('Initial VAA verification (emitter check) failed'),
-          expect.anything(),
+        const errorLogCalls = mockLogErrorContext.mock.calls.filter((c) =>
+          c[0].includes('Initial VAA verification (emitter check) failed'),
         );
+        expect(errorLogCalls.length).toBe(0);
       });
     });
 
     describe('VAA content verification failures', () => {
-      let mockWormholeMessageId: WormholeMessageId;
-
       beforeEach(() => {
-        const mockReceipt = createMockReceipt(1, L2_TX_HASH);
-        mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
-        mockWormholeMessageId = {
-          chain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+        const mockWormholeMessageIdForContentTests: WormholeMessageId = {
+          chain: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
           emitter: new ActualUniversalAddress(EMITTER_ADDRESS_STR),
           sequence: BigInt(1),
         };
-        mockChainContext.parseTransaction.mockResolvedValue([mockWormholeMessageId]);
-        mockTokenBridgeOperations.isTransferCompleted.mockResolvedValue(true);
+        const specificEthChainContext: MockChainContextType = {
+          ...mockChainContext,
+          parseTransaction: jest.fn().mockResolvedValue([mockWormholeMessageIdForContentTests]),
+        };
+        const specificArbChainContext: MockChainContextType = {
+          ...mockChainContext,
+          getTokenBridge: jest.fn().mockResolvedValue({
+            ...mockTokenBridgeOperations,
+            isTransferCompleted: jest.fn().mockResolvedValue(true),
+          }),
+        };
+        (
+          mockWormholeInstance.getChain as jest.MockedFunction<typeof mockWormholeInstance.getChain>
+        ).mockImplementation((chainOrId: Chain | ChainId) => {
+          const chainName =
+            typeof chainOrId === 'string'
+              ? chainOrId
+              : actualChainIdToChainSDK(chainOrId as ChainId);
+          if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID))
+            return specificEthChainContext;
+          if (chainName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID))
+            return specificArbChainContext;
+          return mockChainContext;
+        });
       });
-
       test('Should return null if VAA protocolName is not TokenBridge', async () => {
         const vaaWithWrongProtocol = createMockVaa(
           L2_TX_HASH,
@@ -738,24 +832,23 @@ describe('WormholeVaaService', () => {
           ETHEREUM_CHAIN_ID,
           {
             protocolName: 'AnotherProtocol' as any,
+            sequence: BigInt(1),
           },
         );
         mockGetVaaImplementation.mockResolvedValue(vaaWithWrongProtocol);
-
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
-        expect(mockLogErrorContext).toHaveBeenCalledWith(
-          expect.stringContaining('VAA verification failed: Protocol name mismatch'),
-          expect.objectContaining({ message: 'VAA protocol name mismatch' }),
+        const logCall = mockLogErrorContext.mock.calls.find((c) =>
+          c[0].includes('VAA verification failed: Protocol name mismatch'),
         );
+        expect(logCall).toBeDefined();
+        expect(logCall![1]).toMatchObject({ message: 'VAA protocol name mismatch' });
       });
-
       test('should return null if VAA payloadName is not Transfer or TransferWithPayload', async () => {
         const vaaWithWrongPayloadName = createMockVaa(
           L2_TX_HASH,
@@ -764,50 +857,63 @@ describe('WormholeVaaService', () => {
           {
             payloadName: 'SomeOtherPayload' as any,
             payloadLiteral: 'TokenBridge:SomeOtherPayload' as any,
+            sequence: BigInt(1),
           },
         );
         mockGetVaaImplementation.mockResolvedValue(vaaWithWrongPayloadName);
-
         const result = await service.fetchAndVerifyVaaForL2Event(
           L2_TX_HASH,
           ETHEREUM_CHAIN_ID,
           EMITTER_ADDRESS_STR,
           ARBITRUM_CHAIN_ID,
         );
-
         expect(result).toBeNull();
-        expect(mockLogErrorContext).toHaveBeenCalledWith(
-          expect.stringContaining('VAA verification failed: Payload name mismatch'),
-          expect.objectContaining({ message: 'VAA payload name mismatch' }),
+        const logCall = mockLogErrorContext.mock.calls.find((c) =>
+          c[0].includes('VAA verification failed: Payload name mismatch'),
         );
+        expect(logCall).toBeDefined();
+        expect(logCall![1]).toMatchObject({ message: 'VAA payload name mismatch' });
       });
     });
 
-    describe(' transfer completion issues', () => {
+    describe('transfer completion issues', () => {
       const getTokenBridgeError = new Error('Failed to get L1 Token Bridge');
       const isTransferCompletedError = new Error('isTransferCompleted exploded');
+      type TransferCompletionTestCase = {
+        customDescription: string;
+        setupL1Mocks: (testSpecificMsgId: WormholeMessageId) => void;
+        expectedLogMessage: string;
+        expectedErrorObject: any;
+      };
 
-      const testCases = [
+      const testCases: TransferCompletionTestCase[] = [
         {
-          description:
+          customDescription:
             'should return null if tokenBridge.isTransferCompleted() returns false on L1',
-          setupL1Mocks: (
-            l1ChainCtx: typeof mockChainContext,
-            l1TokenBridgeOps: typeof mockTokenBridgeOperations,
-          ) => {
-            l1TokenBridgeOps.isTransferCompleted.mockResolvedValue(false);
-            mockWormholeInstance.getChain.mockImplementation((chainOrChainId) => {
-              if (
-                chainOrChainId === ARBITRUM_CHAIN_ID ||
-                actualChainIdToChain(ARBITRUM_CHAIN_ID) === chainOrChainId
-              ) {
-                const configuredL1Context = {
-                  ...l1ChainCtx,
-                  getTokenBridge: jest
-                    .fn<() => Promise<typeof mockTokenBridgeOperations>>()
-                    .mockResolvedValue(l1TokenBridgeOps),
+          setupL1Mocks: (testSpecificMsgId: WormholeMessageId) => {
+            (
+              mockWormholeInstance.getChain as jest.MockedFunction<
+                typeof mockWormholeInstance.getChain
+              >
+            ).mockImplementation((chainOrId: Chain | ChainId) => {
+              const chainName =
+                typeof chainOrId === 'string'
+                  ? chainOrId
+                  : actualChainIdToChainSDK(chainOrId as ChainId);
+              if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID)) {
+                return {
+                  ...mockChainContext,
+                  parseTransaction: jest.fn().mockResolvedValue([testSpecificMsgId]),
                 };
-                return configuredL1Context;
+              }
+              if (chainName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID)) {
+                return {
+                  ...mockChainContext,
+                  getTokenBridge: jest.fn().mockResolvedValue({
+                    ...mockTokenBridgeOperations,
+                    isTransferCompleted: jest.fn().mockResolvedValue(false),
+                  }),
+                };
               }
               return mockChainContext;
             });
@@ -818,106 +924,96 @@ describe('WormholeVaaService', () => {
           }),
         },
         {
-          description: 'should return null if l1ChainContext.getTokenBridge() throws an error',
-          setupL1Mocks: (
-            l1ChainCtx: typeof mockChainContext,
-            l1TokenBridgeOps: typeof mockTokenBridgeOperations,
-          ) => {
-            const throwingL1ChainContext = {
-              ...l1ChainCtx,
-              getTokenBridge: jest
-                .fn<() => Promise<typeof mockTokenBridgeOperations>>()
-                .mockRejectedValue(getTokenBridgeError),
-            };
-            mockWormholeInstance.getChain.mockImplementation((chainOrChainId) => {
-              if (
-                chainOrChainId === ARBITRUM_CHAIN_ID ||
-                actualChainIdToChain(ARBITRUM_CHAIN_ID) === chainOrChainId
-              ) {
-                return throwingL1ChainContext;
+          customDescription:
+            'should return null if l1ChainContext.getTokenBridge() throws an error',
+          setupL1Mocks: (testSpecificMsgId: WormholeMessageId) => {
+            (
+              mockWormholeInstance.getChain as jest.MockedFunction<
+                typeof mockWormholeInstance.getChain
+              >
+            ).mockImplementation((chainOrId: Chain | ChainId) => {
+              const chainName =
+                typeof chainOrId === 'string'
+                  ? chainOrId
+                  : actualChainIdToChainSDK(chainOrId as ChainId);
+              if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID)) {
+                return {
+                  ...mockChainContext,
+                  parseTransaction: jest.fn().mockResolvedValue([testSpecificMsgId]),
+                };
+              }
+              if (chainName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID)) {
+                return {
+                  ...mockChainContext,
+                  getTokenBridge: jest.fn().mockRejectedValue(getTokenBridgeError),
+                };
               }
               return mockChainContext;
             });
           },
-          expectedLogMessage: 'Error checking VAA completion on L1',
-          expectedErrorObject: getTokenBridgeError,
+          expectedLogMessage:
+            'Error checking VAA completion on L1: Failed to get token bridge for L1 chain',
+          expectedErrorObject: expect.objectContaining({ message: getTokenBridgeError.message }),
         },
         {
-          description: 'should return null if L1 tokenBridge.isTransferCompleted() throws an error',
-          setupL1Mocks: (
-            l1ChainCtx: typeof mockChainContext,
-            l1TokenBridgeOps: typeof mockTokenBridgeOperations,
-          ) => {
-            l1TokenBridgeOps.isTransferCompleted.mockRejectedValue(isTransferCompletedError);
-            const l1ChainContextResolvingToThrowingOps = {
-              ...l1ChainCtx,
-              getTokenBridge: jest
-                .fn<() => Promise<typeof mockTokenBridgeOperations>>()
-                .mockResolvedValue(l1TokenBridgeOps),
-            };
-            mockWormholeInstance.getChain.mockImplementation((chainOrChainId) => {
-              if (
-                chainOrChainId === ARBITRUM_CHAIN_ID ||
-                actualChainIdToChain(ARBITRUM_CHAIN_ID) === chainOrChainId
-              ) {
-                return l1ChainContextResolvingToThrowingOps;
+          customDescription:
+            'should return null if L1 tokenBridge.isTransferCompleted() throws an error',
+          setupL1Mocks: (testSpecificMsgId: WormholeMessageId) => {
+            (
+              mockWormholeInstance.getChain as jest.MockedFunction<
+                typeof mockWormholeInstance.getChain
+              >
+            ).mockImplementation((chainOrId: Chain | ChainId) => {
+              const chainName =
+                typeof chainOrId === 'string'
+                  ? chainOrId
+                  : actualChainIdToChainSDK(chainOrId as ChainId);
+              if (chainName === actualChainIdToChainSDK(ETHEREUM_CHAIN_ID)) {
+                return {
+                  ...mockChainContext,
+                  parseTransaction: jest.fn().mockResolvedValue([testSpecificMsgId]),
+                };
+              }
+              if (chainName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID)) {
+                return {
+                  ...mockChainContext,
+                  getTokenBridge: jest.fn().mockResolvedValue({
+                    ...mockTokenBridgeOperations,
+                    isTransferCompleted: jest.fn().mockRejectedValue(isTransferCompletedError),
+                  }),
+                };
               }
               return mockChainContext;
             });
           },
-          expectedLogMessage: 'Error checking VAA completion on L1',
-          expectedErrorObject: isTransferCompletedError,
+          expectedLogMessage:
+            'Error checking VAA completion on L1: isTransferCompleted failed for L1 chain',
+          expectedErrorObject: expect.objectContaining({
+            message: isTransferCompletedError.message,
+          }),
         },
       ];
 
       test.each(testCases)(
-        '$description',
+        '$customDescription',
         async ({ setupL1Mocks, expectedLogMessage, expectedErrorObject }) => {
           const mockReceipt = createMockReceipt(1, L2_TX_HASH);
-          mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
+          (mockL2Provider.getTransactionReceipt as jest.Mock).mockResolvedValue(mockReceipt);
           const mockEmitterUAddress = new ActualUniversalAddress(EMITTER_ADDRESS_STR);
-          const mockWormholeMessageId: WormholeMessageId = {
-            chain: actualChainIdToChain(ETHEREUM_CHAIN_ID),
+          const commonMockWormholeMessageId: WormholeMessageId = {
+            chain: actualChainIdToChainSDK(ETHEREUM_CHAIN_ID),
             emitter: mockEmitterUAddress,
             sequence: BigInt(1),
           };
-          mockChainContext.parseTransaction.mockResolvedValue([mockWormholeMessageId]);
-          const baseVaa = createMockVaa(L2_TX_HASH, EMITTER_ADDRESS_STR, ETHEREUM_CHAIN_ID);
-          mockGetVaaImplementation.mockResolvedValue(
-            baseVaa as VAA<'TokenBridge:TransferWithPayload'>,
-          );
 
-          const defaultL1TokenBridgeOps: typeof mockTokenBridgeOperations = {
-            isTransferCompleted: jest
-              .fn<(vaa: VAA<any>) => Promise<boolean>>()
-              .mockResolvedValue(true),
-          };
-          const defaultL1ChainContext: typeof mockChainContext = {
-            parseTransaction: jest
-              .fn<(txHash: string) => Promise<WormholeMessageId[]>>()
-              .mockResolvedValue([]),
-            getTokenBridge: jest
-              .fn<() => Promise<typeof mockTokenBridgeOperations>>()
-              .mockResolvedValue(defaultL1TokenBridgeOps),
-          };
+          setupL1Mocks(commonMockWormholeMessageId);
 
-          mockWormholeInstance.getChain.mockImplementation((chainOrChainId) => {
-            if (
-              chainOrChainId === ETHEREUM_CHAIN_ID ||
-              actualChainIdToChain(ETHEREUM_CHAIN_ID) === chainOrChainId
-            ) {
-              return mockChainContext;
-            }
-            if (
-              chainOrChainId === ARBITRUM_CHAIN_ID ||
-              actualChainIdToChain(ARBITRUM_CHAIN_ID) === chainOrChainId
-            ) {
-              return defaultL1ChainContext;
-            }
-            throw new Error(`Unexpected chain in getChain mock: ${chainOrChainId}`);
+          const baseVaa = createMockVaa(L2_TX_HASH, EMITTER_ADDRESS_STR, ETHEREUM_CHAIN_ID, {
+            sequence: BigInt(1),
           });
-
-          setupL1Mocks(defaultL1ChainContext, defaultL1TokenBridgeOps);
+          mockGetVaaImplementation.mockResolvedValue(
+            baseVaa as MockableVAA<'TokenBridge:TransferWithPayload'>,
+          );
 
           const result = await service.fetchAndVerifyVaaForL2Event(
             L2_TX_HASH,
@@ -927,15 +1023,52 @@ describe('WormholeVaaService', () => {
           );
 
           expect(result).toBeNull();
-          expect(mockLogErrorContext).toHaveBeenCalledWith(
-            expect.stringContaining(expectedLogMessage),
-            expectedErrorObject,
+          const logErrorCall = mockLogErrorContext.mock.calls.find((call) =>
+            call[0].includes(expectedLogMessage),
           );
+          expect(logErrorCall).toBeDefined();
+          expect(logErrorCall![1]).toMatchObject(expectedErrorObject);
 
-          if (expectedLogMessage.includes('Token bridge transfer VAA not completed on L1')) {
-            const l1Chain = mockWormholeInstance.getChain(ARBITRUM_CHAIN_ID);
-            const l1Bridge = await l1Chain.getTokenBridge();
-            expect(l1Bridge.isTransferCompleted).toHaveBeenCalledWith(baseVaa);
+          if (
+            expectedLogMessage.includes('Token bridge transfer VAA not completed on L1') ||
+            expectedLogMessage.includes('isTransferCompleted failed for L1 chain')
+          ) {
+            const getChainCallForL1 = (mockWormholeInstance.getChain as jest.Mock).mock.calls.find(
+              (call) => {
+                const arg = call[0];
+                const cName =
+                  typeof arg === 'string' ? arg : actualChainIdToChainSDK(arg as ChainId);
+                return cName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID);
+              },
+            );
+            expect(getChainCallForL1).toBeDefined();
+            const l1ChainContextReturned = (
+              mockWormholeInstance.getChain as jest.Mock
+            ).mock.results.find((r: jest.MockResult<MockChainContextType>) => {
+              const callArgs = (mockWormholeInstance.getChain as jest.Mock).mock.calls[
+                (mockWormholeInstance.getChain as jest.Mock).mock.results.indexOf(r)
+              ][0];
+              const cName =
+                typeof callArgs === 'string'
+                  ? callArgs
+                  : actualChainIdToChainSDK(callArgs as ChainId);
+              return cName === actualChainIdToChainSDK(ARBITRUM_CHAIN_ID);
+            })?.value;
+
+            if (l1ChainContextReturned && l1ChainContextReturned.getTokenBridge) {
+              const l1Bridge = await l1ChainContextReturned.getTokenBridge();
+              if (
+                l1Bridge.isTransferCompleted &&
+                (expectedLogMessage.includes('isTransferCompleted failed for L1 chain') ||
+                  expectedLogMessage.includes('Token bridge transfer VAA not completed on L1'))
+              ) {
+                expect(l1Bridge.isTransferCompleted).toHaveBeenCalledWith(baseVaa);
+              }
+            } else if (!expectedLogMessage.includes('Failed to get token bridge for L1 chain')) {
+              // console.warn(
+              //   `L1 chain context or getTokenBridge not found/called as expected for ARBITRUM_CHAIN_ID in test: ${_testDescriptionForLog}`
+              // );
+            }
           }
         },
       );

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import logger from '../utils/Logger.js';
-import { AppConfigSchema, type AppConfig } from './schemas/app.schema.js';
+import logger from '../utils/Logger';
+import { AppConfigSchema, type AppConfig } from './schemas/app.schema';
 
 export const appConfig: AppConfig = (() => {
   try {

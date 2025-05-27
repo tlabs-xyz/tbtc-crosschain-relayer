@@ -1,5 +1,13 @@
+process.env.USE_REAL_WORMHOLE_SERVICE = 'true'; // Signal global setup to NOT mock WormholeVaaService
+
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
-import { WormholeVaaService } from '../../services/WormholeVaaService.js';
+
+// // Unmock WormholeVaaService for this specific E2E test file to use the actual implementation
+// // The path is relative to THIS test file (tests/e2e/wormhole.vaa.service.e2e.test.ts)
+// // and should point to services/WormholeVaaService.ts
+// jest.unmock('../../services/WormholeVaaService');
+
+import { WormholeVaaService } from '../../services/WormholeVaaService';
 import {
   type ChainId,
   type Network,
@@ -11,8 +19,8 @@ import {
   chainIdToChain as actualChainIdToChain,
 } from '@wormhole-foundation/sdk';
 // Logger and stringifyWithBigInt are used by the service, mocks are handled by utils
-// import logger from '../../utils/Logger.js';
-import { stringifyWithBigInt } from '../../utils/Numbers.js';
+// import logger from '../../utils/Logger';
+import { stringifyWithBigInt } from '../../utils/Numbers';
 import {
   testScenarios,
   // L1_CHAIN_ID_ETH, // Not directly used, derived from scenario in setup
@@ -26,7 +34,7 @@ import {
   createMockSdkVaa,
   EXPECTED_GET_VAA_TIMEOUT_MS,
   type MockedWormholeInstances,
-} from './utils/wormhole.e2e.test.utils.js';
+} from './utils/wormhole.e2e.test.utils';
 
 describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks)', (scenario) => {
   let service: WormholeVaaService;
@@ -268,9 +276,7 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
   test('Subtask 13.8: VAA emitter address mismatch', async () => {
     const l2TxEmitterMismatchHash = '0x' + 'e'.repeat(64);
     const actualEmitterAddress = scenario.expectedEmitterAddress; // The one configured in the service
-    const vaaEmitterAddress = new ActualUniversalAddress(
-      '0x' + 'f'.repeat(64),
-    ).toString(); // A different emitter
+    const vaaEmitterAddress = new ActualUniversalAddress('0x' + 'f'.repeat(64)).toString(); // A different emitter
 
     const mockReceipt = createMockEthersReceipt(l2TxEmitterMismatchHash, 1);
     mocks.mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);

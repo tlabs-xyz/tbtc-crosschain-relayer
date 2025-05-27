@@ -1,7 +1,7 @@
-import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
-import { StarknetChainConfigSchema } from '../config/schemas/starknet.chain.schema.js';
-import logger from '../utils/Logger.js';
-import { BaseChainHandler } from './BaseChainHandler.js';
+import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema';
+import { StarknetChainConfigSchema } from '../config/schemas/starknet.chain.schema';
+import logger from '../utils/Logger';
+import { BaseChainHandler } from './BaseChainHandler';
 import {
   ethers,
   type Overrides,

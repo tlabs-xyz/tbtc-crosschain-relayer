@@ -22,6 +22,7 @@ module.exports = {
   moduleNameMapper: {
     // eslint-disable-next-line no-useless-escape
     // '^(\\.{1,2}/.+)\\.js$': '$1', // Commented out to allow standard TS import resolution
+    '^@/utils/prisma$': '<rootDir>/utils/prisma', // Updated specific mapping
     '^@/(.*)$': '<rootDir>/$1',
     '^#ansi-styles$': 'ansi-styles',
   },

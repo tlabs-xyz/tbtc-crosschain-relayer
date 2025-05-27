@@ -1,21 +1,18 @@
-// Set this before any other imports that might initialize the app core
-process.env.SUPPORTED_CHAINS = 'mockEVM1,mockEVM2,faultyMockEVM';
-
 import request from 'supertest';
 import express from 'express';
 import type { Express } from 'express';
 import { ethers } from 'ethers';
-import { DepositStatus } from '../../types/DepositStatus.enum.js';
-import { chainConfigs as loadedChainConfigs, type AnyChainConfig } from '../../config/index.js';
-import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
-import { chainHandlerRegistry } from '../../handlers/ChainHandlerRegistry.js'; // Global instance
-import { initializationPromise } from '../../index.js';
-import { router as mainAppRouter } from '../../routes/Routes.js'; // Global router
+import { DepositStatus } from '../../types/DepositStatus.enum';
+import { chainConfigs as loadedChainConfigs, type AnyChainConfig } from '../../config';
+import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema';
+import { chainHandlerRegistry } from '../../handlers/ChainHandlerRegistry';
+import { initializationPromise } from '../..';
+import { router as mainAppRouter } from '../../routes/Routes';
 
 // Store deposits made by mocks
 const mockChainDeposits = new Map<string, Map<string, any>>(); // chainName -> depositId -> Deposit
 
-jest.mock('../../handlers/EVMChainHandler.js', () => {
+jest.mock('../../handlers/EVMChainHandler', () => {
   return {
     EVMChainHandler: jest.fn().mockImplementation((config: EvmChainConfig) => {
       const chainName = config.chainName;

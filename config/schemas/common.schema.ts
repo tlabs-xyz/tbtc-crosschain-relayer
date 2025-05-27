@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EthereumAddressSchema } from './shared.js';
+import { EthereumAddressSchema } from './shared';
 
 export enum NETWORK {
   MAINNET = 'Mainnet',

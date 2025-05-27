@@ -1,8 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import {
   AuditEventType,
-  getAuditLogs,
-  getAuditLogsByDepositId,
   logDepositCreated,
   logStatusChange,
   logDepositInitialized,
@@ -10,13 +8,12 @@ import {
   logDepositDeleted,
   logApiRequest,
   logDepositError,
-} from '../../../utils/AuditLog.js';
-import * as AuditLogFunctions from '../../../utils/AuditLog.js';
-// import prisma from '../../../../utils/PrismaClient.js'; // Path to be confirmed
-import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum.js';
-import type { Deposit } from '../../../types/Deposit.type.js';
-import type { FundingTransaction } from '../../../types/FundingTransaction.type.js';
-import type { Reveal } from '../../../types/Reveal.type.js';
+} from '../../../utils/AuditLog';
+import * as AuditLogFunctions from '../../../utils/AuditLog';
+import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum';
+import type { Deposit } from '../../../types/Deposit.type';
+import type { FundingTransaction } from '../../../types/FundingTransaction.type';
+import type { Reveal } from '../../../types/Reveal.type';
 
 const mockFundingTx: FundingTransaction = {
   version: '0x01000000',
@@ -84,30 +81,39 @@ const testDeposit: Deposit = {
   error: null,
 };
 
-// Attempt to dynamically require Prisma to see if it resolves path issues in test runtime
-let prisma: any;
+// Try importing Prisma client using a static import.
+// This assumes 'utils/PrismaClient' default exports the Prisma instance.
+import { prisma as prismaClientInstance } from '@/utils/prisma'; // Import named export and alias
+// If the above line fails with "Cannot find module", the path is still unresolved.
+// In that case, ensure utils/PrismaClient.ts (or .js) exists, check casing,
+// or investigate Jest/TypeScript path configuration.
+// As a fallback for tests if direct import is problematic and you want to proceed with mocks:
+// import { PrismaClient } from '@prisma/client'; // Standard Prisma import
+// const prisma = new PrismaClient(); // Or use a project-wide singleton if available
 
+// For the purpose of this test suite which heavily mocks/spies,
+// we can retain the fallback mocking logic if the primary import method fails.
+// However, static imports failing will typically halt test execution for this file earlier.
+let prisma: any;
 try {
-  const prismaPath = '../../../utils/PrismaClient.js'; // Reverted path and added .js
-  console.log(`[AuditLog.test.ts] Attempting to load Prisma from: ${require.resolve(prismaPath)}`);
-  prisma = require(prismaPath).default;
-  if (!prisma || !prisma.auditLog) {
-    throw new Error('Prisma client or auditLog table not loaded correctly.');
+  // Ensure prismaClientInstance is not undefined and has the auditLog property
+  if (!prismaClientInstance || !(prismaClientInstance as any).auditLog) {
+    throw new Error('Prisma client or auditLog table not loaded correctly from static import.');
   }
+  prisma = prismaClientInstance;
 } catch (e: any) {
-  console.error('[AuditLog.test.ts] FAILED TO LOAD PRISMA:', e.message);
   console.error(
-    'Attempted path was relative to utils/ within tests/unit/utils. Check jest config and paths.',
+    '[AuditLog.test.ts] FAILED TO LOAD PRISMA VIA STATIC IMPORT:',
+    (e as Error).message,
   );
-  // Fallback or rethrow if Prisma is essential for setup/teardown, even if appendToAuditLog is spied
-  // For now, let tests proceed to see spy behavior, but setup/teardown might fail.
+  console.warn('[AuditLog.test.ts] Falling back to mocked Prisma client for tests.');
   prisma = {
     auditLog: {
       deleteMany: jest.fn().mockResolvedValue(undefined as never),
       create: jest.fn().mockResolvedValue(undefined as never),
       findMany: jest.fn().mockResolvedValue([] as unknown as never),
-    } as any,
-  }; // Mock prisma if load fails
+    },
+  };
 }
 
 describe('AuditLog', () => {

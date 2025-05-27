@@ -5,17 +5,17 @@ import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-c
 import { ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
 import { AnchorProvider, type Idl, Program, setProvider, Wallet } from '@coral-xyz/anchor';
-import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes/index.js';
+import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes/index';
 
-import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
-import type { SolanaChainConfig } from '../config/schemas/solana.chain.schema.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import { BaseChainHandler } from './BaseChainHandler.js';
-import { type Deposit } from '../types/Deposit.type.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema';
+import type { SolanaChainConfig } from '../config/schemas/solana.chain.schema';
+import logger, { logErrorContext } from '../utils/Logger';
+import { BaseChainHandler } from './BaseChainHandler';
+import { type Deposit } from '../types/Deposit.type';
+import { DepositStatus } from '../types/DepositStatus.enum';
 import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json' assert { type: 'json' };
-import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
-import { DepositStore } from '../utils/DepositStore.js';
+import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits';
+import { DepositStore } from '../utils/DepositStore';
 
 const WORMHOLE_GATEWAY_PROGRAM_ID = new PublicKey('87MEvHZCXE3ML5rrmh5uX1FbShHmRXXS32xJDGbQ7h5t');
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(

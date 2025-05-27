@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CHAIN_TYPE } from './common.schema.js';
-import { CommonChainConfigSchema } from './common.schema.js';
+import { CHAIN_TYPE } from './common.schema';
+import { CommonChainConfigSchema } from './common.schema';
 
 // Base schema for fields that are specific to Solana chains.
 const SolanaChainBaseSchema = z.object({

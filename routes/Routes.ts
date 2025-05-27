@@ -2,13 +2,13 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { Router } from 'express';
 
-import Operations from '../controllers/Operations.controller.js';
-import Utils from '../controllers/Utils.controller.js';
-import { EndpointController } from '../controllers/Endpoint.controller.js';
-import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
-import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import logger from '../utils/Logger.js';
-import type { AnyChainConfig } from '../config/index.js';
+import Operations from '../controllers/Operations.controller';
+import Utils from '../controllers/Utils.controller';
+import { EndpointController } from '../controllers/Endpoint.controller';
+import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
+import logger from '../utils/Logger';
+import type { AnyChainConfig } from '../config/index';
 
 // Custom Request Interface
 export interface RequestWithChainInfo extends Request {

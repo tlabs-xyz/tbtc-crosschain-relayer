@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
-import CustomResponse from '../helpers/CustomResponse.helper.js';
-import { logErrorContext } from '../utils/Logger.js';
-import { prisma } from '../utils/prisma.js';
-import { appConfig } from '../config/app.config.js';
+import CustomResponse from '../helpers/CustomResponse.helper';
+import { logErrorContext } from '../utils/Logger';
+import { prisma } from '../utils/prisma';
+import { appConfig } from '../config/app.config';
 
 export default class Utils {
   /**

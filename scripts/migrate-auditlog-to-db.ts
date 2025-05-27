@@ -1,8 +1,8 @@
-import { prisma } from '../utils/prisma.js';
+import { prisma } from '../utils/prisma';
 import * as fs from 'fs';
 import * as readline from 'readline';
 import path from 'path';
-import { chainConfigs, type AnyChainConfig } from '../config/index.js';
+import { chainConfigs, type AnyChainConfig } from '../config/index';
 
 const LOG_FILE = path.resolve('logs/deposit_audit.log');
 

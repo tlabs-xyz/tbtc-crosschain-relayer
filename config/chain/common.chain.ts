@@ -1,6 +1,6 @@
-import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
+import type { CommonChainConfigSchema } from '../schemas/common.schema';
 import { z } from 'zod';
-import { getEnv } from '../../utils/Env.js';
+import { getEnv } from '../../utils/Env';
 
 type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 

@@ -13,21 +13,21 @@ import helmet from 'helmet';
 import compression from 'compression';
 
 // Rutas
-import Routes from './routes/Routes.js';
+import Routes from './routes/Routes';
 
 // Utils
-import logger from './utils/Logger.js';
+import logger from './utils/Logger';
 import {
   initializeAllChains,
   initializeAllL2RedemptionServices,
   startCronJobs,
-} from './services/Core.js';
-import { logErrorContext } from './utils/Logger.js';
+} from './services/Core';
+import { logErrorContext } from './utils/Logger';
 
 import 'dotenv/config';
 
-import { chainConfigs } from './config/index.js';
-import { appConfig } from './config/app.config.js';
+import { chainConfigs } from './config/index';
+import { appConfig } from './config/app.config';
 
 // -------------------------------------------------------------------------
 // |                            APP INSTANCE                               |
