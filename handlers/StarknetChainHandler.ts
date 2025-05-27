@@ -6,11 +6,23 @@ import { BaseChainHandler } from './BaseChainHandler.js';
 import { ethers } from 'ethers'; // Ethers import for Contract
 import type { IStarkGateBridge, EthersStarkGateBridge } from '../interfaces/IStarkGateBridge.js'; // IStarkGateBridge type
 import { IStarkGateBridgeABI } from '../interfaces/IStarkGateBridge.abi.js'; // The ABI we just created
+import crypto from 'crypto'; // For SHA256 hashing for deposit ID
 
 // Custom type imports for Deposit processing
 import { DepositStore } from '../utils/DepositStore.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js'; // Corrected path
 // import { logDepositError, logDepositInfo } from '../utils/AuditLog.js'; // Uncomment when AuditLog is confirmed
+import {
+  validateStarkNetAddress,
+  formatStarkNetAddressForContract,
+  extractAddressFromBitcoinScript,
+} from '../utils/starknetAddress.js'; // Address utilities
+import type { Deposit } from '../types/Deposit.type.js'; // Deposit type
+import type { Reveal } from '../types/Reveal.type.js'; // Reveal type
+import { getFundingTxHash } from '../utils/GetTransactionHash.js'; // To get fundingTxHash
+import { createDeposit as createDepositUtil, getDepositId } from '../utils/Deposits.js'; // Renamed to avoid conflict
+import { logDepositError, logDepositInfo } from '../utils/AuditLog.js'; // Assuming AuditLog is available
+import type { FundingTransaction } from '../types/FundingTransaction.type.js'; // For L1 contract call
 
 // Placeholder for StarkNet specific imports (e.g., starknet.js)
 
@@ -513,4 +525,237 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   //     const supports = !!(this.config.l2Rpc && !this.config.useEndpoint);
   //     return supports;
   // }
+
+  private async createDeposit(
+    fundingTx: Buffer,
+    reveal: Reveal,
+    outputIndex: number,
+    l2RecipientStarkNetAddress: string,
+  ): Promise<Deposit> {
+    const fundingTxHash = getFundingTxHash(fundingTx);
+    const depositId = getDepositId(fundingTxHash, reveal.outputIndex); // Use reveal.outputIndex for consistency with how it's likely derived
+
+    // Log and ensure that the l2RecipientStarkNetAddress is a valid StarkNet address string before creating the deposit object.
+    // The actual validation (is it a felt, etc.) should happen before this method is called (e.g., in initializeDeposit).
+    logger.info(
+      `Creating deposit entry for ID: ${depositId}, StarkNet Recipient: ${l2RecipientStarkNetAddress}`,
+    );
+
+    // Create the deposit object using the utility
+    // Note: The `createDepositUtil` expects reveal data to be structured. We need to ensure the `reveal` object
+    // passed here aligns with what `createDepositUtil` expects or adjust the call.
+    // For now, assuming `reveal` object contains necessary fields like `lockingScript`, `outputIndex`, `fundingTransaction` etc.
+    // The recipient for StarkNet is the StarkNet address itself.
+    const deposit = createDepositUtil(
+      {
+        // Constructing FundingTransaction type expected by createDepositUtil
+        // This needs to match the structure of `FundingTransaction` type. Example:
+        transaction: fundingTx, // The raw transaction buffer
+        outputIndex: reveal.outputIndex, // The specific output index from the reveal data
+        // Other fields from FundingTransaction type might be needed if createDepositUtil expects them
+        // For example, if it needs parsed transaction details, we might need to parse fundingTx here.
+        // Based on EVMChainHandler, it seems to pass a more structured fundingTx object.
+        // Let's assume fundingTx is Buffer and reveal contains necessary details like outputIndex and the full fundingTransaction details if needed by createDepositUtil.
+      },
+      reveal, // Pass the full reveal object
+      l2RecipientStarkNetAddress, // l2Owner for StarkNet is the StarkNet address
+      this.config.l1SenderAddress || 'StarkNetRelayer', // l2Sender - who is initiating this on L2 (relayer)
+      this.config.chainName,
+      this.config.chainId,
+      this.config.chainType,
+      // Add StarkNet specific data if any to be stored at creation
+    );
+
+    // Store the newly created deposit
+    await DepositStore.create(deposit);
+    logDepositInfo(deposit.id, 'StarkNet deposit created in QUEUED state.');
+    return deposit;
+  }
+
+  /**
+   * Initializes a deposit on the L1 StarkGate contract.
+   * This involves validating the StarkNet address, formatting it for the contract,
+   * and calling the `initializeDeposit` method on the L1 contract.
+   *
+   * @param fundingTx The raw Bitcoin funding transaction.
+   * @param reveal The reveal data containing the StarkNet recipient address.
+   * @param outputIndex The output index of the funding transaction.
+   * @returns A Promise that resolves when the deposit is successfully initialized on L1.
+   */
+  public async initializeDeposit(
+    fundingTx: Buffer, // Raw Bitcoin transaction
+    reveal: Reveal, // Reveal data containing locking script, output index, etc.
+    _outputIndex: number, // outputIndex is part of reveal, but kept for interface consistency if needed
+  ): Promise<Deposit> {
+    const fundingTxHash = getFundingTxHash(fundingTx);
+    // Deposit ID is typically derived from fundingTxHash and outputIndex from reveal
+    const tempDepositId = getDepositId(fundingTxHash, reveal.outputIndex);
+    logDepositInfo(
+      tempDepositId,
+      `Starting initializeDeposit for StarkNet. Funding Tx Hash: ${fundingTxHash}, Output Index: ${reveal.outputIndex}`,
+    );
+
+    let starkNetAddress: string;
+    try {
+      starkNetAddress = extractAddressFromBitcoinScript(
+        reveal.lockingScript,
+        this.config.network, // 'mainnet' or 'testnet' for P2(W)SH version bytes
+      );
+      if (!validateStarkNetAddress(starkNetAddress)) {
+        throw new Error(`Invalid StarkNet address extracted: ${starkNetAddress}`);
+      }
+      logDepositInfo(tempDepositId, `Extracted StarkNet address: ${starkNetAddress}`);
+    } catch (error: any) {
+      logDepositError(
+        tempDepositId,
+        `Failed to extract/validate StarkNet address from Bitcoin script: ${error.message}`,
+        error,
+      );
+      // Cannot proceed without a valid StarkNet address
+      // Create a temporary deposit object for error logging if one doesn't exist or update if it does.
+      // For now, we will re-throw, assuming the caller or a higher level handles deposit state for such early failures.
+      throw error; // Or update a preliminary deposit record to ERROR state.
+    }
+
+    // Create and store the initial deposit object in QUEUED state
+    // This utility should handle the deposit ID generation internally.
+    let deposit = await this.createDeposit(
+      fundingTx,
+      reveal,
+      reveal.outputIndex,
+      starkNetAddress,
+    );
+
+    try {
+      if (!this.starkGateContract) {
+        throw new Error(
+          'StarkGate L1 contract (starkGateContract with signer) is not initialized. Cannot send initializeDeposit transaction.',
+        );
+      }
+
+      const starkNetRecipientBytes32 = formatStarkNetAddressForContract(starkNetAddress);
+      logDepositInfo(
+        deposit.id,
+        `Formatted StarkNet address for L1 contract: ${starkNetRecipientBytes32}`,
+      );
+
+      // Prepare arguments for the L1 StarkGate contract's initializeDeposit method
+      // The contract expects: initializeDeposit(FundingTransaction calldata fundingTx, Reveal calldata reveal, bytes32 l2DepositOwner)
+      // We need to map our `fundingTx` (Buffer) and `reveal` (Reveal type) to these structures.
+
+      // Constructing the FundingTransaction struct for the contract call:
+      // This requires parsing the `fundingTx` Buffer or using fields from `reveal.fundingTransaction`
+      // For `ethers.js` contract calls, complex objects are passed as arrays or JS objects matching struct fields.
+      const contractFundingTx: FundingTransaction = {
+        // Assuming reveal.fundingTransaction contains the full, potentially parsed, tx data
+        // This is based on `Reveal` type containing `fundingTransaction: TxWithInputOutput;`
+        transaction: reveal.fundingTransaction.transaction, // This should be the hex string of the tx
+        outputIndex: reveal.fundingTransaction.outputIndex,
+        // Ensure all fields of the Solidity struct FundingTransaction are present
+        // Example: value, script, etc. might be needed depending on struct definition
+        // For StarkGate, it's likely simpler: transaction bytes, output index
+        // We must align this with the *actual* Solidity struct for `FundingTransaction` in `IStarkGateBridge.sol`
+        // For now, let's assume a simplified version or that the ABI coder handles it.
+        // From contract: struct FundingTransaction { bytes transaction; uint256 outputIndex; }
+        // So, we need the transaction as bytes (hex string) and outputIndex.
+        // The `fundingTx` Buffer needs to be hex-encoded: `0x${fundingTx.toString('hex')}`
+      };
+      // Corrected mapping for contract call:
+      const l1ContractFundingTxArg = {
+        transaction: `0x${fundingTx.toString('hex')}`,
+        outputIndex: reveal.outputIndex, // This is the outputIndex being claimed in the fundingTx
+      };
+
+      // The `reveal` parameter is of type `Reveal` from `types/Reveal.type.ts`,
+      // which is `[number, string, string, string, string, string] تع RevealTuple`.
+      // We need to map this tuple to the fields of the Solidity `RevealData` struct.
+      // Assuming the tuple elements correspond to:
+      // reveal[0]: version (e.g., Bitcoin script version)
+      // reveal[1]: parentTransaction (bytes of the tx whose output is spent by fundingTx's input)
+      // reveal[2]: inputIndex (index of input in fundingTx that spends parentTransaction's output)
+      // reveal[3]: outputIndex (index of output in parentTransaction spent by fundingTx's input)
+      // reveal[4]: lockingScript (scriptPubKey of the output in parentTransaction)
+      // reveal[5]: value (value of the output in parentTransaction)
+      // This mapping MUST be confirmed against the actual Solidity struct definition for RevealData.
+      const revealTuple = reveal; // aliasing for clarity if Reveal type is complex
+
+      const l1ContractRevealArg = {
+        version: revealTuple[0], // Assuming number, cast if necessary for BigNumberish
+        parentTransaction: revealTuple[1], // Assuming hex string, should be `0x` prefixed if not already
+        inputIndex: revealTuple[2], // Assuming number
+        outputIndex: revealTuple[3], // Assuming number (this is the UTXO's index in its original tx)
+        lockingScript: revealTuple[4], // Assuming hex string (scriptPubKey)
+        value: revealTuple[5], // Assuming string representing number, or number. Ethers handles BigNumberish.
+      };
+
+      // Pre-flight check using callStatic
+      logDepositInfo(deposit.id, 'Simulating initializeDeposit transaction (callStatic)...');
+      try {
+        await this.starkGateContract.callStatic.initializeDeposit(
+          l1ContractFundingTxArg,
+          l1ContractRevealArg, // This argument structure needs to be confirmed with the actual ABI
+          starkNetRecipientBytes32,
+        );
+        logDepositInfo(deposit.id, 'initializeDeposit simulation successful.');
+      } catch (callStaticError: any) {
+        const errMsg = `initializeDeposit simulation failed (callStatic): ${callStaticError.message}`;
+        logDepositError(deposit.id, errMsg, callStaticError);
+        deposit = await DepositStore.update(deposit.id, {
+          status: DepositStatus.ERROR,
+          statusMessage: `L1 Init Sim Failed: ${callStaticError.reason || callStaticError.message}`.substring(0, 255),
+        });
+        throw new Error(errMsg); // Re-throw to halt processing
+      }
+
+      // Execute the transaction
+      logDepositInfo(deposit.id, 'Sending initializeDeposit transaction to L1 StarkGate contract...');
+      const txResponse = await this.starkGateContract.initializeDeposit(
+        l1ContractFundingTxArg,
+        l1ContractRevealArg, // Ensure this structure is correct for the ABI
+        starkNetRecipientBytes32,
+        {
+          // Add gas estimation/limits if necessary, or let ethers handle it
+          // gasLimit: this.config.l1GasLimit?.initializeDeposit, // Example
+        },
+      );
+
+      logDepositInfo(
+        deposit.id,
+        `initializeDeposit transaction sent. Tx Hash: ${txResponse.hash}`,
+      );
+      deposit = await DepositStore.update(deposit.id, {
+        status: DepositStatus.INITIALIZING,
+        statusMessage: 'L1 Init Tx Sent',
+        l1InitializeTxHash: txResponse.hash,
+      });
+
+      // Wait for confirmations
+      const confirmations = this.config.l1Confirmations || 1;
+      logDepositInfo(
+        deposit.id,
+        `Waiting for ${confirmations} confirmations for L1 initializeDeposit transaction...`,
+      );
+      await txResponse.wait(confirmations);
+
+      logDepositInfo(
+        deposit.id,
+        `L1 initializeDeposit transaction confirmed. Tx Hash: ${txResponse.hash}`,
+      );
+      deposit = await DepositStore.update(deposit.id, {
+        status: DepositStatus.INITIALIZED,
+        statusMessage: 'L1 Init Confirmed',
+      });
+
+      return deposit;
+    } catch (error: any) {
+      const errorMessage = `Error during StarkNet initializeDeposit L1 transaction for deposit ${deposit.id}: ${error.message}`;
+      logDepositError(deposit.id, errorMessage, error);
+      await DepositStore.update(deposit.id, {
+        status: DepositStatus.ERROR,
+        statusMessage: `L1 Init Error: ${error.reason || error.message}`.substring(0, 255),
+      });
+      // Re-throw the error to be handled by the caller (e.g., EndpointController)
+      throw new Error(errorMessage, { cause: error });
+    }
+  }
 }
