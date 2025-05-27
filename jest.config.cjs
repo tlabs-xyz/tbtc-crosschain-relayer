@@ -4,16 +4,7 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts'],
-  moduleFileExtensions: [
-    'js',
-    'mjs',
-    'cjs',
-    'ts',
-    'mts',
-    'cts',
-    'json',
-    'node',
-  ],
+  moduleFileExtensions: ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts', 'json', 'node'],
   verbose: true,
   collectCoverageFrom: [
     'controllers/**/*.ts',
@@ -35,10 +26,7 @@ module.exports = {
   },
   globalSetup: '<rootDir>/jest.global-setup.js',
   globalTeardown: '<rootDir>/jest.global-teardown.js',
-  transformIgnorePatterns: [
-    '/node_modules/(?!.*(p-limit|yocto-queue))/',
-    '\\.pnp\\.[^\\/]+$'
-  ],
+  transformIgnorePatterns: ['/node_modules/(?!.*(p-limit|yocto-queue))/', '\\.pnp\\.[^\\/]+$'],
   transform: {
     '^.+\\.m?[tj]sx?$': [
       'ts-jest',

@@ -41,11 +41,7 @@ export default [
   js.configs.recommended,
   {
     files: ['.js', '*.config.js'],
-    ignores: [
-      'jest.global-setup.js', 
-      'jest.global-teardown.js', 
-      'eslint.config.js'
-    ],
+    ignores: ['jest.global-setup.js', 'jest.global-teardown.js', 'eslint.config.js'],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -110,8 +106,8 @@ export default [
         'error',
         'ignorePackages',
         {
-          'js': 'always',
-          'ts': 'never',
+          js: 'always',
+          ts: 'never',
         },
       ],
     },

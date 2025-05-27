@@ -18,4 +18,4 @@ export function getChainHandlerRegistry(): ChainHandlerRegistry {
     );
   }
   return registryInstance;
-} 
+}

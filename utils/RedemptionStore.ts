@@ -3,7 +3,6 @@ import logger, { logErrorContext } from './Logger.js';
 import { ethers } from 'ethers';
 import { prisma } from '../utils/prisma.js';
 
-
 function serializeRedemptionData(redemption: Redemption): any {
   // Clone the redemption object and remove top-level fields that are separate columns in Prisma
   const dataBlob: Partial<Redemption> = { ...redemption };

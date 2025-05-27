@@ -7,6 +7,7 @@
 .env.dev
 
 .cursor
+memory-bank
 
 /coverage
 .eslintcache
