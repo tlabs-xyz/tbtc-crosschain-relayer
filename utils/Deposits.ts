@@ -355,23 +355,13 @@ export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => 
  */
 
 export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
-  // Asegúrate de que fundingTxHash es una cadena de 64 caracteres hexadecimales
-  if (fundingTxHash.length !== 64) throw new Error('Invalid fundingTxHash');
+  // The deposit ID is a keccak256 hash of the funding transaction hash and output index.
+  // The tBTC OptimisticMintingFinalized event emits depositKey as uint256.
+  // To ensure matching, we calculate the bytes32 keccak256 hash and then convert it
+  // to its BigNumber (uint256) decimal string representation.
+  const types = ['bytes32', 'uint256'];
+  const values = [fundingTxHash, fundingOutputIndex];
 
-  // Convertir el fundingTxHash a un formato de bytes32 esperado por ethers.js
-  const fundingTxHashBytes = '0x' + fundingTxHash;
-
-  // Codifica los datos de manera similar a abi.encodePacked en Solidity
-  const encodedData = ethers.utils.solidityPack(
-    ['bytes32', 'uint32'],
-    [fundingTxHashBytes, fundingOutputIndex],
-  );
-
-  // Calcula el hash keccak256
-  const hash = ethers.utils.keccak256(encodedData);
-
-  // Convierte el hash a un entero sin signo de 256 bits (uint256)
-  const depositKey = ethers.BigNumber.from(hash).toString();
-
-  return depositKey;
+  const hashBytes32 = ethers.utils.solidityKeccak256(types, values);
+  return ethers.BigNumber.from(hashBytes32).toString();
 };

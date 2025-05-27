@@ -469,11 +469,12 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       );
 
       deposit.hashes.eth.finalizeTxHash = txResponse.hash;
-      deposit.status = DepositStatus.FINALIZED;
+      deposit.status = DepositStatus.FINALIZING;
+      deposit.statusMessage = 'L1 Finalize Tx Sent';
       deposit.dates.finalizationAt = Math.floor(Date.now() / 1000);
       deposit.dates.lastActivityAt = Math.floor(Date.now() / 1000);
       await DepositStore.update(deposit);
-      // TODO: Integrate logDepositInfo(deposit.id, `L1 StarkGate.finalizeDeposit tx submitted: ${txResponse.hash}. Status: FINALIZED.`);
+      // TODO: Integrate logDepositInfo(deposit.id, `L1 StarkGate.finalizeDeposit tx submitted: ${txResponse.hash}. Status: FINALIZING.`);
 
       logger.info(
         `Waiting for ${this.config.l1Confirmations} L1 confirmation(s) for StarkGate.finalizeDeposit tx ${txResponse.hash} (deposit ${deposit.id})`,
@@ -484,8 +485,11 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         logger.info(
           `L1 StarkGate.finalizeDeposit transaction CONFIRMED for deposit ${deposit.id}. TxHash: ${receipt.transactionHash}, Block: ${receipt.blockNumber}`,
         );
-        // TODO: Integrate logDepositInfo(deposit.id, `L1 StarkGate.finalizeDeposit tx confirmed: ${receipt.transactionHash}. Awaiting TBTCBridgedToStarkNet event.`);
-        // Deposit is FINALIZED. The TBTCBridgedToStarkNet event listener (from T2.2) will move it to BRIDGED.
+        deposit.status = DepositStatus.FINALIZED;
+        deposit.statusMessage = 'L1 Finalize Tx Confirmed';
+        deposit.dates.lastActivityAt = Math.floor(Date.now() / 1000);
+        await DepositStore.update(deposit);
+        // TODO: Integrate logDepositInfo(deposit.id, `L1 StarkGate.finalizeDeposit tx confirmed: ${receipt.transactionHash}. Status: FINALIZED. Awaiting TBTCBridgedToStarkNet event.`);
       } else {
         logger.error(
           `L1 StarkGate.finalizeDeposit transaction REVERTED for deposit ${deposit.id}. TxHash: ${receipt.transactionHash}, Block: ${receipt.blockNumber}`,
@@ -757,5 +761,138 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       // Re-throw the error to be handled by the caller (e.g., EndpointController)
       throw new Error(errorMessage, { cause: error });
     }
+  }
+
+  /**
+   * Checks if the tBTC protocol has finalized the minting for a given deposit.
+   * This is determined by querying for the OptimisticMintingFinalized event on the TBTCVault contract.
+   * @param deposit The deposit to check.
+   * @returns True if the minting is confirmed, false otherwise.
+   */
+  protected async hasDepositBeenMintedOnTBTC(deposit: Deposit): Promise<boolean> {
+    if (!this.tbtcVaultProvider) {
+      logger.warn(
+        `hasDepositBeenMintedOnTBTC | TBTCVault provider not available for ${this.config.chainName}. Cannot check minting status for deposit ${deposit.id}.`,
+      );
+      return false;
+    }
+
+    const depositKeyUint256 = ethers.BigNumber.from(deposit.id); // The event uses uint256 for depositKey
+
+    try {
+      logger.debug(
+        `hasDepositBeenMintedOnTBTC | Checking for OptimisticMintingFinalized event for depositKey ${deposit.id} (uint256: ${depositKeyUint256.toString()}) on chain ${this.config.chainName}`, 
+      );
+
+      // Determine a safe start block for querying.
+      // Using l1InitializeTxHash block number if available, otherwise fallback to a wider range or config.
+      let fromBlock: number | undefined = undefined;
+      if (deposit.l1InitializeTxHash) {
+        try {
+          const txReceipt = await this.l1Provider.getTransactionReceipt(deposit.l1InitializeTxHash);
+          if (txReceipt) {
+            fromBlock = txReceipt.blockNumber - 10; // A small buffer before the init tx block
+          }
+        } catch (receiptError: any) {
+          logger.warn(`hasDepositBeenMintedOnTBTC | Error fetching receipt for l1InitializeTxHash ${deposit.l1InitializeTxHash} to determine fromBlock: ${receiptError.message}`);
+        }
+      }
+      if (!fromBlock) {
+        // Fallback: use l2StartBlock from config, or a recent range if that's too old.
+        // For simplicity here, using a configured lookback window or chain start block if more specific logic is too complex.
+        // For now, let's default to the chain's configured l2StartBlock if no tx-specific block is found.
+        // This might scan a large range if l2StartBlock is very old.
+        // A better fallback might be `currentBlock - X_BLOCKS`.
+        fromBlock = this.config.l2StartBlock > 0 ? this.config.l2StartBlock : 'earliest';
+        logger.debug(`hasDepositBeenMintedOnTBTC | Falling back to fromBlock: ${fromBlock} for deposit ${deposit.id}`);
+      }
+
+      const events = await this.tbtcVaultProvider.queryFilter(
+        // The filter matches by the indexed depositKey argument
+        this.tbtcVaultProvider.filters.OptimisticMintingFinalized(null, depositKeyUint256),
+        fromBlock,
+        'latest'
+      );
+
+      if (events.length > 0) {
+        logger.info(
+          `hasDepositBeenMintedOnTBTC | Found OptimisticMintingFinalized event for deposit ${deposit.id}. Assuming minting confirmed.`,
+        );
+        return true;
+      }
+      logger.debug(
+        `hasDepositBeenMintedOnTBTC | No OptimisticMintingFinalized event found for deposit ${deposit.id} in scanned range.`, 
+      );
+      return false;
+    } catch (error: any) {
+      logger.error(
+        `hasDepositBeenMintedOnTBTC | Error querying OptimisticMintingFinalized events for deposit ${deposit.id}: ${error.message}`,
+        error,
+      );
+      return false; // Assume not minted on error to be safe
+    }
+  }
+
+  /**
+   * Processes deposits that are in the INITIALIZED state to check if their
+   * corresponding tBTC minting has been finalized. If so, triggers L1 finalization on StarkGate.
+   * This acts as a recovery mechanism if the live OptimisticMintingFinalized event was missed.
+   */
+  public async processMintedDepositsForFinalization(): Promise<void> {
+    logger.info(`StarknetChainHandler | Running processMintedDepositsForFinalization for ${this.config.chainName}`);
+    const depositsToProcess = await DepositStore.getByStatus(
+      DepositStatus.INITIALIZED,
+      this.config.chainId,
+    );
+
+    if (depositsToProcess.length === 0) {
+      logger.debug(`StarknetChainHandler | No deposits in INITIALIZED state found for ${this.config.chainName} to process for finalization.`);
+      return;
+    }
+
+    logger.info(
+      `StarknetChainHandler | Found ${depositsToProcess.length} deposits in INITIALIZED state for ${this.config.chainName} to check for tBTC minting.`, 
+    );
+
+    for (const deposit of depositsToProcess) {
+      try {
+        // Add a delay or check deposit age to avoid processing too rapidly after initialization
+        const ageInMs = Date.now() - (deposit.dates.initializationAt || 0);
+        // e.g., wait at least 5 minutes before checking, to give live event listener a chance.
+        if (ageInMs < (this.config.processingDelayMinutes?.mintCheck || 5) * 60 * 1000) { 
+          logger.debug(`StarknetChainHandler | Deposit ${deposit.id} is too recent (${(ageInMs/1000/60).toFixed(1)} min old). Skipping mint check for now.`);
+          continue;
+        }
+
+        logger.info(
+          `StarknetChainHandler | Checking tBTC minting status for INITIALIZED deposit ${deposit.id}`,
+        );
+        const isMinted = await this.hasDepositBeenMintedOnTBTC(deposit);
+
+        if (isMinted) {
+          logger.info(
+            `StarknetChainHandler | tBTC minting confirmed for deposit ${deposit.id}. Attempting to finalize on StarkGate.`, 
+          );
+          // Update status to reflect minting confirmed before calling finalize (optional)
+          // deposit.status = DepositStatus.MINT_CONFIRMED; // Example, if such a status is added
+          // await DepositStore.update(deposit);
+          await this.finalizeDeposit(deposit); // finalizeDeposit handles its own status updates (FINALIZING -> FINALIZED)
+        } else {
+          logger.debug(
+            `StarknetChainHandler | tBTC minting not yet confirmed for deposit ${deposit.id}. Will re-check later.`, 
+          );
+        }
+      } catch (error: any) {
+        logger.error(
+          `StarknetChainHandler | Error processing deposit ${deposit.id} for finalization: ${error.message}`,
+          error,
+        );
+        // Optionally update deposit with error, or rely on next retry cycle
+        deposit.error = `Error in processMintedDepositsForFinalization: ${error.message}`.substring(0,255);
+        deposit.dates.lastActivityAt = Date.now();
+        await DepositStore.update(deposit).catch(updErr => logger.error(`Failed to update deposit ${deposit.id} with error: ${updErr.message}`));
+      }
+    }
+    logger.info(`StarknetChainHandler | Finished processMintedDepositsForFinalization for ${this.config.chainName}`);
   }
 }
