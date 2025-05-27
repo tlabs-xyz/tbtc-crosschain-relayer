@@ -19,6 +19,7 @@
     "build": "tsc",
     "clean:build": "rimraf ./dist ./generated",
     "clean:all": "rimraf ./dist ./generated ./coverage ./node_modules/@prisma/client ./node_modules/@prisma/client-test",
+    "fix": "bun run lint:fix && bun run format:fix",
     "lint": "eslint . --ext .ts --cache",
     "lint:fix": "eslint . --ext .ts --cache --fix",
     "format": "prettier --check .",
@@ -51,6 +52,7 @@
     "pino-pretty": "^13.0.0",
     "prisma": "^6.8.2",
     "rimraf": "^6.0.1",
+    "starknet": "^6.0.0",
     "zod": "^3.25.16"
   },
   "optionalDependencies": {
