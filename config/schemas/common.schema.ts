@@ -67,6 +67,9 @@ export const CommonChainConfigSchema = z.object({
 
   l2StartBlock: z.coerce.number().int().nonnegative(),
   vaultAddress: EthereumAddressSchema,
+
+  // Number of L1 block confirmations to wait for transactions.
+  l1Confirmations: z.coerce.number().int().positive().default(1),
 });
 
 export type CommonChainConfig = z.infer<typeof CommonChainConfigSchema>;
