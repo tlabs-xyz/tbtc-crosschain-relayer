@@ -36,8 +36,8 @@ export type Deposit = {
   L1OutputEvent: {
     fundingTx: FundingTransaction;
     reveal: Reveal;
-    l2DepositOwner: any;
-    l2Sender: any;
+    l2DepositOwner: string;
+    l2Sender: string;
   };
   dates: {
     createdAt: EpochTimeStamp | null;

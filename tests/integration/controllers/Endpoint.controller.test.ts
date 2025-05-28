@@ -38,9 +38,14 @@ describe('EndpointController', () => {
     test('should successfully handle a valid reveal request', async () => {
       // Create mock request with required parameters
       const req = mockRequest();
+      const mockFundingTxHash = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+      const mockFundingOutputIndex = 0;
+
       req.body = {
+        fundingTxHash: mockFundingTxHash,
+        fundingOutputIndex: mockFundingOutputIndex,
         fundingTx: {
-          outputIndex: 0,
+          outputIndex: mockFundingOutputIndex,
           value: ethers.utils.parseEther('0.1').toString(),
           version: '0x01000000',
           inputVector:

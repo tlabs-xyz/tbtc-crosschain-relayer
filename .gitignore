@@ -25,3 +25,5 @@ tasks
 prisma/memory:
 
 *.diff
+
+*.log
