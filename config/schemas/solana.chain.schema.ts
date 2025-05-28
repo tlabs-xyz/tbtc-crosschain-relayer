@@ -7,10 +7,7 @@ const SolanaChainBaseSchema = z.object({
   chainName: z.string().default('Solana'),
   chainType: z.literal(CHAIN_TYPE.SOLANA).default(CHAIN_TYPE.SOLANA),
   // Solana-specific fields, often sourced from ENV or specific to the chain instance
-  solanaPrivateKey: z
-    .string()
-    .min(1, 'solanaPrivateKey must not be empty if provided')
-    .optional(),
+  solanaPrivateKey: z.string().min(1, 'solanaPrivateKey must not be empty if provided').optional(),
   solanaCommitment: z.enum(['processed', 'confirmed', 'finalized']).default('confirmed'),
   solanaSignerKeyBase: z.string().optional(),
 });

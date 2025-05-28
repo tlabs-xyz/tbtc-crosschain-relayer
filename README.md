@@ -54,6 +54,7 @@ The relayer supports multiple blockchain configurations, managed via environment
 The primary way to control which chains the relayer actively operates on is through the `SUPPORTED_CHAINS` environment variable. This should be a comma-separated list of chain keys that correspond to configurations defined in `config/index.ts` (e.g., `sepoliaTestnet`, `solanaDevnet`, or custom keys like `myEvmChain`).
 
 **Example `.env`:**
+
 ```
 SUPPORTED_CHAINS=sepoliaTestnet,solanaDevnet
 # Or for custom/mock chains used in development:
@@ -66,10 +67,10 @@ If `SUPPORTED_CHAINS` is not set or is empty, the relayer will attempt to initia
 
 Each chain requires specific configuration parameters, typically provided via environment variables. Refer to `.env.example` for a comprehensive list. Key variables for each chain often include:
 
-*   `*_PRIVATE_KEY`: Private key for the relayer's account on that chain.
-*   `*_L1_RPC_URL`, `*_L2_RPC_URL`, `*_L2_WS_RPC_URL`: RPC and WebSocket endpoints.
-*   `*_L1_CONTRACT_ADDRESS`, `*_L2_CONTRACT_ADDRESS`: Addresses of relevant smart contracts.
-*   And other chain-specific parameters like Wormhole gateway addresses, start blocks, etc.
+- `*_PRIVATE_KEY`: Private key for the relayer's account on that chain.
+- `*_L1_RPC_URL`, `*_L2_RPC_URL`, `*_L2_WS_RPC_URL`: RPC and WebSocket endpoints.
+- `*_L1_CONTRACT_ADDRESS`, `*_L2_CONTRACT_ADDRESS`: Addresses of relevant smart contracts.
+- And other chain-specific parameters like Wormhole gateway addresses, start blocks, etc.
 
 The prefix (e.g., `SEPOLIA_TESTNET_*`, `SOLANA_DEVNET_*`, `MOCK_EVM1_*`) for these environment variables should generally align with the chain key used in `SUPPORTED_CHAINS` and defined in the chain input files (see below).
 
@@ -97,7 +98,9 @@ To add support for a new chain:
       l1Rpc: getEnv('MY_CUSTOM_EVM_L1_RPC_URL'),
       l2Rpc: getEnv('MY_CUSTOM_EVM_L2_RPC_URL'),
       l2WsRpc: getEnv('MY_CUSTOM_EVM_L2_WS_RPC_URL'),
-      l1ContractAddress: getEnv('MY_CUSTOM_EVM_L1_CONTRACT_ADDRESS') as z.infer<typeof EthereumAddressSchema>,
+      l1ContractAddress: getEnv('MY_CUSTOM_EVM_L1_CONTRACT_ADDRESS') as z.infer<
+        typeof EthereumAddressSchema
+      >,
       // ... add all other required fields from EvmChainConfigSchema and CommonChainConfigSchema
     };
     ```
@@ -127,11 +130,12 @@ To add support for a new chain:
 Most API endpoints are now chain-specific and require a `chainName` (or `chainId` as referred to internally, but `chainName` is used in the path) as part of the URL path.
 
 **Example:**
-*   Get deposit status: `GET /api/:chainName/deposit/:depositId`
-    *   e.g., `GET /api/sepoliaTestnet/deposit/0x123...`
-    *   e.g., `GET /api/mockEVM1/deposit/0xabc...`
-*   Reveal deposit: `POST /api/:chainName/reveal`
-    *   e.g., `POST /api/myCustomEVM/reveal`
+
+- Get deposit status: `GET /api/:chainName/deposit/:depositId`
+  - e.g., `GET /api/sepoliaTestnet/deposit/0x123...`
+  - e.g., `GET /api/mockEVM1/deposit/0xabc...`
+- Reveal deposit: `POST /api/:chainName/reveal`
+  - e.g., `POST /api/myCustomEVM/reveal`
 
 Refer to the route definitions in `routes/index.ts` and associated controllers for details on available endpoints and their parameters.
 
@@ -165,22 +169,29 @@ gh act
 Database records for chain-specific data (like deposits) are isolated by a `chainId` field. This was added via a database migration. Ensure migrations have run if you are upgrading an existing deployment.
 
 ### Automatic Migrations
+
 Migrations are run automatically when the app starts in Docker (production mode) using an entrypoint script.
 
 ### Manual Migration
+
 To run migrations manually:
+
 ```bash
 npm run db:migrate
 ```
 
 ### Backup Database
+
 To create a backup (PostgreSQL):
+
 ```bash
 npm run db:backup
 ```
 
 ### Restore Database
+
 To restore from a backup:
+
 ```bash
 npm run db:restore
 ```
