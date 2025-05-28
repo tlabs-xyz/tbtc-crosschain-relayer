@@ -8,6 +8,7 @@
 
 .cursor
 memory-bank
+contracts
 
 /coverage
 .eslintcache
