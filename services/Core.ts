@@ -81,10 +81,6 @@ export const startCronJobs = () => {
           await handler.processWormholeBridging?.();
           await handler.processFinalizeDeposits();
           await handler.processInitializeDeposits();
-          if (typeof (handler as any).processMintedDepositsForFinalization === 'function') {
-            logger.debug(`Calling processMintedDepositsForFinalization for ${chainName}`);
-            await (handler as any).processMintedDepositsForFinalization();
-          }
         } catch (error) {
           logErrorContext(`Error in deposit processing cron job for ${chainName}:`, error);
         }

@@ -3,31 +3,27 @@ import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schem
 import { StarknetChainConfigSchema } from '../config/schemas/starknet.chain.schema.js';
 import logger from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
-import { type Overrides, ethers } from 'ethers'; // Reverted Overrides to type import
-import type { EthersStarkGateBridge } from '../interfaces/IStarkGateBridge.js'; // IStarkGateBridge type
-import { IStarkGateBridgeABI } from '../interfaces/IStarkGateBridge.abi.js'; // The ABI we just created
+import { ethers, type Overrides } from 'ethers';
+import type { EthersStarkGateBridge } from '../interfaces/IStarkGateBridge.js';
+import { IStarkGateBridgeABI } from '../interfaces/IStarkGateBridge.abi.js';
 
-// Custom type imports for Deposit processing
 import { DepositStore } from '../utils/DepositStore.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js'; // Corrected path
-// import { logDepositError, logDepositInfo } from '../utils/AuditLog.js'; // Uncomment when AuditLog is confirmed
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 import {
   validateStarkNetAddress,
   formatStarkNetAddressForContract,
-} from '../utils/starknetAddress.js'; // Address utilities
-import type { Deposit } from '../types/Deposit.type.js'; // Deposit type
-import type { Reveal } from '../types/Reveal.type.js'; // Reveal type
-import { getFundingTxHash } from '../utils/GetTransactionHash.js'; // To get fundingTxHash
+} from '../utils/starknetAddress.js';
+import type { Deposit } from '../types/Deposit.type.js';
+import type { Reveal } from '../types/Reveal.type.js';
+import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import {
   getDepositId,
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
-} from '../utils/Deposits.js'; // Renamed to avoid conflict
-import { logDepositError, logStatusChange } from '../utils/AuditLog.js'; // Removed logDepositInfo
-import { logErrorContext } from '../utils/Logger.js'; // Separated import for logErrorContext
-import type { FundingTransaction } from '../types/FundingTransaction.type.js'; // For L1 contract call
-
-// Placeholder for StarkNet specific imports (e.g., starknet.js)
+} from '../utils/Deposits.js';
+import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
+import { logErrorContext } from '../utils/Logger.js';
+import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 
 export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {
   // --- L1 StarkGate Contract Instances ---
@@ -36,48 +32,25 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   /** L1 StarkGate contract instance for read-only operations and event listening (uses L1 provider) */
   protected starkGateContractProvider: EthersStarkGateBridge | undefined;
 
-  // StarkNet L2 specific provider/account (to be initialized in later tasks)
-  // protected starknetL2Provider: RpcProvider | undefined;
-  // protected starknetL2Account: Account | undefined;
-
   constructor(config: StarknetChainConfig) {
     super(config);
-    // Validate config using Zod schema first
     try {
       StarknetChainConfigSchema.parse(config);
-      // Assuming chainId is available in StarknetChainConfig after merging with CommonChainConfigSchema
-      // If not, this log might need adjustment or chainId added to the specific StarkNet config.
-      // Based on StarknetChainConfigSchema, it inherits from CommonChainConfigSchema which has chainId.
       logger.info(`StarknetChainHandler constructed and validated for ${this.config.chainName}`);
     } catch (error: any) {
-      // Log the detailed Zod validation error
-      logger.error(
-        `Invalid StarkNet configuration for ${config.chainName}: ${error.message}`,
-        { zodErrors: error.errors }, // Include Zod error details for better debugging
-      );
+      logger.error(`Invalid StarkNet configuration for ${config.chainName}: ${error.message}`, {
+        zodErrors: error.errors,
+      });
       // Throw a new error to halt initialization if config is invalid
       throw new Error(
         `Invalid StarkNet configuration for ${config.chainName}. Please check logs for details.`,
       );
-    }
-    // The explicit chainType check below is now largely redundant due to Zod schema validation,
-    // but doesn't harm. It could be removed if desired to rely solely on Zod.
-    // For now, keeping it as a defense-in-depth, though Zod should catch it first.
-    if (config.chainType !== CHAIN_TYPE.STARKNET) {
-      // This case should ideally be caught by Zod schema validation above.
-      const errMsg = `Incorrect chain type ${config.chainType} provided to StarknetChainHandler for ${this.config.chainName}. Expected ${CHAIN_TYPE.STARKNET}.`;
-      logger.error(errMsg);
-      throw new Error(errMsg);
     }
 
     logger.debug(`StarknetChainHandler setup complete for ${this.config.chainName}`);
   }
 
   protected async initializeL2(): Promise<void> {
-    // BaseChainHandler's initialize() is assumed to have set up:
-    // this.l1Provider, this.l1Signer, this.nonceManagerL1
-    // if config.l1Rpc and config.privateKey were provided.
-
     logger.info(`Initializing StarkNet L1 components for ${this.config.chainName}`);
 
     if (!this.l1Provider) {
@@ -114,7 +87,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         this.starkGateContract = new ethers.Contract(
           this.config.l1ContractAddress,
           IStarkGateBridgeABI,
-          this.nonceManagerL1, // Use nonceManager for tx sequencing
+          this.nonceManagerL1,
         ) as EthersStarkGateBridge;
         logger.info(
           `StarkGate L1 contract signer instance (with NonceManager) created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
@@ -146,31 +119,6 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       );
     }
 
-    // Perform a simple health check - e.g., try to call a read-only function
-    try {
-      if (this.starkGateContractProvider) {
-        const fee = await this.starkGateContractProvider.l1ToL2MessageFee();
-        logger.info(
-          `StarkGate L1 contract health check successful for ${this.config.chainName}. Current l1ToL2MessageFee: ${fee.toString()}`,
-        );
-      } else {
-        // This case should ideally not be reached if instantiation was successful or threw above.
-        throw new Error(
-          'StarkGate L1 contract provider instance not available for health check after attempted instantiation.',
-        );
-      }
-    } catch (error: any) {
-      logger.error(
-        `StarkGate L1 contract health check failed for ${this.config.chainName} (l1ContractAddress: ${this.config.l1ContractAddress}): ${error.message}`,
-        error,
-      );
-      throw new Error(
-        `StarkGate L1 contract health check failed for ${this.config.chainName}. Error: ${error.message}`,
-      );
-    }
-
-    // StarkNet L2 provider initialization (actual L2 connection using starknet.js)
-    // This part is deferred as per "L1-Only Initialization" focus.
     if (this.config.l2Rpc && this.config.starknetPrivateKey) {
       logger.info(
         `StarkNet L2 RPC (${this.config.l2Rpc}) and private key are configured for ${this.config.chainName}. Actual StarkNet L2 provider/account initialization will be handled in a subsequent task.`,
@@ -588,11 +536,6 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         `${logPrefix} L1 initializeDeposit transaction sent. TxHash: ${txResponse.hash}. Waiting for confirmations...`,
       );
       deposit.hashes.eth.initializeTxHash = txResponse.hash; // Store optimistic hash
-
-      // Note: Original code had DepositStatus.PENDING_L1_INIT_CONFIRMATION
-      // Reverting to QUEUED or INITIALIZED based on outcome.
-      // If this status was crucial, it needs to be re-added to DepositStatus.enum.ts
-      // For now, we'll update to INITIALIZED upon successful confirmation.
 
       const txReceipt = await txResponse.wait(this.config.l1Confirmations);
 

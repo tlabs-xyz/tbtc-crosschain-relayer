@@ -6,15 +6,10 @@ import type {
   CallOverrides,
   ContractTransaction,
   Signer,
-  // Import from sub-packages for ethers v5 compatibility
-  // Also import types for ethers.Contract's properties
   ContractFunction,
-} from 'ethers'; // Keep these from main 'ethers' export if available
-import { ethers } from 'ethers'; // Keep ethers for utility functions and base Contract type
-import type { Listener, Provider } from '@ethersproject/abstract-provider'; // Corrected import for Listener and Provider
-
-// We no longer import `Contract` directly here to avoid implicit full interface
-// import { Contract, ContractTransaction } from 'ethers'; // Removed
+} from 'ethers';
+import { ethers } from 'ethers';
+import type { Listener, Provider } from '@ethersproject/abstract-provider';
 
 // This interface defines the *application-specific* methods and events
 // of the StarkGate Bridge contract that our relayer will interact with.

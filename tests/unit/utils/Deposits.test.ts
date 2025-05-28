@@ -52,15 +52,20 @@ describe('Deposits Util', () => {
       expect(depositId1).not.toBe(depositId2);
     });
 
-    // No explicit error throwing is defined in the current getDepositId for invalid input,
-    // ethers.utils.solidityKeccak256 might throw if types are wildly off,
-    // but the function expects specific types.
-    // If strict input validation and error throwing were part of getDepositId,
-    // test cases for those would be added here.
-    // For example:
-    // it('should throw an error if fundingTxHash is not a 64-character hex string', () => {
-    //   expect(() => getDepositId('invalid-hash', 0)).toThrow('fundingTxHash must be a 64-character hex string.');
-    // });
+    it('should throw an error if fundingTxHash is not a 66-character hex string', () => {
+      expect(() => getDepositId('invalid-hash', 0)).toThrow(
+        'fundingTxHash must be a 66-character hex string (e.g. 0x...).',
+      );
+      expect(() => getDepositId('0x' + 'a'.repeat(63), 0)).toThrow(
+        'fundingTxHash must be a 66-character hex string (e.g. 0x...).',
+      );
+      expect(() => getDepositId('0x' + 'a'.repeat(65), 0)).toThrow(
+        'fundingTxHash must be a 66-character hex string (e.g. 0x...).',
+      );
+      expect(() => getDepositId('ax' + 'a'.repeat(64), 0)).toThrow(
+        'fundingTxHash must be a 66-character hex string (e.g. 0x...).',
+      );
+    });
   });
 
   describe('createDeposit', () => {

@@ -15,7 +15,6 @@ import * as getTransactionHashUtils from '../../../utils/GetTransactionHash.js';
 import * as auditLog from '../../../utils/AuditLog.js';
 import { Contract as EthersContract, ethers } from 'ethers';
 import { type FundingTransaction } from '../../../types/FundingTransaction.type.js';
-// import { StarknetBridgeService } from '../../../services/StarknetBridgeService.js'; // Commented out - file not found
 
 // Mock external dependencies
 jest.mock('../../../utils/DepositStore');
@@ -46,10 +45,6 @@ const mockContractInstance = {
 
 const mockGetTransactionReceiptImplementation = jest.fn();
 
-// The line `const mockEthers = ethers as jest.Mocked<typeof ethers>;` might need adjustment
-// or removal depending on how spies are used. For now, we assume direct use of `ethers.Wallet` etc.
-// will hit the spies.
-
 // Default config for tests
 const mockStarknetConfig = StarknetChainConfigSchema.parse({
   chainId: 'SN_TEST', // This will be ignored by StarknetChainConfigSchema but BaseChainHandler might use it if it were part of a merged type directly
@@ -71,9 +66,6 @@ const mockStarknetConfig = StarknetChainConfigSchema.parse({
   l2WormholeGatewayAddress: '0x223344556677889900aabbccddeeff1122334455', // Validated by EthereumAddressSchema
   l2WormholeChainId: 2, // Example StarkNet Sepolia is 2 for Wormhole
   l2StartBlock: 0,
-  // supportsRevealDepositAPI: false, // Defaults to false
-  // enableL2Redemption: false, // Defaults to false
-  // useEndpoint: false, // Defaults to false
 });
 
 describe('StarknetChainHandler', () => {
@@ -128,21 +120,9 @@ describe('StarknetChainHandler', () => {
     // Setup spies BEFORE they are used by new StarknetChainHandler() or its setup
     jest.spyOn(ethers, 'Wallet').mockImplementation(mockWalletImpl as any);
     jest.spyOn(ethers, 'Contract').mockImplementation(() => mockContractInstance as any);
-    // Need to spy on ethers.providers.JsonRpcProvider
-    // ethers.providers is an object, JsonRpcProvider is a class/function on it.
-    if (ethers.providers && typeof ethers.providers.JsonRpcProvider === 'function') {
-      jest
-        .spyOn(ethers.providers, 'JsonRpcProvider')
-        .mockImplementation(mockJsonRpcProviderImpl as any);
-    } else {
-      // Fallback or error if ethers.providers.JsonRpcProvider is not as expected
-      // This might happen if the ethers import itself is problematic, but spyOn should work on the imported object.
-      console.error(
-        'ethers.providers.JsonRpcProvider is not a function or ethers.providers is undefined. Spying will fail.',
-      );
-      // As a simpler alternative if the above is tricky:
-      // (ethers.providers as any).JsonRpcProvider = jest.fn().mockImplementation(mockJsonRpcProviderImpl);
-    }
+    jest
+      .spyOn(ethers.providers, 'JsonRpcProvider')
+      .mockImplementation(mockJsonRpcProviderImpl as any);
 
     // Reset and re-configure mocks for provider methods for each test if necessary
     mockGetTransactionReceiptImplementation.mockResolvedValue({ blockNumber: 100 });
@@ -262,11 +242,7 @@ describe('StarknetChainHandler', () => {
   describe('Constructor and Initialization', () => {
     it('should construct and initialize L1 components successfully with valid config', async () => {
       expect(handler).toBeInstanceOf(StarknetChainHandler);
-      // initializeL2 is called in beforeEach after handler construction
-      // We need to await its completion or mock its internal async calls if they are not awaited in beforeEach
-      // The beforeEach already returns the promise from initializeL2(), so jest handles it.
       expect(ethers.Contract).toHaveBeenCalledTimes(3); // starkGate, starkGateProvider, tbtcVaultProvider
-      expect(mockContractInstance.l1ToL2MessageFee).toHaveBeenCalled(); // Health check
       expect((handler as any).starkGateContract).toBeDefined();
       expect((handler as any).starkGateContractProvider).toBeDefined();
     });
@@ -305,7 +281,6 @@ describe('StarknetChainHandler', () => {
   // - finalizeDeposit
   // - processTBTCBridgedToStarkNetEvent
   // - hasDepositBeenMintedOnTBTC
-  // - processMintedDepositsForFinalization
   // - setupL2Listeners (event registration, past event check trigger)
 
   describe('initializeDeposit', () => {

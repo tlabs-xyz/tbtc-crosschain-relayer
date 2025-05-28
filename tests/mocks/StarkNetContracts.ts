@@ -9,7 +9,6 @@ import type {
   Signer,
   ContractFunction,
 } from 'ethers';
-// Import specific types from ethers sub-packages for v5 compatibility
 import type {
   Block,
   TransactionRequest,

@@ -351,7 +351,7 @@ export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => 
  *
  * @returns {string} A unique deposit ID as a uint256 string.
  *
- * @throws {Error} If the fundingTxHash is not a 64-character string.
+ * @throws {Error} If the fundingTxHash is not a 66-character hex string (e.g. 0x...).
  */
 
 export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
@@ -359,6 +359,12 @@ export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number):
   // The tBTC OptimisticMintingFinalized event emits depositKey as uint256.
   // To ensure matching, we calculate the bytes32 keccak256 hash and then convert it
   // to its BigNumber (uint256) decimal string representation.
+
+  // Validate fundingTxHash
+  if (!ethers.utils.isHexString(fundingTxHash) || fundingTxHash.length !== 66) {
+    throw new Error('fundingTxHash must be a 66-character hex string (e.g. 0x...).');
+  }
+
   const types = ['bytes32', 'uint256'];
   const values = [fundingTxHash, fundingOutputIndex];
 

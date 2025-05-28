@@ -111,5 +111,5 @@
     "resolveJsonModule": true /*  <--- Enable JSON imports */
   },
   "include": ["src/**/*.ts", "./**/*.ts", "helpers/Response.helper.js", "index.js"],
-  "exclude": ["node_modules", "test"]
+  "exclude": ["node_modules"]
 }
