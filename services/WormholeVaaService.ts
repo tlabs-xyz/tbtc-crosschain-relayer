@@ -18,6 +18,12 @@ import { stringifyWithBigInt } from '../utils/Numbers';
 type SignedVaa = Uint8Array;
 type ParsedVaaWithPayload = VAA<'TokenBridge:Transfer'> | VAA<'TokenBridge:TransferWithPayload'>;
 
+// Make this interface available for import in test setup files
+export interface VerifiedVaaInfo {
+  vaaBytes: SignedVaa;
+  parsedVaa: ParsedVaaWithPayload;
+}
+
 const DEFAULT_WORMHOLE_NETWORK: Network = 'Testnet';
 const DEFAULT_SDK_PLATFORMS_MODULES = [evmPlatform, solanaPlatform];
 const MIN_VAA_CONSISTENCY_LEVEL = 1; // How long does the Guardian network need to wait before signing off on a VAA?
@@ -46,17 +52,17 @@ export class WormholeVaaService {
     network: Network = DEFAULT_WORMHOLE_NETWORK,
     platformModules: any[] = DEFAULT_SDK_PLATFORMS_MODULES,
   ): Promise<WormholeVaaService> {
-    console.log('[REAL WormholeVaaService.create CALLED] Args:', { l2RpcOrProvider, network, platformModules });
     const service = new WormholeVaaService(l2RpcOrProvider);
-    try {
-      service.wh = await wormhole(network, platformModules);
-      console.log('[REAL WormholeVaaService.create] service.wh initialized:', service.wh ? 'OK' : 'UNDEFINED');
-    } catch (e) {
-      console.error('[REAL WormholeVaaService.create] Error initializing wormhole SDK:', e);
-      throw e; // Re-throw to ensure failure is visible
+    service.wh = await wormhole(network, platformModules);
+    if (!service.wh) {
+      const errorMessage =
+        '[WormholeVaaService.create] wormhole SDK initialization failed: wormhole() returned null or undefined.';
+      throw new Error(errorMessage);
     }
     const l2Location = typeof l2RpcOrProvider === 'string' ? l2RpcOrProvider : 'provided_instance';
-    logger.info(`WormholeVaaService created. L2 Provider: ${l2Location}, Wormhole Network: ${network}`);
+    logger.info(
+      `WormholeVaaService created. L2 Provider: ${l2Location}, Wormhole Network: ${network}`,
+    );
     return service;
   }
 
@@ -73,16 +79,12 @@ export class WormholeVaaService {
     emitterChainId: ChainId,
     emitterAddress: string,
     targetL1ChainId: ChainId = DEFAULT_TARGET_L1_CHAIN_ID,
-  ): Promise<{ vaaBytes: SignedVaa; parsedVaa: ParsedVaaWithPayload } | null> {
-    console.log(
-      `[REAL WormholeVaaService.fetchAndVerifyVaaForL2Event CALLED] L2 Tx: ${l2TransactionHash}. this.wh is ${this.wh ? 'DEFINED' : 'UNDEFINED'}`,
-    );
+  ): Promise<VerifiedVaaInfo | null> {
     if (!this.wh) {
-      console.error(
-        '[REAL WormholeVaaService.fetchAndVerifyVaaForL2Event] CRITICAL: this.wh is undefined before getChain call.',
+      logger.error(
+        '[WormholeVaaService.fetchAndVerifyVaaForL2Event] CRITICAL: this.wh is undefined. Service may not have been initialized correctly.',
       );
-      // Potentially throw here or return early to avoid undefined access
-      throw new Error('[REAL Service] this.wh is undefined, cannot proceed.');
+      return null;
     }
     const emitterChainName = chainIdToChain(emitterChainId);
     logger.info(
@@ -90,7 +92,12 @@ export class WormholeVaaService {
     );
 
     try {
+      logger.debug('[WormholeVaaService] About to call this.l2Provider.getTransactionReceipt');
       const receipt = await this.l2Provider.getTransactionReceipt(l2TransactionHash);
+      logger.debug(
+        '[WormholeVaaService] Result from getTransactionReceipt:',
+        receipt === null ? 'null' : 'object',
+      );
       if (!receipt) {
         logErrorContext(
           `Failed to get L2 transaction receipt for ${l2TransactionHash}.`,
@@ -140,6 +147,7 @@ export class WormholeVaaService {
         `Successfully parsed Wormhole message ID: Chain: ${messageId.chain}, Emitter: ${messageId.emitter.toString()}, Sequence: ${messageId.sequence}.`,
       );
 
+      // --- Restored VAA Fetching Logic with Loop ---
       const discriminatorsToTry: Array<'TokenBridge:TransferWithPayload' | 'TokenBridge:Transfer'> =
         ['TokenBridge:TransferWithPayload', 'TokenBridge:Transfer'];
 
@@ -148,36 +156,39 @@ export class WormholeVaaService {
 
       for (const disc of discriminatorsToTry) {
         try {
-          logger.info(`Attempting to fetch VAA with discriminator: ${disc}`);
-          const vaa = await this.wh.getVaa(messageId, disc, GET_VAA_TIMEOUT_MS);
-          if (vaa) {
-            fetchedParsedVaa = vaa as ParsedVaaWithPayload;
-            logger.info(`Successfully fetched VAA with discriminator: ${disc}`);
+          logger.info(
+            `[WormholeVaaService] Attempting this.wh.getVaa with discriminator: ${disc}, messageId: ${stringifyWithBigInt(messageId)}, timeout: ${GET_VAA_TIMEOUT_MS}`,
+          );
+          const vaaAttempt = await this.wh.getVaa(messageId, disc, GET_VAA_TIMEOUT_MS);
+          if (vaaAttempt) {
+            fetchedParsedVaa = vaaAttempt as ParsedVaaWithPayload;
+            logger.info(
+              `[WormholeVaaService] Successfully fetched VAA with discriminator: ${disc}`,
+            );
             break; // Found a VAA
           }
         } catch (e: any) {
           lastGetVaaError = e;
           logErrorContext(
-            `Error fetching VAA using this.wh.getVaa with discriminator: ${disc}: ${e.message}`,
+            `[WormholeVaaService] Error fetching VAA using this.wh.getVaa with discriminator: ${disc}: ${e.message}`,
             e,
           );
           // Continue to try the next discriminator
         }
       }
+      const vaa = fetchedParsedVaa;
 
-      if (!fetchedParsedVaa) {
+      if (!vaa) {
         logErrorContext(
-          `this.wh.getVaa did not return a VAA for message ID ${stringifyWithBigInt(messageId)} after trying all discriminators. Last error: ${lastGetVaaError?.message}`,
+          `[WormholeVaaService] this.wh.getVaa did not return a VAA for message ID ${stringifyWithBigInt(messageId)} after trying all discriminators. Last error: ${lastGetVaaError?.message}`,
           new Error('this.wh.getVaa failed or returned null VAA after all retries'),
         );
         return null;
       }
 
-      if (!this.verifyParsedVaa(fetchedParsedVaa, emitterChainId, emitterAddress)) {
-        logErrorContext(
-          `Initial VAA verification (emitter check) failed for ${l2TransactionHash}.`,
-          new Error('Initial VAA verification failed'),
-        );
+      const isVaaVerified = this.verifyParsedVaa(vaa, emitterChainId, emitterAddress);
+      if (!isVaaVerified) {
+        // logErrorContext is called inside verifyParsedVaa if it fails
         return null;
       }
 
@@ -186,50 +197,79 @@ export class WormholeVaaService {
 
       try {
         const tokenBridge = await l1ChainContext.getTokenBridge();
-        if (
-          fetchedParsedVaa.payloadName === 'Transfer' ||
-          fetchedParsedVaa.payloadName === 'TransferWithPayload'
-        ) {
-          const isCompleted = await tokenBridge.isTransferCompleted(fetchedParsedVaa);
+        if (vaa.payloadName === 'Transfer' || vaa.payloadName === 'TransferWithPayload') {
+          const isCompleted = await tokenBridge.isTransferCompleted(vaa as ParsedVaaWithPayload);
           if (!isCompleted) {
             logErrorContext(
-              `Token bridge transfer VAA not completed on L1 (${targetL1ChainName}) for ${l2TransactionHash}. VAA Seq: ${fetchedParsedVaa.sequence}, Type: ${fetchedParsedVaa.payloadName}`,
+              `Token bridge transfer VAA not completed on L1 (${targetL1ChainName}) for ${l2TransactionHash}. VAA Seq: ${vaa.sequence}, Type: ${vaa.payloadName}`,
               new Error('VAA transfer not completed on L1'),
             );
             return null;
           }
           logger.info(
-            `Token bridge transfer VAA confirmed completed on L1 (${targetL1ChainName}) for ${l2TransactionHash}. Type: ${fetchedParsedVaa.payloadName}`,
+            `Token bridge transfer VAA confirmed completed on L1 (${targetL1ChainName}) for ${l2TransactionHash}. Type: ${vaa.payloadName}`,
           );
+        } else {
+          logErrorContext(
+            `Unsupported VAA payloadName for L1 completion check: ${(vaa as VAA<any>).payloadName}`,
+            new Error('Unsupported VAA payload for L1 completion check'),
+          );
+          return null;
         }
-      } catch (e: any) {
+
+        let signedVaaBytes: SignedVaa | null = null;
+
+        if (
+          'bytes' in vaa &&
+          (vaa as any).bytes instanceof Uint8Array &&
+          (vaa as any).bytes.length > 0
+        ) {
+          signedVaaBytes = (vaa as any).bytes;
+        } else if (typeof (vaa as any).serialize === 'function') {
+          try {
+            const serialized = (vaa as any).serialize();
+            if (serialized instanceof Uint8Array && serialized.length > 0) {
+              signedVaaBytes = serialized;
+            } else {
+              logErrorContext(
+                'VAA .serialize() method returned empty or non-Uint8Array bytes.',
+                new Error('VAA serialize() failed'),
+              );
+              return null;
+            }
+          } catch (e: any) {
+            logErrorContext(`Error calling VAA .serialize(): ${e.message}`, e);
+            return null;
+          }
+        } else {
+          logErrorContext(
+            'VAA has no .bytes (or it is invalid) and no .serialize() method. Cannot extract signed VAA.',
+            new Error('Cannot extract signed VAA bytes'),
+          );
+          return null;
+        }
+
+        if (!signedVaaBytes) {
+          logErrorContext(
+            'Critical: Signed VAA bytes are null or empty after attempting to retrieve/serialize.',
+            new Error('Empty signed VAA bytes'),
+          );
+          return null;
+        }
+
+        logger.info(`VAA fetched and verified (including L1 completion) for ${l2TransactionHash}.`);
+        return {
+          vaaBytes: signedVaaBytes,
+          parsedVaa: vaa,
+        };
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
         logErrorContext(
-          `Error checking VAA completion on L1 (${targetL1ChainName}): ${e.message}`,
-          e,
+          `Error checking VAA completion on L1 (${targetL1ChainName}): ${err.message}`,
+          err,
         );
         return null;
       }
-
-      let signedVaaBytes: SignedVaa | null = null;
-      if ('bytes' in fetchedParsedVaa && (fetchedParsedVaa as any).bytes instanceof Uint8Array) {
-        signedVaaBytes = (fetchedParsedVaa as any).bytes;
-      } else if (typeof (fetchedParsedVaa as any).serialize === 'function') {
-        signedVaaBytes = (fetchedParsedVaa as any).serialize();
-      }
-
-      if (!signedVaaBytes || signedVaaBytes.length === 0) {
-        logErrorContext(
-          `Could not extract VAA bytes from fetched VAA object (tried .bytes and .serialize()). VAA: ${stringifyWithBigInt(fetchedParsedVaa)}`,
-          new Error('VAA bytes extraction failed'),
-        );
-        return null;
-      }
-      logger.info(
-        `Successfully obtained VAA object and its bytes. VAA Length: ${signedVaaBytes.length}`,
-      );
-
-      logger.info(`VAA fetched and verified (including L1 completion) for ${l2TransactionHash}.`);
-      return { vaaBytes: signedVaaBytes, parsedVaa: fetchedParsedVaa };
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       logErrorContext(

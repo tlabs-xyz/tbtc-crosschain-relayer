@@ -11,6 +11,10 @@ export function getEnv(key: string, defaultValue?: string): string {
   throw new Error(`Missing required environment variable: ${key}`);
 }
 
+export function getEnvOptional(key: string): string | undefined {
+  return process.env[key];
+}
+
 export function getEnvBoolean(key: string, defaultValue?: boolean): boolean {
   const value = process.env[key];
   if (value !== undefined) {

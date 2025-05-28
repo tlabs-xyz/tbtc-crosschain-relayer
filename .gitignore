@@ -13,13 +13,13 @@ memory-bank
 .eslintcache
 
 /logs
-/data
 
 redemptions/
 
 /generated
 
-*.md
+# *.md
+analysis.md
 tasks
 
 prisma/memory:

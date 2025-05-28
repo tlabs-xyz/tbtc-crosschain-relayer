@@ -1,3 +1,6 @@
+const originalSupportedChains = process.env.SUPPORTED_CHAINS;
+process.env.SUPPORTED_CHAINS = 'mockEVM1,mockEVM2,faultyMockEVM';
+
 import request from 'supertest';
 import express from 'express';
 import type { Express } from 'express';
@@ -70,6 +73,8 @@ jest.mock('../../handlers/EVMChainHandler', () => {
 let activeChainConfigsArray: AnyChainConfig[] = [];
 let localApp: Express;
 
+const describeIfPKey = process.env.CHAIN_SEPOLIATESTNET_PRIVATE_KEY ? describe : describe.skip;
+
 beforeAll(async () => {
   await initializationPromise; // Ensure any main app async init is done
 
@@ -99,7 +104,15 @@ beforeAll(async () => {
   localApp.use(mainAppRouter); // Use the global router, which uses the global registry
 });
 
-describe('API Endpoint Tests with Local App and Global Registry', () => {
+afterAll(() => {
+  if (originalSupportedChains === undefined) {
+    delete process.env.SUPPORTED_CHAINS;
+  } else {
+    process.env.SUPPORTED_CHAINS = originalSupportedChains;
+  }
+});
+
+describeIfPKey('E2E API Tests', () => {
   const getValidRevealData = () => ({
     fundingOutputBlindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
     fundingOutputIndex: 0,

@@ -80,7 +80,8 @@ export default [
       prettier: prettierPlugin, // Loads the plugin "eslint-plugin-prettier" (from .eslintrc.js)
       import: importPlugin, // Use the imported plugin object
     },
-    settings: { // Added to help eslint-plugin-import resolve TS paths
+    settings: {
+      // Added to help eslint-plugin-import resolve TS paths
       'import/resolver': {
         typescript: {
           alwaysTryTypes: true,

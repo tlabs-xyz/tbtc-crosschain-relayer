@@ -24,6 +24,7 @@
     "lint:fix": "eslint . --ext .ts --cache --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
+    "fix": "yarn run lint:fix && yarn run format:fix",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "db:migrate": "npx prisma migrate deploy",
     "db:migrate:auditlog": "tsx scripts/migrate-auditlog-to-db.ts",

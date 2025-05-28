@@ -1,11 +1,11 @@
-process.env.USE_REAL_WORMHOLE_SERVICE = 'true'; // Signal global setup to NOT mock WormholeVaaService
+// process.env.USE_REAL_WORMHOLE_SERVICE = 'true'; // Signal global setup to NOT mock WormholeVaaService
 
 import { jest } from '@jest/globals';
 
-// // Unmock WormholeVaaService for this utility file to ensure it uses the actual implementation
-// // The path is relative to THIS utility file (tests/e2e/utils/wormhole.e2e.test.utils.ts)
-// // and should point to services/WormholeVaaService.ts
-// jest.unmock('../../../services/WormholeVaaService');
+// Unmock WormholeVaaService for this utility file to ensure it uses the actual implementation
+// The path is relative to THIS utility file (tests/e2e/utils/wormhole.e2e.test.utils.ts)
+// and should point to services/WormholeVaaService.ts
+jest.unmock('../../../services/WormholeVaaService');
 
 import {
   type ChainId,
@@ -17,15 +17,12 @@ import {
   type Chain,
   type PayloadLiteral,
   wormhole,
-  // Wormhole, // Not directly used as a type here, instance is through mockWormholeInstance
-  // toChainId, // Not directly used here
-  TokenBridge, // Potentially for typing L1TokenBridgeOperations if needed
 } from '@wormhole-foundation/sdk';
 import evmPlatform from '@wormhole-foundation/sdk/platforms/evm';
 import suiPlatform from '@wormhole-foundation/sdk/platforms/sui';
 // import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana'; // If solana becomes relevant
-import { ethers } from 'ethers'; // This will be the mocked ethers
-import logger, { logErrorContext } from '../../../utils/Logger';
+import * as ethers from 'ethers'; // Changed from 'import { ethers } from ...'
+import logger, { logErrorContext } from '../../../utils/Logger'; // Import directly
 import {
   type TestScenario,
   // L2_CHAIN_ID_SUI, // Not directly used in this file, but by tests
@@ -33,21 +30,39 @@ import {
 } from '../../data/wormhole.e2e.scenarios';
 import { WormholeVaaService } from '../../../services/WormholeVaaService';
 
-// --- mockWormholeInstance DEFINITION (MOVED UP) ---
-// This structure defines what our `wormhole()` mock function will return.
-const mockWormholeInstance = {
-  getChain: jest.fn<(chain: Chain | ChainId) => any>(), // Type will be InferredChainContext
-  getVaa: jest.fn<any>(), // This will be assigned mockGetVaaSdkImplementation in setup
-  // Add other methods of Wormhole class if they are directly called by WormholeVaaService
+// --- Pre-define the core object that the mocked 'wormhole()' function will return ---
+// This object's methods (getChain, getVaa) will be further fleshed out with specific jest.fn()
+// implementations within setupWormholeMocksAndService.
+const coreSdkMethodMocks = {
+  getChain: jest.fn<(chain: Chain | ChainId) => MockedChainContext>(),
+  getVaa:
+    jest.fn<
+      <T extends PayloadLiteral>(
+        id: WormholeMessageId,
+        decodeAs: T,
+        timeout?: number,
+      ) => Promise<VAA<T> | null>
+    >(),
 };
 
-// Determine ChainContext type dynamically from the mock's getChain method
-type InferredChainContext = ReturnType<typeof mockWormholeInstance.getChain>;
+// Type for the InferredChainContext, derived from the getChain mock
+// Assuming getChain returns an object with at least parseTransaction and getTokenBridge
+type MockedChainContext = {
+  parseTransaction: jest.Mock<(txid: string) => Promise<WormholeMessageId[]>>;
+  getTokenBridge: jest.Mock<() => Promise<MockedTokenBridgeOperations>>;
+  // Add other methods if used, e.g., getRelayer, getWrappedAsset...
+};
+
+type MockedTokenBridgeOperations = {
+  isTransferCompleted: jest.Mock<(vaa: VAA<any>) => Promise<boolean>>;
+  // Add other TokenBridge operations if needed, e.g. redeem, transfer...
+};
 
 // --- Global Constants for mocks ---
-export const EXPECTED_GET_VAA_TIMEOUT_MS = 5000;
+export const EXPECTED_GET_VAA_TIMEOUT_MS = 300000;
 export const DEFAULT_PAYLOAD_LITERAL = 'TokenBridge:TransferWithPayload';
-export const EXAMPLE_EMITTER_ADDRESS_SUI = '0x00000000000000000000000000000000000000000000000000000000deadbeef';
+export const EXAMPLE_EMITTER_ADDRESS_SUI =
+  '0x00000000000000000000000000000000000000000000000000000000deadbeef';
 export const EXAMPLE_SEQUENCE = BigInt(123);
 
 // --- Global Mock Variables (Typed) ---
@@ -55,12 +70,9 @@ export const EXAMPLE_SEQUENCE = BigInt(123);
 export let mockWormholeEntry: jest.MockedFunction<typeof wormhole>;
 export let mockL2Provider: jest.Mocked<ethers.providers.JsonRpcProvider>;
 export let mockL1Provider: jest.Mocked<ethers.providers.JsonRpcProvider>;
-export let mockL2ChainContext: jest.Mocked<InferredChainContext>;
-export let mockL1ChainContext: jest.Mocked<InferredChainContext>;
-export let mockL1TokenBridgeOperations: {
-  isTransferCompleted: jest.Mock<(vaa: VAA<any>) => Promise<boolean>>;
-  // Add other TokenBridge operations if needed
-};
+export let mockL2ChainContext: MockedChainContext;
+export let mockL1ChainContext: MockedChainContext;
+export let mockL1TokenBridgeOperations: MockedTokenBridgeOperations;
 export let mockLogger: jest.Mocked<typeof logger>;
 export let mockLogErrorContext: jest.MockedFunction<typeof logErrorContext>;
 export let mockGetVaaSdkImplementation: jest.Mock<
@@ -75,27 +87,26 @@ export let mockGetVaaSdkImplementation: jest.Mock<
 // export const mockUniversalAddressConstructorFn =
 //   jest.fn<(address: string | Uint8Array) => ActualUniversalAddress>();
 
+// Define the specific generic function signature for getVaa mocks
+type GenericGetVaaFn = <T extends PayloadLiteral>(
+  id: WormholeMessageId,
+  decodeAs: T,
+  timeout?: number,
+) => Promise<VAA<T> | null>;
+
 // --- Mock Instance Types (for return type of setup function) ---
 export interface MockedWormholeInstances {
   wormholeVaaService: WormholeVaaService;
   mockWormholeEntry: jest.MockedFunction<typeof wormhole>;
   mockL2Provider: jest.Mocked<ethers.providers.JsonRpcProvider>;
   mockL1Provider: jest.Mocked<ethers.providers.JsonRpcProvider>;
-  mockL2ChainContext: jest.Mocked<InferredChainContext>;
-  mockL1ChainContext: jest.Mocked<InferredChainContext>;
-  mockL1TokenBridgeOperations: {
-    isTransferCompleted: jest.Mock<(vaa: VAA<any>) => Promise<boolean>>;
-  };
+  mockL2ChainContext: MockedChainContext;
+  mockL1ChainContext: MockedChainContext;
+  mockL1TokenBridgeOperations: MockedTokenBridgeOperations;
   mockLogger: jest.Mocked<typeof logger>;
   mockLogErrorContext: jest.MockedFunction<typeof logErrorContext>;
-  mockGetVaaSdkImplementation: jest.Mock<
-    <T extends PayloadLiteral>(
-      id: WormholeMessageId,
-      decodeAs: T,
-      timeout?: number,
-    ) => Promise<VAA<T> | null>
-  >;
-  mockWormholeInstance: typeof mockWormholeInstance; // Expose the core mock instance
+  mockGetVaaSdkImplementation: jest.Mock<GenericGetVaaFn>;
+  mockWormholeSdkInstance: typeof coreSdkMethodMocks; // Changed name for clarity
 }
 
 // --- SDK and Ethers Mocks ---
@@ -103,18 +114,19 @@ export interface MockedWormholeInstances {
 // Mock for @wormhole-foundation/sdk
 jest.mock('@wormhole-foundation/sdk', () => {
   const originalSdk = jest.requireActual('@wormhole-foundation/sdk') as any;
+  // console.log('[E2E Utils Mock Factory] mockWormholeInstance:', mockWormholeInstance); // REMOVED - caused error
   return {
     __esModule: true,
-    Wormhole: originalSdk.Wormhole, // Actual class for type hints / instanceof
-    UniversalAddress: originalSdk.UniversalAddress, // Use actual constructor
-    chainIdToChain: originalSdk.chainIdToChain, // Use actual utility
-    wormhole: jest.fn(() => mockWormholeInstance), // Our main mock for the `wormhole()` entry point
-    Network: originalSdk.Network, // Export enums/constants if needed
+    ...originalSdk,
+    Wormhole: originalSdk.Wormhole,
+    UniversalAddress: originalSdk.UniversalAddress,
+    chainIdToChain: originalSdk.chainIdToChain,
+    wormhole: jest.fn(async () => coreSdkMethodMocks), // Use the pre-defined object
+    Network: originalSdk.Network,
     Chain: originalSdk.Chain,
     toChainId: originalSdk.toChainId,
-    TokenBridge: originalSdk.TokenBridge, // For typing L1TokenBridgeOperations
-    ethers_contracts: originalSdk.ethers_contracts, // Preserve if used by TokenBridge or other parts
-    // Add other exports from SDK if they are directly used by the service and need to be actuals or mocked.
+    TokenBridge: originalSdk.TokenBridge,
+    ethers_contracts: originalSdk.ethers_contracts,
   };
 });
 
@@ -136,9 +148,8 @@ jest.mock('ethers', () => {
     (_rpcUrl?: string): MockJsonRpcProviderInstanceMethods => {
       // Return a fresh set of mocks for each constructed instance
       return {
-        getTransactionReceipt: jest.fn<
-          (txHash: string) => Promise<ethers.providers.TransactionReceipt | null>
-        >(), // Individual tests will mockResolvedValue on this
+        getTransactionReceipt:
+          jest.fn<(txHash: string) => Promise<ethers.providers.TransactionReceipt | null>>(), // Individual tests will mockResolvedValue on this
         getNetwork: jest.fn<() => Promise<ethers.providers.Network>>().mockResolvedValue({
           name: 'mock-network', // Static mock network name
           chainId: 123, // Static mock chain ID
@@ -176,19 +187,19 @@ export function createMockEthersReceipt(
   txHash: string,
   status: number = 1, // Default to success
 ): ethers.providers.TransactionReceipt {
-  const localEthers = jest.requireMock('ethers') as typeof ethers;
+  // ethers is already mocked, so this will use the mocked BigNumber etc.
   return {
     to: '0xtoaddressmock',
     from: '0xfromaddressmock',
     contractAddress: '0xcontractaddressmock',
     transactionIndex: 1,
-    gasUsed: localEthers.BigNumber.from('21000'),
+    gasUsed: ethers.BigNumber.from('21000'),
     logsBloom: '0xlogsBloommMock',
     blockHash: '0xblockhashmock',
     blockNumber: 1234567,
     confirmations: 10,
-    cumulativeGasUsed: localEthers.BigNumber.from('100000'),
-    effectiveGasPrice: localEthers.BigNumber.from('10000000000'), // Example: 10 Gwei
+    cumulativeGasUsed: ethers.BigNumber.from('100000'),
+    effectiveGasPrice: ethers.BigNumber.from('10000000000'), // Example: 10 Gwei
     byzantium: true,
     type: 2, // EIP-1559 transaction type
     status: status, // 1 for success, 0 for failure
@@ -217,9 +228,7 @@ interface CreateMockSdkVaaParams<T extends PayloadLiteral> {
 }
 
 // Helper to create VAA for tests
-export function createMockSdkVaa<
-  T extends PayloadLiteral = typeof DEFAULT_PAYLOAD_LITERAL,
->({
+export function createMockSdkVaa<T extends PayloadLiteral = typeof DEFAULT_PAYLOAD_LITERAL>({
   emitterChain = 21 as ChainId, // Default to Sui L2 ChainId for SDK
   emitterAddress = EXAMPLE_EMITTER_ADDRESS_SUI,
   sequence = EXAMPLE_SEQUENCE,
@@ -241,6 +250,13 @@ export function createMockSdkVaa<
   // Create a hash value (e.g. a 32-byte array filled with 1s)
   const mockHash = new Uint8Array(32).fill(1);
 
+  // If a custom serialize function is provided, default .bytes to an empty array
+  // to ensure the serialize function is called by the service.
+  // Otherwise, use the provided bytes or the default [1,2,3,4,5].
+  const vaaBytesContent = serialize
+    ? (bytes ?? new Uint8Array(0))
+    : (bytes ?? new Uint8Array([1, 2, 3, 4, 5]));
+
   return {
     version: 1,
     guardianSet,
@@ -255,7 +271,7 @@ export function createMockSdkVaa<
     payloadName: payloadNameStr,
     payloadLiteral: payloadLiteral,
     payload: { somePayloadData: 'data', anotherKey: 123 } as any, // Generic payload
-    bytes: bytes ?? new Uint8Array([1, 2, 3, 4, 5]),
+    bytes: vaaBytesContent, // Use the determined byte content
     serialize: serialize ?? jest.fn(() => new Uint8Array([1, 2, 3, 4, 5])),
     hash: mockHash, // Added missing hash property
   } as VAA<T>;
@@ -274,128 +290,100 @@ export async function setupWormholeMocksAndService(
   scenario: TestScenario,
   testNetwork: Network,
 ): Promise<MockedWormholeInstances> {
-  const SdkMockModule = jest.requireMock('@wormhole-foundation/sdk') as {
-    wormhole: jest.MockedFunction<typeof wormhole>;
-  };
-  const MockedEthers = jest.requireMock('ethers') as {
-    providers: {
-      JsonRpcProvider: new (
-        url?: string | ethers.utils.ConnectionInfo,
-        network?: ethers.providers.Networkish,
-      ) => ethers.providers.JsonRpcProvider;
-    };
-    // Add other ethers properties if needed by the setup function directly
-  };
+  jest.clearAllMocks(); // Clear all mocks before setting up new ones
 
-  mockWormholeEntry = SdkMockModule.wormhole;
+  // Use direct imports for already-mocked modules, and cast them.
+  // Jest hoists jest.mock, so these are the mocked versions.
+  mockWormholeEntry = wormhole as jest.MockedFunction<typeof wormhole>;
   mockLogger = logger as jest.Mocked<typeof logger>;
   mockLogErrorContext = logErrorContext as jest.MockedFunction<typeof logErrorContext>;
+  const EthersProviders = ethers.providers;
 
-  mockL2Provider = new MockedEthers.providers.JsonRpcProvider(
+  // L2 Provider setup
+  mockL2Provider = new EthersProviders.JsonRpcProvider(
     scenario.l2RpcUrl,
   ) as jest.Mocked<ethers.providers.JsonRpcProvider>;
-  // Specifically mock getNetwork for this L2 provider instance
-  (mockL2Provider.getNetwork as jest.Mock<() => Promise<ethers.providers.Network>>).mockResolvedValue({
-    name: actualChainIdToChain(scenario.l2ChainId), // Use actual chain name from SDK util
-    chainId: scenario.l2ChainId,
-  } as ethers.providers.Network);
 
-  mockL1Provider = new MockedEthers.providers.JsonRpcProvider(
-    'http://mock-l1-rpc.com', // This URL is for a generic L1 mock
+  // L1 Provider setup
+  mockL1Provider = new EthersProviders.JsonRpcProvider(
+    'http://mock-l1-rpc.com',
   ) as jest.Mocked<ethers.providers.JsonRpcProvider>;
-  // Specifically mock getNetwork for this L1 provider instance
-  // It's less critical for L1 as WormholeVaaService doesn't use l1Provider directly,
-  // but good practice to have it aligned if any deeper SDK calls were to use it.
-  (mockL1Provider.getNetwork as jest.Mock<() => Promise<ethers.providers.Network>>).mockResolvedValue({
-    name: actualChainIdToChain(scenario.targetL1ChainId), // Use actual chain name
-    chainId: scenario.targetL1ChainId, // Use target L1 chain ID
-  } as ethers.providers.Network);
 
-  mockGetVaaSdkImplementation = mockWormholeInstance.getVaa as jest.Mock<
-    <T extends PayloadLiteral>(
-      id: WormholeMessageId,
-      decodeAs: T,
-      timeout?: number,
-    ) => Promise<VAA<T> | null>
-  >;
+  // Define mock implementations for SDK methods *before* WormholeVaaService.create is called
+  const actualMockGetVaaImplementation: GenericGetVaaFn = <T extends PayloadLiteral>(
+    _id: WormholeMessageId,
+    _decodeAs: T,
+    _timeout?: number,
+  ): Promise<VAA<T> | null> => Promise.resolve(null);
 
-  // Type assertion for the mock implementation of getChain
-  const l2ChainContextMock = {
-    parseTransaction: jest.fn<() => Promise<WormholeMessageId[]>>(),
-    // Add other specific ChainContext methods if needed by the service for L2
-  } as unknown as jest.Mocked<InferredChainContext>;
-  mockL2ChainContext = l2ChainContextMock;
+  mockGetVaaSdkImplementation = jest.fn(actualMockGetVaaImplementation);
 
   mockL1TokenBridgeOperations = {
-    isTransferCompleted: jest.fn<(vaa: VAA<any>) => Promise<boolean>>(),
+    isTransferCompleted: jest.fn<(vaa: VAA<any>) => Promise<boolean>>().mockResolvedValue(false),
   };
 
-  // Type assertion for the mock implementation of getChain for L1
-  const l1ChainContextMock = {
+  mockL2ChainContext = {
+    parseTransaction: jest
+      .fn<(txid: string) => Promise<WormholeMessageId[]>>()
+      .mockImplementation(async (txid: string) => {
+        return [];
+      }),
+    getTokenBridge: jest.fn<() => Promise<MockedTokenBridgeOperations>>().mockResolvedValue({
+      isTransferCompleted: jest.fn<(vaa: VAA<any>) => Promise<boolean>>().mockResolvedValue(false),
+    } as MockedTokenBridgeOperations),
+  };
+
+  mockL1ChainContext = {
+    parseTransaction: jest
+      .fn<(txid: string) => Promise<WormholeMessageId[]>>()
+      .mockImplementation(async (txid: string) => {
+        return [];
+      }),
     getTokenBridge: jest
-      .fn<() => Promise<jest.MockedObject<TokenBridge<Network, Chain>>>>()
-      .mockResolvedValue(
-        mockL1TokenBridgeOperations as unknown as jest.MockedObject<TokenBridge<Network, Chain>>,
-      ),
-    // Add other specific ChainContext methods if needed by the service for L1
-  } as unknown as jest.Mocked<InferredChainContext>;
-  mockL1ChainContext = l1ChainContextMock;
+      .fn<() => Promise<MockedTokenBridgeOperations>>()
+      .mockResolvedValue(mockL1TokenBridgeOperations),
+  };
 
-  // Now type the getChain mock on mockWormholeInstance itself
-  mockWormholeInstance.getChain.mockImplementation(
-    (chainInput: Chain | ChainId): InferredChainContext => {
-      const chainName =
-        typeof chainInput === 'string' ? chainInput : actualChainIdToChain(chainInput as ChainId);
-      if (chainName === scenario.l2ChainName) return mockL2ChainContext;
-      if (chainName === scenario.targetL1ChainName) return mockL1ChainContext;
-      throw new Error(
-        `mockWormholeInstance.getChain: Unexpected chain: ${chainName}. Expected L2: ${scenario.l2ChainName} or L1: ${scenario.targetL1ChainName}`,
-      );
-    },
+  // Configure coreSdkMethodMocks.getChain to return the correct chain context mock
+  coreSdkMethodMocks.getChain.mockImplementation((chainOrChainId: Chain | ChainId) => {
+    const chainName =
+      typeof chainOrChainId === 'string' ? chainOrChainId : actualChainIdToChain(chainOrChainId);
+    if (chainName === scenario.l2ChainName) {
+      return mockL2ChainContext;
+    }
+    if (chainName === scenario.targetL1ChainName) {
+      return mockL1ChainContext;
+    }
+    // Fallback for other chains if necessary
+    const fallbackChainContext: MockedChainContext = {
+      parseTransaction: jest
+        .fn<(txid: string) => Promise<WormholeMessageId[]>>()
+        .mockImplementation(async (txid: string) => {
+          return [];
+        }),
+      getTokenBridge: jest.fn<() => Promise<MockedTokenBridgeOperations>>().mockResolvedValue({
+        isTransferCompleted: jest
+          .fn<(vaa: VAA<any>) => Promise<boolean>>()
+          .mockResolvedValue(false),
+      } as MockedTokenBridgeOperations),
+    };
+    return fallbackChainContext;
+  });
+  coreSdkMethodMocks.getVaa.mockImplementation(actualMockGetVaaImplementation);
+
+  // Ensure the global SDK mock uses this setup
+  // The `wormhole` function from `@wormhole-foundation/sdk` is already mocked at the top
+  // to return `coreSdkMethodMocks`. So, accessing `wormhole` (which is the mock)
+  // and setting its implementation is how we control the SDK's entry point.
+  (wormhole as jest.Mock).mockImplementation(async () => coreSdkMethodMocks);
+
+  // Create the service instance - this will use the mocked SDK via mockWormholeEntry
+  const platformModulesToUse = [evmPlatform, suiPlatform];
+  const wormholeVaaService = await WormholeVaaService.create(
+    mockL2Provider,
+    testNetwork,
+    platformModulesToUse,
   );
-
-  // Resolve platform loaders, handling potential CJS/ESM interop issues
-  // The SDK's loadPlatforms expects each item in the array to be a loader function.
-  const resolvedEvmPlatformLoader =
-    typeof evmPlatform === 'function'
-      ? evmPlatform
-      : (evmPlatform as any)?.default;
-  const resolvedSuiPlatformLoader =
-    typeof suiPlatform === 'function'
-      ? suiPlatform
-      : (suiPlatform as any)?.default;
-
-  const platformLoaders: Array<() => any> = []; // Specify that we expect an array of functions
-
-  if (typeof resolvedEvmPlatformLoader === 'function') {
-    platformLoaders.push(resolvedEvmPlatformLoader);
-  } else {
-    console.error(
-      '[wormhole.e2e.test.utils] EVM platform loader could not be resolved to a function. Actual type:',
-      typeof evmPlatform,
-      'Imported content:',
-      evmPlatform,
-      'Resolved loader type:',
-      typeof resolvedEvmPlatformLoader,
-    );
-    // This will likely cause the SDK to fail, which is informative.
-  }
-
-  if (typeof resolvedSuiPlatformLoader === 'function') {
-    platformLoaders.push(resolvedSuiPlatformLoader);
-  } else {
-    console.error(
-      '[wormhole.e2e.test.utils] Sui platform loader could not be resolved to a function. Actual type:',
-      typeof suiPlatform,
-      'Imported content:',
-      suiPlatform,
-      'Resolved loader type:',
-      typeof resolvedSuiPlatformLoader,
-    );
-  }
-
-  // const platformModulesToUse = [evmPlatform, suiPlatform]; // Original
-  const wormholeVaaService = await WormholeVaaService.create(mockL2Provider, testNetwork, platformLoaders);
 
   return {
     wormholeVaaService,
@@ -408,7 +396,6 @@ export async function setupWormholeMocksAndService(
     mockLogger,
     mockLogErrorContext,
     mockGetVaaSdkImplementation,
-    mockWormholeInstance: mockWormholeInstance,
+    mockWormholeSdkInstance: coreSdkMethodMocks, // Return the core object
   };
 }
-
