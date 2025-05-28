@@ -51,6 +51,10 @@ let hasChainConfigErrors = false;
 
 logger.info('Loading chain configurations...');
 
+logger.info(
+  `[config/index.ts] Initial process.env.SUPPORTED_CHAINS: ${process.env.SUPPORTED_CHAINS}`,
+);
+
 // Determine which chains to load based on SUPPORTED_CHAINS env var
 const supportedChainsEnv = process.env.SUPPORTED_CHAINS;
 let chainsToLoad: string[] | null = null;

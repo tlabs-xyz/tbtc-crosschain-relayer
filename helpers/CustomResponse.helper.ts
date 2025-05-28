@@ -36,8 +36,8 @@ export class CustomResponse {
 
   ok(message?: string, data?: any): void {
     this.responseJson.error = false;
-    this.responseJson.message = message || 'Operation succesful';
-    this.responseJson.data = data !== undefined ? data : null;
+    this.responseJson.message = message || 'Operation successful';
+    this.responseJson.data = data || null;
 
     this.res.status(200).send(this.responseJson);
   }

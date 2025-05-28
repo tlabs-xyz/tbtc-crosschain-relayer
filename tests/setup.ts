@@ -21,5 +21,6 @@ jest.mock('@wormhole-foundation/sdk', () => {
 // Set up environment variables for tests
 process.env.LOG_LEVEL = 'debug';
 process.env.NODE_ENV = 'test';
+process.env.SUPPORTED_CHAINS = 'mockEVM1,mockEVM2,faultyMockEVM,mockEndpointChain';
 
 console.log('[tests/setup.ts] Finished execution (Minimal - SDK mock only)');

@@ -23,7 +23,6 @@ import suiPlatform from '@wormhole-foundation/sdk/platforms/sui';
 // import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana'; // If solana becomes relevant
 import * as ethers from 'ethers'; // Changed from 'import { ethers } from ...'
 import logger, { logErrorContext } from '../../../utils/Logger'; // Import directly
-import { stringifyWithBigInt } from '../../../utils/Numbers';
 import {
   type TestScenario,
   // L2_CHAIN_ID_SUI, // Not directly used in this file, but by tests
