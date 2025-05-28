@@ -23,6 +23,7 @@ import suiPlatform from '@wormhole-foundation/sdk/platforms/sui';
 // import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana'; // If solana becomes relevant
 import * as ethers from 'ethers'; // Changed from 'import { ethers } from ...'
 import logger, { logErrorContext } from '../../../utils/Logger'; // Import directly
+import { stringifyWithBigInt } from '../../../utils/Numbers';
 import {
   type TestScenario,
   // L2_CHAIN_ID_SUI, // Not directly used in this file, but by tests
@@ -311,10 +312,18 @@ export async function setupWormholeMocksAndService(
 
   // Define mock implementations for SDK methods *before* WormholeVaaService.create is called
   const actualMockGetVaaImplementation: GenericGetVaaFn = <T extends PayloadLiteral>(
-    _id: WormholeMessageId,
-    _decodeAs: T,
+    id: WormholeMessageId,
+    decodeAs: T,
     _timeout?: number,
-  ): Promise<VAA<T> | null> => Promise.resolve(null);
+  ): Promise<VAA<T> | null> => {
+    // console.log(
+    //   '[E2E Mock Util DEBUG getVaa] actualMockGetVaaImplementation CALLED with id:',
+    //   stringifyWithBigInt(id),
+    //   'decodeAs:',
+    //   decodeAs,
+    // );
+    return Promise.resolve(null); // Fallback if not specifically mocked by test
+  };
 
   mockGetVaaSdkImplementation = jest.fn(actualMockGetVaaImplementation);
 
@@ -369,7 +378,7 @@ export async function setupWormholeMocksAndService(
     };
     return fallbackChainContext;
   });
-  coreSdkMethodMocks.getVaa.mockImplementation(actualMockGetVaaImplementation);
+  coreSdkMethodMocks.getVaa.mockImplementation(mockGetVaaSdkImplementation as GenericGetVaaFn);
 
   // Ensure the global SDK mock uses this setup
   // The `wormhole` function from `@wormhole-foundation/sdk` is already mocked at the top
@@ -385,7 +394,7 @@ export async function setupWormholeMocksAndService(
     platformModulesToUse,
   );
 
-  return {
+  const instancesToReturn: MockedWormholeInstances = {
     wormholeVaaService,
     mockWormholeEntry,
     mockL2Provider,
@@ -396,6 +405,18 @@ export async function setupWormholeMocksAndService(
     mockLogger,
     mockLogErrorContext,
     mockGetVaaSdkImplementation,
-    mockWormholeSdkInstance: coreSdkMethodMocks, // Return the core object
+    mockWormholeSdkInstance: coreSdkMethodMocks,
   };
+  // console.log(
+  //   '[E2E Mock Util DEBUG] Returning from setupWormholeMocksAndService. mockL1TokenBridgeOperations defined:',
+  //   !!instancesToReturn.mockL1TokenBridgeOperations,
+  // );
+  // if (instancesToReturn.mockL1TokenBridgeOperations) {
+  //   console.log(
+  //     '[E2E Mock Util DEBUG] mockL1TokenBridgeOperations.isTransferCompleted defined:',
+  //     !!instancesToReturn.mockL1TokenBridgeOperations.isTransferCompleted,
+  //   );
+  // }
+
+  return instancesToReturn;
 }

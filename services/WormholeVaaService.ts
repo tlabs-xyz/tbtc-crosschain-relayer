@@ -131,9 +131,11 @@ export class WormholeVaaService {
       }
 
       const emitterUA = new UniversalAddress(emitterAddress);
-      const messageId = wormholeMessageIds.find(
-        (whm) => whm.emitter.equals(emitterUA) && whm.chain === emitterChainName,
-      );
+      const messageId = wormholeMessageIds.find((whm) => {
+        const isEmitterMatch = whm.emitter.equals(emitterUA);
+        const isChainMatch = whm.chain === emitterChainName;
+        return whm.emitter.equals(emitterUA) && whm.chain === emitterChainName;
+      });
 
       if (!messageId) {
         logErrorContext(

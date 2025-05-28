@@ -230,8 +230,8 @@ describe('WormholeVaaService', () => {
     };
 
     mockChainContext = {
-      parseTransaction:
-        jest.fn<(txHash: string) => Promise<WormholeMessageId[]>>()
+      parseTransaction: jest
+        .fn<(txHash: string) => Promise<WormholeMessageId[]>>()
         .mockResolvedValue([]),
       getTokenBridge: jest.fn<() => Promise<any>>().mockResolvedValue(mockTokenBridgeOperations),
     };

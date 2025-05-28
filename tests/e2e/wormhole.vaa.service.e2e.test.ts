@@ -4,7 +4,7 @@ process.env.USE_REAL_WORMHOLE_SERVICE = 'true'; // Signal global setup to NOT mo
 import {
   setupWormholeMocksAndService,
   createMockEthersReceipt, // Ensure all used utils are imported
-  createMockSdkVaa,      // Ensure all used utils are imported
+  createMockSdkVaa, // Ensure all used utils are imported
   EXPECTED_GET_VAA_TIMEOUT_MS, // Ensure all used utils are imported
   type MockedWormholeInstances, // Ensure all used utils are imported
 } from './utils/wormhole.e2e.test.utils';
@@ -52,6 +52,17 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
     mocks = await setupWormholeMocksAndService(scenario, TEST_NETWORK);
     service = mocks.wormholeVaaService;
 
+    // console.log(
+    //   '[E2E Test DEBUG] After setupWormholeMocksAndService. mocks.mockL1TokenBridgeOperations defined:',
+    //   !!mocks.mockL1TokenBridgeOperations,
+    // );
+    // if (mocks.mockL1TokenBridgeOperations) {
+    //   console.log(
+    //     '[E2E Test DEBUG] mocks.mockL1TokenBridgeOperations.isTransferCompleted defined:',
+    //     !!mocks.mockL1TokenBridgeOperations.isTransferCompleted,
+    //   );
+    // }
+
     currentTestMockWormholeMessageId = {
       // Renamed for clarity within tests
       chain: actualChainIdToChain(scenario.l2ChainId),
@@ -70,8 +81,17 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
     const mockReceipt = createMockEthersReceipt(L2_EXAMPLE_TX_HASH, 1);
     mocks.mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
 
-    // currentTestMockWormholeMessageId is already set up with EXAMPLE_SEQUENCE
-    mocks.mockL2ChainContext.parseTransaction.mockResolvedValue([currentTestMockWormholeMessageId]);
+    // Ensure parseTransaction is explicitly mocked for THIS test run
+    const whMessageIdForParseTxMock = {
+      chain: actualChainIdToChain(scenario.l2ChainId), // Should be 'Sui' for this scenario
+      emitter: new ActualUniversalAddress(scenario.expectedEmitterAddress),
+      sequence: EXAMPLE_SEQUENCE,
+    };
+    // console.log(
+    //   '[TEST 13.1 DEBUG] whMessageIdForParseTxMock set in test:',
+    //   stringifyWithBigInt(whMessageIdForParseTxMock),
+    // );
+    mocks.mockL2ChainContext.parseTransaction.mockResolvedValue([whMessageIdForParseTxMock]);
 
     const mockVaaBytes = new Uint8Array([11, 22, 33, 44, 55]);
     const mockParsedVaa = createMockSdkVaa({
@@ -94,15 +114,16 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
       scenario.targetL1ChainId,
     );
 
-    // Check for the diagnostic log first - REMOVED
-    // expect(mocks.mockLogger.debug).toHaveBeenCalledWith(
-    //   '[DIAGNOSTIC_E2E_LOGGER_TEST] fetchAndVerifyVaaForL2Event called',
-    //   {
-    //     l2TransactionHash: L2_EXAMPLE_TX_HASH,
-    //     emitterChainId: scenario.l2ChainId,
-    //     emitterAddress: scenario.expectedEmitterAddress,
-    //   },
+    // console.log(
+    //   '[E2E Test DEBUG] Before checking isTransferCompleted. mocks.mockL1TokenBridgeOperations defined:',
+    //   !!mocks.mockL1TokenBridgeOperations,
     // );
+    // if (mocks.mockL1TokenBridgeOperations) {
+    //   console.log(
+    //     '[E2E Test DEBUG] mocks.mockL1TokenBridgeOperations.isTransferCompleted defined:',
+    //     !!mocks.mockL1TokenBridgeOperations.isTransferCompleted,
+    //   );
+    // }
 
     expect(result).not.toBeNull();
     expect(result?.vaaBytes).toBe(mockVaaBytes);
@@ -282,7 +303,8 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
       expect.any(Error),
     );
     // Restore original getChain if it was overridden locally, or ensure setup handles it.
-    if (originalGetChain) mocks.mockWormholeSdkInstance.getChain.mockImplementation(originalGetChain);
+    if (originalGetChain)
+      mocks.mockWormholeSdkInstance.getChain.mockImplementation(originalGetChain);
   });
 
   test('Subtask 13.8: VAA emitter address mismatch', async () => {
@@ -314,7 +336,8 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
 
     // Similar to above, ensure only L2 getChain is called for parseTransaction
     // and L1 getChain is not called before isTransferCompleted determines VAA is invalid.
-    const originalGetChainEmitterMismatch = mocks.mockWormholeSdkInstance.getChain.getMockImplementation();
+    const originalGetChainEmitterMismatch =
+      mocks.mockWormholeSdkInstance.getChain.getMockImplementation();
     mocks.mockWormholeSdkInstance.getChain.mockImplementationOnce((chainOrChainId) => {
       const idOfChainToGet: ChainId =
         typeof chainOrChainId === 'string'
@@ -343,7 +366,8 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
       `Could not find Wormhole message from emitter ${scenario.expectedEmitterAddress} on chain ${actualChainIdToChain(scenario.l2ChainId)} in L2 transaction ${l2TxEmitterMismatchHash}. Found messages: ${stringifyWithBigInt([localMockWormholeMessageId])}`,
       expect.objectContaining({ message: 'Relevant WormholeMessageId not found' }),
     );
-    if (originalGetChainEmitterMismatch) mocks.mockWormholeSdkInstance.getChain.mockImplementation(originalGetChainEmitterMismatch);
+    if (originalGetChainEmitterMismatch)
+      mocks.mockWormholeSdkInstance.getChain.mockImplementation(originalGetChainEmitterMismatch);
   });
 
   test('Subtask 13.9: isTransferCompleted Returns False - should return null and log info', async () => {
@@ -490,6 +514,7 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
       expect.objectContaining({ message: 'Relevant WormholeMessageId not found' }),
     );
 
-    if (originalGetChain) mocks.mockWormholeSdkInstance.getChain.mockImplementation(originalGetChain);
+    if (originalGetChain)
+      mocks.mockWormholeSdkInstance.getChain.mockImplementation(originalGetChain);
   });
 });
