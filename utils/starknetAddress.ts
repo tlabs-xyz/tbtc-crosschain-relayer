@@ -1,4 +1,4 @@
-import { CallData, CairoOption, CairoOptionVariant } from 'starknet';
+import { CallData } from 'starknet';
 import { ethers } from 'ethers';
 import * as bitcoin from 'bitcoinjs-lib';
 
@@ -13,14 +13,14 @@ export function validateStarkNetAddress(address: string): boolean {
     // starknet.js's CallData.compile accepts an address and will throw if it's invalid.
     // We can use a simple CairoOption type for validation.
     // A valid address is a felt252, which CallData.compile can handle.
-    CallData.compile({ addr: address }, [new CairoOption(CairoOptionVariant.None).toApiFormat()]);
+    CallData.compile({ addr: address });
     // Additional check: StarkNet addresses are typically 66 characters long (0x + 64 hex chars)
     // or shorter if leading zeros are omitted. Max length is 66.
     // Felt252 can be up to 252 bits, so hex can be up to 63 chars + 0x prefix.
     // Starknet.js `isAddress` or similar dedicated function would be ideal if available in future versions
     // For now, CallData.compile is a robust check.
     // Let's ensure it's a hex string and check length.
-    if (!ethers.isHexString(address)) {
+    if (!ethers.utils.isHexString(address)) {
       return false;
     }
     // Length of a felt252 hex string can be up to 64 characters after '0x'.
@@ -45,7 +45,7 @@ export function formatStarkNetAddressForContract(address: string): string {
   // StarkNet addresses (felt252) are already less than or equal to 32 bytes.
   // We need to pad them to ensure they are exactly 32 bytes.
   // ethers.utils.hexZeroPad expects a hex string.
-  return ethers.hexZeroPad(address, 32);
+  return ethers.utils.hexZeroPad(address, 32);
 }
 
 /**
@@ -88,29 +88,19 @@ export function extractAddressFromBitcoinScript(script: Buffer | string): string
       return null;
     }
 
-    // Iterate through script chunks to find a potential StarkNet address.
-    // A StarkNet address is a felt252, typically represented as a hex string.
-    // We'll look for a data push (Buffer) that could be a valid address.
     for (const chunk of chunks) {
       if (Buffer.isBuffer(chunk)) {
-        // Convert buffer to hex string, add '0x' prefix
         const potentialAddress = '0x' + chunk.toString('hex');
         if (validateStarkNetAddress(potentialAddress)) {
-          // Ensure it's not too long for a felt (max 64 hex chars + 0x)
-          // and not too short (e.g. 0x0 is valid but might be ambiguous without context)
-          // validateStarkNetAddress already checks length implicitly via CallData.compile
-          // but an explicit check on length of the buffer might be useful.
-          // A felt252 is at most 32 bytes.
           if (chunk.length > 0 && chunk.length <= 32) {
-             return potentialAddress;
+            return potentialAddress;
           }
         }
       }
     }
     return null;
   } catch (error) {
-    // Errors during decompilation or validation
-    console.error("Error extracting address from Bitcoin script:", error);
+    console.error('Error extracting address from Bitcoin script:', error);
     return null;
   }
-} 
+}

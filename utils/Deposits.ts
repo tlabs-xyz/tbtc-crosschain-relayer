@@ -80,10 +80,10 @@ export const createDeposit = (
     owner: l2DepositOwner,
     status: DepositStatus.QUEUED,
     dates: {
-      createdAt: new Date().getTime(),
+      createdAt: Date.now(),
       initializationAt: null,
       finalizationAt: null,
-      lastActivityAt: new Date().getTime(),
+      lastActivityAt: Date.now(),
       awaitingWormholeVAAMessageSince: null,
       bridgedAt: null,
     },
@@ -139,7 +139,7 @@ export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error
 
   // Log status change if it actually changed
   if (newStatus !== oldStatus) {
-    logStatusChange(deposit, newStatus, oldStatus);
+    logStatusChange(updatedDeposit, newStatus, oldStatus);
   }
 
   await DepositStore.update(updatedDeposit);
@@ -190,7 +190,7 @@ export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, err
 
   // Log status change if it actually changed
   if (newStatus !== oldStatus) {
-    logStatusChange(deposit, newStatus, oldStatus);
+    logStatusChange(updatedDeposit, newStatus, oldStatus);
   }
 
   await DepositStore.update(updatedDeposit);
