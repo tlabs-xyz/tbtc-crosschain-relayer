@@ -18,6 +18,7 @@ export default [
       '*.log',
       'jest.config.cjs',
       'jest.setup.js',
+      'test/', // Added to ignore Hardhat contract tests
     ],
   },
   // Config for Jest global setup/teardown files

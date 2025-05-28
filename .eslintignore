@@ -1,0 +1,6 @@
+node_modules
+dist
+generated
+coverage
+# Hardhat contract tests - not part of the main TS project for linting/building
+test/ 
