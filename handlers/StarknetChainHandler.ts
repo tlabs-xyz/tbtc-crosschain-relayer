@@ -83,7 +83,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         this.config.l1ContractAddress,
         IStarkGateBridgeABI,
         this.l1Provider,
-      ) as EthersStarkNetBitcoinDepositor;
+      ) as unknown as EthersStarkGateBridge;
       logger.info(
         `L1 Depositor contract provider instance created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
       );
@@ -94,7 +94,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
           this.config.l1ContractAddress,
           IStarkGateBridgeABI,
           this.nonceManagerL1,
-        ) as EthersStarkNetBitcoinDepositor;
+        ) as unknown as EthersStarkGateBridge;
         logger.info(
           `L1 Depositor contract signer instance (with NonceManager) created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
         );
@@ -106,7 +106,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
           this.config.l1ContractAddress,
           IStarkGateBridgeABI,
           this.l1Signer,
-        ) as EthersStarkNetBitcoinDepositor;
+        ) as unknown as EthersStarkGateBridge;
         logger.info(
           `L1 Depositor contract signer instance (without NonceManager) created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
         );
@@ -399,12 +399,13 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       try {
         const dynamicFee = await this.l1DepositorContract.estimateMessageFee();
         // Apply a 10% buffer to the dynamic fee to account for gas price fluctuations
-        const buffer = dynamicFee.mul(10).div(100);
-        messageFee = dynamicFee.add(buffer);
+        const dynamicFeeBN = ethers.BigNumber.from(dynamicFee);
+        const buffer = dynamicFeeBN.mul(10).div(100);
+        messageFee = dynamicFeeBN.add(buffer);
         logger.info(
           `${logPrefix} Dynamically quoted L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH (includes 10% buffer)`,
         );
-      } catch (estimateError) {
+      } catch (estimateError: any) {
         logger.warn(
           `${logPrefix} Failed to get dynamic fee estimate from StarkGate: ${estimateError.message}. Falling back to static methods.`,
         );

@@ -150,6 +150,14 @@ export class MockStarkGateBridge extends EventEmitter implements IStarkGateBridg
   quoteFinalizeDeposit: jest.Mock<Promise<BigNumber>>;
   l1ToL2MessageFee: jest.Mock<Promise<BigNumber>>;
   updateL1ToL2MessageFee: jest.Mock<Promise<ContractTransaction>>;
+  
+  // New methods from updated IStarkGateBridge
+  deposit: jest.Mock<Promise<ContractTransaction>>;
+  depositWithMessage: jest.Mock<Promise<ContractTransaction>>;
+  estimateMessageFee: jest.Mock<Promise<BigNumber>>;
+  depositWithMessageCancelRequest: jest.Mock<Promise<ContractTransaction>>;
+  l1ToL2MessageNonce: jest.Mock<Promise<BigNumber>>;
+  isDepositCancellable: jest.Mock<Promise<boolean>>;
 
   // Event listener methods from IStarkGateBridge
   on: jest.Mock;
@@ -163,8 +171,9 @@ export class MockStarkGateBridge extends EventEmitter implements IStarkGateBridg
   readonly filters: {
     TBTCBridgedToStarkNet: (
       depositKey?: BytesLike | null,
+      starkNetRecipient?: BigNumberish | null,
       amount?: null,
-      starkNetRecipient?: null,
+      messageNonce?: null,
     ) => EventFilter;
   };
 
@@ -194,16 +203,29 @@ export class MockStarkGateBridge extends EventEmitter implements IStarkGateBridg
       BigNumber.from(ethers.utils.parseUnits('50', 'gwei')),
     );
     this.updateL1ToL2MessageFee = jest.fn(async () => this.createMockTransactionResponse());
+    
+    // Initialize new method mocks from updated IStarkGateBridge
+    this.deposit = jest.fn(async () => this.createMockTransactionResponse());
+    this.depositWithMessage = jest.fn(async () => this.createMockTransactionResponse());
+    this.estimateMessageFee = jest.fn(async () => 
+      BigNumber.from(ethers.utils.parseUnits('75', 'gwei')),
+    );
+    this.depositWithMessageCancelRequest = jest.fn(async () => this.createMockTransactionResponse());
+    this.l1ToL2MessageNonce = jest.fn(async () => BigNumber.from(123));
+    this.isDepositCancellable = jest.fn(async () => false);
 
     // Initialize the `filters` object with our specific event filter mock
     this.filters = {
       TBTCBridgedToStarkNet: jest.fn(
-        (depositKey?: BytesLike | null, amount?: null, starkNetRecipient?: null) => {
+        (depositKey?: BytesLike | null, starkNetRecipient?: BigNumberish | null, amount?: null, messageNonce?: null) => {
           const topics: (string | string[])[] = [
-            ethers.utils.id('TBTCBridgedToStarkNet(bytes32,uint256,bytes32)'),
+            ethers.utils.id('TBTCBridgedToStarkNet(bytes32,uint256,uint256,uint256)'),
           ];
           if (depositKey) {
             topics.push(ethers.utils.hexZeroPad(depositKey.toString(), 32));
+          }
+          if (starkNetRecipient) {
+            topics.push(ethers.utils.hexZeroPad(starkNetRecipient.toString(), 32));
           }
           return {
             topics: topics,
@@ -270,7 +292,7 @@ export class MockStarkGateBridge extends EventEmitter implements IStarkGateBridg
   }
 
   // Helper method to simulate emitting a TBTCBridgedToStarkNet event for tests
-  emitTBTCBridgedToStarkNet(depositKey: string, amount: BigNumberish, starkNetRecipient: string) {
-    this.emit('TBTCBridgedToStarkNet', depositKey, BigNumber.from(amount), starkNetRecipient, {});
+  emitTBTCBridgedToStarkNet(depositKey: string, starkNetRecipient: BigNumberish, amount: BigNumberish, messageNonce: BigNumberish = 123) {
+    this.emit('TBTCBridgedToStarkNet', depositKey, BigNumber.from(starkNetRecipient), BigNumber.from(amount), BigNumber.from(messageNonce), {});
   }
 }
