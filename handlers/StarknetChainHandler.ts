@@ -182,9 +182,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       },
     );
 
-    logger.info(
-      `L1 TBTCBridgedToStarkNet event listener is active for ${this.config.chainName}`,
-    );
+    logger.info(`L1 TBTCBridgedToStarkNet event listener is active for ${this.config.chainName}`);
 
     if (this.config.l2StartBlock > 0) {
       this.checkForPastL1DepositorEvents({ fromBlock: this.config.l2StartBlock }).catch((error) => {
@@ -410,7 +408,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         logger.warn(
           `${logPrefix} Failed to get dynamic fee estimate from StarkGate: ${estimateError.message}. Falling back to static methods.`,
         );
-        
+
         if (this.l1DepositorContract.callStatic.quoteFinalizeDeposit) {
           messageFee = await this.l1DepositorContract.callStatic.quoteFinalizeDeposit();
           logger.info(
@@ -567,7 +565,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         fundingTx.outputVector,
         fundingTx.locktime,
       ] as any;
-      
+
       // Take the first 5 elements of the reveal array
       const revealArray = revealData.slice(0, 5) as any;
 

@@ -57,7 +57,7 @@ export const IStarkGateBridgeABI = [
     inputs: [{ internalType: 'uint256', name: 'nonce', type: 'uint256' }],
     outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
   },
-  
+
   // Functions from StarkNetBitcoinDepositor.sol that are called via this interface
   {
     name: 'initializeDeposit',
@@ -98,7 +98,7 @@ export const IStarkGateBridgeABI = [
     inputs: [{ internalType: 'uint256', name: 'newFee', type: 'uint256' }],
     outputs: [],
   },
-  
+
   // Events
   {
     name: 'TBTCBridgedToStarkNet',

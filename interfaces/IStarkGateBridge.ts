@@ -65,7 +65,7 @@ export interface IStarkGateBridge {
   isDepositCancellable(nonce: BigNumberish, overrides?: CallOverrides): Promise<boolean>;
 
   // StarkNetBitcoinDepositor contract functions that might still be called via this interface
-  
+
   /**
    * initializeDeposit(bytes fundingTx, bytes reveal, bytes32 l2DepositOwner)
    */
@@ -79,7 +79,10 @@ export interface IStarkGateBridge {
   /**
    * finalizeDeposit(bytes32 depositKey) payable
    */
-  finalizeDeposit(depositKey: BytesLike, overrides?: PayableOverrides): Promise<ContractTransaction>;
+  finalizeDeposit(
+    depositKey: BytesLike,
+    overrides?: PayableOverrides,
+  ): Promise<ContractTransaction>;
 
   /**
    * quoteFinalizeDeposit() view returns (uint256)
