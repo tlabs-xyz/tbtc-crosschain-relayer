@@ -3,6 +3,7 @@ import type {
   BytesLike,
   EventFilter,
   Overrides,
+  PayableOverrides,
   CallOverrides,
   ContractTransaction,
   Signer,
@@ -11,10 +12,60 @@ import type {
 import { ethers } from 'ethers';
 import type { Listener, Provider } from '@ethersproject/abstract-provider';
 
-// This interface defines the *application-specific* methods and events
-// of the StarkGate Bridge contract that our relayer will interact with.
+// This interface defines the methods and events of the StarkGate Bridge contract
+// that our relayer will interact with, based on the updated contracts/cross-chain/starknet/interfaces/IStarkGateBridge.sol
 // It explicitly *does not* extend ethers.Contract, allowing for simpler mocks.
 export interface IStarkGateBridge {
+  /**
+   * deposit(address token, uint256 amount, uint256 l2Recipient) payable returns (uint256)
+   */
+  deposit(
+    token: string,
+    amount: BigNumberish,
+    l2Recipient: BigNumberish,
+    overrides?: PayableOverrides,
+  ): Promise<ContractTransaction>;
+
+  /**
+   * depositWithMessage(address token, uint256 amount, uint256 l2Recipient, uint256[] message) payable returns (uint256)
+   */
+  depositWithMessage(
+    token: string,
+    amount: BigNumberish,
+    l2Recipient: BigNumberish,
+    message: BigNumberish[],
+    overrides?: PayableOverrides,
+  ): Promise<ContractTransaction>;
+
+  /**
+   * estimateMessageFee() view returns (uint256)
+   */
+  estimateMessageFee(overrides?: CallOverrides): Promise<BigNumberish>;
+
+  /**
+   * depositWithMessageCancelRequest(address token, uint256 amount, uint256 l2Recipient, uint256[] message, uint256 nonce)
+   */
+  depositWithMessageCancelRequest(
+    token: string,
+    amount: BigNumberish,
+    l2Recipient: BigNumberish,
+    message: BigNumberish[],
+    nonce: BigNumberish,
+    overrides?: Overrides,
+  ): Promise<ContractTransaction>;
+
+  /**
+   * l1ToL2MessageNonce() view returns (uint256)
+   */
+  l1ToL2MessageNonce(overrides?: CallOverrides): Promise<BigNumberish>;
+
+  /**
+   * isDepositCancellable(uint256 nonce) view returns (bool)
+   */
+  isDepositCancellable(nonce: BigNumberish, overrides?: CallOverrides): Promise<boolean>;
+
+  // StarkNetBitcoinDepositor contract functions that might still be called via this interface
+  
   /**
    * initializeDeposit(bytes fundingTx, bytes reveal, bytes32 l2DepositOwner)
    */
@@ -28,7 +79,7 @@ export interface IStarkGateBridge {
   /**
    * finalizeDeposit(bytes32 depositKey) payable
    */
-  finalizeDeposit(depositKey: BytesLike, overrides?: Overrides): Promise<ContractTransaction>;
+  finalizeDeposit(depositKey: BytesLike, overrides?: PayableOverrides): Promise<ContractTransaction>;
 
   /**
    * quoteFinalizeDeposit() view returns (uint256)
@@ -49,31 +100,32 @@ export interface IStarkGateBridge {
   filters: {
     TBTCBridgedToStarkNet(
       depositKey?: BytesLike | null,
-      amount?: null, // Event filter doesn't filter on non-indexed params
-      starkNetRecipient?: null, // Event filter doesn't filter on non-indexed params
+      starkNetRecipient?: BigNumberish | null,
+      amount?: null,
+      messageNonce?: null,
     ): EventFilter;
   };
 
   // Event listener methods that our application might use directly on the contract instance
-  // These are often part of ethers.Contract, but we'll include minimal definitions here
-  // as our code will likely call them.
   on(
     event: 'TBTCBridgedToStarkNet',
     listener: (
       depositKey: string,
+      starkNetRecipient: BigNumberish,
       amount: BigNumberish,
-      starkNetRecipient: string,
+      messageNonce: BigNumberish,
       event: any,
     ) => void,
   ): this;
-  on(event: EventFilter | string, listener: Listener): this; // Use imported Listener
+  on(event: EventFilter | string, listener: Listener): this;
 
   once(
     event: 'TBTCBridgedToStarkNet',
     listener: (
       depositKey: string,
+      starkNetRecipient: BigNumberish,
       amount: BigNumberish,
-      starkNetRecipient: string,
+      messageNonce: BigNumberish,
       event: any,
     ) => void,
   ): this;
@@ -83,44 +135,32 @@ export interface IStarkGateBridge {
     event: 'TBTCBridgedToStarkNet',
     listener: (
       depositKey: string,
+      starkNetRecipient: BigNumberish,
       amount: BigNumberish,
-      starkNetRecipient: string,
+      messageNonce: BigNumberish,
       event: any,
     ) => void,
   ): this;
   off(event: EventFilter | string, listener: Listener): this;
 
   removeAllListeners(event?: EventFilter | string): this;
-  listeners(event?: EventFilter | string): Array<Listener>; // Use imported Listener
+  listeners(event?: EventFilter | string): Array<Listener>;
   listenerCount(event?: EventFilter | string): number;
 
-  // We explicitly add the 'address' and 'interface' properties as they are commonly accessed
-  // from an ethers.Contract instance and are relevant for contract interaction.
+  // Contract properties
   readonly address: string;
   readonly interface: ethers.utils.Interface;
-
-  // The 'signer' and 'provider' are typically accessed from an ethers.Contract,
-  // so we include them here, but make them nullable as they might not always be present
-  // on a contract instance (e.g., if it's connected to a provider only).
   readonly signer: Signer | null;
-  readonly provider: Provider | null; // Use imported Provider
-
-  // These properties are part of the ethers.Contract interface that IStarkGateBridge combines with.
-  // We need to define them here to satisfy the `ethers.Contract & IStarkGateBridge` type.
+  readonly provider: Provider | null;
   readonly callStatic: { [key: string]: ContractFunction };
   readonly estimateGas: { [key: string]: ContractFunction };
   readonly populateTransaction: { [key: string]: ContractFunction };
   readonly resolvedAddress: Promise<string>;
   readonly functions: { [key: string]: ContractFunction };
-
-  // For `deployed()` and `deployTransaction`, we need to match the ethers.Contract type precisely.
-  // The `deployed()` method on Contract returns `Promise<Contract>`, so our mock also needs to.
   readonly deployed: () => Promise<ethers.Contract>;
   readonly deployTransaction: ContractTransaction | undefined;
 }
 
 // This type represents the *actual* ethers.Contract instance at runtime,
 // which will also satisfy our application-specific interface.
-// When you create an ethers.Contract object (e.g., `new ethers.Contract(address, abi, signerOrProvider)`),
-// it will satisfy this combined type if its ABI matches `IStarkGateBridge`.
 export type EthersStarkGateBridge = ethers.Contract & IStarkGateBridge;

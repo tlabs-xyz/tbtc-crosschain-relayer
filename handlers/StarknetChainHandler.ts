@@ -10,7 +10,8 @@ import {
   type BytesLike,
 } from 'ethers';
 import type { EthersStarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor.js';
-import { IStarkGateBridgeABI } from '../interfaces/IStarkGateBridge.abi';
+import type { EthersStarkGateBridge } from '../interfaces/IStarkGateBridge.js';
+import { IStarkGateBridgeABI } from '../interfaces/IStarkGateBridge.abi.js';
 
 import { DepositStore } from '../utils/DepositStore.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -33,9 +34,9 @@ import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {
   // --- L1 StarkGate Contract Instances ---
   /** L1 StarkGate contract instance for sending transactions (uses L1 signer with nonce manager) */
-  protected l1DepositorContract: EthersStarkNetBitcoinDepositor | undefined;
+  protected l1DepositorContract: EthersStarkGateBridge | undefined;
   /** L1 StarkGate contract instance for read-only operations and event listening (uses L1 provider) */
-  protected l1DepositorContractProvider: EthersStarkNetBitcoinDepositor | undefined;
+  protected l1DepositorContractProvider: EthersStarkGateBridge | undefined;
 
   constructor(config: StarknetChainConfig) {
     super(config);
@@ -145,24 +146,24 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   protected async setupL2Listeners(): Promise<void> {
     if (this.config.useEndpoint) {
       logger.info(
-        `L1 event listeners for L1 Depositor (e.g., DepositBridgedToStarkNet) skipped for ${this.config.chainName} (using Endpoint mode).`,
+        `L1 event listeners for L1 Depositor (e.g., TBTCBridgedToStarkNet) skipped for ${this.config.chainName} (using Endpoint mode).`,
       );
       return;
     }
 
     if (!this.l1DepositorContractProvider) {
       logger.warn(
-        `L1 Depositor contract provider not initialized for ${this.config.chainName}. Cannot set up DepositBridgedToStarkNet event listener.`,
+        `L1 Depositor contract provider not initialized for ${this.config.chainName}. Cannot set up TBTCBridgedToStarkNet event listener.`,
       );
       return;
     }
 
     logger.info(
-      `Setting up L1 DepositBridgedToStarkNet event listener for ${this.config.chainName} on contract ${this.l1DepositorContractProvider.address}`,
+      `Setting up L1 TBTCBridgedToStarkNet event listener for ${this.config.chainName} on contract ${this.l1DepositorContractProvider.address}`,
     );
 
     this.l1DepositorContractProvider.on(
-      this.l1DepositorContractProvider.filters.DepositBridgedToStarkNet(),
+      this.l1DepositorContractProvider.filters.TBTCBridgedToStarkNet(),
       async (
         depositKey: string,
         starkNetRecipient: ethers.BigNumber,
@@ -172,8 +173,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       ) => {
         await this.processDepositBridgedToStarkNetEvent(
           depositKey,
+          starkNetRecipient,
           amount,
-          starkNetRecipient.toString(),
           messageNonce,
           event.transactionHash,
           false,
@@ -182,7 +183,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     );
 
     logger.info(
-      `L1 DepositBridgedToStarkNet event listener is active for ${this.config.chainName}`,
+      `L1 TBTCBridgedToStarkNet event listener is active for ${this.config.chainName}`,
     );
 
     if (this.config.l2StartBlock > 0) {
@@ -212,19 +213,19 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     const toBlockWithDefault = options.toBlock || 'latest';
     logger.info(
-      `Checking for past DepositBridgedToStarkNet L1 events for ${this.config.chainName} from block ${options.fromBlock} to ${toBlockWithDefault}`,
+      `Checking for past TBTCBridgedToStarkNet L1 events for ${this.config.chainName} from block ${options.fromBlock} to ${toBlockWithDefault}`,
     );
 
     try {
       const events = await this.l1DepositorContractProvider.queryFilter(
-        this.l1DepositorContractProvider.filters.DepositBridgedToStarkNet(),
+        this.l1DepositorContractProvider.filters.TBTCBridgedToStarkNet(),
         options.fromBlock,
         toBlockWithDefault,
       );
 
       if (events.length > 0) {
         logger.info(
-          `Found ${events.length} past DepositBridgedToStarkNet L1 events for ${this.config.chainName}`,
+          `Found ${events.length} past TBTCBridgedToStarkNet L1 events for ${this.config.chainName}`,
         );
         for (const event of events) {
           if (event.args) {
@@ -234,8 +235,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
             const messageNonce = event.args.messageNonce as ethers.BigNumber;
             await this.processDepositBridgedToStarkNetEvent(
               depositKey,
+              starkNetRecipient,
               amount,
-              starkNetRecipient.toString(),
               messageNonce,
               event.transactionHash,
               true,
@@ -248,12 +249,12 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         }
       } else {
         logger.info(
-          `No past DepositBridgedToStarkNet L1 events found for ${this.config.chainName} in the queried range.`,
+          `No past TBTCBridgedToStarkNet L1 events found for ${this.config.chainName} in the queried range.`,
         );
       }
     } catch (error: any) {
       logger.error(
-        `Error querying past DepositBridgedToStarkNet L1 events for ${this.config.chainName}: ${error.message}`,
+        `Error querying past TBTCBridgedToStarkNet L1 events for ${this.config.chainName}: ${error.message}`,
         error,
       );
     }
@@ -261,8 +262,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
   protected async processDepositBridgedToStarkNetEvent(
     depositKeyOrId: string | BytesLike,
+    starkNetRecipient: ethers.BigNumber,
     amount: ethers.BigNumber,
-    starkNetRecipient: string,
     messageNonce: ethers.BigNumber,
     transactionHash: string,
     isPastEvent: boolean = false,
@@ -275,7 +276,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       typeof depositKeyOrId === 'string' ? depositKeyOrId : ethers.utils.hexlify(depositKeyOrId);
 
     logger.info(
-      `${logPrefix} Processing | DepositId: ${depositId} | Amount: ${amount.toString()} | StarkNet Recipient: ${starkNetRecipient} | L1 Tx: ${transactionHash} | Nonce: ${messageNonce.toString()}`,
+      `${logPrefix} Processing | DepositId: ${depositId} | Amount: ${amount.toString()} | StarkNet Recipient: ${starkNetRecipient.toString()} | L1 Tx: ${transactionHash} | Nonce: ${messageNonce.toString()}`,
     );
 
     try {
@@ -396,29 +397,44 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     let messageFee: ethers.BigNumber;
     try {
-      if (this.l1DepositorContract.callStatic.quoteFinalizeDeposit) {
-        messageFee = await this.l1DepositorContract.callStatic.quoteFinalizeDeposit();
+      // First try to use the dynamic fee estimation from StarkGate
+      try {
+        const dynamicFee = await this.l1DepositorContract.estimateMessageFee();
+        // Apply a 10% buffer to the dynamic fee to account for gas price fluctuations
+        const buffer = dynamicFee.mul(10).div(100);
+        messageFee = dynamicFee.add(buffer);
         logger.info(
-          `${logPrefix} Quoted L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH`,
+          `${logPrefix} Dynamically quoted L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH (includes 10% buffer)`,
         );
-      } else if (
-        this.config.l1FeeAmountWei &&
-        ethers.BigNumber.from(this.config.l1FeeAmountWei).gt(0)
-      ) {
-        messageFee = ethers.BigNumber.from(this.config.l1FeeAmountWei);
+      } catch (estimateError) {
         logger.warn(
-          `${logPrefix} Using configured l1FeeAmountWei as L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH. Review if this is the correct fee for finalizeDeposit.`,
+          `${logPrefix} Failed to get dynamic fee estimate from StarkGate: ${estimateError.message}. Falling back to static methods.`,
         );
-      } else {
-        logger.error(
-          `${logPrefix} L1->L2 message fee for finalizeDeposit is not configured or quotable and is zero. Cannot proceed.`,
-        );
-        await logDepositError(
-          deposit.id,
-          'L1->L2 message fee for finalizeDeposit is zero or unconfigured.',
-          {},
-        );
-        return undefined;
+        
+        if (this.l1DepositorContract.callStatic.quoteFinalizeDeposit) {
+          messageFee = await this.l1DepositorContract.callStatic.quoteFinalizeDeposit();
+          logger.info(
+            `${logPrefix} Static quoted L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH`,
+          );
+        } else if (
+          this.config.l1FeeAmountWei &&
+          ethers.BigNumber.from(this.config.l1FeeAmountWei).gt(0)
+        ) {
+          messageFee = ethers.BigNumber.from(this.config.l1FeeAmountWei);
+          logger.warn(
+            `${logPrefix} Using configured l1FeeAmountWei as L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH. Review if this is the correct fee for finalizeDeposit.`,
+          );
+        } else {
+          logger.error(
+            `${logPrefix} L1->L2 message fee for finalizeDeposit is not configured or quotable and is zero. Cannot proceed.`,
+          );
+          await logDepositError(
+            deposit.id,
+            'L1->L2 message fee for finalizeDeposit is zero or unconfigured.',
+            {},
+          );
+          return undefined;
+        }
       }
     } catch (quoteError: any) {
       logger.error(
@@ -544,14 +560,20 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       logger.debug(`${logPrefix} L1 Contract Funding Tx Arg:`, fundingTx);
       logger.debug(`${logPrefix} L1 Contract Reveal Arg:`, revealData);
 
+      // Create the funding transaction array to match the contract expected format
+      const fundingTxStruct = [
+        fundingTx.version,
+        fundingTx.inputVector,
+        fundingTx.outputVector,
+        fundingTx.locktime,
+      ] as any;
+      
+      // Take the first 5 elements of the reveal array
+      const revealArray = revealData.slice(0, 5) as any;
+
       const txResponse = await this.l1DepositorContract.initializeDeposit(
-        [
-          fundingTx.version,
-          fundingTx.inputVector,
-          fundingTx.outputVector,
-          fundingTx.locktime,
-        ] as any,
-        revealData.slice(0, 5) as any,
+        fundingTxStruct,
+        revealArray,
         formattedL2DepositOwnerAsBytes32,
         txOverrides,
       );
