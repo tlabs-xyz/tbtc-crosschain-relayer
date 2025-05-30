@@ -1,437 +1,645 @@
-import type {
-  Provider,
-  // Signer, // Removed from @ethersproject/providers
-} from '@ethersproject/providers';
-import type {
+import {
   BaseContract,
   BigNumber,
-  BigNumberish,
-  BytesLike,
-  CallOverrides,
-  ContractTransaction,
-  EventFilter,
-  Overrides,
-  PayableOverrides,
-  PopulatedTransaction,
-  Signer, // Added import from 'ethers'
+  type BigNumberish,
+  type BytesLike,
+  type CallOverrides,
+  type ContractTransaction,
+  type Overrides,
+  type PayableOverrides,
+  type PopulatedTransaction,
+  Signer,
   utils,
-} from 'ethers'; // Using full ethers import
-import type { FunctionFragment, EventFragment } from '@ethersproject/abi';
+} from 'ethers';
+import { FunctionFragment, type Result, EventFragment } from '@ethersproject/abi';
+import { type Listener, type Provider } from '@ethersproject/providers';
+import {
+  type TypedEventFilter,
+  type TypedEvent,
+  type TypedListener,
+  type OnEvent,
+} from './common.js';
 
-// Common type for events, assuming you might have a common types file or define it per interface
-export type TypedEventFilter<_TEvent extends TypedEvent> = EventFilter;
-export interface TypedEvent<TArgsArray extends Array<any> = any, TArgsObject = any> extends Event {
-  args: TArgsArray & TArgsObject;
-}
-// export type TypedListener<TEvent extends TypedEvent> = (...listenerArg: [...Parameters<TEvent[" musste"]>,
-// TEvent]) => void;
-// export type OnEvent<TEvent extends TypedEvent> = (listener: TypedListener<TEvent>) => void;
-
-// --- Structs Used in Contract Functions ---
-
-/**
- * Corresponds to the `FundingTransaction` struct often used in L1 depositor contracts.
- * Ensure this matches the exact definition in your `AbstractL1BTCDepositor.sol` or related files if it's passed directly.
- * For `StarkNetBitcoinDepositor.initializeDeposit`, it appears to be passed as a tuple/array in the JS call.
- */
-export type FundingTransactionStruct = {
-  version: BigNumberish;
+export type BitcoinTxInfoStruct = {
+  version: BytesLike;
   inputVector: BytesLike;
   outputVector: BytesLike;
-  locktime: BigNumberish;
+  locktime: BytesLike;
 };
 
-export type FundingTransactionStructOutput = [BigNumber, string, string, BigNumber] & {
-  version: BigNumber;
+export type BitcoinTxInfoStructOutput = [string, string, string, string] & {
+  version: string;
   inputVector: string;
   outputVector: string;
-  locktime: BigNumber;
+  locktime: string;
 };
 
-// --- Main Contract Interface (for ethers.utils.Interface) ---
-export interface EthersStarkNetBitcoinDepositorInterface extends utils.Interface {
-  functions: {
-    // From StarkNetBitcoinDepositor itself
-    'starkGateBridge()': FunctionFragment;
-    'l2TbtcToken()': FunctionFragment;
-    'l1ToL2MessageFee()': FunctionFragment;
-    'depositStarkNetRecipients(bytes32)': FunctionFragment;
-    'updateL1ToL2MessageFee(uint256)': FunctionFragment;
-    'setDepositStateForTesting(uint256,uint8)': FunctionFragment; // Test helper
-    'emitDepositInitializedForStarkNet(bytes32,uint256)': FunctionFragment; // Test helper
-
-    // Overridden from AbstractL1BTCDepositor / AbstractBTCDepositor
-    'quoteFinalizeDeposit()': FunctionFragment;
-
-    // Inherited from AbstractL1BTCDepositor / AbstractBTCDepositor
-    // (Add all public/external functions from parent contracts that are part of the interface)
-    'initializeDeposit((uint256,bytes,bytes,uint256),bytes[5],bytes32)': FunctionFragment;
-    'finalizeDeposit(bytes32)': FunctionFragment;
-    'tbtcToken()': FunctionFragment;
-    'tbtcVault()': FunctionFragment;
-    'bridge()': FunctionFragment;
-    'deposits(uint256)': FunctionFragment; // Assuming this is how DepositState is accessed
-    'owner()': FunctionFragment;
-    'paused()': FunctionFragment;
-    'renounceOwnership()': FunctionFragment;
-    'transferOwnership(address)': FunctionFragment;
-    'pause()': FunctionFragment;
-    'unpause()': FunctionFragment;
-    // Potentially others like: 'isOwner()', 'getRoleAdmin()', etc. if using OpenZeppelin AccessControl more deeply
-  };
-
-  getFunction(nameOrSignatureOrTopic: string): FunctionFragment;
-
-  events: {
-    // From StarkNetBitcoinDepositor itself
-    'StarkNetBitcoinDepositorInitialized(address,address,uint256)': EventFragment;
-    'DepositInitializedForStarkNet(bytes32,uint256)': EventFragment;
-    'DepositBridgedToStarkNet(bytes32,uint256,uint256,uint256)': EventFragment;
-    'L1ToL2MessageFeeUpdated(uint256)': EventFragment;
-
-    // Inherited from AbstractL1BTCDepositor / AbstractBTCDepositor & Ownable/Pausable
-    // Ensure these match your actual parent contract events
-    'DepositInitialized(bytes32,uint256,bytes,bytes,bytes32,uint256,address)': EventFragment; // Example signature
-    'DepositFinalized(bytes32,uint256,address,uint256)': EventFragment; // Example signature, added amount
-    'OwnershipTransferred(address,address)': EventFragment;
-    'Paused(address)': EventFragment;
-    'Unpaused(address)': EventFragment;
-    // Potentially others like 'RoleAdminChanged', 'RoleGranted', 'RoleRevoked'
-  };
-
-  getEvent(nameOrSignatureOrTopic: string): EventFragment;
-}
-
-// --- Event Interfaces (for typed event access) ---
-
-export interface StarkNetBitcoinDepositorInitializedEventObject {
-  _starkGateBridge: string;
-  _l2TbtcToken: string;
-  _initialL1ToL2MessageFee: BigNumber;
-}
-export type StarkNetBitcoinDepositorInitializedEvent = TypedEvent<
-  [string, string, BigNumber],
-  StarkNetBitcoinDepositorInitializedEventObject
->;
-export type StarkNetBitcoinDepositorInitializedEventFilter =
-  TypedEventFilter<StarkNetBitcoinDepositorInitializedEvent>;
-
-export interface DepositInitializedForStarkNetEventObject {
-  depositKey: BytesLike;
-  starkNetRecipient: BigNumber;
-}
-export type DepositInitializedForStarkNetEvent = TypedEvent<
-  [BytesLike, BigNumber],
-  DepositInitializedForStarkNetEventObject
->;
-export type DepositInitializedForStarkNetEventFilter =
-  TypedEventFilter<DepositInitializedForStarkNetEvent>;
-
-export interface DepositBridgedToStarkNetEventObject {
-  depositKey: BytesLike;
-  starkNetRecipient: BigNumber;
-  amount: BigNumber;
-  messageNonce: BigNumber;
-}
-export type DepositBridgedToStarkNetEvent = TypedEvent<
-  [BytesLike, BigNumber, BigNumber, BigNumber],
-  DepositBridgedToStarkNetEventObject
->;
-export type DepositBridgedToStarkNetEventFilter = TypedEventFilter<DepositBridgedToStarkNetEvent>;
-
-export interface L1ToL2MessageFeeUpdatedEventObject {
-  newFee: BigNumber;
-}
-export type L1ToL2MessageFeeUpdatedEvent = TypedEvent<
-  [BigNumber],
-  L1ToL2MessageFeeUpdatedEventObject
->;
-export type L1ToL2MessageFeeUpdatedEventFilter = TypedEventFilter<L1ToL2MessageFeeUpdatedEvent>;
-
-// Example Inherited Event - Adjust to match your actual AbstractL1BTCDepositor
-export interface DepositInitializedEventObject {
-  depositKey: BytesLike;
-  fundingOutputIndex: BigNumber; // Example, ensure type matches ABI
+export type DepositRevealInfoStruct = {
+  fundingOutputIndex: BigNumberish;
   blindingFactor: BytesLike;
   walletPubKeyHash: BytesLike;
   refundPubKeyHash: BytesLike;
-  refundLocktime: BigNumber;
-  vault: string; // Assuming 'vault' is part of this event as per some conventions
-}
-export type DepositInitializedEvent = TypedEvent<
-  [BytesLike, BigNumber, BytesLike, BytesLike, BytesLike, BigNumber, string],
-  DepositInitializedEventObject
->;
-export type DepositInitializedEventFilter = TypedEventFilter<DepositInitializedEvent>;
+  refundLocktime: BytesLike;
+  vault: string;
+};
 
-// Example Inherited Event - Adjust to match your actual AbstractL1BTCDepositor
-export interface DepositFinalizedEventObject {
-  depositKey: BytesLike;
-  amountMinted: BigNumber;
-  beneficiary: string;
-  optimisticMintingFee: BigNumber; // Example, check actual event params
+export type DepositRevealInfoStructOutput = [number, string, string, string, string, string] & {
+  fundingOutputIndex: number;
+  blindingFactor: string;
+  walletPubKeyHash: string;
+  refundPubKeyHash: string;
+  refundLocktime: string;
+  vault: string;
+};
+
+export interface StarkNetBitcoinDepositorInterface extends utils.Interface {
+  functions: {
+    'MAX_FEE_BUFFER()': FunctionFragment;
+    'SATOSHI_MULTIPLIER()': FunctionFragment;
+    'bridge()': FunctionFragment;
+    'deposits(uint256)': FunctionFragment;
+    'feeBuffer()': FunctionFragment;
+    'finalizeDeposit(uint256)': FunctionFragment;
+    'finalizeDepositGasOffset()': FunctionFragment;
+    'gasReimbursements(uint256)': FunctionFragment;
+    'initialize(address,address,address,uint256,uint256)': FunctionFragment;
+    'initializeDeposit((bytes4,bytes,bytes,bytes4),(uint32,bytes8,bytes20,bytes20,bytes4,address),bytes32)': FunctionFragment;
+    'initializeDepositGasOffset()': FunctionFragment;
+    'l1ToL2MessageFee()': FunctionFragment;
+    'owner()': FunctionFragment;
+    'quoteFinalizeDeposit(uint256)': FunctionFragment;
+    'quoteFinalizeDepositDynamic()': FunctionFragment;
+    'reimburseTxMaxFee()': FunctionFragment;
+    'reimbursementAuthorizations(address)': FunctionFragment;
+    'reimbursementPool()': FunctionFragment;
+    'renounceOwnership()': FunctionFragment;
+    'setReimburseTxMaxFee(bool)': FunctionFragment;
+    'starkGateBridge()': FunctionFragment;
+    'starkNetTBTCToken()': FunctionFragment;
+    'tbtcToken()': FunctionFragment;
+    'tbtcVault()': FunctionFragment;
+    'transferOwnership(address)': FunctionFragment;
+    'updateFeeBuffer(uint256)': FunctionFragment;
+    'updateGasOffsetParameters(uint256,uint256)': FunctionFragment;
+    'updateL1ToL2MessageFee(uint256)': FunctionFragment;
+    'updateReimbursementAuthorization(address,bool)': FunctionFragment;
+    'updateReimbursementPool(address)': FunctionFragment;
+  };
+
+  encodeFunctionData(functionFragment: 'MAX_FEE_BUFFER', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'SATOSHI_MULTIPLIER', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'bridge', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'deposits', values: [BigNumberish]): string;
+  encodeFunctionData(functionFragment: 'feeBuffer', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'finalizeDeposit', values: [BigNumberish]): string;
+  encodeFunctionData(functionFragment: 'finalizeDepositGasOffset', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'gasReimbursements', values: [BigNumberish]): string;
+  encodeFunctionData(
+    functionFragment: 'initialize',
+    values: [string, string, string, BigNumberish, BigNumberish],
+  ): string;
+  encodeFunctionData(
+    functionFragment: 'initializeDeposit',
+    values: [BitcoinTxInfoStruct, DepositRevealInfoStruct, BytesLike],
+  ): string;
+  encodeFunctionData(functionFragment: 'initializeDepositGasOffset', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'l1ToL2MessageFee', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'owner', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'quoteFinalizeDeposit', values: [BigNumberish]): string;
+  encodeFunctionData(functionFragment: 'quoteFinalizeDepositDynamic', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'reimburseTxMaxFee', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'reimbursementAuthorizations', values: [string]): string;
+  encodeFunctionData(functionFragment: 'reimbursementPool', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'renounceOwnership', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'setReimburseTxMaxFee', values: [boolean]): string;
+  encodeFunctionData(functionFragment: 'starkGateBridge', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'starkNetTBTCToken', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'tbtcToken', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'tbtcVault', values?: undefined): string;
+  encodeFunctionData(functionFragment: 'transferOwnership', values: [string]): string;
+  encodeFunctionData(functionFragment: 'updateFeeBuffer', values: [BigNumberish]): string;
+  encodeFunctionData(
+    functionFragment: 'updateGasOffsetParameters',
+    values: [BigNumberish, BigNumberish],
+  ): string;
+  encodeFunctionData(functionFragment: 'updateL1ToL2MessageFee', values: [BigNumberish]): string;
+  encodeFunctionData(
+    functionFragment: 'updateReimbursementAuthorization',
+    values: [string, boolean],
+  ): string;
+  encodeFunctionData(functionFragment: 'updateReimbursementPool', values: [string]): string;
+
+  decodeFunctionResult(functionFragment: 'MAX_FEE_BUFFER', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'SATOSHI_MULTIPLIER', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'bridge', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'deposits', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'feeBuffer', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'finalizeDeposit', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'finalizeDepositGasOffset', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'gasReimbursements', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'initialize', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'initializeDeposit', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'initializeDepositGasOffset', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'l1ToL2MessageFee', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'owner', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'quoteFinalizeDeposit', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'quoteFinalizeDepositDynamic', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'reimburseTxMaxFee', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'reimbursementAuthorizations', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'reimbursementPool', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'renounceOwnership', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'setReimburseTxMaxFee', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'starkGateBridge', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'starkNetTBTCToken', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'tbtcToken', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'tbtcVault', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'transferOwnership', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'updateFeeBuffer', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'updateGasOffsetParameters', data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: 'updateL1ToL2MessageFee', data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: 'updateReimbursementAuthorization',
+    data: BytesLike,
+  ): Result;
+  decodeFunctionResult(functionFragment: 'updateReimbursementPool', data: BytesLike): Result;
+
+  events: {
+    'DepositFinalized(uint256,bytes32,address,uint256,uint256)': EventFragment;
+    'DepositInitialized(uint256,bytes32,address)': EventFragment;
+    'FeeBufferUpdated(uint256)': EventFragment;
+    'GasOffsetParametersUpdated(uint256,uint256)': EventFragment;
+    'Initialized(uint8)': EventFragment;
+    'L1ToL2MessageFeeUpdated(uint256)': EventFragment;
+    'OwnershipTransferred(address,address)': EventFragment;
+    'ReimburseTxMaxFeeUpdated(bool)': EventFragment;
+    'ReimbursementAuthorizationUpdated(address,bool)': EventFragment;
+    'ReimbursementPoolUpdated(address)': EventFragment;
+    'StarkNetBitcoinDepositorInitialized(address,uint256)': EventFragment;
+    'TBTCBridgedToStarkNet(bytes32,uint256,uint256,uint256)': EventFragment;
+  };
+
+  getEvent(nameOrSignatureOrTopic: 'DepositFinalized'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'DepositInitialized'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'FeeBufferUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'GasOffsetParametersUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'Initialized'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'L1ToL2MessageFeeUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'OwnershipTransferred'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'ReimburseTxMaxFeeUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'ReimbursementAuthorizationUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'ReimbursementPoolUpdated'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'StarkNetBitcoinDepositorInitialized'): EventFragment;
+  getEvent(nameOrSignatureOrTopic: 'TBTCBridgedToStarkNet'): EventFragment;
 }
+
 export type DepositFinalizedEvent = TypedEvent<
-  [BytesLike, BigNumber, string, BigNumber],
-  DepositFinalizedEventObject
+  [BigNumber, string, string, BigNumber, BigNumber],
+  {
+    depositKey: BigNumber;
+    destinationChainDepositOwner: string;
+    l1Sender: string;
+    initialAmount: BigNumber;
+    tbtcAmount: BigNumber;
+  }
 >;
+
 export type DepositFinalizedEventFilter = TypedEventFilter<DepositFinalizedEvent>;
 
-export interface OwnershipTransferredEventObject {
-  previousOwner: string;
-  newOwner: string;
-}
+export type DepositInitializedEvent = TypedEvent<
+  [BigNumber, string, string],
+  {
+    depositKey: BigNumber;
+    destinationChainDepositOwner: string;
+    l1Sender: string;
+  }
+>;
+
+export type DepositInitializedEventFilter = TypedEventFilter<DepositInitializedEvent>;
+
+export type FeeBufferUpdatedEvent = TypedEvent<[BigNumber], { newBuffer: BigNumber }>;
+
+export type FeeBufferUpdatedEventFilter = TypedEventFilter<FeeBufferUpdatedEvent>;
+
+export type GasOffsetParametersUpdatedEvent = TypedEvent<
+  [BigNumber, BigNumber],
+  { initializeDepositGasOffset: BigNumber; finalizeDepositGasOffset: BigNumber }
+>;
+
+export type GasOffsetParametersUpdatedEventFilter =
+  TypedEventFilter<GasOffsetParametersUpdatedEvent>;
+
+export type InitializedEvent = TypedEvent<[number], { version: number }>;
+
+export type InitializedEventFilter = TypedEventFilter<InitializedEvent>;
+
+export type L1ToL2MessageFeeUpdatedEvent = TypedEvent<[BigNumber], { newFee: BigNumber }>;
+
+export type L1ToL2MessageFeeUpdatedEventFilter = TypedEventFilter<L1ToL2MessageFeeUpdatedEvent>;
+
 export type OwnershipTransferredEvent = TypedEvent<
   [string, string],
-  OwnershipTransferredEventObject
+  { previousOwner: string; newOwner: string }
 >;
+
 export type OwnershipTransferredEventFilter = TypedEventFilter<OwnershipTransferredEvent>;
 
-export interface PausedEventObject {
-  account: string;
-}
-export type PausedEvent = TypedEvent<[string], PausedEventObject>;
-export type PausedEventFilter = TypedEventFilter<PausedEvent>;
+export type ReimburseTxMaxFeeUpdatedEvent = TypedEvent<[boolean], { reimburseTxMaxFee: boolean }>;
 
-export interface UnpausedEventObject {
-  account: string;
-}
-export type UnpausedEvent = TypedEvent<[string], UnpausedEventObject>;
-export type UnpausedEventFilter = TypedEventFilter<UnpausedEvent>;
+export type ReimburseTxMaxFeeUpdatedEventFilter = TypedEventFilter<ReimburseTxMaxFeeUpdatedEvent>;
 
-// --- Main Contract Typed Instance ---
+export type ReimbursementAuthorizationUpdatedEvent = TypedEvent<
+  [string, boolean],
+  { _address: string; authorization: boolean }
+>;
 
-export interface EthersStarkNetBitcoinDepositor extends BaseContract {
+export type ReimbursementAuthorizationUpdatedEventFilter =
+  TypedEventFilter<ReimbursementAuthorizationUpdatedEvent>;
+
+export type ReimbursementPoolUpdatedEvent = TypedEvent<[string], { newReimbursementPool: string }>;
+
+export type ReimbursementPoolUpdatedEventFilter = TypedEventFilter<ReimbursementPoolUpdatedEvent>;
+
+export type StarkNetBitcoinDepositorInitializedEvent = TypedEvent<
+  [string, BigNumber],
+  { starkGateBridge: string; starkNetTBTCToken: BigNumber }
+>;
+
+export type StarkNetBitcoinDepositorInitializedEventFilter =
+  TypedEventFilter<StarkNetBitcoinDepositorInitializedEvent>;
+
+export type TBTCBridgedToStarkNetEvent = TypedEvent<
+  [string, BigNumber, BigNumber, BigNumber],
+  {
+    depositKey: string;
+    starkNetRecipient: BigNumber;
+    amount: BigNumber;
+    messageNonce: BigNumber;
+  }
+>;
+
+export type TBTCBridgedToStarkNetEventFilter = TypedEventFilter<TBTCBridgedToStarkNetEvent>;
+
+export interface StarkNetBitcoinDepositor extends BaseContract {
   connect(signerOrProvider: Signer | Provider | string): this;
   attach(addressOrName: string): this;
   deployed(): Promise<this>;
 
-  interface: EthersStarkNetBitcoinDepositorInterface;
+  interface: StarkNetBitcoinDepositorInterface;
+
+  queryFilter<TEvent extends TypedEvent>(
+    event: TypedEventFilter<TEvent>,
+    fromBlockOrBlockhash?: string | number | undefined,
+    toBlock?: string | number | undefined,
+  ): Promise<Array<TEvent>>;
+
+  listeners<TEvent extends TypedEvent>(
+    eventFilter?: TypedEventFilter<TEvent>,
+  ): Array<TypedListener<TEvent>>;
+  listeners(eventName?: string): Array<Listener>;
+  removeAllListeners<TEvent extends TypedEvent>(eventFilter: TypedEventFilter<TEvent>): this;
+  removeAllListeners(eventName?: string): this;
+  off: OnEvent<this>;
+  on: OnEvent<this>;
+  once: OnEvent<this>;
+  removeListener: OnEvent<this>;
 
   functions: {
-    // From StarkNetBitcoinDepositor itself
-    starkGateBridge(overrides?: CallOverrides): Promise<[string]>;
-    l2TbtcToken(overrides?: CallOverrides): Promise<[string]>;
-    l1ToL2MessageFee(overrides?: CallOverrides): Promise<[BigNumber]>;
-    depositStarkNetRecipients(
-      depositKey: BytesLike,
-      overrides?: CallOverrides,
-    ): Promise<[BigNumber]>;
-    updateL1ToL2MessageFee(
-      _newL1ToL2MessageFee: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<ContractTransaction>;
-    setDepositStateForTesting(
-      depositKey: BigNumberish,
-      state: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<ContractTransaction>;
-    emitDepositInitializedForStarkNet(
-      _depositKey: BytesLike,
-      _starkNetRecipient: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<ContractTransaction>;
+    MAX_FEE_BUFFER(overrides?: CallOverrides): Promise<[BigNumber]>;
 
-    // Overridden from AbstractL1BTCDepositor
-    quoteFinalizeDeposit(overrides?: CallOverrides): Promise<[BigNumber] & { fee: BigNumber }>;
+    SATOSHI_MULTIPLIER(overrides?: CallOverrides): Promise<[BigNumber]>;
 
-    // Inherited from AbstractL1BTCDepositor / AbstractBTCDepositor
-    initializeDeposit(
-      _fundingTx: FundingTransactionStruct, // This is how ethers.js expects struct parameters
-      _reveal: [BytesLike, BytesLike, BytesLike, BytesLike, BytesLike], // Solidity: bytes[5]
-      _depositOwner: BytesLike, // Solidity: bytes32 (extraData for StarkNet recipient)
-      overrides?: PayableOverrides & { from?: string }, // It's payable in AbstractL1BTCDepositor
-    ): Promise<ContractTransaction>;
+    bridge(overrides?: CallOverrides): Promise<[string]>;
+
+    deposits(arg0: BigNumberish, overrides?: CallOverrides): Promise<[number]>;
+
+    feeBuffer(overrides?: CallOverrides): Promise<[BigNumber]>;
 
     finalizeDeposit(
-      depositKey: BytesLike, // Solidity: bytes32
-      overrides?: PayableOverrides & { from?: string }, // It's payable due to msg.value requirement for _transferTbtc
+      depositKey: BigNumberish,
+      overrides?: PayableOverrides & { from?: string | Promise<string> },
     ): Promise<ContractTransaction>;
 
-    tbtcToken(overrides?: CallOverrides): Promise<[string]>;
-    tbtcVault(overrides?: CallOverrides): Promise<[string]>;
-    bridge(overrides?: CallOverrides): Promise<[string]>;
-    deposits(depositKey: BigNumberish, overrides?: CallOverrides): Promise<[number]>; // Assuming DepositState enum maps to uint8
+    finalizeDepositGasOffset(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    gasReimbursements(
+      arg0: BigNumberish,
+      overrides?: CallOverrides,
+    ): Promise<[string, BigNumber] & { receiver: string; gasSpent: BigNumber }>;
+
+    initialize(
+      _tbtcBridge: string,
+      _tbtcVault: string,
+      _starkGateBridge: string,
+      _starkNetTBTCToken: BigNumberish,
+      _l1ToL2MessageFee: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
+
+    initializeDeposit(
+      fundingTx: BitcoinTxInfoStruct,
+      reveal: DepositRevealInfoStruct,
+      destinationChainDepositOwner: BytesLike,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
+
+    initializeDepositGasOffset(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    l1ToL2MessageFee(overrides?: CallOverrides): Promise<[BigNumber]>;
 
     owner(overrides?: CallOverrides): Promise<[string]>;
-    paused(overrides?: CallOverrides): Promise<[boolean]>;
-    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
+
+    quoteFinalizeDeposit(arg0: BigNumberish, overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    quoteFinalizeDepositDynamic(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    reimburseTxMaxFee(overrides?: CallOverrides): Promise<[boolean]>;
+
+    reimbursementAuthorizations(arg0: string, overrides?: CallOverrides): Promise<[boolean]>;
+
+    reimbursementPool(overrides?: CallOverrides): Promise<[string]>;
+
+    renounceOwnership(
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
+
+    setReimburseTxMaxFee(
+      _reimburseTxMaxFee: boolean,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
+
+    starkGateBridge(overrides?: CallOverrides): Promise<[string]>;
+
+    starkNetTBTCToken(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    tbtcToken(overrides?: CallOverrides): Promise<[string]>;
+
+    tbtcVault(overrides?: CallOverrides): Promise<[string]>;
+
     transferOwnership(
       newOwner: string,
-      overrides?: Overrides & { from?: string },
+      overrides?: Overrides & { from?: string | Promise<string> },
     ): Promise<ContractTransaction>;
-    pause(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
-    unpause(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
+
+    updateFeeBuffer(
+      newBuffer: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
+
+    updateGasOffsetParameters(
+      _initializeDepositGasOffset: BigNumberish,
+      _finalizeDepositGasOffset: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
+
+    updateL1ToL2MessageFee(
+      newFee: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
+
+    updateReimbursementAuthorization(
+      _address: string,
+      authorization: boolean,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
+
+    updateReimbursementPool(
+      _reimbursementPool: string,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<ContractTransaction>;
   };
 
-  // Direct-access functions (matching above for convenience)
-  starkGateBridge(overrides?: CallOverrides): Promise<string>;
-  l2TbtcToken(overrides?: CallOverrides): Promise<string>;
-  l1ToL2MessageFee(overrides?: CallOverrides): Promise<BigNumber>;
-  depositStarkNetRecipients(depositKey: BytesLike, overrides?: CallOverrides): Promise<BigNumber>;
-  updateL1ToL2MessageFee(
-    _newL1ToL2MessageFee: BigNumberish,
-    overrides?: Overrides & { from?: string },
-  ): Promise<ContractTransaction>;
-  setDepositStateForTesting(
-    depositKey: BigNumberish,
-    state: BigNumberish,
-    overrides?: Overrides & { from?: string },
-  ): Promise<ContractTransaction>;
-  emitDepositInitializedForStarkNet(
-    _depositKey: BytesLike,
-    _starkNetRecipient: BigNumberish,
-    overrides?: Overrides & { from?: string },
-  ): Promise<ContractTransaction>;
+  MAX_FEE_BUFFER(overrides?: CallOverrides): Promise<BigNumber>;
 
-  quoteFinalizeDeposit(overrides?: CallOverrides): Promise<BigNumber>; // Simplified return for direct access
+  SATOSHI_MULTIPLIER(overrides?: CallOverrides): Promise<BigNumber>;
 
-  initializeDeposit(
-    _fundingTx: FundingTransactionStruct,
-    _reveal: [BytesLike, BytesLike, BytesLike, BytesLike, BytesLike],
-    _depositOwner: BytesLike,
-    overrides?: PayableOverrides & { from?: string },
-  ): Promise<ContractTransaction>;
+  bridge(overrides?: CallOverrides): Promise<string>;
+
+  deposits(arg0: BigNumberish, overrides?: CallOverrides): Promise<number>;
+
+  feeBuffer(overrides?: CallOverrides): Promise<BigNumber>;
 
   finalizeDeposit(
-    depositKey: BytesLike,
-    overrides?: PayableOverrides & { from?: string },
+    depositKey: BigNumberish,
+    overrides?: PayableOverrides & { from?: string | Promise<string> },
   ): Promise<ContractTransaction>;
 
-  tbtcToken(overrides?: CallOverrides): Promise<string>;
-  tbtcVault(overrides?: CallOverrides): Promise<string>;
-  bridge(overrides?: CallOverrides): Promise<string>;
-  deposits(depositKey: BigNumberish, overrides?: CallOverrides): Promise<number>; // Assuming DepositState enum maps to uint8
+  finalizeDepositGasOffset(overrides?: CallOverrides): Promise<BigNumber>;
+
+  gasReimbursements(
+    arg0: BigNumberish,
+    overrides?: CallOverrides,
+  ): Promise<[string, BigNumber] & { receiver: string; gasSpent: BigNumber }>;
+
+  initialize(
+    _tbtcBridge: string,
+    _tbtcVault: string,
+    _starkGateBridge: string,
+    _starkNetTBTCToken: BigNumberish,
+    _l1ToL2MessageFee: BigNumberish,
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
+  initializeDeposit(
+    fundingTx: BitcoinTxInfoStruct,
+    reveal: DepositRevealInfoStruct,
+    destinationChainDepositOwner: BytesLike,
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
+  initializeDepositGasOffset(overrides?: CallOverrides): Promise<BigNumber>;
+
+  l1ToL2MessageFee(overrides?: CallOverrides): Promise<BigNumber>;
 
   owner(overrides?: CallOverrides): Promise<string>;
-  paused(overrides?: CallOverrides): Promise<boolean>;
-  renounceOwnership(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
+
+  quoteFinalizeDeposit(arg0: BigNumberish, overrides?: CallOverrides): Promise<BigNumber>;
+
+  quoteFinalizeDepositDynamic(overrides?: CallOverrides): Promise<BigNumber>;
+
+  reimburseTxMaxFee(overrides?: CallOverrides): Promise<boolean>;
+
+  reimbursementAuthorizations(arg0: string, overrides?: CallOverrides): Promise<boolean>;
+
+  reimbursementPool(overrides?: CallOverrides): Promise<string>;
+
+  renounceOwnership(
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
+  setReimburseTxMaxFee(
+    _reimburseTxMaxFee: boolean,
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
+  starkGateBridge(overrides?: CallOverrides): Promise<string>;
+
+  starkNetTBTCToken(overrides?: CallOverrides): Promise<BigNumber>;
+
+  tbtcToken(overrides?: CallOverrides): Promise<string>;
+
+  tbtcVault(overrides?: CallOverrides): Promise<string>;
+
   transferOwnership(
     newOwner: string,
-    overrides?: Overrides & { from?: string },
+    overrides?: Overrides & { from?: string | Promise<string> },
   ): Promise<ContractTransaction>;
-  pause(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
-  unpause(overrides?: Overrides & { from?: string }): Promise<ContractTransaction>;
 
-  // callStatic functions
+  updateFeeBuffer(
+    newBuffer: BigNumberish,
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
+  updateGasOffsetParameters(
+    _initializeDepositGasOffset: BigNumberish,
+    _finalizeDepositGasOffset: BigNumberish,
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
+  updateL1ToL2MessageFee(
+    newFee: BigNumberish,
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
+  updateReimbursementAuthorization(
+    _address: string,
+    authorization: boolean,
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
+  updateReimbursementPool(
+    _reimbursementPool: string,
+    overrides?: Overrides & { from?: string | Promise<string> },
+  ): Promise<ContractTransaction>;
+
   callStatic: {
-    starkGateBridge(overrides?: CallOverrides): Promise<string>;
-    l2TbtcToken(overrides?: CallOverrides): Promise<string>;
-    l1ToL2MessageFee(overrides?: CallOverrides): Promise<BigNumber>;
-    depositStarkNetRecipients(depositKey: BytesLike, overrides?: CallOverrides): Promise<BigNumber>;
-    updateL1ToL2MessageFee(
-      _newL1ToL2MessageFee: BigNumberish,
-      overrides?: CallOverrides,
-    ): Promise<void>;
-    setDepositStateForTesting(
-      depositKey: BigNumberish,
-      state: BigNumberish,
-      overrides?: CallOverrides,
-    ): Promise<void>;
-    emitDepositInitializedForStarkNet(
-      _depositKey: BytesLike,
-      _starkNetRecipient: BigNumberish,
-      overrides?: CallOverrides,
-    ): Promise<void>;
+    MAX_FEE_BUFFER(overrides?: CallOverrides): Promise<BigNumber>;
 
-    quoteFinalizeDeposit(overrides?: CallOverrides): Promise<BigNumber>;
+    SATOSHI_MULTIPLIER(overrides?: CallOverrides): Promise<BigNumber>;
+
+    bridge(overrides?: CallOverrides): Promise<string>;
+
+    deposits(arg0: BigNumberish, overrides?: CallOverrides): Promise<number>;
+
+    feeBuffer(overrides?: CallOverrides): Promise<BigNumber>;
+
+    finalizeDeposit(depositKey: BigNumberish, overrides?: CallOverrides): Promise<void>;
+
+    finalizeDepositGasOffset(overrides?: CallOverrides): Promise<BigNumber>;
+
+    gasReimbursements(
+      arg0: BigNumberish,
+      overrides?: CallOverrides,
+    ): Promise<[string, BigNumber] & { receiver: string; gasSpent: BigNumber }>;
+
+    initialize(
+      _tbtcBridge: string,
+      _tbtcVault: string,
+      _starkGateBridge: string,
+      _starkNetTBTCToken: BigNumberish,
+      _l1ToL2MessageFee: BigNumberish,
+      overrides?: CallOverrides,
+    ): Promise<void>;
 
     initializeDeposit(
-      _fundingTx: FundingTransactionStruct,
-      _reveal: [BytesLike, BytesLike, BytesLike, BytesLike, BytesLike],
-      _depositOwner: BytesLike,
-      overrides?: CallOverrides, // PayableOverrides for callStatic might just be CallOverrides
-    ): Promise<void>; // Or actual return type if any from callStatic
+      fundingTx: BitcoinTxInfoStruct,
+      reveal: DepositRevealInfoStruct,
+      destinationChainDepositOwner: BytesLike,
+      overrides?: CallOverrides,
+    ): Promise<void>;
 
-    finalizeDeposit(
-      depositKey: BytesLike,
-      overrides?: CallOverrides, // PayableOverrides for callStatic might just be CallOverrides
-    ): Promise<void>; // Or actual return type if any from callStatic
+    initializeDepositGasOffset(overrides?: CallOverrides): Promise<BigNumber>;
 
-    tbtcToken(overrides?: CallOverrides): Promise<string>;
-    tbtcVault(overrides?: CallOverrides): Promise<string>;
-    bridge(overrides?: CallOverrides): Promise<string>;
-    deposits(depositKey: BigNumberish, overrides?: CallOverrides): Promise<number>; // Assuming DepositState enum maps to uint8
+    l1ToL2MessageFee(overrides?: CallOverrides): Promise<BigNumber>;
 
     owner(overrides?: CallOverrides): Promise<string>;
-    paused(overrides?: CallOverrides): Promise<boolean>;
+
+    quoteFinalizeDeposit(arg0: BigNumberish, overrides?: CallOverrides): Promise<BigNumber>;
+
+    quoteFinalizeDepositDynamic(overrides?: CallOverrides): Promise<BigNumber>;
+
+    reimburseTxMaxFee(overrides?: CallOverrides): Promise<boolean>;
+
+    reimbursementAuthorizations(arg0: string, overrides?: CallOverrides): Promise<boolean>;
+
+    reimbursementPool(overrides?: CallOverrides): Promise<string>;
+
     renounceOwnership(overrides?: CallOverrides): Promise<void>;
+
+    setReimburseTxMaxFee(_reimburseTxMaxFee: boolean, overrides?: CallOverrides): Promise<void>;
+
+    starkGateBridge(overrides?: CallOverrides): Promise<string>;
+
+    starkNetTBTCToken(overrides?: CallOverrides): Promise<BigNumber>;
+
+    tbtcToken(overrides?: CallOverrides): Promise<string>;
+
+    tbtcVault(overrides?: CallOverrides): Promise<string>;
+
     transferOwnership(newOwner: string, overrides?: CallOverrides): Promise<void>;
-    pause(overrides?: CallOverrides): Promise<void>;
-    unpause(overrides?: CallOverrides): Promise<void>;
+
+    updateFeeBuffer(newBuffer: BigNumberish, overrides?: CallOverrides): Promise<void>;
+
+    updateGasOffsetParameters(
+      _initializeDepositGasOffset: BigNumberish,
+      _finalizeDepositGasOffset: BigNumberish,
+      overrides?: CallOverrides,
+    ): Promise<void>;
+
+    updateL1ToL2MessageFee(newFee: BigNumberish, overrides?: CallOverrides): Promise<void>;
+
+    updateReimbursementAuthorization(
+      _address: string,
+      authorization: boolean,
+      overrides?: CallOverrides,
+    ): Promise<void>;
+
+    updateReimbursementPool(_reimbursementPool: string, overrides?: CallOverrides): Promise<void>;
   };
 
-  // filters for events
   filters: {
-    // From StarkNetBitcoinDepositor itself
-    'StarkNetBitcoinDepositorInitialized(address,address,uint256)'(
-      _starkGateBridge?: string | null,
-      _l2TbtcToken?: string | null,
-      _initialL1ToL2MessageFee?: null,
-    ): StarkNetBitcoinDepositorInitializedEventFilter;
-    StarkNetBitcoinDepositorInitialized(
-      _starkGateBridge?: string | null,
-      _l2TbtcToken?: string | null,
-      _initialL1ToL2MessageFee?: null,
-    ): StarkNetBitcoinDepositorInitializedEventFilter;
+    'DepositFinalized(uint256,bytes32,address,uint256,uint256)'(
+      depositKey?: BigNumberish | null,
+      destinationChainDepositOwner?: BytesLike | null,
+      l1Sender?: string | null,
+      initialAmount?: null,
+      tbtcAmount?: null,
+    ): DepositFinalizedEventFilter;
+    DepositFinalized(
+      depositKey?: BigNumberish | null,
+      destinationChainDepositOwner?: BytesLike | null,
+      l1Sender?: string | null,
+      initialAmount?: null,
+      tbtcAmount?: null,
+    ): DepositFinalizedEventFilter;
 
-    'DepositInitializedForStarkNet(bytes32,uint256)'(
-      depositKey?: BytesLike | null,
-      starkNetRecipient?: BigNumberish | null,
-    ): DepositInitializedForStarkNetEventFilter;
-    DepositInitializedForStarkNet(
-      depositKey?: BytesLike | null,
-      starkNetRecipient?: BigNumberish | null,
-    ): DepositInitializedForStarkNetEventFilter;
+    'DepositInitialized(uint256,bytes32,address)'(
+      depositKey?: BigNumberish | null,
+      destinationChainDepositOwner?: BytesLike | null,
+      l1Sender?: string | null,
+    ): DepositInitializedEventFilter;
+    DepositInitialized(
+      depositKey?: BigNumberish | null,
+      destinationChainDepositOwner?: BytesLike | null,
+      l1Sender?: string | null,
+    ): DepositInitializedEventFilter;
 
-    'DepositBridgedToStarkNet(bytes32,uint256,uint256,uint256)'(
-      depositKey?: BytesLike | null,
-      starkNetRecipient?: BigNumberish | null,
-      amount?: null,
-      messageNonce?: null,
-    ): DepositBridgedToStarkNetEventFilter;
-    DepositBridgedToStarkNet(
-      depositKey?: BytesLike | null,
-      starkNetRecipient?: BigNumberish | null,
-      amount?: null,
-      messageNonce?: null,
-    ): DepositBridgedToStarkNetEventFilter;
+    'FeeBufferUpdated(uint256)'(newBuffer?: null): FeeBufferUpdatedEventFilter;
+    FeeBufferUpdated(newBuffer?: null): FeeBufferUpdatedEventFilter;
+
+    'GasOffsetParametersUpdated(uint256,uint256)'(
+      initializeDepositGasOffset?: null,
+      finalizeDepositGasOffset?: null,
+    ): GasOffsetParametersUpdatedEventFilter;
+    GasOffsetParametersUpdated(
+      initializeDepositGasOffset?: null,
+      finalizeDepositGasOffset?: null,
+    ): GasOffsetParametersUpdatedEventFilter;
+
+    'Initialized(uint8)'(version?: null): InitializedEventFilter;
+    Initialized(version?: null): InitializedEventFilter;
 
     'L1ToL2MessageFeeUpdated(uint256)'(newFee?: null): L1ToL2MessageFeeUpdatedEventFilter;
     L1ToL2MessageFeeUpdated(newFee?: null): L1ToL2MessageFeeUpdatedEventFilter;
-
-    // Inherited Events - Ensure these match your actual parent contract events
-    'DepositInitialized(bytes32,uint256,bytes,bytes,bytes32,uint256,address)'(
-      depositKey?: BytesLike | null,
-      fundingOutputIndex?: null, // Adjust if indexed
-      blindingFactor?: null,
-      walletPubKeyHash?: null,
-      refundPubKeyHash?: null,
-      refundLocktime?: null,
-      vault?: string | null,
-    ): DepositInitializedEventFilter;
-    DepositInitialized(
-      depositKey?: BytesLike | null,
-      fundingOutputIndex?: null,
-      blindingFactor?: null,
-      walletPubKeyHash?: null,
-      refundPubKeyHash?: null,
-      refundLocktime?: null,
-      vault?: string | null,
-    ): DepositInitializedEventFilter;
-
-    'DepositFinalized(bytes32,uint256,address,uint256)'(
-      depositKey?: BytesLike | null,
-      amountMinted?: null,
-      beneficiary?: string | null,
-      optimisticMintingFee?: null,
-    ): DepositFinalizedEventFilter;
-    DepositFinalized(
-      depositKey?: BytesLike | null,
-      amountMinted?: null,
-      beneficiary?: string | null,
-      optimisticMintingFee?: null,
-    ): DepositFinalizedEventFilter;
 
     'OwnershipTransferred(address,address)'(
       previousOwner?: string | null,
@@ -442,115 +650,253 @@ export interface EthersStarkNetBitcoinDepositor extends BaseContract {
       newOwner?: string | null,
     ): OwnershipTransferredEventFilter;
 
-    'Paused(address)'(account?: string | null): PausedEventFilter;
-    Paused(account?: string | null): PausedEventFilter;
+    'ReimburseTxMaxFeeUpdated(bool)'(reimburseTxMaxFee?: null): ReimburseTxMaxFeeUpdatedEventFilter;
+    ReimburseTxMaxFeeUpdated(reimburseTxMaxFee?: null): ReimburseTxMaxFeeUpdatedEventFilter;
 
-    'Unpaused(address)'(account?: string | null): UnpausedEventFilter;
-    Unpaused(account?: string | null): UnpausedEventFilter;
+    'ReimbursementAuthorizationUpdated(address,bool)'(
+      _address?: string | null,
+      authorization?: null,
+    ): ReimbursementAuthorizationUpdatedEventFilter;
+    ReimbursementAuthorizationUpdated(
+      _address?: string | null,
+      authorization?: null,
+    ): ReimbursementAuthorizationUpdatedEventFilter;
+
+    'ReimbursementPoolUpdated(address)'(
+      newReimbursementPool?: null,
+    ): ReimbursementPoolUpdatedEventFilter;
+    ReimbursementPoolUpdated(newReimbursementPool?: null): ReimbursementPoolUpdatedEventFilter;
+
+    'StarkNetBitcoinDepositorInitialized(address,uint256)'(
+      starkGateBridge?: null,
+      starkNetTBTCToken?: null,
+    ): StarkNetBitcoinDepositorInitializedEventFilter;
+    StarkNetBitcoinDepositorInitialized(
+      starkGateBridge?: null,
+      starkNetTBTCToken?: null,
+    ): StarkNetBitcoinDepositorInitializedEventFilter;
+
+    'TBTCBridgedToStarkNet(bytes32,uint256,uint256,uint256)'(
+      depositKey?: BytesLike | null,
+      starkNetRecipient?: BigNumberish | null,
+      amount?: null,
+      messageNonce?: null,
+    ): TBTCBridgedToStarkNetEventFilter;
+    TBTCBridgedToStarkNet(
+      depositKey?: BytesLike | null,
+      starkNetRecipient?: BigNumberish | null,
+      amount?: null,
+      messageNonce?: null,
+    ): TBTCBridgedToStarkNetEventFilter;
   };
 
-  // estimateGas functions
   estimateGas: {
-    starkGateBridge(overrides?: CallOverrides): Promise<BigNumber>;
-    l2TbtcToken(overrides?: CallOverrides): Promise<BigNumber>;
-    l1ToL2MessageFee(overrides?: CallOverrides): Promise<BigNumber>;
-    depositStarkNetRecipients(depositKey: BytesLike, overrides?: CallOverrides): Promise<BigNumber>;
-    updateL1ToL2MessageFee(
-      _newL1ToL2MessageFee: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<BigNumber>;
-    setDepositStateForTesting(
-      depositKey: BigNumberish,
-      state: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<BigNumber>;
-    emitDepositInitializedForStarkNet(
-      _depositKey: BytesLike,
-      _starkNetRecipient: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<BigNumber>;
+    MAX_FEE_BUFFER(overrides?: CallOverrides): Promise<BigNumber>;
 
-    quoteFinalizeDeposit(overrides?: CallOverrides): Promise<BigNumber>;
+    SATOSHI_MULTIPLIER(overrides?: CallOverrides): Promise<BigNumber>;
 
-    initializeDeposit(
-      _fundingTx: FundingTransactionStruct,
-      _reveal: [BytesLike, BytesLike, BytesLike, BytesLike, BytesLike],
-      _depositOwner: BytesLike,
-      overrides?: PayableOverrides & { from?: string },
-    ): Promise<BigNumber>;
+    bridge(overrides?: CallOverrides): Promise<BigNumber>;
+
+    deposits(arg0: BigNumberish, overrides?: CallOverrides): Promise<BigNumber>;
+
+    feeBuffer(overrides?: CallOverrides): Promise<BigNumber>;
 
     finalizeDeposit(
-      depositKey: BytesLike,
-      overrides?: PayableOverrides & { from?: string },
+      depositKey: BigNumberish,
+      overrides?: PayableOverrides & { from?: string | Promise<string> },
     ): Promise<BigNumber>;
 
-    tbtcToken(overrides?: CallOverrides): Promise<BigNumber>;
-    tbtcVault(overrides?: CallOverrides): Promise<BigNumber>;
-    bridge(overrides?: CallOverrides): Promise<BigNumber>;
-    deposits(depositKey: BigNumberish, overrides?: CallOverrides): Promise<BigNumber>;
+    finalizeDepositGasOffset(overrides?: CallOverrides): Promise<BigNumber>;
+
+    gasReimbursements(arg0: BigNumberish, overrides?: CallOverrides): Promise<BigNumber>;
+
+    initialize(
+      _tbtcBridge: string,
+      _tbtcVault: string,
+      _starkGateBridge: string,
+      _starkNetTBTCToken: BigNumberish,
+      _l1ToL2MessageFee: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
+
+    initializeDeposit(
+      fundingTx: BitcoinTxInfoStruct,
+      reveal: DepositRevealInfoStruct,
+      destinationChainDepositOwner: BytesLike,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
+
+    initializeDepositGasOffset(overrides?: CallOverrides): Promise<BigNumber>;
+
+    l1ToL2MessageFee(overrides?: CallOverrides): Promise<BigNumber>;
 
     owner(overrides?: CallOverrides): Promise<BigNumber>;
-    paused(overrides?: CallOverrides): Promise<BigNumber>;
-    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<BigNumber>;
+
+    quoteFinalizeDeposit(arg0: BigNumberish, overrides?: CallOverrides): Promise<BigNumber>;
+
+    quoteFinalizeDepositDynamic(overrides?: CallOverrides): Promise<BigNumber>;
+
+    reimburseTxMaxFee(overrides?: CallOverrides): Promise<BigNumber>;
+
+    reimbursementAuthorizations(arg0: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    reimbursementPool(overrides?: CallOverrides): Promise<BigNumber>;
+
+    renounceOwnership(
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
+
+    setReimburseTxMaxFee(
+      _reimburseTxMaxFee: boolean,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
+
+    starkGateBridge(overrides?: CallOverrides): Promise<BigNumber>;
+
+    starkNetTBTCToken(overrides?: CallOverrides): Promise<BigNumber>;
+
+    tbtcToken(overrides?: CallOverrides): Promise<BigNumber>;
+
+    tbtcVault(overrides?: CallOverrides): Promise<BigNumber>;
+
     transferOwnership(
       newOwner: string,
-      overrides?: Overrides & { from?: string },
+      overrides?: Overrides & { from?: string | Promise<string> },
     ): Promise<BigNumber>;
-    pause(overrides?: Overrides & { from?: string }): Promise<BigNumber>;
-    unpause(overrides?: Overrides & { from?: string }): Promise<BigNumber>;
+
+    updateFeeBuffer(
+      newBuffer: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
+
+    updateGasOffsetParameters(
+      _initializeDepositGasOffset: BigNumberish,
+      _finalizeDepositGasOffset: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
+
+    updateL1ToL2MessageFee(
+      newFee: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
+
+    updateReimbursementAuthorization(
+      _address: string,
+      authorization: boolean,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
+
+    updateReimbursementPool(
+      _reimbursementPool: string,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<BigNumber>;
   };
 
-  // populateTransaction functions
   populateTransaction: {
-    starkGateBridge(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-    l2TbtcToken(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-    l1ToL2MessageFee(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-    depositStarkNetRecipients(
-      depositKey: BytesLike,
-      overrides?: CallOverrides,
-    ): Promise<PopulatedTransaction>;
-    updateL1ToL2MessageFee(
-      _newL1ToL2MessageFee: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<PopulatedTransaction>;
-    setDepositStateForTesting(
-      depositKey: BigNumberish,
-      state: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<PopulatedTransaction>;
-    emitDepositInitializedForStarkNet(
-      _depositKey: BytesLike,
-      _starkNetRecipient: BigNumberish,
-      overrides?: Overrides & { from?: string },
-    ): Promise<PopulatedTransaction>;
+    MAX_FEE_BUFFER(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
-    quoteFinalizeDeposit(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+    SATOSHI_MULTIPLIER(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
-    initializeDeposit(
-      _fundingTx: FundingTransactionStruct,
-      _reveal: [BytesLike, BytesLike, BytesLike, BytesLike, BytesLike],
-      _depositOwner: BytesLike,
-      overrides?: PayableOverrides & { from?: string },
-    ): Promise<PopulatedTransaction>;
+    bridge(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    deposits(arg0: BigNumberish, overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    feeBuffer(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     finalizeDeposit(
-      depositKey: BytesLike,
-      overrides?: PayableOverrides & { from?: string },
+      depositKey: BigNumberish,
+      overrides?: PayableOverrides & { from?: string | Promise<string> },
     ): Promise<PopulatedTransaction>;
 
-    tbtcToken(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-    tbtcVault(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-    bridge(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-    deposits(depositKey: BigNumberish, overrides?: CallOverrides): Promise<PopulatedTransaction>;
+    finalizeDepositGasOffset(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    gasReimbursements(arg0: BigNumberish, overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    initialize(
+      _tbtcBridge: string,
+      _tbtcVault: string,
+      _starkGateBridge: string,
+      _starkNetTBTCToken: BigNumberish,
+      _l1ToL2MessageFee: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
+
+    initializeDeposit(
+      fundingTx: BitcoinTxInfoStruct,
+      reveal: DepositRevealInfoStruct,
+      destinationChainDepositOwner: BytesLike,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
+
+    initializeDepositGasOffset(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    l1ToL2MessageFee(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     owner(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-    paused(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-    renounceOwnership(overrides?: Overrides & { from?: string }): Promise<PopulatedTransaction>;
+
+    quoteFinalizeDeposit(
+      arg0: BigNumberish,
+      overrides?: CallOverrides,
+    ): Promise<PopulatedTransaction>;
+
+    quoteFinalizeDepositDynamic(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    reimburseTxMaxFee(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    reimbursementAuthorizations(
+      arg0: string,
+      overrides?: CallOverrides,
+    ): Promise<PopulatedTransaction>;
+
+    reimbursementPool(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    renounceOwnership(
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
+
+    setReimburseTxMaxFee(
+      _reimburseTxMaxFee: boolean,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
+
+    starkGateBridge(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    starkNetTBTCToken(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    tbtcToken(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    tbtcVault(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
     transferOwnership(
       newOwner: string,
-      overrides?: Overrides & { from?: string },
+      overrides?: Overrides & { from?: string | Promise<string> },
     ): Promise<PopulatedTransaction>;
-    pause(overrides?: Overrides & { from?: string }): Promise<PopulatedTransaction>;
-    unpause(overrides?: Overrides & { from?: string }): Promise<PopulatedTransaction>;
+
+    updateFeeBuffer(
+      newBuffer: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
+
+    updateGasOffsetParameters(
+      _initializeDepositGasOffset: BigNumberish,
+      _finalizeDepositGasOffset: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
+
+    updateL1ToL2MessageFee(
+      newFee: BigNumberish,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
+
+    updateReimbursementAuthorization(
+      _address: string,
+      authorization: boolean,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
+
+    updateReimbursementPool(
+      _reimbursementPool: string,
+      overrides?: Overrides & { from?: string | Promise<string> },
+    ): Promise<PopulatedTransaction>;
   };
 }

@@ -103,14 +103,14 @@ describe('Deposits Util', () => {
       dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(mockTimestamp);
 
       // Define mockReveal here so it uses the mocked Date.now() for its refundLocktime
-      mockReveal = [
-        0,
-        '0x' + 'b'.repeat(64),
-        '0x' + 'c'.repeat(40),
-        '0x' + 'd'.repeat(40),
-        BigInt(Math.floor(mockTimestamp / 1000) + 3600).toString(), // Use mockTimestamp
-        'some_tx_id',
-      ];
+      mockReveal = {
+        fundingOutputIndex: 0,
+        blindingFactor: '0x' + 'b'.repeat(64),
+        walletPubKeyHash: '0x' + 'c'.repeat(40),
+        refundPubKeyHash: '0x' + 'd'.repeat(40),
+        refundLocktime: BigInt(Math.floor(mockTimestamp / 1000) + 3600).toString(), // Use mockTimestamp
+        vault: 'some_vault_address', // Added vault property as per Reveal type
+      };
     });
 
     afterEach(() => {
@@ -128,21 +128,21 @@ describe('Deposits Util', () => {
       );
 
       const expectedFundingTxHash = '0x' + 'a'.repeat(64);
-      const expectedDepositId = getDepositId(expectedFundingTxHash, mockReveal[0] as number);
+      const expectedDepositId = getDepositId(expectedFundingTxHash, mockReveal.fundingOutputIndex);
 
       expect(deposit.id).toBe(expectedDepositId);
       expect(deposit.chainId).toBe(mockChainId);
       expect(deposit.fundingTxHash).toBe(expectedFundingTxHash);
-      expect(deposit.outputIndex).toBe(mockReveal[0]);
+      expect(deposit.outputIndex).toBe(mockReveal.fundingOutputIndex);
       expect(deposit.hashes.btc.btcTxHash).toBe('0x' + 'a'.repeat(64));
       expect(deposit.hashes.eth.initializeTxHash).toBeNull();
       expect(deposit.hashes.eth.finalizeTxHash).toBeNull();
       expect(deposit.hashes.solana.bridgeTxHash).toBeNull();
       expect(deposit.receipt.depositor).toBe(mockL2Sender);
-      expect(deposit.receipt.blindingFactor).toBe(mockReveal[1]);
-      expect(deposit.receipt.walletPublicKeyHash).toBe(mockReveal[2]);
-      expect(deposit.receipt.refundPublicKeyHash).toBe(mockReveal[3]);
-      expect(deposit.receipt.refundLocktime).toBe(mockReveal[4]);
+      expect(deposit.receipt.blindingFactor).toBe(mockReveal.blindingFactor);
+      expect(deposit.receipt.walletPublicKeyHash).toBe(mockReveal.walletPubKeyHash);
+      expect(deposit.receipt.refundPublicKeyHash).toBe(mockReveal.refundPubKeyHash);
+      expect(deposit.receipt.refundLocktime).toBe(mockReveal.refundLocktime);
       expect(deposit.receipt.extraData).toBe(mockL2DepositOwner);
       expect(deposit.L1OutputEvent.fundingTx).toEqual(mockFundingTx);
       expect(deposit.L1OutputEvent.reveal).toEqual(mockReveal);
@@ -168,12 +168,15 @@ describe('Deposits Util', () => {
     });
 
     it('should handle reveal as an object', () => {
-      const revealObject = {
-        fundingOutputIndex: mockReveal[0],
-        blindingFactor: mockReveal[1],
-        walletPublicKeyHash: mockReveal[2],
-        refundPublicKeyHash: mockReveal[3],
-        refundLocktime: mockReveal[4],
+      // This test case is now redundant as createDeposit always expects an object.
+      // However, we can keep it to ensure direct object passing works.
+      const revealObject: Reveal = {
+        fundingOutputIndex: 0,
+        blindingFactor: '0xblinding',
+        walletPubKeyHash: '0xwallet',
+        refundPubKeyHash: '0xrefund',
+        refundLocktime: '12345',
+        vault: '0xvault',
       };
 
       const deposit = createDeposit(
@@ -185,8 +188,8 @@ describe('Deposits Util', () => {
       );
       expect(deposit.outputIndex).toBe(revealObject.fundingOutputIndex);
       expect(deposit.receipt.blindingFactor).toBe(revealObject.blindingFactor);
-      expect(deposit.receipt.walletPublicKeyHash).toBe(revealObject.walletPublicKeyHash);
-      expect(deposit.receipt.refundPublicKeyHash).toBe(revealObject.refundPublicKeyHash);
+      expect(deposit.receipt.walletPublicKeyHash).toBe(revealObject.walletPubKeyHash);
+      expect(deposit.receipt.refundPublicKeyHash).toBe(revealObject.refundPubKeyHash);
       expect(deposit.receipt.refundLocktime).toBe(revealObject.refundLocktime);
       expect(logDepositCreatedSpy).toHaveBeenCalledWith(deposit);
     });
@@ -199,7 +202,14 @@ describe('Deposits Util', () => {
       outputVector: '[]',
       locktime: '0',
     };
-    const minimalMockReveal: Reveal = [0, '0x0', '0x0', '0x0', '0', '0x0'];
+    const minimalMockReveal: Reveal = {
+      fundingOutputIndex: 0,
+      blindingFactor: '0x0',
+      walletPubKeyHash: '0x0',
+      refundPubKeyHash: '0x0',
+      refundLocktime: '0',
+      vault: '0x0',
+    };
     const mockL1OutputEvent = {
       fundingTx: minimalMockFundingTx,
       reveal: minimalMockReveal,
@@ -396,7 +406,14 @@ describe('Deposits Util', () => {
       outputVector: '[]',
       locktime: '0',
     };
-    const minimalMockReveal: Reveal = [0, '0x0', '0x0', '0x0', '0', '0x0'];
+    const minimalMockReveal: Reveal = {
+      fundingOutputIndex: 0,
+      blindingFactor: '0x0',
+      walletPubKeyHash: '0x0',
+      refundPubKeyHash: '0x0',
+      refundLocktime: '0',
+      vault: '0x0',
+    };
     const mockL1OutputEvent = {
       fundingTx: minimalMockFundingTx,
       reveal: minimalMockReveal,
@@ -716,7 +733,14 @@ describe('Deposits Util', () => {
       outputVector: '[]',
       locktime: '0',
     };
-    const minimalMockReveal: Reveal = [0, '0x0', '0x0', '0x0', '0', '0x0'];
+    const minimalMockReveal: Reveal = {
+      fundingOutputIndex: 0,
+      blindingFactor: '0x0',
+      walletPubKeyHash: '0x0',
+      refundPubKeyHash: '0x0',
+      refundLocktime: '0',
+      vault: '0x0',
+    };
     const mockL1OutputEvent = {
       fundingTx: minimalMockFundingTx,
       reveal: minimalMockReveal,
@@ -908,7 +932,14 @@ describe('Deposits Util', () => {
       outputVector: '[]',
       locktime: '0',
     };
-    const minimalMockReveal: Reveal = [0, '0x0', '0x0', '0x0', '0', '0x0'];
+    const minimalMockReveal: Reveal = {
+      fundingOutputIndex: 0,
+      blindingFactor: '0x0',
+      walletPubKeyHash: '0x0',
+      refundPubKeyHash: '0x0',
+      refundLocktime: '0',
+      vault: '0x0',
+    };
     const mockL1OutputEvent = {
       fundingTx: minimalMockFundingTx,
       reveal: minimalMockReveal,
@@ -1064,7 +1095,14 @@ describe('Deposits Util', () => {
       outputVector: '[]',
       locktime: '0',
     };
-    const minimalMockReveal: Reveal = [0, '0x0', '0x0', '0x0', '0', '0x0'];
+    const minimalMockReveal: Reveal = {
+      fundingOutputIndex: 0,
+      blindingFactor: '0x0',
+      walletPubKeyHash: '0x0',
+      refundPubKeyHash: '0x0',
+      refundLocktime: '0',
+      vault: '0x0',
+    };
     const mockL1OutputEvent = {
       fundingTx: minimalMockFundingTx,
       reveal: minimalMockReveal,

@@ -110,6 +110,6 @@
     "skipLibCheck": true /* Skip type checking all .d.ts files. */,
     "resolveJsonModule": true /*  <--- Enable JSON imports */
   },
-  "include": ["src/**/*.ts", "./**/*.ts", "helpers/Response.helper.js", "index.js"],
+  "include": ["src/**/*.ts", "./**/*.ts"],
   "exclude": ["node_modules"]
 }

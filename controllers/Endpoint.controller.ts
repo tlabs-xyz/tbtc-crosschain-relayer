@@ -52,11 +52,10 @@ export class EndpointController {
         });
         return;
       }
-      const revealArray = Array.isArray(reveal) ? reveal : (Object.values(reveal) as Reveal);
-      const fundingOutputIndex = revealArray[0];
+      const revealData: Reveal = reveal as Reveal;
 
       const fundingTxHash = getFundingTxHash(fundingTx);
-      const depositId = getDepositId(fundingTxHash, fundingOutputIndex);
+      const depositId = getDepositId(fundingTxHash, revealData.fundingOutputIndex);
       logger.info(
         `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
@@ -72,7 +71,7 @@ export class EndpointController {
       // Create deposit object
       const deposit = createDeposit(
         fundingTx,
-        reveal,
+        revealData,
         l2DepositOwner,
         l2Sender,
         this.chainHandler.config.chainName,

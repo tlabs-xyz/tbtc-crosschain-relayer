@@ -9,9 +9,8 @@ import {
   type BigNumberish,
   type BytesLike,
 } from 'ethers';
-import type { EthersStarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor.js';
-import type { EthersStarkGateBridge } from '../interfaces/IStarkGateBridge.js';
-import { IStarkGateBridgeABI } from '../interfaces/IStarkGateBridge.abi.js';
+import { StarkNetBitcoinDepositorABI } from '../interfaces/StarkNetBitcoinDepositor.js';
+import type { StarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor.js';
 
 import { DepositStore } from '../utils/DepositStore.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -34,9 +33,9 @@ import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {
   // --- L1 StarkGate Contract Instances ---
   /** L1 StarkGate contract instance for sending transactions (uses L1 signer with nonce manager) */
-  protected l1DepositorContract: EthersStarkGateBridge | undefined;
+  protected l1DepositorContract: StarkNetBitcoinDepositor | undefined;
   /** L1 StarkGate contract instance for read-only operations and event listening (uses L1 provider) */
-  protected l1DepositorContractProvider: EthersStarkGateBridge | undefined;
+  protected l1DepositorContractProvider: StarkNetBitcoinDepositor | undefined;
 
   constructor(config: StarknetChainConfig) {
     super(config);
@@ -81,9 +80,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       // For read-only operations and event listening:
       this.l1DepositorContractProvider = new ethers.Contract(
         this.config.l1ContractAddress,
-        IStarkGateBridgeABI,
+        StarkNetBitcoinDepositorABI,
         this.l1Provider,
-      ) as unknown as EthersStarkGateBridge;
+      ) as StarkNetBitcoinDepositor;
       logger.info(
         `L1 Depositor contract provider instance created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
       );
@@ -92,9 +91,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       if (this.nonceManagerL1) {
         this.l1DepositorContract = new ethers.Contract(
           this.config.l1ContractAddress,
-          IStarkGateBridgeABI,
+          StarkNetBitcoinDepositorABI,
           this.nonceManagerL1,
-        ) as unknown as EthersStarkGateBridge;
+        ) as StarkNetBitcoinDepositor;
         logger.info(
           `L1 Depositor contract signer instance (with NonceManager) created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
         );
@@ -104,9 +103,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         );
         this.l1DepositorContract = new ethers.Contract(
           this.config.l1ContractAddress,
-          IStarkGateBridgeABI,
+          StarkNetBitcoinDepositorABI,
           this.l1Signer,
-        ) as unknown as EthersStarkGateBridge;
+        ) as StarkNetBitcoinDepositor;
         logger.info(
           `L1 Depositor contract signer instance (without NonceManager) created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
         );
@@ -163,7 +162,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     );
 
     this.l1DepositorContractProvider.on(
-      this.l1DepositorContractProvider.filters.TBTCBridgedToStarkNet(),
+      'TBTCBridgedToStarkNet',
       async (
         depositKey: string,
         starkNetRecipient: ethers.BigNumber,
@@ -171,7 +170,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         messageNonce: ethers.BigNumber,
         event: ethers.Event,
       ) => {
-        await this.processDepositBridgedToStarkNetEvent(
+        await this.processTBTCBridgedToStarkNetEvent(
           depositKey,
           starkNetRecipient,
           amount,
@@ -182,7 +181,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       },
     );
 
-    logger.info(`L1 TBTCBridgedToStarkNet event listener is active for ${this.config.chainName}`);
+    logger.info(
+      `L1 TBTCBridgedToStarkNet event listener is active for ${this.config.chainName}`,
+    );
 
     if (this.config.l2StartBlock > 0) {
       this.checkForPastL1DepositorEvents({ fromBlock: this.config.l2StartBlock }).catch((error) => {
@@ -231,7 +232,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
             const starkNetRecipient = event.args.starkNetRecipient as ethers.BigNumber;
             const amount = event.args.amount as ethers.BigNumber;
             const messageNonce = event.args.messageNonce as ethers.BigNumber;
-            await this.processDepositBridgedToStarkNetEvent(
+            await this.processTBTCBridgedToStarkNetEvent(
               depositKey,
               starkNetRecipient,
               amount,
@@ -258,7 +259,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     }
   }
 
-  protected async processDepositBridgedToStarkNetEvent(
+  protected async processTBTCBridgedToStarkNetEvent(
     depositKeyOrId: string | BytesLike,
     starkNetRecipient: ethers.BigNumber,
     amount: ethers.BigNumber,
@@ -267,8 +268,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     isPastEvent: boolean = false,
   ): Promise<void> {
     const logPrefix = isPastEvent
-      ? `PastEvent | DepositBridgedToStarkNet for ${this.config.chainName}:`
-      : `LiveEvent | DepositBridgedToStarkNet for ${this.config.chainName}:`;
+      ? `PastEvent | TBTCBridgedToStarkNet for ${this.config.chainName}:`
+      : `LiveEvent | TBTCBridgedToStarkNet for ${this.config.chainName}:`;
 
     const depositId =
       typeof depositKeyOrId === 'string' ? depositKeyOrId : ethers.utils.hexlify(depositKeyOrId);
@@ -357,7 +358,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
     const depositId = getDepositId(
       getFundingTxHash(deposit.L1OutputEvent.fundingTx),
-      deposit.L1OutputEvent.reveal[0],
+      deposit.L1OutputEvent.reveal.fundingOutputIndex,
     );
     const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${depositId} |`;
 
@@ -393,71 +394,14 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       return undefined;
     }
 
-    let messageFee: ethers.BigNumber;
-    try {
-      // First try to use the dynamic fee estimation from StarkGate
-      try {
-        const dynamicFee = await this.l1DepositorContract.estimateMessageFee();
-        // Apply a 10% buffer to the dynamic fee to account for gas price fluctuations
-        const dynamicFeeBN = ethers.BigNumber.from(dynamicFee);
-        const buffer = dynamicFeeBN.mul(10).div(100);
-        messageFee = dynamicFeeBN.add(buffer);
-        logger.info(
-          `${logPrefix} Dynamically quoted L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH (includes 10% buffer)`,
-        );
-      } catch (estimateError: any) {
-        logger.warn(
-          `${logPrefix} Failed to get dynamic fee estimate from StarkGate: ${estimateError.message}. Falling back to static methods.`,
-        );
-
-        if (this.l1DepositorContract.callStatic.quoteFinalizeDeposit) {
-          messageFee = await this.l1DepositorContract.callStatic.quoteFinalizeDeposit();
-          logger.info(
-            `${logPrefix} Static quoted L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH`,
-          );
-        } else if (
-          this.config.l1FeeAmountWei &&
-          ethers.BigNumber.from(this.config.l1FeeAmountWei).gt(0)
-        ) {
-          messageFee = ethers.BigNumber.from(this.config.l1FeeAmountWei);
-          logger.warn(
-            `${logPrefix} Using configured l1FeeAmountWei as L1->L2 message fee: ${ethers.utils.formatEther(messageFee)} ETH. Review if this is the correct fee for finalizeDeposit.`,
-          );
-        } else {
-          logger.error(
-            `${logPrefix} L1->L2 message fee for finalizeDeposit is not configured or quotable and is zero. Cannot proceed.`,
-          );
-          await logDepositError(
-            deposit.id,
-            'L1->L2 message fee for finalizeDeposit is zero or unconfigured.',
-            {},
-          );
-          return undefined;
-        }
-      }
-    } catch (quoteError: any) {
-      logger.error(
-        `${logPrefix} Error quoting L1->L2 message fee: ${quoteError.message}`,
-        quoteError,
-      );
-      await logDepositError(
-        deposit.id,
-        `Error quoting L1->L2 message fee: ${quoteError.message}`,
-        quoteError,
-      );
-      return undefined;
-    }
-
-    if (messageFee.isZero()) {
-      logger.error(`${logPrefix} L1->L2 message fee is zero. Cannot finalize deposit.`);
-      await logDepositError(deposit.id, 'Quoted or configured L1->L2 message fee is zero.', {
-        fee: messageFee.toString(),
-      });
-      return undefined;
-    }
+    const dynamicFee: ethers.BigNumber =
+      await this.l1DepositorContract.quoteFinalizeDepositDynamic();
+    logger.info(
+      `${logPrefix} Dynamically quoted L1->L2 message fee: ${ethers.utils.formatEther(dynamicFee)} ETH (includes 10% buffer)`,
+    );
 
     const txOverrides: PayableOverrides = {
-      value: messageFee,
+      value: dynamicFee,
     };
 
     try {
@@ -512,7 +456,10 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
     const fundingTxHash = getFundingTxHash(deposit.L1OutputEvent.fundingTx);
-    const depositKeyBytes32 = getDepositId(fundingTxHash, deposit.L1OutputEvent.reveal[0]);
+    const depositKeyBytes32 = getDepositId(
+      fundingTxHash,
+      deposit.L1OutputEvent.reveal.fundingOutputIndex,
+    );
     const logId = deposit.id || depositKeyBytes32;
     const logPrefix = `INITIALIZE_DEPOSIT ${this.config.chainName} ${logId} |`;
 
@@ -535,7 +482,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     }
 
     const fundingTx: FundingTransaction = deposit.L1OutputEvent.fundingTx;
-    const revealData: Reveal = deposit.L1OutputEvent.reveal;
+    const reveal: Reveal = deposit.L1OutputEvent.reveal;
     const l2DepositOwner: string = deposit.L1OutputEvent.l2DepositOwner;
 
     if (!validateStarkNetAddress(l2DepositOwner)) {
@@ -547,9 +494,6 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     }
     const formattedL2DepositOwnerAsBytes32 = formatStarkNetAddressForContract(l2DepositOwner);
 
-    // Based on IStarkGateBridgeABI, initializeDeposit is non-payable.
-    // Therefore, we do not send a `value` (msg.value).
-    // If l1FeeAmountWei was intended for gas parameters, that would be a different logic.
     const txOverrides: Overrides = {}; // No value needed for non-payable function
 
     try {
@@ -557,22 +501,11 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         `${logPrefix} Calling L1 Depositor contract initializeDeposit for StarkNet recipient (as _depositOwner/extraData): ${formattedL2DepositOwnerAsBytes32} (original: ${l2DepositOwner})`,
       );
       logger.debug(`${logPrefix} L1 Contract Funding Tx Arg:`, fundingTx);
-      logger.debug(`${logPrefix} L1 Contract Reveal Arg:`, revealData);
-
-      // Create the funding transaction array to match the contract expected format
-      const fundingTxStruct = [
-        fundingTx.version,
-        fundingTx.inputVector,
-        fundingTx.outputVector,
-        fundingTx.locktime,
-      ] as any;
-
-      // Take the first 5 elements of the reveal array
-      const revealArray = revealData.slice(0, 5) as any;
+      logger.debug(`${logPrefix} L1 Contract Reveal Arg:`, reveal);
 
       const txResponse = await this.l1DepositorContract.initializeDeposit(
-        fundingTxStruct,
-        revealArray,
+        fundingTx,
+        reveal,
         formattedL2DepositOwnerAsBytes32,
         txOverrides,
       );

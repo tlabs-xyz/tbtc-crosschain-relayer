@@ -23,7 +23,7 @@ import { type Reveal } from '../types/Reveal.type.js';
  * event data, ownership information, status, and timestamps.
  *
  * @param {FundingTransaction} fundingTx - The Bitcoin funding transaction.
- * @param {any} reveal - An array containing reveal parameters related to the Bitcoin deposit.
+ * @param {Reveal} reveal - An object containing reveal parameters related to the Bitcoin deposit.
  * @param {any} l2DepositOwner - The owner of the deposit on the L2 network.
  * @param {any} l2Sender - The sender address on the L2 network.
  * @param {string} chainId - The chain ID of the deposit.
@@ -33,19 +33,18 @@ import { type Reveal } from '../types/Reveal.type.js';
 
 export const createDeposit = (
   fundingTx: FundingTransaction,
-  reveal: any,
+  reveal: Reveal,
   l2DepositOwner: any,
   l2Sender: any,
   chainId: string,
 ): Deposit => {
-  const revealArray = Array.isArray(reveal) ? reveal : (Object.values(reveal) as Reveal);
   const fundingTxHash = getFundingTxHash(fundingTx);
-  const depositId = getDepositId(fundingTxHash, revealArray[0]);
+  const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
   const deposit: Deposit = {
     id: depositId,
     chainId: chainId,
     fundingTxHash: fundingTxHash,
-    outputIndex: revealArray[0],
+    outputIndex: reveal.fundingOutputIndex,
     hashes: {
       btc: {
         btcTxHash: getTransactionHash(fundingTx),
@@ -60,10 +59,10 @@ export const createDeposit = (
     },
     receipt: {
       depositor: l2Sender,
-      blindingFactor: revealArray[1],
-      walletPublicKeyHash: revealArray[2],
-      refundPublicKeyHash: revealArray[3],
-      refundLocktime: revealArray[4],
+      blindingFactor: reveal.blindingFactor,
+      walletPublicKeyHash: reveal.walletPubKeyHash,
+      refundPublicKeyHash: reveal.refundPubKeyHash,
+      refundLocktime: reveal.refundLocktime,
       extraData: l2DepositOwner,
     },
     L1OutputEvent: {

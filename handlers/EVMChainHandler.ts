@@ -14,6 +14,7 @@ import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
 import { logDepositError } from '../utils/AuditLog.js';
 
 import { BaseChainHandler } from './BaseChainHandler.js';
+import type { Reveal } from '../types/Reveal.type.js';
 
 export class EVMChainHandler
   extends BaseChainHandler<EvmChainConfig>
@@ -82,12 +83,12 @@ export class EVMChainHandler
         'DepositInitialized',
         async (
           fundingTx: FundingTransaction,
-          reveal: any[],
+          reveal: Reveal,
           l2DepositOwner: string,
           l2Sender: string,
         ) => {
           const fundingTxHash = getFundingTxHash(fundingTx);
-          const depositId = getDepositId(fundingTxHash, reveal[0]);
+          const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
           logger.debug(
             `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
           );
