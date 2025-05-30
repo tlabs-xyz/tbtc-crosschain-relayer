@@ -87,7 +87,7 @@ export class MockProvider extends EventEmitter {
  */
 export class MockContract extends EventEmitter {
   private address: string;
-  private functions: Map<string, Function> = new Map();
+  private functions: Map<string, (...args: any[]) => any> = new Map();
   private provider: MockProvider;
 
   constructor(address: string, provider: MockProvider) {
@@ -104,7 +104,7 @@ export class MockContract extends EventEmitter {
   /**
    * Mock a contract function
    */
-  mockFunction(name: string, implementation: Function): void {
+  mockFunction(name: string, implementation: (...args: any[]) => any): void {
     this.functions.set(name, implementation);
   }
 

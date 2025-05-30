@@ -1,5 +1,5 @@
 import logger from '../utils/Logger.js';
-import { ChainHandlerRegistry } from './ChainHandlerRegistry.js';
+import type { ChainHandlerRegistry } from './ChainHandlerRegistry.js';
 
 let registryInstance: ChainHandlerRegistry | null = null;
 

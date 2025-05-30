@@ -1,17 +1,23 @@
 import request from 'supertest';
 import { ethers } from 'ethers';
 import { DepositStatus } from '../../types/DepositStatus.enum.js';
-import { app, chainConfigs as importedChainConfigs, initializationPromise } from '../../index.js';
+import { app, initializationPromise } from '../../index.js';
+import { chainConfigs as loadedChainConfigs, type AnyChainConfig } from '../../config/index.js';
 
 let testChainNames: string[] = [];
-let chainConfigs: import('../../types/ChainConfig.type.js').ChainConfig[] = [];
+let activeChainConfigsArray: AnyChainConfig[] = [];
 
 beforeAll(async () => {
   await initializationPromise;
-  chainConfigs = importedChainConfigs;
-  testChainNames = chainConfigs.map(c => c.chainName);
+  activeChainConfigsArray = Object.values(loadedChainConfigs)
+    .filter((config): config is AnyChainConfig => config !== undefined)
+    .map((config: AnyChainConfig) => {
+      return config;
+    });
+
+  testChainNames = activeChainConfigsArray.map((c) => c.chainName);
   if (testChainNames.length === 0) {
-    throw new Error('No test chains loaded after initialization. Check test-chain-config.json and ConfigLoader logic.');
+    throw new Error('No test chains loaded after initialization. Check config and loading logic.');
   }
 });
 
@@ -44,7 +50,7 @@ describe('API Endpoints - Multi-Chain', () => {
   });
 
   // Test data for reveal endpoint - this might need to be adjusted per chain type (EVM vs Solana)
-  const getValidRevealDataForChain = (chainName: string) => {
+  const getValidRevealDataForChain = () => {
     // Basic EVM-like reveal data, can be customized if MockSolana1 needs different structure
     return {
       fundingTx: {
@@ -58,11 +64,11 @@ describe('API Endpoints - Multi-Chain', () => {
         locktime: '0x00000000',
       },
       reveal: [
-        0, 
-        ethers.utils.hexlify(ethers.utils.randomBytes(32)), 
-        ethers.utils.hexlify(ethers.utils.randomBytes(20)), 
-        ethers.utils.hexlify(ethers.utils.randomBytes(20)), 
-        ethers.utils.hexlify(ethers.utils.randomBytes(4)), 
+        0,
+        ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+        ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+        ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+        ethers.utils.hexlify(ethers.utils.randomBytes(4)),
         '0x',
       ],
       l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
@@ -70,16 +76,18 @@ describe('API Endpoints - Multi-Chain', () => {
     };
   };
 
-  testChainNames.forEach(chainName => {
+  testChainNames.forEach((chainName) => {
     describe(`Endpoints for chain: ${chainName}`, () => {
-      const validRevealData = getValidRevealDataForChain(chainName);
-      const chainConfig = chainConfigs.find(c => c.chainName === chainName);
+      const validRevealData = getValidRevealDataForChain();
+      const chainConfig = activeChainConfigsArray.find((c) => c.chainName === chainName);
 
       // Tests for POST /api/:chainName/reveal
       describe(`POST /api/${chainName}/reveal`, () => {
         if (chainConfig?.supportsRevealDepositAPI) {
           test('should return 200 and deposit ID for valid data when API is supported', async () => {
-            const response = await request(app).post(`/api/${chainName}/reveal`).send(validRevealData);
+            const response = await request(app)
+              .post(`/api/${chainName}/reveal`)
+              .send(validRevealData);
             expect(response.status).toBe(200);
             expect(response.body).toEqual(
               expect.objectContaining({
@@ -91,7 +99,7 @@ describe('API Endpoints - Multi-Chain', () => {
           });
 
           test('should return 400 for missing required fields when API is supported', async () => {
-            const incompleteRevealData = { fundingTx: validRevealData.fundingTx }; 
+            const incompleteRevealData = { fundingTx: validRevealData.fundingTx };
             const response = await request(app)
               .post(`/api/${chainName}/reveal`)
               .send(incompleteRevealData)
@@ -125,7 +133,9 @@ describe('API Endpoints - Multi-Chain', () => {
           let depositIdToTest: string | null = null;
 
           if (chainConfig?.supportsRevealDepositAPI) {
-            const revealResponse = await request(app).post(`/api/${chainName}/reveal`).send(validRevealData);
+            const revealResponse = await request(app)
+              .post(`/api/${chainName}/reveal`)
+              .send(validRevealData);
             if (revealResponse.body.success) {
               depositIdToTest = revealResponse.body.depositId;
             }
@@ -138,12 +148,19 @@ describe('API Endpoints - Multi-Chain', () => {
               success: true,
               depositId: depositIdToTest,
             });
-            expect([DepositStatus.QUEUED, DepositStatus.INITIALIZED]).toContain(response.body.status);
+            expect([DepositStatus.QUEUED, DepositStatus.INITIALIZED]).toContain(
+              response.body.status,
+            );
           } else {
             if (chainConfig?.supportsRevealDepositAPI) {
-                 console.warn(`Skipping GET /api/${chainName}/deposit/:depositId test because prerequisite reveal failed or was not applicable.`);
+              console.warn(
+                `Skipping GET /api/${chainName}/deposit/:depositId test because prerequisite reveal failed or was not applicable.`,
+              );
             } else {
-                console.warn(`Skipping GET /api/${chainName}/deposit/:depositId because reveal API is not supported for this chain.`);
+
+              console.warn(
+                `Skipping GET /api/${chainName}/deposit/:depositId because reveal API is not supported for this chain.`,
+              );
             }
           }
         });
@@ -151,8 +168,10 @@ describe('API Endpoints - Multi-Chain', () => {
         test('should return 404 for non-existent deposit ID', async () => {
           const nonExistentId = 'nonExistentDepositIdForSure';
           const response = await request(app).get(`/api/${chainName}/deposit/${nonExistentId}`);
-          expect(response.status).toBe(404); 
-          expect(response.body).toEqual(expect.objectContaining({ success: false, error: 'Deposit not found' }));
+          expect(response.status).toBe(404);
+          expect(response.body).toEqual(
+            expect.objectContaining({ success: false, error: 'Deposit not found' }),
+          );
         });
       });
 
@@ -160,7 +179,9 @@ describe('API Endpoints - Multi-Chain', () => {
       if (chainConfig?.supportsRevealDepositAPI) {
         describe(`Full deposit lifecycle on ${chainName} (when API supported)`, () => {
           test('should process a deposit through the reveal and initial status check', async () => {
-            const createResponse = await request(app).post(`/api/${chainName}/reveal`).send(validRevealData);
+            const createResponse = await request(app)
+              .post(`/api/${chainName}/reveal`)
+              .send(validRevealData);
             expect(createResponse.status).toBe(200);
             expect(createResponse.body.success).toBe(true);
             const depositId = createResponse.body.depositId;
@@ -168,7 +189,10 @@ describe('API Endpoints - Multi-Chain', () => {
 
             const statusResponse = await request(app).get(`/api/${chainName}/deposit/${depositId}`);
             expect(statusResponse.status).toBe(200);
-            expect([DepositStatus.QUEUED, DepositStatus.INITIALIZED]).toContain(statusResponse.body.status);
+            expect([DepositStatus.QUEUED, DepositStatus.INITIALIZED]).toContain(
+              statusResponse.body.status,
+            );
+
           });
         });
       }
