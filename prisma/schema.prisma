@@ -12,6 +12,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// TODO: Consider renaming chainId to chainName
+
 model Deposit {
   id        String   @id
   chainId   String
@@ -35,6 +37,7 @@ model AuditLog {
   depositId  String?
   data       Json
   errorCode  Int?
+  // TODO: Consider making chainId non-nullable for consistent querying.
   chainId    String?
 
   @@index([chainId])

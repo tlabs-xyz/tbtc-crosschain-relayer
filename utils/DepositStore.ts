@@ -74,7 +74,10 @@ export class DepositStore {
       const records = await prisma.deposit.findMany({ where: whereClause });
       return records;
     } catch (err) {
-      logErrorContext(`Failed to fetch deposits by status${chainId ? ` for chain ${chainId}` : ''}:`, err);
+      logErrorContext(
+        `Failed to fetch deposits by status${chainId ? ` for chain ${chainId}` : ''}:`,
+        err,
+      );
       return [];
     }
   }
@@ -92,4 +95,4 @@ export class DepositStore {
       }
     }
   }
-} 
+}
