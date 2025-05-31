@@ -181,9 +181,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       },
     );
 
-    logger.info(
-      `L1 TBTCBridgedToStarkNet event listener is active for ${this.config.chainName}`,
-    );
+    logger.info(`L1 TBTCBridgedToStarkNet event listener is active for ${this.config.chainName}`);
 
     if (this.config.l2StartBlock > 0) {
       this.checkForPastL1DepositorEvents({ fromBlock: this.config.l2StartBlock }).catch((error) => {

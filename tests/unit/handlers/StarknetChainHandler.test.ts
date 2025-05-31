@@ -698,9 +698,7 @@ describe('StarknetChainHandler', () => {
 
     it('should log a warning and skip if deposit is not found', async () => {
       mockDepositStore.getById.mockResolvedValue(null); // Simulate deposit not found
-      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(
-        handler,
-      );
+      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(handler);
       await processEventMethod(
         mockDepositKey,
         mockAmount,
@@ -719,9 +717,7 @@ describe('StarknetChainHandler', () => {
     it('should skip update if deposit is already BRIDGED (live event)', async () => {
       mockEventDeposit.status = DepositStatus.BRIDGED;
       mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
-      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(
-        handler,
-      );
+      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(handler);
       await processEventMethod(
         mockDepositKey,
         mockAmount,
@@ -768,9 +764,7 @@ describe('StarknetChainHandler', () => {
     it('should log an error and skip if deposit chainId does not match handler chainId', async () => {
       mockEventDeposit.chainId = 'DIFFERENT_CHAIN';
       mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
-      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(
-        handler,
-      );
+      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(handler);
       await processEventMethod(
         mockDepositKey,
         mockAmount,
