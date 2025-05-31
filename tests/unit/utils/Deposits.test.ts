@@ -6,16 +6,16 @@ import {
   updateToAwaitingWormholeVAA,
   updateToBridgedDeposit,
   updateLastActivity,
-} from '../../../utils/Deposits.js';
+} from '../../../utils/Deposits';
 import { ethers } from 'ethers';
 import { type FundingTransaction } from '../../../types/FundingTransaction.type.js';
 import { type Reveal } from '../../../types/Reveal.type.js';
-import { DepositStatus } from '../../../types/DepositStatus.enum.js';
+import { DepositStatus } from '../../../types/DepositStatus.enum';
 import { type Deposit } from '../../../types/Deposit.type.js';
-import * as GetTransactionHash from '../../../utils/GetTransactionHash.js';
-import * as AuditLog from '../../../utils/AuditLog.js';
-import * as DepositStore from '../../../utils/DepositStore.js';
-import logger from '../../../utils/Logger.js';
+import * as GetTransactionHash from '../../../utils/GetTransactionHash';
+import * as AuditLog from '../../../utils/AuditLog';
+import * as DepositStore from '../../../utils/DepositStore';
+import logger from '../../../utils/Logger';
 
 describe('Deposits Util', () => {
   describe('getDepositId', () => {
@@ -83,7 +83,7 @@ describe('Deposits Util', () => {
     let mockReveal: Reveal;
     const mockL2DepositOwner = '0x' + 'e'.repeat(40);
     const mockL2Sender = '0x' + 'f'.repeat(40);
-    const mockChainId = '1';
+    const mockChainName = 'mockEvm1';
     const mockTimestamp = 1678886400000; // March 15, 2023 12:00:00 PM UTC
 
     let getFundingTxHashSpy: jest.SpyInstance;
@@ -124,14 +124,14 @@ describe('Deposits Util', () => {
         mockReveal,
         mockL2DepositOwner,
         mockL2Sender,
-        mockChainId,
+        mockChainName,
       );
 
       const expectedFundingTxHash = '0x' + 'a'.repeat(64);
       const expectedDepositId = getDepositId(expectedFundingTxHash, mockReveal.fundingOutputIndex);
 
       expect(deposit.id).toBe(expectedDepositId);
-      expect(deposit.chainId).toBe(mockChainId);
+      expect(deposit.chainName).toBe(mockChainName);
       expect(deposit.fundingTxHash).toBe(expectedFundingTxHash);
       expect(deposit.outputIndex).toBe(mockReveal.fundingOutputIndex);
       expect(deposit.hashes.btc.btcTxHash).toBe('0x' + 'a'.repeat(64));
@@ -184,7 +184,7 @@ describe('Deposits Util', () => {
         revealObject,
         mockL2DepositOwner,
         mockL2Sender,
-        mockChainId,
+        mockChainName,
       );
       expect(deposit.outputIndex).toBe(revealObject.fundingOutputIndex);
       expect(deposit.receipt.blindingFactor).toBe(revealObject.blindingFactor);
@@ -218,7 +218,7 @@ describe('Deposits Util', () => {
     };
     const mockInitialDeposit: Deposit = {
       id: 'deposit_final_123',
-      chainId: '1',
+      chainName: '1',
       fundingTxHash: '0x' + 'a'.repeat(64),
       outputIndex: 0,
       hashes: {
@@ -422,7 +422,7 @@ describe('Deposits Util', () => {
     };
     const mockInitialDeposit: Deposit = {
       id: 'deposit_123',
-      chainId: '1',
+      chainName: '1',
       fundingTxHash: '0x' + 'a'.repeat(64),
       outputIndex: 0,
       hashes: {
@@ -548,7 +548,7 @@ describe('Deposits Util', () => {
     it('should correctly update hash, dates, and logs if status is already INITIALIZED and a new tx is provided', async () => {
       const mockInitialDepositAlreadyInitialized: Deposit = {
         id: 'deposit_456',
-        chainId: '1',
+        chainName: '1',
         fundingTxHash: '0x' + 'a'.repeat(64),
         outputIndex: 0,
         hashes: {
@@ -617,7 +617,7 @@ describe('Deposits Util', () => {
     it('should set error and update lastActivityAt if error is provided, even if already INITIALIZED', async () => {
       const mockInitializedDepositWithError: Deposit = {
         id: 'deposit_789',
-        chainId: '1',
+        chainName: '1',
         fundingTxHash: '0x' + 'a'.repeat(64),
         outputIndex: 0,
         hashes: {
@@ -675,7 +675,7 @@ describe('Deposits Util', () => {
     it('should update only lastActivityAt if no tx and no error are provided', async () => {
       const initialDeposit: Deposit = {
         id: 'deposit-1',
-        chainId: '1',
+        chainName: '1',
         status: DepositStatus.INITIALIZED,
         dates: {
           createdAt: mockTimestamp - 10000,
@@ -749,7 +749,7 @@ describe('Deposits Util', () => {
     };
     const mockInitialDepositBase: Deposit = {
       id: 'deposit_wormhole_123',
-      chainId: 'solana-1',
+      chainName: 'solana-1',
       fundingTxHash: '0x' + 'a'.repeat(64),
       outputIndex: 0,
       hashes: {
@@ -948,7 +948,7 @@ describe('Deposits Util', () => {
     };
     const mockInitialDeposit: Deposit = {
       id: 'deposit_bridged_123',
-      chainId: 'solana-1',
+      chainName: 'solana-1',
       fundingTxHash: '0x' + 'a'.repeat(64),
       outputIndex: 0,
       hashes: {
@@ -1111,7 +1111,7 @@ describe('Deposits Util', () => {
     };
     const mockInitialDeposit: Deposit = {
       id: 'deposit_activity_123',
-      chainId: '1',
+      chainName: '1',
       fundingTxHash: '0x' + 'a'.repeat(64),
       outputIndex: 0,
       hashes: {

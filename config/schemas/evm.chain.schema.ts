@@ -4,6 +4,7 @@ import { CommonChainConfigSchema } from './common.schema';
 
 const EvmChainBaseSchema = z.object({
   chainType: z.literal(CHAIN_TYPE.EVM).default(CHAIN_TYPE.EVM), // Fixed for EVM chains
+  l1Confirmations: z.coerce.number().int().positive().default(1),
 });
 
 export const EvmChainConfigSchema = EvmChainBaseSchema.merge(CommonChainConfigSchema)

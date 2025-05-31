@@ -26,6 +26,7 @@ const mockEndpointChainDeposits = new Map<string, Map<string, Deposit>>();
 export type MockEndpointChainConfig = SolanaChainConfig & {
   readonly useEndpoint: true;
   readonly chainType: CHAIN_TYPE.SOLANA;
+  readonly l1Confirmations: number;
 };
 
 // This config definition is fine at module scope as it's used by the dynamic setup.
@@ -47,6 +48,8 @@ const mockEndpointChainTestConfig: MockEndpointChainConfig = {
   chainName: 'MockEndpointChain',
   chainType: CHAIN_TYPE.SOLANA,
   solanaCommitment: 'confirmed',
+  solanaPrivateKey: 'mockPrivateKey',
+  l1Confirmations: 1,
 };
 
 // The describeIfPKey and describeToRun logic is fine here
@@ -70,6 +73,17 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     process.env.NODE_ENV = 'test'; // Ensure it's 'test'
 
     jest.resetModules(); // Crucial: Clears module cache
+
+    // Mock Config utility if it's used directly by other modules after reset
+    // This is a common pattern if Config.get() is used globally.
+    jest.mock('../../utils/Config', () => {
+      // console.log('[api.test.ts] Applying Config mock factory (moved before dynamic imports)');
+      const originalConfigModule = jest.requireActual('../../utils/Config') as any;
+      return {
+        ...originalConfigModule,
+        // Example: getConfiguredChains: () => ['mockEVM1', 'mockEVM2', 'mockEndpointChain'],
+      };
+    });
 
     // Dynamically import modules AFTER setting env vars and resetting cache
     chainConfigsModule = await import('../../config');
@@ -412,34 +426,8 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
   // Example of how the test that failed would look:
   describe('API Endpoints - Multi-Chain', () => {
     const getValidRevealDataForEvmChain = () => {
-      return {
-        fundingTx: {
-          txHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          outputIndex: 0,
-          value: ethers.utils.parseEther('0.1').toString(),
-          version: '0x01000000',
-          inputVector:
-            '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
-          locktime: '0x00000000',
-        },
-        reveal: [
-          0,
-          ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-          '0x',
-        ] as Reveal,
-        l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-      };
-    };
-    const getValidDataForEndpointChain = (
-      action: string,
-      depositIdToUse?: string,
-    ): Deposit | { depositId: string } | object => {
-      const baseFundingTx = {
+      // Mock data for a successful reveal, adjust as needed for your contract
+      const fundingTx = {
         txHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
         outputIndex: 0,
         value: ethers.utils.parseEther('0.1').toString(),
@@ -449,74 +437,111 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
         outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
         locktime: '0x00000000',
       };
-      const baseReveal: Reveal = [
-        0,
-        ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-        '0x',
-      ];
-      const baseL2DepositOwner = ethers.utils.hexlify(ethers.utils.randomBytes(20));
-      const baseL2Sender = ethers.utils.hexlify(ethers.utils.randomBytes(20));
-      let currentDepositId: string;
-      if (depositIdToUse) {
-        currentDepositId = depositIdToUse;
-      } else {
-        currentDepositId = ethers.utils.keccak256(
-          ethers.utils.defaultAbiCoder.encode(
-            ['bytes32', 'uint32'],
-            [baseFundingTx.txHash, baseFundingTx.outputIndex],
-          ),
-        );
-      }
-      if (action === 'initialize_deposit') {
+      return {
+        fundingTx,
+        reveal: {
+          fundingOutputIndex: 0,
+          blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+          walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+          refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+          refundLocktime: ethers.BigNumber.from(Math.floor(Date.now() / 1000) + 3600).toString(), // e.g., 1 hour from now
+          vault: ethers.constants.AddressZero, // Example vault address
+        } as Reveal,
+      };
+    };
+    const getValidDataForEndpointChain = (
+      action: string,
+      depositIdToUse?: string,
+    ): Deposit | { depositId: string } | object => {
+      // For endpoint chain, data might differ. This is a placeholder.
+      const baseL2Sender = '0x' + '1'.repeat(40); // Mock L2 sender for endpoint
+      const baseL2DepositOwner = '0x' + '2'.repeat(40); // Mock L2 owner for endpoint
+
+      const baseReveal: Reveal = {
+        fundingOutputIndex: 0,
+        blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+        walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+        refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+        refundLocktime: ethers.BigNumber.from(Math.floor(Date.now() / 1000) + 7200).toString(), // e.g., 2 hours from now
+        vault: 'mockVaultAddressForEndpoint',
+      };
+
+      if (action === 'reveal') {
+        const fundingTx = {
+          version: '1',
+          inputVector: JSON.stringify([
+            {
+              prevout: { hash: ethers.utils.hexlify(ethers.utils.randomBytes(32)), index: 0 },
+              scriptSig: ethers.utils.hexlify(ethers.utils.randomBytes(100)),
+            },
+          ]),
+          outputVector: JSON.stringify([
+            {
+              value: '100000000',
+              scriptPubKey: ethers.utils.hexlify(ethers.utils.randomBytes(50)),
+            },
+          ]),
+          locktime: '0',
+        };
         return {
-          id: currentDepositId,
-          chainName: 'MockEndpointChain',
-          fundingTxHash: baseFundingTx.txHash,
-          outputIndex: baseFundingTx.outputIndex,
+          fundingTx,
+          reveal: baseReveal,
+          l2DepositOwner: baseL2DepositOwner,
+          l2Sender: baseL2Sender,
+        };
+      }
+      if (action === 'finalize' || action === 'status') {
+        if (!depositIdToUse)
+          throw new Error('depositId is required for finalize/status on endpoint chain');
+        // For finalize, we might need more data than just ID, but for mock, ID is enough
+        // to retrieve/update the deposit in MockEndpointChainHandler.
+        // Let's assume the mock handler can create a dummy deposit from this for finalize
+        // or already has it from a reveal call.
+        // When it's a full Deposit object, it would be like this:
+        const dummyDepositForFinalize: Partial<Deposit> & { id: string; chainName: string } = {
+          id: depositIdToUse,
+          chainName: mockEndpointChainTestConfig.chainName,
+          fundingTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+          outputIndex: baseReveal.fundingOutputIndex,
           hashes: {
-            btc: { btcTxHash: baseFundingTx.txHash },
-            eth: { initializeTxHash: null, finalizeTxHash: null },
-            solana: { bridgeTxHash: null },
+            btc: { btcTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)) }, // Mocked BTC tx hash
+            eth: { initializeTxHash: null, finalizeTxHash: null }, // Not applicable for Solana
+            solana: { bridgeTxHash: null }, // Will be set upon successful bridging
           },
           receipt: {
             depositor: baseL2Sender,
-            blindingFactor: baseReveal[1],
-            walletPublicKeyHash: baseReveal[2],
-            refundPublicKeyHash: baseReveal[3],
-            refundLocktime: baseReveal[4],
-            extraData: baseReveal[5],
+            blindingFactor: baseReveal.blindingFactor,
+            walletPublicKeyHash: baseReveal.walletPubKeyHash,
+            refundPublicKeyHash: baseReveal.refundPubKeyHash,
+            refundLocktime: baseReveal.refundLocktime,
+            extraData: baseL2DepositOwner, // Or some other relevant data
           },
-          owner: baseL2DepositOwner,
-          status: DepositStatus.QUEUED,
           L1OutputEvent: {
-            fundingTx: baseFundingTx,
+            // Mock L1 event data as it would have been captured
+            fundingTx: {} as any, // Simplified for mock
             reveal: baseReveal,
             l2DepositOwner: baseL2DepositOwner,
             l2Sender: baseL2Sender,
           },
+          owner: baseL2DepositOwner,
+          status: DepositStatus.INITIALIZED, // Assume it was initialized before finalizing
           dates: {
-            createdAt: Date.now(),
-            initializationAt: null,
+            createdAt: Date.now() - 2000,
+            initializationAt: Date.now() - 1000,
             finalizationAt: null,
+            lastActivityAt: Date.now() - 1000,
             awaitingWormholeVAAMessageSince: null,
             bridgedAt: null,
-            lastActivityAt: Date.now(),
           },
           wormholeInfo: { txHash: null, transferSequence: null, bridgingAttempted: false },
           error: null,
-        } as Deposit;
+        };
+        // For the purpose of the mock, sending just the ID is sufficient for `finalize` and `status`
+        // as the mock handler will fetch/update based on this ID.
+        // If sending the full deposit object is intended, then `dummyDepositForFinalize` would be returned.
+        return { depositId: depositIdToUse };
       }
-      if (action === 'check_deposit_status' || action === 'finalize_deposit') {
-        if (!currentDepositId)
-          throw new Error(
-            'depositId required for status/finalize actions in test data helper and was not provided or generated.',
-          );
-        return { depositId: currentDepositId };
-      }
-      return {};
+      return {}; // Default empty object for other actions
     };
 
     beforeEach(() => {

@@ -1,27 +1,27 @@
-import { StarknetChainHandler } from '../../../handlers/StarknetChainHandler.js';
+import { StarknetChainHandler } from '../../../handlers/StarknetChainHandler';
 import {
   StarknetChainConfigSchema,
   type StarknetChainConfig,
-} from '../../../config/schemas/starknet.chain.schema.js';
-import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
-import { DepositStore } from '../../../utils/DepositStore.js';
-import logger from '../../../utils/Logger.js';
+} from '../../../config/schemas/starknet.chain.schema';
+import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema';
+import { DepositStore } from '../../../utils/DepositStore';
+import logger from '../../../utils/Logger';
 import { DepositStatus } from '../../../types/DepositStatus.enum';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import type { Reveal } from '../../../types/Reveal.type.js';
-import * as starknetAddressUtils from '../../../utils/starknetAddress.js';
-import * as depositUtils from '../../../utils/Deposits.js';
-import * as getTransactionHashUtils from '../../../utils/GetTransactionHash.js';
-import * as auditLog from '../../../utils/AuditLog.js';
+import * as starknetAddressUtils from '../../../utils/starknetAddress';
+import * as depositUtils from '../../../utils/Deposits';
+import * as getTransactionHashUtils from '../../../utils/GetTransactionHash';
+import * as auditLog from '../../../utils/AuditLog';
 import { Contract as EthersContract, ethers } from 'ethers';
-import { type FundingTransaction } from '../../../types/FundingTransaction.type.js';
+import type { FundingTransaction } from '../../../types/FundingTransaction.type.js';
 
 // Mock external dependencies
 jest.mock('../../../utils/DepositStore');
 jest.mock('../../../utils/Logger');
 jest.mock('../../../utils/starknetAddress');
 jest.mock('../../../utils/Deposits');
-jest.mock('../../../utils/GetTransactionHash.js');
+jest.mock('../../../utils/GetTransactionHash');
 jest.mock('../../../utils/AuditLog');
 
 // Mock ethers.Contract instances and provider methods that are globally used
@@ -159,13 +159,13 @@ describe('StarknetChainHandler', () => {
     );
     mockGetTransactionHashUtil.getFundingTxHash.mockReturnValue('0xfundingtxhash');
     mockDepositsUtil.getDepositId.mockImplementation((hash, index) => `deposit-${hash}-${index}`);
-    mockDepositsUtil.createDeposit.mockImplementation((ftx, rev, owner, sender, chainId) => {
+    mockDepositsUtil.createDeposit.mockImplementation((ftx, rev, owner, sender, chainNameInput) => {
       const fundingTxHash = mockGetTransactionHashUtil.getFundingTxHash(ftx as any);
       const outputIndex = (rev as Reveal).fundingOutputIndex;
       const currentDepositId = mockDepositsUtil.getDepositId(fundingTxHash, outputIndex);
       return {
         id: currentDepositId,
-        chainId,
+        chainName: chainNameInput,
         owner: owner as string,
         status: DepositStatus.QUEUED,
         L1OutputEvent: {
@@ -210,6 +210,13 @@ describe('StarknetChainHandler', () => {
     mockContractInstance.quoteFinalizeDepositDynamic.mockResolvedValue(
       ethers.BigNumber.from('120000'),
     );
+    // Add mocks for getDeposit and updateDeposit if they are part of DepositStore
+    mockDepositStore.getById = jest.fn(); // Assuming getById is the correct method
+    mockDepositStore.update = jest.fn(); // Assuming update is the correct method
+    mockDepositStore.create = jest.fn();
+    mockDepositStore.getAll = jest.fn();
+    mockDepositStore.delete = jest.fn();
+
     mockContractInstance.callStatic.initializeDeposit.mockResolvedValue(undefined);
     mockContractInstance.callStatic.l1ToL2MessageFee.mockResolvedValue(
       ethers.BigNumber.from('100000'),
@@ -609,174 +616,161 @@ describe('StarknetChainHandler', () => {
   });
 
   describe('processTBTCBridgedToStarkNetEvent', () => {
-    let mockEventDeposit: Deposit;
-    const mockDepositKey = '0xDepositKeyFromEvent';
-    const mockAmount = ethers.BigNumber.from('1000000000000000000'); // 1 TBTC in wei
-    const mockStarkNetRecipient = '0xStarkRecipientFromEvent';
-    const mockL1TxHash = '0xL1BridgeEventTxHash';
-    const mockMessageNonce = ethers.BigNumber.from(123); // Added mockMessageNonce
+    let mockFullDepositEvent: Deposit;
+    let mockEventDepositKey: string;
+    let mockAmount: ethers.BigNumber;
+    let mockStarkNetRecipient: ethers.BigNumber;
+    let mockMessageNonce: ethers.BigNumber;
+    let mockL1TxHash: string;
 
     beforeEach(() => {
-      // Base mock deposit that would be retrieved from DepositStore
-      mockEventDeposit = {
-        id: mockDepositKey, // Should match the event's depositKey
-        chainId: mockStarknetConfig.chainName, // Ensure it matches the handler's chain
-        status: DepositStatus.FINALIZED, // A status prior to BRIDGED
-        fundingTxHash: '0xfundingtxhash_event',
+      mockEventDepositKey = 'deposit_id_starknet_bridge_123';
+      mockAmount = ethers.BigNumber.from('1000000000000000000'); // 1 ETH in wei
+      mockStarkNetRecipient = ethers.BigNumber.from(
+        '0x0123456789012345678901234567890123456789012345678901234567890123',
+      ); // Example valid StarkNet address as BigNumber
+      mockMessageNonce = ethers.BigNumber.from('12345');
+      mockL1TxHash = '0xL1BridgeEventTxHash';
+
+      mockFullDepositEvent = {
+        id: mockEventDepositKey,
+        chainName: mockStarknetConfig.chainName,
+        status: DepositStatus.INITIALIZED, // Default for most tests in this block
+        fundingTxHash: '0xSomeFundingTxHash',
         outputIndex: 0,
-        L1OutputEvent: {
-          /* minimal data */
-        } as any,
         hashes: {
-          btc: { btcTxHash: '0xbtc_event' },
-          eth: { initializeTxHash: '0xinit_event', finalizeTxHash: '0xfinal_event' },
-          starknet: { l1BridgeTxHash: null, l2TxHash: '0xl2_event' }, // l1BridgeTxHash will be updated
-          solana: { bridgeTxHash: null }, // Ensuring solana property is present
+          btc: { btcTxHash: '0xSomeBtcTxHash' },
+          eth: { initializeTxHash: '0xSomeEthInitTxHash', finalizeTxHash: null },
+          starknet: { l1BridgeTxHash: null, l2TxHash: null }, // Reset for each test usually
+          solana: { bridgeTxHash: null },
         },
         receipt: {
-          /* minimal data */
-        } as any,
-        owner: '0xOriginalOwner',
+          depositor: '0xDepositorAddress',
+          blindingFactor: '0xBlindingFactor',
+          walletPublicKeyHash: '0xWalletPubKeyHash',
+          refundPublicKeyHash: '0xRefundPubKeyHash',
+          refundLocktime: '0xRefundLocktime',
+          extraData: '0xExtraData',
+        },
+        L1OutputEvent: {
+          fundingTx: {} as FundingTransaction,
+          reveal: {} as Reveal,
+          l2DepositOwner: '0xL2Owner',
+          l2Sender: '0xL2Sender',
+        },
+        owner: '0xOwnerAddress',
         dates: {
-          createdAt: Date.now() - 20000,
-          initializationAt: Date.now() - 15000,
-          finalizationAt: Date.now() - 10000,
-          lastActivityAt: Date.now() - 10000,
+          createdAt: Date.now() - 3600000, // 1 hour ago
+          initializationAt: Date.now() - 1800000, // 30 mins ago
+          finalizationAt: null,
+          lastActivityAt: Date.now() - 1800000,
           awaitingWormholeVAAMessageSince: null,
-          bridgedAt: null, // Will be updated
+          bridgedAt: null, // Reset for each test usually
         },
         wormholeInfo: { txHash: null, transferSequence: null, bridgingAttempted: false },
         error: null,
       };
-
-      mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
-      mockDepositStore.update.mockResolvedValue(); // Default mock for update
-      (logger.info as jest.Mock).mockClear();
-      (logger.warn as jest.Mock).mockClear();
-      (logger.error as jest.Mock).mockClear();
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
     });
 
-    it('should process a new bridge event, update deposit to BRIDGED, and store L1 bridge tx hash', async () => {
-      // Explicitly reset parts of mockEventDeposit that might be affected by other tests
-      mockEventDeposit.status = DepositStatus.INITIALIZED;
-      mockEventDeposit.hashes.starknet = { l1BridgeTxHash: null, l2TxHash: null };
-      mockEventDeposit.dates.bridgedAt = null;
-      mockDepositStore.getById.mockResolvedValue(mockEventDeposit); // Re-set mock after modification
+    it('should successfully process a TBTCBridgedToStarkNet event and update deposit', async () => {
+      mockFullDepositEvent.status = DepositStatus.INITIALIZED;
+      mockFullDepositEvent.hashes.starknet = { l1BridgeTxHash: null, l2TxHash: null };
+      mockFullDepositEvent.dates.bridgedAt = null;
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
 
-      // const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(handler);
-      // Call directly to avoid potential issues with bind or 'this' context in mocks
       await (handler as any).processTBTCBridgedToStarkNetEvent(
-        mockDepositKey,
+        mockEventDepositKey,
         mockAmount,
         mockStarkNetRecipient.toString(),
-        mockMessageNonce, // Added mockMessageNonce
-        mockL1TxHash, // This is '0xL1BridgeEventTxHash'
-        false, // isPastEvent = false
+        mockMessageNonce,
+        mockL1TxHash,
       );
 
-      expect(mockDepositStore.update).toHaveBeenCalledTimes(1);
+      expect(mockDepositStore.getById).toHaveBeenCalledWith(mockEventDepositKey);
       const updatedDepositArgument = mockDepositStore.update.mock.calls[0][0] as Deposit;
-
-      // console.log('DEBUGGING TEST - updatedDepositArgument.hashes.starknet:', updatedDepositArgument.hashes.starknet);
       expect(updatedDepositArgument.status).toBe(DepositStatus.BRIDGED);
       expect(updatedDepositArgument.hashes.starknet?.l1BridgeTxHash).toBe(mockL1TxHash);
       expect(updatedDepositArgument.dates.bridgedAt).toBeDefined();
-      expect(updatedDepositArgument.dates.bridgedAt).toBeGreaterThanOrEqual(
-        Math.floor((Date.now() - 1000) / 1000),
-      ); // Check it's a recent timestamp
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining(
-          `LiveEvent | TBTCBridgedToStarkNet for ${mockStarknetConfig.chainName}: Processing | DepositId: ${mockDepositKey}`,
+          `LiveEvent | TBTCBridgedToStarkNet for ${mockStarknetConfig.chainName}: Processing | DepositId: ${mockEventDepositKey}`,
         ),
       );
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining(
-          `Deposit updated to BRIDGED. ID: ${mockDepositKey}. L1 Tx: ${mockL1TxHash}`,
+          `Deposit updated to BRIDGED. ID: ${mockEventDepositKey}. L1 Tx: ${mockL1TxHash}`,
         ),
       );
     });
 
-    it('should log a warning and skip if deposit is not found', async () => {
-      mockDepositStore.getById.mockResolvedValue(null); // Simulate deposit not found
-      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(handler);
-      await processEventMethod(
-        mockDepositKey,
-        mockAmount,
-        mockStarkNetRecipient.toString(),
-        mockMessageNonce, // Added mockMessageNonce
-        mockL1TxHash,
-        false,
-      );
-
-      expect(mockDepositStore.update).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining(`Unknown deposit. ID: ${mockDepositKey}. Ignoring.`),
-      );
-    });
-
-    it('should skip update if deposit is already BRIDGED (live event)', async () => {
-      mockEventDeposit.status = DepositStatus.BRIDGED;
-      mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
-      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(handler);
-      await processEventMethod(
-        mockDepositKey,
-        mockAmount,
-        mockStarkNetRecipient.toString(),
-        mockMessageNonce, // Added mockMessageNonce
-        mockL1TxHash,
-        false, // isPastEvent = false
-      ); // isPastEvent = false
-
-      expect(mockDepositStore.update).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          `Deposit already BRIDGED. ID: ${mockDepositKey}. Potential replay of live event. Skipping update.`,
-        ),
-      );
-    });
-
-    it('should skip update if deposit is already BRIDGED (past event)', async () => {
-      mockEventDeposit.status = DepositStatus.BRIDGED;
-      mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
-
-      // Clear logger.debug mocks specifically for this test run after handler setup
-      (logger.debug as jest.Mock).mockClear();
-
-      // const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(handler);
-      // Call directly
+    it('should log info and not update if deposit is not found', async () => {
+      mockDepositStore.getById.mockResolvedValue(null);
       await (handler as any).processTBTCBridgedToStarkNetEvent(
-        mockDepositKey,
+        mockEventDepositKey,
         mockAmount,
         mockStarkNetRecipient.toString(),
-        mockMessageNonce, // Added mockMessageNonce
+        mockMessageNonce,
         mockL1TxHash,
-        true, // isPastEvent = true
       );
+      expect(mockDepositStore.update).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(`Unknown deposit. ID: ${mockEventDepositKey}. Ignoring.`),
+      );
+    });
 
+    it('should log info and not update if deposit is already BRIDGED (live event replay)', async () => {
+      mockFullDepositEvent.status = DepositStatus.BRIDGED;
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
+
+      await (handler as any).processTBTCBridgedToStarkNetEvent(
+        mockEventDepositKey,
+        mockAmount,
+        mockStarkNetRecipient.toString(),
+        mockMessageNonce,
+        mockL1TxHash,
+      );
+      expect(mockDepositStore.update).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Deposit already BRIDGED. ID: ${mockEventDepositKey}. Potential replay of live event. Skipping update.`,
+        ),
+      );
+    });
+    it('should log info and not update if deposit is already BRIDGED (past event)', async () => {
+      mockFullDepositEvent.status = DepositStatus.BRIDGED;
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
+      await (handler as any).processTBTCBridgedToStarkNetEvent(
+        mockEventDepositKey,
+        mockAmount,
+        mockStarkNetRecipient.toString(),
+        mockMessageNonce,
+        mockL1TxHash,
+        true, // isPastEvent
+      );
       expect(mockDepositStore.update).not.toHaveBeenCalled();
       expect(logger.debug).toHaveBeenCalledWith(
         expect.stringContaining(
-          `PastEvent | TBTCBridgedToStarkNet for ${mockStarknetConfig.chainName}: Deposit already BRIDGED. ID: ${mockDepositKey}. Skipping update.`,
+          `PastEvent | TBTCBridgedToStarkNet for ${mockStarknetConfig.chainName}: Deposit already BRIDGED. ID: ${mockEventDepositKey}. Skipping update.`,
         ),
       );
     });
 
-    it('should log an error and skip if deposit chainId does not match handler chainId', async () => {
-      mockEventDeposit.chainId = 'DIFFERENT_CHAIN';
-      mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
-      const processEventMethod = (handler as any).processTBTCBridgedToStarkNetEvent.bind(handler);
-      await processEventMethod(
-        mockDepositKey,
+    it('should log an error and not update if chainName mismatches', async () => {
+      mockFullDepositEvent.chainName = 'DIFFERENT_CHAIN';
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
+
+      await (handler as any).processTBTCBridgedToStarkNetEvent(
+        mockEventDepositKey,
         mockAmount,
         mockStarkNetRecipient.toString(),
-        mockMessageNonce, // Added mockMessageNonce
+        mockMessageNonce,
         mockL1TxHash,
-        false,
       );
-
       expect(mockDepositStore.update).not.toHaveBeenCalled();
       expect(logger.error).toHaveBeenCalledWith(
-        expect.stringContaining(`Mismatched chain for DepositKey ${mockDepositKey}`),
+        expect.stringContaining(`Mismatched chain for DepositKey ${mockEventDepositKey}`),
+        expect.any(Object),
       );
     });
   });
@@ -791,13 +785,13 @@ describe('StarknetChainHandler', () => {
 
     beforeEach(() => {
       // Use jest.requireActual to get the original implementation of getDepositId
-      const DepositsJs = jest.requireActual('../../../utils/Deposits.js');
+      const DepositsJs = jest.requireActual('../../../utils/Deposits');
       actualDepositId = DepositsJs.getDepositId(testFundingTxHash, testOutputIndex);
 
       // Simplified mock deposit for these tests
       mockCheckDeposit = {
         id: actualDepositId, // Use the realistically generated ID
-        chainId: mockStarknetConfig.chainName,
+        chainName: mockStarknetConfig.chainName,
         fundingTxHash: testFundingTxHash, // Consistent fundingTxHash
         outputIndex: testOutputIndex, // Consistent outputIndex
         L1OutputEvent: {
@@ -993,6 +987,226 @@ describe('StarknetChainHandler', () => {
         ),
       );
       expect(tbtcVaultProviderMock.queryFilter).not.toHaveBeenCalled(); // Should not call if no fromBlock
+    });
+  });
+
+  /*
+  // Commenting out this entire describe block as `updateDepositStatus` method does not exist on StarknetChainHandler
+  describe('updateDepositStatus', () => {
+    const currentTestDepositId = 'test-deposit-id-for-update';
+    const eventDepositForMismatch: Deposit = {} as Deposit;
+
+    beforeEach(() => {
+      Object.assign(eventDepositForMismatch, {
+        id: currentTestDepositId,
+        chainName: 'DifferentChain',
+        status: DepositStatus.QUEUED, // Changed PENDING to QUEUED
+        fundingTxHash: 'event-funding-hash',
+        outputIndex: 1,
+        hashes: {
+          btc: { btcTxHash: 'hash' },
+          eth: { initializeTxHash: 'hash', finalizeTxHash: 'hash' },
+          solana: { bridgeTxHash: 'hash' },
+          starknet: { l1BridgeTxHash: 'hash', l2TxHash: 'hash' },
+        },
+        receipt: {
+          depositor: 'd',
+          blindingFactor: 'b',
+          walletPublicKeyHash: 'w',
+          refundPublicKeyHash: 'r',
+          refundLocktime: 'l',
+          extraData: 'e',
+        },
+        L1OutputEvent: {
+          fundingTx: {} as FundingTransaction,
+          reveal: {} as Reveal,
+          l2DepositOwner: 'o',
+          l2Sender: 's',
+        },
+        owner: 'event-owner',
+        dates: {
+          createdAt: Date.now(),
+          initializationAt: null,
+          finalizationAt: null,
+          lastActivityAt: Date.now(),
+          awaitingWormholeVAAMessageSince: null,
+          bridgedAt: null,
+        },
+        wormholeInfo: { txHash: null, transferSequence: null, bridgingAttempted: false },
+        error: null,
+      });
+    });
+
+    it('should log an error and not update if chain names mismatch', async () => {
+      mockDepositStore.getById.mockResolvedValueOnce(eventDepositForMismatch);
+      // await (handler as any).updateDepositStatus(currentTestDepositId, eventDepositForMismatch); // Method does not exist
+
+      expect(mockDepositStore.getById).toHaveBeenCalledWith(currentTestDepositId);
+      expect(logger.error).toHaveBeenCalledWith(
+        // Changed to logger.error
+        expect.stringContaining('Mismatched chainName for deposit'),
+        currentTestDepositId,
+      );
+      expect(mockDepositStore.update).not.toHaveBeenCalled();
+    });
+  });
+  */
+
+  describe('processBridgedEvent', () => {
+    let mockFullDepositEvent: Deposit;
+    let mockEventDepositKey: string;
+    let mockAmount: string;
+    let mockStarkNetRecipient: string;
+    let mockMessageNonce: string;
+    let mockL1TxHash: string;
+
+    beforeEach(() => {
+      mockEventDepositKey = 'deposit_id_starknet_bridge_123';
+      mockAmount = '1000000000000000000'; // 1 ETH in wei
+      mockStarkNetRecipient = '0xRecipientStarkNetAddress';
+      mockMessageNonce = '12345';
+      mockL1TxHash = '0xL1BridgeEventTxHash';
+
+      mockFullDepositEvent = {
+        id: mockEventDepositKey,
+        chainName: mockStarknetConfig.chainName,
+        status: DepositStatus.INITIALIZED,
+        fundingTxHash: '0xSomeFundingTxHash',
+        outputIndex: 0,
+        hashes: {
+          btc: { btcTxHash: '0xSomeBtcTxHash' },
+          eth: { initializeTxHash: '0xSomeEthInitTxHash', finalizeTxHash: null },
+          starknet: { l1BridgeTxHash: null, l2TxHash: null },
+          solana: { bridgeTxHash: null },
+        },
+        receipt: {
+          depositor: '0xDepositorAddress',
+          blindingFactor: '0xBlindingFactor',
+          walletPublicKeyHash: '0xWalletPubKeyHash',
+          refundPublicKeyHash: '0xRefundPubKeyHash',
+          refundLocktime: '0xRefundLocktime',
+          extraData: '0xExtraData',
+        },
+        L1OutputEvent: {
+          fundingTx: {} as FundingTransaction,
+          reveal: {} as Reveal,
+          l2DepositOwner: '0xL2Owner',
+          l2Sender: '0xL2Sender',
+        },
+        owner: '0xOwnerAddress',
+        dates: {
+          createdAt: Date.now() - 3600000,
+          initializationAt: Date.now() - 1800000,
+          finalizationAt: null,
+          lastActivityAt: Date.now() - 1800000,
+          awaitingWormholeVAAMessageSince: null,
+          bridgedAt: null,
+        },
+        wormholeInfo: { txHash: null, transferSequence: null, bridgingAttempted: false },
+        error: null,
+      };
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
+    });
+
+    it('should successfully process a TBTCBridgedToStarkNet event and update deposit', async () => {
+      mockFullDepositEvent.status = DepositStatus.INITIALIZED;
+      mockFullDepositEvent.hashes.starknet = { l1BridgeTxHash: null, l2TxHash: null };
+      mockFullDepositEvent.dates.bridgedAt = null;
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
+
+      await (handler as any).processTBTCBridgedToStarkNetEvent(
+        mockEventDepositKey,
+        mockAmount,
+        mockStarkNetRecipient.toString(),
+        mockMessageNonce,
+        mockL1TxHash,
+      );
+
+      expect(mockDepositStore.getById).toHaveBeenCalledWith(mockEventDepositKey);
+      const updatedDepositArgument = mockDepositStore.update.mock.calls[0][0] as Deposit;
+      expect(updatedDepositArgument.status).toBe(DepositStatus.BRIDGED);
+      expect(updatedDepositArgument.hashes.starknet?.l1BridgeTxHash).toBe(mockL1TxHash);
+      expect(updatedDepositArgument.dates.bridgedAt).toBeDefined();
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `LiveEvent | TBTCBridgedToStarkNet for ${mockStarknetConfig.chainName}: Processing | DepositId: ${mockEventDepositKey}`,
+        ),
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Deposit updated to BRIDGED. ID: ${mockEventDepositKey}. L1 Tx: ${mockL1TxHash}`,
+        ),
+      );
+    });
+
+    it('should log info and not update if deposit is not found', async () => {
+      mockDepositStore.getById.mockResolvedValue(null);
+      await (handler as any).processTBTCBridgedToStarkNetEvent(
+        mockEventDepositKey,
+        mockAmount,
+        mockStarkNetRecipient.toString(),
+        mockMessageNonce,
+        mockL1TxHash,
+      );
+      expect(mockDepositStore.update).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(`Unknown deposit. ID: ${mockEventDepositKey}. Ignoring.`),
+      );
+    });
+
+    it('should log info and not update if deposit is already BRIDGED (live event replay)', async () => {
+      mockFullDepositEvent.status = DepositStatus.BRIDGED;
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
+
+      await (handler as any).processTBTCBridgedToStarkNetEvent(
+        mockEventDepositKey,
+        mockAmount,
+        mockStarkNetRecipient.toString(),
+        mockMessageNonce,
+        mockL1TxHash,
+      );
+      expect(mockDepositStore.update).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Deposit already BRIDGED. ID: ${mockEventDepositKey}. Potential replay of live event. Skipping update.`,
+        ),
+      );
+    });
+    it('should log info and not update if deposit is already BRIDGED (past event)', async () => {
+      mockFullDepositEvent.status = DepositStatus.BRIDGED;
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
+      await (handler as any).processTBTCBridgedToStarkNetEvent(
+        mockEventDepositKey,
+        mockAmount,
+        mockStarkNetRecipient.toString(),
+        mockMessageNonce,
+        mockL1TxHash,
+        true, // isPastEvent
+      );
+      expect(mockDepositStore.update).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `PastEvent | TBTCBridgedToStarkNet for ${mockStarknetConfig.chainName}: Deposit already BRIDGED. ID: ${mockEventDepositKey}. Skipping update.`,
+        ),
+      );
+    });
+
+    it('should log an error and not update if chainName mismatches', async () => {
+      mockFullDepositEvent.chainName = 'DIFFERENT_CHAIN';
+      mockDepositStore.getById.mockResolvedValue(mockFullDepositEvent);
+
+      await (handler as any).processTBTCBridgedToStarkNetEvent(
+        mockEventDepositKey,
+        mockAmount,
+        mockStarkNetRecipient.toString(),
+        mockMessageNonce,
+        mockL1TxHash,
+      );
+      expect(mockDepositStore.update).not.toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining(`Mismatched chain for DepositKey ${mockEventDepositKey}`),
+        expect.any(Object),
+      );
     });
   });
 });

@@ -22,14 +22,14 @@ const mockFundingTx: FundingTransaction = {
   locktime: '0', // Changed to string
 };
 
-const mockReveal: Reveal = [
-  0, // Corresponds to L1OutputEvent.reveal[0] - typically outputIndex
-  'mock_reveal_blinding_factor', // Corresponds to L1OutputEvent.reveal[1] - blindingFactor
-  'mock_depositor_address', // Corresponds to L1OutputEvent.reveal[2] - depositor
-  'mock_l2_address', // Corresponds to L1OutputEvent.reveal[3] - l2Address
-  'mock_deadline', // Corresponds to L1OutputEvent.reveal[4] - deadline
-  'mock_btc_recovery_address', // Corresponds to L1OutputEvent.reveal[5] - btcRecoveryAddress
-];
+const mockReveal: Reveal = {
+  fundingOutputIndex: 0,
+  blindingFactor: 'mock_reveal_blinding_factor',
+  walletPubKeyHash: 'mock_depositor_address',
+  refundPubKeyHash: 'mock_l2_address',
+  refundLocktime: 'mock_deadline',
+  vault: 'mock_btc_recovery_address', // Assuming vault is a string, adjust if it's a different type. The original comment mentioned btcRecoveryAddress, which might be a misunderstanding of the Reveal type.
+};
 
 // Define a more complete testDeposit object
 const testDeposit: Deposit = {

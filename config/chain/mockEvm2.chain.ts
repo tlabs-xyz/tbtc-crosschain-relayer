@@ -21,4 +21,5 @@ export const mockEvm2Config: EvmChainConfig = {
   l2WormholeChainId: parseInt('3'),
   l2StartBlock: parseInt('0'),
   vaultAddress: '0x6666666666666666666666666666666666666666' as EthereumAddress,
+  l1Confirmations: 1,
 };
