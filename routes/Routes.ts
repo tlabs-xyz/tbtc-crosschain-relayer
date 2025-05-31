@@ -1,4 +1,5 @@
 import express from 'express';
+import escapeHtml from 'escape-html';
 import type { Request, Response, NextFunction } from 'express';
 import { Router } from 'express';
 
@@ -32,7 +33,8 @@ const createChainValidator = (options: ChainValidationOptions = {}) => {
     const handler = chainHandlerRegistry.get(chainName);
 
     if (!handler) {
-      return res.status(404).send(`Unknown chain: ${chainName}`);
+      const escapeHtml = require('escape-html');
+      return res.status(404).send(`Unknown chain: ${escapeHtml(chainName)}`);
     }
 
     expressReq.chainHandler = handler;
