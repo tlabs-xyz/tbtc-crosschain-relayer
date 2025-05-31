@@ -18,6 +18,10 @@ export type Deposit = {
     solana: {
       bridgeTxHash: string | null;
     };
+    starknet?: {
+      l1BridgeTxHash?: string | null;
+      l2TxHash?: string | null;
+    };
   };
   receipt: {
     depositor: string;
@@ -32,8 +36,8 @@ export type Deposit = {
   L1OutputEvent: {
     fundingTx: FundingTransaction;
     reveal: Reveal;
-    l2DepositOwner: any;
-    l2Sender: any;
+    l2DepositOwner: string;
+    l2Sender: string;
   };
   dates: {
     createdAt: EpochTimeStamp | null;

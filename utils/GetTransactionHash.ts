@@ -73,5 +73,5 @@ export function getTransactionHash(fundingTx: FundingTransaction): string {
 export function getFundingTxHash(fundingTx: FundingTransaction): string {
   const serializedTx = serializeTransaction(fundingTx);
   const hash = doubleSha256(serializedTx);
-  return hash.toString('hex');
+  return '0x' + hash.toString('hex');
 }

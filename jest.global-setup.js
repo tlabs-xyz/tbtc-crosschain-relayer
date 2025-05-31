@@ -7,4 +7,4 @@ module.exports = async () => {
     stdio: 'inherit',
     env: { ...process.env },
   });
-}; 
+};

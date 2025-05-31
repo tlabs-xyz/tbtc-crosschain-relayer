@@ -18,6 +18,7 @@ export default [
       '*.log',
       'jest.config.cjs',
       'jest.setup.js',
+      'test/', // Added to ignore Hardhat contract tests
     ],
   },
   // Config for Jest global setup/teardown files
@@ -41,11 +42,7 @@ export default [
   js.configs.recommended,
   {
     files: ['.js', '*.config.js'],
-    ignores: [
-      'jest.global-setup.js', 
-      'jest.global-teardown.js', 
-      'eslint.config.js'
-    ],
+    ignores: ['jest.global-setup.js', 'jest.global-teardown.js', 'eslint.config.js'],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -110,8 +107,8 @@ export default [
         'error',
         'ignorePackages',
         {
-          'js': 'always',
-          'ts': 'never',
+          js: 'always',
+          ts: 'never',
         },
       ],
     },

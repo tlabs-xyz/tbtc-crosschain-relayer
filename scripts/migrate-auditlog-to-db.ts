@@ -14,9 +14,7 @@ async function getDefaultChainIdForBackfill(): Promise<string> {
   );
 
   if (configsArray.length === 0) {
-    console.error(
-      'CRITICAL: No chain configurations found in the loaded chainConfigs object.',
-    );
+    console.error('CRITICAL: No chain configurations found in the loaded chainConfigs object.');
     throw new Error(
       'Cannot determine defaultChainId: No chain configurations loaded. Ensure your environment is configured for at least one chain.',
     );
@@ -26,9 +24,7 @@ async function getDefaultChainIdForBackfill(): Promise<string> {
   // This check might need adjustment based on how multi-chain is determined now.
   // For now, assuming if more than one config is present, it's a multi-chain setup.
   if (configsArray.length > 1) {
-    console.error(
-      'CRITICAL: Multiple chain configurations were loaded.',
-    );
+    console.error('CRITICAL: Multiple chain configurations were loaded.');
     console.error(`Loaded chains: ${configsArray.map((c) => c.chainName).join(', ')}`);
     console.error(
       'Backfilling with a single default chainId is ambiguous in this multi-chain setup.',

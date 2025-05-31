@@ -39,7 +39,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   public config: T;
   protected wormhole: Wormhole<Network>;
 
-
   constructor(config: T) {
     this.config = config;
     logger.debug(`Constructing BaseChainHandler for ${this.config.chainName}`);
@@ -56,7 +55,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       !this.config.vaultAddress ||
       !this.config.network
     ) {
-      throw new Error(`Missing required L1 RPC/Contract/Vault/Network configuration for ${this.config.chainName}`);
+      throw new Error(
+        `Missing required L1 RPC/Contract/Vault/Network configuration for ${this.config.chainName}`,
+      );
     }
 
     // Initialize L1 provider first as it's needed by the signer
@@ -148,7 +149,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             // Check if already finalized to avoid redundant calls/logs
             if (deposit.status !== DepositStatus.FINALIZED) {
               logger.debug(`Finalizing deposit ${deposit.id}...`);
-              this.finalizeDeposit(deposit); 
+              this.finalizeDeposit(deposit);
             } else {
               logger.debug(`Deposit ${deposit.id} already finalized locally. Ignoring event.`);
             }

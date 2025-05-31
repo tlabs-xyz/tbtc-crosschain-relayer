@@ -72,9 +72,8 @@ export class MockChainHandler implements ChainHandlerInterface {
       startBlockOffset: 0,
       solanaCommitment: 'confirmed' as const,
       defaultGasLimit: 500000,
-      ...config
+      ...config,
     };
-
 
     let finalConfig: AnyChainConfig;
 
@@ -83,12 +82,19 @@ export class MockChainHandler implements ChainHandlerInterface {
         const evmConfig = {
           ...baseProperties,
           chainType: CHAIN_TYPE.EVM,
-          privateKey: (config as EvmChainConfig).privateKey || ethers.Wallet.createRandom().privateKey,
+          privateKey:
+            (config as EvmChainConfig).privateKey || ethers.Wallet.createRandom().privateKey,
           l2WsRpc: (config as EvmChainConfig).l2WsRpc || baseProperties.l2WsRpc,
-          l2ContractAddress: (config as EvmChainConfig).l2ContractAddress || baseProperties.l2ContractAddress,
-          l2BitcoinRedeemerAddress: (config as EvmChainConfig).l2BitcoinRedeemerAddress || baseProperties.l2BitcoinRedeemerAddress,
-          l2WormholeGatewayAddress: (config as EvmChainConfig).l2WormholeGatewayAddress || baseProperties.l2WormholeGatewayAddress,
-          l2WormholeChainId: (config as EvmChainConfig).l2WormholeChainId || baseProperties.l2WormholeChainId,
+          l2ContractAddress:
+            (config as EvmChainConfig).l2ContractAddress || baseProperties.l2ContractAddress,
+          l2BitcoinRedeemerAddress:
+            (config as EvmChainConfig).l2BitcoinRedeemerAddress ||
+            baseProperties.l2BitcoinRedeemerAddress,
+          l2WormholeGatewayAddress:
+            (config as EvmChainConfig).l2WormholeGatewayAddress ||
+            baseProperties.l2WormholeGatewayAddress,
+          l2WormholeChainId:
+            (config as EvmChainConfig).l2WormholeChainId || baseProperties.l2WormholeChainId,
           l2StartBlock: (config as EvmChainConfig).l2StartBlock,
           endpointUrl: (config as EvmChainConfig).endpointUrl,
         };
@@ -119,7 +125,8 @@ export class MockChainHandler implements ChainHandlerInterface {
         const starknetConfig = {
           ...baseProperties,
           chainType: CHAIN_TYPE.STARKNET,
-          starknetPrivateKey: (config as StarknetChainConfig).starknetPrivateKey || 'mockStarknetPrivKey',
+          starknetPrivateKey:
+            (config as StarknetChainConfig).starknetPrivateKey || 'mockStarknetPrivKey',
         };
         finalConfig = starknetConfig as unknown as StarknetChainConfig;
         break;

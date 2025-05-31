@@ -13,6 +13,10 @@ const StarknetChainBaseSchema = z.object({
         'STARKNET_PRIVATE_KEY is required. Set it in the environment or provide it in the config data.',
     })
     .min(1, 'STARKNET_PRIVATE_KEY must not be empty.'),
+  l1FeeAmountWei: z
+    .string()
+    .regex(/^\d+$/, 'l1FeeAmountWei must be a string of digits')
+    .default('0'),
 });
 
 const CommonConfigForStarknet = CommonChainConfigSchema.omit({ privateKey: true });
@@ -22,6 +26,7 @@ export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetC
     chainType: StarknetChainBaseSchema.shape.chainType,
     chainName: StarknetChainBaseSchema.shape.chainName,
     starknetPrivateKey: StarknetChainBaseSchema.shape.starknetPrivateKey,
+    l1FeeAmountWei: StarknetChainBaseSchema.shape.l1FeeAmountWei,
   })
   .refine((data) => data.chainType === CHAIN_TYPE.STARKNET, {
     message: 'Chain type must be Starknet for StarknetChainConfigSchema.',

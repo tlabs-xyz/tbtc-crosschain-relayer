@@ -114,7 +114,9 @@ describe('API Endpoints - Multi-Chain', () => {
           });
         } else {
           test('should return 405 when API is not supported for this chain', async () => {
-            const response = await request(app).post(`/api/${chainName}/reveal`).send(validRevealData);
+            const response = await request(app)
+              .post(`/api/${chainName}/reveal`)
+              .send(validRevealData);
             expect(response.status).toBe(405);
             expect(response.body).toEqual(
               expect.objectContaining({
@@ -157,7 +159,6 @@ describe('API Endpoints - Multi-Chain', () => {
                 `Skipping GET /api/${chainName}/deposit/:depositId test because prerequisite reveal failed or was not applicable.`,
               );
             } else {
-
               console.warn(
                 `Skipping GET /api/${chainName}/deposit/:depositId because reveal API is not supported for this chain.`,
               );
@@ -192,7 +193,6 @@ describe('API Endpoints - Multi-Chain', () => {
             expect([DepositStatus.QUEUED, DepositStatus.INITIALIZED]).toContain(
               statusResponse.body.status,
             );
-
           });
         });
       }

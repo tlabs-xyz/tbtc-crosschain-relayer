@@ -17,12 +17,10 @@ import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json' assert { ty
 import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
 import { DepositStore } from '../utils/DepositStore.js';
 
-const WORMHOLE_GATEWAY_PROGRAM_ID = new PublicKey(
-  '87MEvHZCXE3ML5rrmh5uX1FbShHmRXXS32xJDGbQ7h5t',
-);
+const WORMHOLE_GATEWAY_PROGRAM_ID = new PublicKey('87MEvHZCXE3ML5rrmh5uX1FbShHmRXXS32xJDGbQ7h5t');
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
   'TokensTransferredWithPayload(uint256,bytes32,uint64)',
-); 
+);
 const DEFAULT_COMMITMENT_LEVEL: Commitment = 'confirmed';
 
 export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {

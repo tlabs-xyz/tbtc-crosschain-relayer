@@ -23,7 +23,7 @@ import { type Reveal } from '../types/Reveal.type.js';
  * event data, ownership information, status, and timestamps.
  *
  * @param {FundingTransaction} fundingTx - The Bitcoin funding transaction.
- * @param {any} reveal - An array containing reveal parameters related to the Bitcoin deposit.
+ * @param {Reveal} reveal - An object containing reveal parameters related to the Bitcoin deposit.
  * @param {any} l2DepositOwner - The owner of the deposit on the L2 network.
  * @param {any} l2Sender - The sender address on the L2 network.
  * @param {string} chainId - The chain ID of the deposit.
@@ -33,19 +33,18 @@ import { type Reveal } from '../types/Reveal.type.js';
 
 export const createDeposit = (
   fundingTx: FundingTransaction,
-  reveal: any,
+  reveal: Reveal,
   l2DepositOwner: any,
   l2Sender: any,
   chainId: string,
 ): Deposit => {
-  const revealArray = Array.isArray(reveal) ? reveal : (Object.values(reveal) as Reveal);
   const fundingTxHash = getFundingTxHash(fundingTx);
-  const depositId = getDepositId(fundingTxHash, revealArray[0]);
+  const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
   const deposit: Deposit = {
     id: depositId,
     chainId: chainId,
     fundingTxHash: fundingTxHash,
-    outputIndex: revealArray[0],
+    outputIndex: reveal.fundingOutputIndex,
     hashes: {
       btc: {
         btcTxHash: getTransactionHash(fundingTx),
@@ -60,10 +59,10 @@ export const createDeposit = (
     },
     receipt: {
       depositor: l2Sender,
-      blindingFactor: revealArray[1],
-      walletPublicKeyHash: revealArray[2],
-      refundPublicKeyHash: revealArray[3],
-      refundLocktime: revealArray[4],
+      blindingFactor: reveal.blindingFactor,
+      walletPublicKeyHash: reveal.walletPubKeyHash,
+      refundPublicKeyHash: reveal.refundPubKeyHash,
+      refundLocktime: reveal.refundLocktime,
       extraData: l2DepositOwner,
     },
     L1OutputEvent: {
@@ -80,10 +79,10 @@ export const createDeposit = (
     owner: l2DepositOwner,
     status: DepositStatus.QUEUED,
     dates: {
-      createdAt: new Date().getTime(),
+      createdAt: Date.now(),
       initializationAt: null,
       finalizationAt: null,
-      lastActivityAt: new Date().getTime(),
+      lastActivityAt: Date.now(),
       awaitingWormholeVAAMessageSince: null,
       bridgedAt: null,
     },
@@ -139,7 +138,7 @@ export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error
 
   // Log status change if it actually changed
   if (newStatus !== oldStatus) {
-    logStatusChange(deposit, newStatus, oldStatus);
+    logStatusChange(updatedDeposit, newStatus, oldStatus);
   }
 
   await DepositStore.update(updatedDeposit);
@@ -190,7 +189,7 @@ export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, err
 
   // Log status change if it actually changed
   if (newStatus !== oldStatus) {
-    logStatusChange(deposit, newStatus, oldStatus);
+    logStatusChange(updatedDeposit, newStatus, oldStatus);
   }
 
   await DepositStore.update(updatedDeposit);
@@ -351,27 +350,23 @@ export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => 
  *
  * @returns {string} A unique deposit ID as a uint256 string.
  *
- * @throws {Error} If the fundingTxHash is not a 64-character string.
+ * @throws {Error} If the fundingTxHash is not a 66-character hex string (e.g. 0x...).
  */
 
 export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
-  // Asegúrate de que fundingTxHash es una cadena de 64 caracteres hexadecimales
-  if (fundingTxHash.length !== 64) throw new Error('Invalid fundingTxHash');
+  // The deposit ID is a keccak256 hash of the funding transaction hash and output index.
+  // The tBTC OptimisticMintingFinalized event emits depositKey as uint256.
+  // To ensure matching, we calculate the bytes32 keccak256 hash and then convert it
+  // to its BigNumber (uint256) decimal string representation.
 
-  // Convertir el fundingTxHash a un formato de bytes32 esperado por ethers.js
-  const fundingTxHashBytes = '0x' + fundingTxHash;
+  // Validate fundingTxHash
+  if (!ethers.utils.isHexString(fundingTxHash) || fundingTxHash.length !== 66) {
+    throw new Error('fundingTxHash must be a 66-character hex string (e.g. 0x...).');
+  }
 
-  // Codifica los datos de manera similar a abi.encodePacked en Solidity
-  const encodedData = ethers.utils.solidityPack(
-    ['bytes32', 'uint32'],
-    [fundingTxHashBytes, fundingOutputIndex],
-  );
+  const types = ['bytes32', 'uint256'];
+  const values = [fundingTxHash, fundingOutputIndex];
 
-  // Calcula el hash keccak256
-  const hash = ethers.utils.keccak256(encodedData);
-
-  // Convierte el hash a un entero sin signo de 256 bits (uint256)
-  const depositKey = ethers.BigNumber.from(hash).toString();
-
-  return depositKey;
+  const hashBytes32 = ethers.utils.solidityKeccak256(types, values);
+  return ethers.BigNumber.from(hashBytes32).toString();
 };
