@@ -59,7 +59,7 @@
   },
   "optionalDependencies": {
     "fsevents": "^2.3.2",
-    "globals": "^16.1.0"
+    "globals": "^16.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.26.0",
