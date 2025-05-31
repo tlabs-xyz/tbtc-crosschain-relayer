@@ -8,9 +8,11 @@ const StarknetChainBaseSchema = z.object({
   chainType: z.literal(CHAIN_TYPE.STARKNET).default(CHAIN_TYPE.STARKNET),
   // Starknet-specific fields
   starknetPrivateKey: z
-    .string()
-    .min(1, 'starknetPrivateKey must not be empty if provided')
-    .optional(),
+    .string({
+      required_error:
+        'STARKNET_PRIVATE_KEY is required. Set it in the environment or provide it in the config data.',
+    })
+    .min(1, 'STARKNET_PRIVATE_KEY must not be empty.'),
   l1FeeAmountWei: z
     .string()
     .regex(/^\d+$/, 'l1FeeAmountWei must be a string of digits')
@@ -29,6 +31,10 @@ export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetC
   .refine((data) => data.chainType === CHAIN_TYPE.STARKNET, {
     message: 'Chain type must be Starknet for StarknetChainConfigSchema.',
     path: ['chainType'],
+  })
+  .refine((data) => !!data.starknetPrivateKey, {
+    message: 'starknetPrivateKey is required for Starknet chains.',
+    path: ['starknetPrivateKey'],
   });
 
 export type StarknetChainConfig = z.infer<typeof StarknetChainConfigSchema>;

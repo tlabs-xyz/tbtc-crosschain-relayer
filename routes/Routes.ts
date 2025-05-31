@@ -1,5 +1,3 @@
-import express from 'express';
-import escapeHtml from 'escape-html';
 import type { Request, Response, NextFunction } from 'express';
 import { Router } from 'express';
 
@@ -93,7 +91,7 @@ class RoutesSingleton {
     console.log(
       `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] Initializing routes...`,
     );
-    const utils = new Utils(); // Instantiated Utils here for clarity for these routes
+    const utils = new Utils();
     const validateChainAndGetHandler = createChainValidator({ allowAllKeyword: true });
 
     // Mount the chain-specific router under /api/:chainName, AFTER validation middleware
@@ -102,8 +100,8 @@ class RoutesSingleton {
       `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] MOUNTED /api/:chainName with chainSpecificRouter`,
     );
 
-    this.router.get('/', utils.defaultController); // Corrected to use utils.defaultController
-    this.router.get('/status', utils.pingController); // Corrected to use utils.pingController
+    this.router.get('/', utils.defaultController);
+    this.router.get('/status', utils.pingController);
     console.log(
       `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] All routes initialized.`,
     );
@@ -127,13 +125,13 @@ router.get('/status', utils.pingController);
 router.get('/api/:chainName/audit-logs', validateChainAllowAll, (req: Request, res: Response) => {
   const { chainName } = req as RequestWithChainInfo;
   // The controller expects chainName as a third argument.
-  return utils.auditLogsController(req, res, chainName!); // Added non-null assertion
+  return utils.auditLogsController(req, res, chainName!);
 });
 
 // Diagnostic routes for a specific chain
 router.get('/api/:chainName/diagnostics', validateChainAllowAll, (req: Request, res: Response) => {
   const { chainName } = req as RequestWithChainInfo;
-  return operations.getAllOperations(req, res, chainName!); // Added non-null assertion
+  return operations.getAllOperations(req, res, chainName!);
 });
 
 router.get(
@@ -141,7 +139,7 @@ router.get(
   validateChainAllowAll,
   (req: Request, res: Response) => {
     const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllQueuedOperations(req, res, chainName!); // Added non-null assertion
+    return operations.getAllQueuedOperations(req, res, chainName!);
   },
 );
 
@@ -150,7 +148,7 @@ router.get(
   validateChainAllowAll,
   (req: Request, res: Response) => {
     const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllInitializedOperations(req, res, chainName!); // Added non-null assertion
+    return operations.getAllInitializedOperations(req, res, chainName!);
   },
 );
 
@@ -159,7 +157,7 @@ router.get(
   validateChainAllowAll,
   (req: Request, res: Response) => {
     const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllFinalizedOperations(req, res, chainName!); // Added non-null assertion
+    return operations.getAllFinalizedOperations(req, res, chainName!);
   },
 );
 

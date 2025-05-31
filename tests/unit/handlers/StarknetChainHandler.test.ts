@@ -81,7 +81,6 @@ describe('StarknetChainHandler', () => {
 
   // Define mock implementations here so they are in scope for beforeEach
   const mockWalletImpl = (privateKey: string, provider: any) => {
-    console.log('>>>>> MOCK ethers.Wallet CONSTRUCTOR CALLED (via spyOn) <<<<<');
     if (typeof privateKey !== 'string' || !privateKey.startsWith('0x')) {
       // console.warn('MockWallet invoked with potentially invalid privateKey:', privateKey);
     }

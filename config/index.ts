@@ -10,9 +10,6 @@ import { sepoliaTestnetChainInput } from './chain/sepolia.chain';
 import { solanaDevnetChainInput } from './chain/solana.chain';
 import { starknetTestnetChainInput } from './chain/starknet.chain';
 import { suiTestnetChainInput } from './chain/sui.chain';
-import { mockEvm1Config } from './chain/mockEvm1.chain';
-import { mockEvm2Config } from './chain/mockEvm2.chain';
-import { faultyMockEvmConfig } from './chain/faultyMockEvm.chain';
 import logger from '../utils/Logger';
 
 logger.info('Application configuration loaded successfully.');
@@ -41,9 +38,6 @@ const chainSchemaRegistry = {
   solanaDevnet: { schema: SolanaChainConfigSchema, input: solanaDevnetChainInput },
   starknetTestnet: { schema: StarknetChainConfigSchema, input: starknetTestnetChainInput },
   suiTestnet: { schema: SuiChainConfigSchema, input: suiTestnetChainInput },
-  mockEVM1: { schema: EvmChainConfigSchema, input: mockEvm1Config },
-  mockEVM2: { schema: EvmChainConfigSchema, input: mockEvm2Config },
-  faultyMockEVM: { schema: EvmChainConfigSchema, input: faultyMockEvmConfig },
 };
 
 export const chainConfigs: AllChainConfigs = {};

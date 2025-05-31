@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema';
 import type { SuiChainConfigSchema } from '../schemas/sui.chain.schema';
 import { commonChainInput } from './common.chain';
-import { getEnv, getEnvOptional } from '../../utils/Env';
+import { getEnv } from '../../utils/Env';
 
 type SuiChainInput = z.input<typeof SuiChainConfigSchema>;
 
@@ -15,5 +15,5 @@ export const suiTestnetChainInput: SuiChainInput = {
   network: NETWORK.TESTNET,
 
   // Required by SuiChainBaseSchema
-  suiPrivateKey: getEnvOptional('CHAIN_SUITESTNET_PRIVATE_KEY'),
+  suiPrivateKey: getEnv('CHAIN_SUITESTNET_PRIVATE_KEY'),
 };

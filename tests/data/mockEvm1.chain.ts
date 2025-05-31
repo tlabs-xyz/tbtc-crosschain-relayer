@@ -1,6 +1,6 @@
-import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema';
-import type { EvmChainConfig } from '../schemas/evm.chain.schema';
-import type { EthereumAddress } from '../schemas/shared';
+import { CHAIN_TYPE, NETWORK } from '../../config/schemas/common.schema';
+import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema';
+import type { EthereumAddress } from '../../config/schemas/shared';
 
 export const mockEvm1Config: EvmChainConfig = {
   chainType: CHAIN_TYPE.EVM,

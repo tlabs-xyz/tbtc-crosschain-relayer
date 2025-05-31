@@ -68,11 +68,7 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
   let localApp: Express;
 
   beforeAll(async () => {
-    // Set specific environment variables for this test suite
-    process.env.SUPPORTED_CHAINS = 'mockEVM1,mockEVM2,faultyMockEVM,mockEndpointChain';
-    process.env.NODE_ENV = 'test'; // Ensure it's 'test'
-
-    jest.resetModules(); // Crucial: Clears module cache
+    jest.resetModules();
 
     // Mock Config utility if it's used directly by other modules after reset
     // This is a common pattern if Config.get() is used globally.
@@ -551,7 +547,7 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
 
     test('Supported chains are correctly loaded for testing', () => {
       expect(process.env.SUPPORTED_CHAINS).toBe(
-        'mockEVM1,mockEVM2,faultyMockEVM,mockEndpointChain',
+        'MockEVM1,MockEVM2,FaultyMockEVM,MockEndpointChain',
       );
       // This is the critical assertion
       expect(activeChainConfigsArray.length).toBe(4);

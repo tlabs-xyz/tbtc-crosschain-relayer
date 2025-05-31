@@ -7,7 +7,12 @@ const SuiChainBaseSchema = z.object({
   chainName: z.string().default('Sui'),
   chainType: z.literal(CHAIN_TYPE.SUI).default(CHAIN_TYPE.SUI),
   // Sui-specific fields
-  suiPrivateKey: z.string().min(1, 'suiPrivateKey must not be empty if provided').optional(),
+  suiPrivateKey: z
+    .string({
+      required_error:
+        'SUI_PRIVATE_KEY is required. Set it in the environment or provide it in the config data.',
+    })
+    .min(1, 'SUI_PRIVATE_KEY must not be empty.'),
   suiGasObjectId: z.string().optional(),
 });
 
@@ -22,6 +27,10 @@ export const SuiChainConfigSchema = CommonConfigForSui.merge(SuiChainBaseSchema)
   .refine((data) => data.chainType === CHAIN_TYPE.SUI, {
     message: 'Chain type must be Sui for SuiChainConfigSchema.',
     path: ['chainType'],
+  })
+  .refine((data) => !!data.suiPrivateKey, {
+    message: 'suiPrivateKey is required for Sui chains.',
+    path: ['suiPrivateKey'],
   });
 
 export type SuiChainConfig = z.infer<typeof SuiChainConfigSchema>;
