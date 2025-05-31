@@ -62,7 +62,6 @@ jobs:
         run: yarn test:coverage
 
       - name: Stop Docker Compose services
-        if: always()
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down
 
       - name: Upload coverage as artifact
