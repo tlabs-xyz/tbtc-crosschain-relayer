@@ -13,7 +13,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 
 // Rutas
-import Routes from './routes/Routes';
+import Routes from './routes/Routes.js';
 
 // Utils
 import logger from './utils/Logger';
