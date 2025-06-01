@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express';
-import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
-import { createDeposit, getDepositId } from '../utils/Deposits';
-import logger, { logErrorContext } from '../utils/Logger';
-import { logApiRequest, logDepositError } from '../utils/AuditLog';
-import { DepositStatus } from '../types/DepositStatus.enum';
-import { getFundingTxHash } from '../utils/GetTransactionHash';
-import type { Reveal } from '../types/Reveal.type';
-import { DepositStore } from '../utils/DepositStore';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { createDeposit, getDepositId } from '../utils/Deposits.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
+import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
+import { type DepositStatus } from '../types/DepositStatus.enum.js';
+import { getFundingTxHash } from '../utils/GetTransactionHash.js';
+import type { Reveal } from '../types/Reveal.type.js';
+import { DepositStore } from '../utils/DepositStore.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners

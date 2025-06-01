@@ -1,8 +1,8 @@
-import type { Deposit } from '../types/Deposit.type';
-import { DepositStore } from '../utils/DepositStore';
-import logger from '../utils/Logger';
-import { logDepositDeleted } from '../utils/AuditLog';
-import { DepositStatus } from '../types/DepositStatus.enum';
+import type { Deposit } from '../types/Deposit.type.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import logger from '../utils/Logger.js';
+import { logDepositDeleted } from '../utils/AuditLog.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 
 /****************************************************************************************
 The goal of this task is cleaning up trash deposits and preventing relayer's congestion.

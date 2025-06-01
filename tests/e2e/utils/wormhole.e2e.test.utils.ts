@@ -22,13 +22,13 @@ import evmPlatform from '@wormhole-foundation/sdk/platforms/evm';
 import suiPlatform from '@wormhole-foundation/sdk/platforms/sui';
 // import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana'; // If solana becomes relevant
 import * as ethers from 'ethers'; // Changed from 'import { ethers } from ...'
-import logger, { logErrorContext } from '../../../utils/Logger'; // Import directly
+import logger, { logErrorContext } from '../../../utils/Logger.js'; // Import directly
 import {
   type TestScenario,
   // L2_CHAIN_ID_SUI, // Not directly used in this file, but by tests
   // L2_CHAIN_ID_AVAX, // Not directly used in this file, but by tests
-} from '../../data/wormhole.e2e.scenarios';
-import { WormholeVaaService } from '../../../services/WormholeVaaService';
+} from '../../data/wormhole.e2e.scenarios.js';
+import { WormholeVaaService } from '../../../services/WormholeVaaService.js';
 
 // --- Pre-define the core object that the mocked 'wormhole()' function will return ---
 // This object's methods (getChain, getVaa) will be further fleshed out with specific jest.fn()

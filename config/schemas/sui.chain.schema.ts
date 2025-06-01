@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CHAIN_TYPE } from './common.schema';
-import { CommonChainConfigSchema } from './common.schema';
+import { CHAIN_TYPE } from './common.schema.js';
+import { CommonChainConfigSchema } from './common.schema.js';
 
 // Base schema for fields that are specific to Sui chains.
 const SuiChainBaseSchema = z.object({

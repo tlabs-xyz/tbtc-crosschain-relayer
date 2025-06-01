@@ -20,15 +20,20 @@ module.exports = {
   testTimeout: 30000,
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   moduleNameMapper: {
-    // eslint-disable-next-line no-useless-escape
-    // '^(\\.{1,2}/.+)\\.js$': '$1', // Commented out to allow standard TS import resolution
-    '^@/utils/prisma$': '<rootDir>/utils/prisma', // Updated specific mapping
-    '^@/(.*)$': '<rootDir>/$1',
+    // Rule for @/ aliases: Strip .js if present, then map to <rootDir>
+    // Example: @/utils/prisma.js -> <rootDir>/utils/prisma (ts-jest will find .ts)
+    '^@/(.*?)(\\.js)?$': '<rootDir>/$1',
+
+    // Rule for relative paths: Strip .js if present
+    // Example: ../../utils/Logger.js -> ../../utils/Logger (ts-jest will find .ts)
+    '^(\\.\\.?/.*?)(\\.js)?$': '$1',
+
+    // Other specific mappings that don't involve .js extension issues
     '^#ansi-styles$': 'ansi-styles',
   },
   globalSetup: '<rootDir>/jest.global-setup.js',
   globalTeardown: '<rootDir>/jest.global-teardown.js',
-  transformIgnorePatterns: ['/node_modules/(?!.*(p-limit|yocto-queue))/', '\\.pnp\\.[^\\/]+$'],
+  transformIgnorePatterns: ['/node_modules/(?!.*(p-limit|yocto-queue))/', '\\\\.pnp\\.[^\\/]+$'],
   transform: {
     '^.+\\.m?[tj]sx?$': [
       'ts-jest',

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { CHAIN_TYPE } from './common.schema';
-import { CommonChainConfigSchema } from './common.schema';
+import { CHAIN_TYPE } from './common.schema.js';
+import { CommonChainConfigSchema } from './common.schema.js';
 
 const EvmChainBaseSchema = z.object({
   chainType: z.literal(CHAIN_TYPE.EVM).default(CHAIN_TYPE.EVM), // Fixed for EVM chains

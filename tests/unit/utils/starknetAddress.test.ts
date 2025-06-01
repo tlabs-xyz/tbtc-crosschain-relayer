@@ -2,7 +2,7 @@ import {
   validateStarkNetAddress,
   formatStarkNetAddressForContract,
   extractAddressFromBitcoinScript,
-} from '../../../utils/starknetAddress';
+} from '../../../utils/starknetAddress.js';
 import * as bitcoin from 'bitcoinjs-lib';
 
 // Mock starknet.js CallData.compile to avoid actual compilation during tests

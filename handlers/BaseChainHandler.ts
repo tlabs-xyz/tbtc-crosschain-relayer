@@ -1,4 +1,4 @@
-import { type Network, Wormhole, wormhole } from '@wormhole-foundation/sdk';
+import { type Network, type Wormhole, wormhole } from '@wormhole-foundation/sdk';
 
 import solana from '@wormhole-foundation/sdk/solana';
 import sui from '@wormhole-foundation/sdk/sui';
@@ -8,23 +8,23 @@ import { BigNumber, ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
 import { NonceManager } from '@ethersproject/experimental';
 
-import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
-import { NETWORK } from '../config/schemas/common.schema';
-import type { Deposit } from '../types/Deposit.type';
-import logger, { logErrorContext } from '../utils/Logger';
-import { DepositStore } from '../utils/DepositStore';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { NETWORK } from '../config/schemas/common.schema.js';
+import type { Deposit } from '../types/Deposit.type.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
+import { DepositStore } from '../utils/DepositStore.js';
 import {
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
   updateLastActivity,
-} from '../utils/Deposits';
-import { DepositStatus } from '../types/DepositStatus.enum';
-import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor';
-import { TBTCVaultABI } from '../interfaces/TBTCVault';
-import { logDepositError } from '../utils/AuditLog';
-import type { AnyChainConfig } from '../config/index';
-import { CHAIN_TYPE } from '../config/schemas/common.schema';
-import type { EvmChainConfig } from '../config/schemas/evm.chain.schema';
+} from '../utils/Deposits.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
+import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
+import { logDepositError } from '../utils/AuditLog.js';
+import type { AnyChainConfig } from '../config/index.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
 

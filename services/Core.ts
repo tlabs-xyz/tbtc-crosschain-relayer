@@ -1,21 +1,21 @@
-import { logErrorContext } from '../utils/Logger';
+import { logErrorContext } from '../utils/Logger.js';
 import cron from 'node-cron';
 import pLimit from 'p-limit';
 
-import logger from '../utils/Logger';
-import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry';
-import { chainConfigs, type AnyChainConfig } from '../config/index';
-import type { EvmChainConfig } from '../config/schemas/evm.chain.schema';
+import logger from '../utils/Logger.js';
+import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
+import { chainConfigs, type AnyChainConfig } from '../config/index.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import {
   cleanQueuedDeposits,
   cleanFinalizedDeposits,
   cleanBridgedDeposits,
-} from './CleanupDeposits';
-import { L2RedemptionService } from './L2RedemptionService';
-import { RedemptionStore } from '../utils/RedemptionStore';
-import { RedemptionStatus } from '../types/Redemption.type';
-import { BaseChainHandler } from '../handlers/BaseChainHandler';
-import { CHAIN_TYPE } from '../config/schemas/common.schema';
+} from './CleanupDeposits.js';
+import { L2RedemptionService } from './L2RedemptionService.js';
+import { RedemptionStore } from '../utils/RedemptionStore.js';
+import { RedemptionStatus } from '../types/Redemption.type.js';
+import { type BaseChainHandler } from '../handlers/BaseChainHandler.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 
 let effectiveChainConfigs: AnyChainConfig[] = [];
 

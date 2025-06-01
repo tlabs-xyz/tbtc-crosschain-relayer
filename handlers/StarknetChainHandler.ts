@@ -1,7 +1,7 @@
-import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema';
-import { StarknetChainConfigSchema } from '../config/schemas/starknet.chain.schema';
-import logger from '../utils/Logger';
-import { BaseChainHandler } from './BaseChainHandler';
+import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
+import { StarknetChainConfigSchema } from '../config/schemas/starknet.chain.schema.js';
+import logger from '../utils/Logger.js';
+import { BaseChainHandler } from './BaseChainHandler.js';
 import {
   ethers,
   type Overrides,
@@ -9,25 +9,25 @@ import {
   type BigNumberish,
   type BytesLike,
 } from 'ethers';
-import { StarkNetBitcoinDepositorABI } from '../interfaces/StarkNetBitcoinDepositor';
-import type { StarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor';
+import { StarkNetBitcoinDepositorABI } from '../interfaces/StarkNetBitcoinDepositor.js';
+import type { StarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor.js';
 
-import { DepositStore } from '../utils/DepositStore';
-import { DepositStatus } from '../types/DepositStatus.enum';
+import { DepositStore } from '../utils/DepositStore.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 import {
   validateStarkNetAddress,
   formatStarkNetAddressForContract,
-} from '../utils/starknetAddress';
+} from '../utils/starknetAddress.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
-import { getFundingTxHash } from '../utils/GetTransactionHash';
+import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import {
   getDepositId,
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
-} from '../utils/Deposits';
-import { logDepositError, logStatusChange } from '../utils/AuditLog';
-import { logErrorContext } from '../utils/Logger';
+} from '../utils/Deposits.js';
+import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
+import { logErrorContext } from '../utils/Logger.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 
 export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {

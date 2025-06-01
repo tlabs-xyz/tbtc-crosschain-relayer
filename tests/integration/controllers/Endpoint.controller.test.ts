@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
-import { MockChainHandler } from '../../mocks/MockChainHandler';
-import { createTestDeposit } from '../../mocks/BlockchainMock';
+import { MockChainHandler } from '../../mocks/MockChainHandler.js';
+import { createTestDeposit } from '../../mocks/BlockchainMock.js';
 import { ethers } from 'ethers';
-import { DepositStatus } from '../../../types/DepositStatus.enum';
-import { EndpointController } from '../../../controllers/Endpoint.controller';
+import { DepositStatus } from '../../../types/DepositStatus.enum.js';
+import { EndpointController } from '../../../controllers/Endpoint.controller.js';
 
 // Mock Express request and response
 const mockRequest = () => {

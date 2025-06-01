@@ -113,5 +113,5 @@
     "resolveJsonModule": true /*  <--- Enable JSON imports */
   },
   "include": ["src/**/*.ts", "./**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "node_modules/**/*.ts", "dist", "coverage", "generated"]
 }

@@ -8,20 +8,26 @@ import request from 'supertest';
 import express from 'express';
 import type { Express } from 'express';
 import { ethers } from 'ethers'; // ethers is likely not affected by resetModules in this context
-import { DepositStatus } from '../../types/DepositStatus.enum';
-import type { AnyChainConfig } from '../../config'; // Type import is fine
-import type { SolanaChainConfig } from '../../config/schemas/solana.chain.schema'; // Type import
-import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema'; // Type import
-import { CHAIN_TYPE, NETWORK } from '../../config/schemas/common.schema'; // Enum import is fine
-import type { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface'; // Type import
-import type { TransactionReceipt } from '@ethersproject/providers'; // Type import
-import type { Deposit } from '../../types/Deposit.type'; // Type import
-import type { Reveal } from '../../types/Reveal.type'; // Type import
+import { DepositStatus } from '../../types/DepositStatus.enum.js';
+import type { SolanaChainConfig } from '../../config/schemas/solana.chain.schema.js';
+import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
+import { CHAIN_TYPE, NETWORK } from '../../config/schemas/common.schema.js';
+import type { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface.js';
+import type { TransactionReceipt } from '@ethersproject/providers';
+import type { Deposit } from '../../types/Deposit.type.js';
+import type { Reveal } from '../../types/Reveal.type.js';
+
+// Type imports for dynamically imported modules
+import type * as ConfigType from '../../config/index.js';
+import type * as RoutesType from '../../routes/Routes.js';
+import type * as ChainHandlerRegistryType from '../../handlers/ChainHandlerRegistry.js';
+import type * as IndexType from '../../index.js';
 
 // Import mock configurations
-import { mockEvm1Config } from '../data/mockEvm1.chain';
-import { mockEvm2Config } from '../data/mockEvm2.chain';
-import { faultyMockEvmConfig } from '../data/faultyMockEvm.chain';
+import { mockEvm1Config } from '../data/mockEvm1.chain.js';
+import { mockEvm2Config } from '../data/mockEvm2.chain.js';
+import { faultyMockEvmConfig } from '../data/faultyMockEvm.chain.js';
+import { type AnyChainConfig } from '../../config/index.js';
 
 // Module-level state for mocks needs to be accessible after resetModules too.
 // These are fine here as they are not re-imported dynamically in the same way config is.
@@ -63,10 +69,10 @@ const describeToRun = describe; // Always run these mock-based E2E tests
 
 describeToRun('E2E API Tests with Dynamic Env', () => {
   // Variables to hold dynamically imported modules
-  let chainConfigsModule: typeof import('../../config');
-  let mainAppRouterModule: typeof import('../../routes/Routes');
-  let chainHandlerRegistryModule: typeof import('../../handlers/ChainHandlerRegistry');
-  let initializationPromiseModule: typeof import('../..'); // Assuming index.ts exports this
+  let chainConfigsModule: typeof ConfigType;
+  let mainAppRouterModule: typeof RoutesType;
+  let chainHandlerRegistryModule: typeof ChainHandlerRegistryType;
+  let initializationPromiseModule: typeof IndexType;
   let loadedChainConfigsActual: Record<string, AnyChainConfig | undefined>;
 
   let activeChainConfigsArray: AnyChainConfig[] = [];

@@ -1,8 +1,8 @@
 import { ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
-import type { Deposit } from '../types/Deposit.type';
-import { DepositStatus } from '../types/DepositStatus.enum';
-import type { AnyChainConfig } from '../config/index';
+import type { Deposit } from '../types/Deposit.type.js';
+import { type DepositStatus } from '../types/DepositStatus.enum.js';
+import type { AnyChainConfig } from '../config/index.js';
 
 /**
  * Interface for chain-specific handlers that define common functionality

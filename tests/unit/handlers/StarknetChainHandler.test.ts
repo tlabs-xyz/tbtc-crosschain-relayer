@@ -1,19 +1,19 @@
-import { StarknetChainHandler } from '../../../handlers/StarknetChainHandler';
+import { StarknetChainHandler } from '../../../handlers/StarknetChainHandler.js';
 import {
   StarknetChainConfigSchema,
   type StarknetChainConfig,
-} from '../../../config/schemas/starknet.chain.schema';
-import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema';
-import { DepositStore } from '../../../utils/DepositStore';
-import logger from '../../../utils/Logger';
-import { DepositStatus } from '../../../types/DepositStatus.enum';
+} from '../../../config/schemas/starknet.chain.schema.js';
+import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
+import { DepositStore } from '../../../utils/DepositStore.js';
+import logger from '../../../utils/Logger.js';
+import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import type { Reveal } from '../../../types/Reveal.type.js';
-import * as starknetAddressUtils from '../../../utils/starknetAddress';
-import * as depositUtils from '../../../utils/Deposits';
-import * as getTransactionHashUtils from '../../../utils/GetTransactionHash';
-import * as auditLog from '../../../utils/AuditLog';
-import { Contract as EthersContract, ethers } from 'ethers';
+import * as starknetAddressUtils from '../../../utils/starknetAddress.js';
+import * as depositUtils from '../../../utils/Deposits.js';
+import * as getTransactionHashUtils from '../../../utils/GetTransactionHash.js';
+import * as auditLog from '../../../utils/AuditLog.js';
+import { type Contract as EthersContract, ethers } from 'ethers';
 import type { FundingTransaction } from '../../../types/FundingTransaction.type.js';
 
 // Mock external dependencies

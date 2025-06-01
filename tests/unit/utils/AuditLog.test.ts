@@ -8,12 +8,12 @@ import {
   logDepositDeleted,
   logApiRequest,
   logDepositError,
-} from '../../../utils/AuditLog';
-import * as AuditLogFunctions from '../../../utils/AuditLog';
-import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum';
-import type { Deposit } from '../../../types/Deposit.type';
-import type { FundingTransaction } from '../../../types/FundingTransaction.type';
-import type { Reveal } from '../../../types/Reveal.type';
+} from '../../../utils/AuditLog.js';
+import * as AuditLogFunctions from '../../../utils/AuditLog.js';
+import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum.js';
+import type { Deposit } from '../../../types/Deposit.type.js';
+import type { FundingTransaction } from '../../../types/FundingTransaction.type.js';
+import type { Reveal } from '../../../types/Reveal.type.js';
 
 const mockFundingTx: FundingTransaction = {
   version: '0x01000000',
@@ -83,7 +83,7 @@ const testDeposit: Deposit = {
 
 // Try importing Prisma client using a static import.
 // This assumes 'utils/PrismaClient' default exports the Prisma instance.
-import { prisma as prismaClientInstance } from '@/utils/prisma'; // Import named export and alias
+import { prisma as prismaClientInstance } from '@/utils/prisma.js'; // Import named export and alias
 // If the above line fails with "Cannot find module", the path is still unresolved.
 // In that case, ensure utils/PrismaClient.ts (or .js) exists, check casing,
 // or investigate Jest/TypeScript path configuration.

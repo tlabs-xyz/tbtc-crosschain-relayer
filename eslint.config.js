@@ -19,6 +19,7 @@ export default [
       'jest.config.cjs',
       'jest.setup.js',
       'test/', // Added to ignore Hardhat contract tests
+      'generated/', // Migrated from .eslintignore
     ],
   },
   // Config for Jest global setup/teardown files
@@ -37,6 +38,21 @@ export default [
     rules: {
       'no-undef': 'error', // These files should have well-defined globals
       // Add any other specific rules if needed
+    },
+  },
+  // Config for .mjs files (like our script)
+  {
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        process: 'readonly',
+        console: 'readonly',
+      },
+      sourceType: 'module',
+    },
+    rules: {
+      'no-undef': 'error',
     },
   },
   js.configs.recommended,
@@ -112,13 +128,26 @@ export default [
         { 'ts-expect-error': 'allow-with-description' },
       ],
       'no-empty': ['error', { allowEmptyCatch: true }],
-      // Enforce .js extension for all local imports
+      // Enforce .js extension for all local imports that will be .js at runtime
       'import/extensions': [
         'error',
-        'ignorePackages',
+        'always', // Default behavior: require extensions
         {
-          js: 'always',
-          ts: 'never',
+          ignorePackages: true,
+          pattern: {
+            js: 'always', // Imports of .js files must have .js
+            mjs: 'always', // Imports of .mjs files must have .mjs
+            cjs: 'always', // Imports of .cjs files must have .cjs
+            ts: 'never', // Do NOT allow './foo.ts' in import statements in TS files
+            tsx: 'never', // Do NOT allow './foo.tsx' in import statements in TS files
+          },
+        },
+      ],
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        {
+          prefer: 'type-imports',
+          fixStyle: 'inline-type-imports',
         },
       ],
     },

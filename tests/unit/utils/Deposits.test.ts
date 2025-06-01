@@ -6,16 +6,16 @@ import {
   updateToAwaitingWormholeVAA,
   updateToBridgedDeposit,
   updateLastActivity,
-} from '../../../utils/Deposits';
+} from '../../../utils/Deposits.js';
 import { ethers } from 'ethers';
 import { type FundingTransaction } from '../../../types/FundingTransaction.type.js';
 import { type Reveal } from '../../../types/Reveal.type.js';
-import { DepositStatus } from '../../../types/DepositStatus.enum';
+import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import { type Deposit } from '../../../types/Deposit.type.js';
-import * as GetTransactionHash from '../../../utils/GetTransactionHash';
-import * as AuditLog from '../../../utils/AuditLog';
-import * as DepositStore from '../../../utils/DepositStore';
-import logger from '../../../utils/Logger';
+import * as GetTransactionHash from '../../../utils/GetTransactionHash.js';
+import * as AuditLog from '../../../utils/AuditLog.js';
+import * as DepositStore from '../../../utils/DepositStore.js';
+import logger from '../../../utils/Logger.js';
 
 describe('Deposits Util', () => {
   describe('getDepositId', () => {

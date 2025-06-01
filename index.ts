@@ -16,18 +16,18 @@ import compression from 'compression';
 import Routes from './routes/Routes.js';
 
 // Utils
-import logger from './utils/Logger';
+import logger from './utils/Logger.js';
 import {
   initializeAllChains,
   initializeAllL2RedemptionServices,
   startCronJobs,
-} from './services/Core';
-import { logErrorContext } from './utils/Logger';
+} from './services/Core.js';
+import { logErrorContext } from './utils/Logger.js';
 
 import 'dotenv/config';
 
-import { chainConfigs } from './config/index';
-import { appConfig } from './config/app.config';
+import { chainConfigs } from './config/index.js';
+import { appConfig } from './config/app.config.js';
 
 // -------------------------------------------------------------------------
 // |                            APP INSTANCE                               |

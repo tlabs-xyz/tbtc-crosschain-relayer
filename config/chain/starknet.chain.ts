@@ -1,8 +1,8 @@
-import { z } from 'zod';
-import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema';
-import type { StarknetChainConfigSchema } from '../schemas/starknet.chain.schema';
-import { commonChainInput } from './common.chain';
-import { getEnv } from '../../utils/Env';
+import { type z } from 'zod';
+import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
+import type { StarknetChainConfigSchema } from '../schemas/starknet.chain.schema.js';
+import { commonChainInput } from './common.chain.js';
+import { getEnv } from '../../utils/Env.js';
 
 type StarknetChainInput = z.input<typeof StarknetChainConfigSchema>;
 

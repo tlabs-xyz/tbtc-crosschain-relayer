@@ -1,17 +1,17 @@
-import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface';
-import { CHAIN_TYPE } from '../config/schemas/common.schema';
-import logger from '../utils/Logger';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import logger from '../utils/Logger.js';
 
-import { EVMChainHandler } from './EVMChainHandler';
-import { StarknetChainHandler } from './StarknetChainHandler';
-import { SuiChainHandler } from './SuiChainHandler';
-import { SolanaChainHandler } from './SolanaChainHandler';
+import { EVMChainHandler } from './EVMChainHandler.js';
+import { StarknetChainHandler } from './StarknetChainHandler.js';
+import { SuiChainHandler } from './SuiChainHandler.js';
+import { SolanaChainHandler } from './SolanaChainHandler.js';
 
-import type { AnyChainConfig } from '../config/index';
-import type { EvmChainConfig } from '../config/schemas/evm.chain.schema';
-import type { SolanaChainConfig } from '../config/schemas/solana.chain.schema';
-import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema';
-import type { SuiChainConfig } from '../config/schemas/sui.chain.schema';
+import type { AnyChainConfig } from '../config/index.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import type { SolanaChainConfig } from '../config/schemas/solana.chain.schema.js';
+import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
+import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
 
 /**
  * Factory class for creating appropriate chain handlers based on configuration

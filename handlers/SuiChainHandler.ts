@@ -1,7 +1,7 @@
-import { CHAIN_TYPE } from '../config/schemas/common.schema';
-import type { SuiChainConfig } from '../config/schemas/sui.chain.schema';
-import logger from '../utils/Logger';
-import { BaseChainHandler } from './BaseChainHandler';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
+import logger from '../utils/Logger.js';
+import { BaseChainHandler } from './BaseChainHandler.js';
 
 export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   constructor(config: SuiChainConfig) {

@@ -4,7 +4,7 @@
 //   // mockJsonRpcProviderConstructor_for_tests_setup, // Will define locally now
 //   mockGetTransactionReceiptFn_setup,   // Still import these helpers
 //   mockGetNetworkFn_setup,
-// } from '../../setup';
+// } from '../../setup.js';
 
 // // Define the mock constructor for JsonRpcProvider here, within the scope accessible to doMock
 // // It will use the global counter from setup.ts and the helper mock functions from setup.ts
@@ -47,10 +47,10 @@ jest.dontMock('../../../services/WormholeVaaService');
 
 import { jest } from '@jest/globals';
 import { describe, test, expect, beforeEach } from '@jest/globals';
-import { WormholeVaaService } from '../../../services/WormholeVaaService';
+import { WormholeVaaService } from '../../../services/WormholeVaaService.js';
 
 // We will import actual ethers for types, but not rely on its module mocking for JsonRpcProvider
-import { ethers, providers as EthersProviders, BigNumber as EthersBigNumber } from 'ethers';
+import { ethers, type providers as EthersProviders, BigNumber as EthersBigNumber } from 'ethers';
 
 // SDK related imports from @wormhole-foundation/sdk (mocked via setup.ts)
 import {
@@ -67,8 +67,8 @@ import {
   type PayloadLiteral,
 } from '@wormhole-foundation/sdk';
 
-import logger, { logErrorContext } from '../../../utils/Logger';
-import { stringifyWithBigInt } from '../../../utils/Numbers';
+import logger, { logErrorContext } from '../../../utils/Logger.js';
+import { stringifyWithBigInt } from '../../../utils/Numbers.js';
 import evmPlatform from '@wormhole-foundation/sdk/platforms/evm';
 import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana';
 

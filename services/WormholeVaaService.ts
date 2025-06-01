@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import {
   wormhole,
-  Wormhole,
+  type Wormhole,
   UniversalAddress,
   type Network,
   type ChainId,
@@ -12,8 +12,8 @@ import {
 } from '@wormhole-foundation/sdk';
 import evmPlatform from '@wormhole-foundation/sdk/platforms/evm';
 import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana';
-import logger, { logErrorContext } from '../utils/Logger';
-import { stringifyWithBigInt } from '../utils/Numbers';
+import logger, { logErrorContext } from '../utils/Logger.js';
+import { stringifyWithBigInt } from '../utils/Numbers.js';
 
 type SignedVaa = Uint8Array;
 type ParsedVaaWithPayload = VAA<'TokenBridge:Transfer'> | VAA<'TokenBridge:TransferWithPayload'>;

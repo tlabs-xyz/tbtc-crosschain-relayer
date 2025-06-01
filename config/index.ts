@@ -1,16 +1,16 @@
 import { z } from 'zod';
-import { EvmChainConfigSchema, type EvmChainConfig } from './schemas/evm.chain.schema';
-import { SolanaChainConfigSchema, type SolanaChainConfig } from './schemas/solana.chain.schema';
+import { EvmChainConfigSchema, type EvmChainConfig } from './schemas/evm.chain.schema.js';
+import { SolanaChainConfigSchema, type SolanaChainConfig } from './schemas/solana.chain.schema.js';
 import {
   StarknetChainConfigSchema,
   type StarknetChainConfig,
-} from './schemas/starknet.chain.schema';
-import { SuiChainConfigSchema, type SuiChainConfig } from './schemas/sui.chain.schema';
-import { sepoliaTestnetChainInput } from './chain/sepolia.chain';
-import { solanaDevnetChainInput } from './chain/solana.chain';
-import { starknetTestnetChainInput } from './chain/starknet.chain';
-import { suiTestnetChainInput } from './chain/sui.chain';
-import logger from '../utils/Logger';
+} from './schemas/starknet.chain.schema.js';
+import { SuiChainConfigSchema, type SuiChainConfig } from './schemas/sui.chain.schema.js';
+import { sepoliaTestnetChainInput } from './chain/sepolia.chain.js';
+import { solanaDevnetChainInput } from './chain/solana.chain.js';
+import { starknetTestnetChainInput } from './chain/starknet.chain.js';
+import { suiTestnetChainInput } from './chain/sui.chain.js';
+import logger from '../utils/Logger.js';
 
 logger.info('Application configuration loaded successfully.');
 

@@ -1,13 +1,12 @@
 process.env.USE_REAL_WORMHOLE_SERVICE = 'true'; // Signal global setup to NOT mock WormholeVaaService
 
-// Import the utility that sets up mocks FIRST
 import {
   setupWormholeMocksAndService,
-  createMockEthersReceipt, // Ensure all used utils are imported
-  createMockSdkVaa, // Ensure all used utils are imported
-  EXPECTED_GET_VAA_TIMEOUT_MS, // Ensure all used utils are imported
-  type MockedWormholeInstances, // Ensure all used utils are imported
-} from './utils/wormhole.e2e.test.utils';
+  createMockEthersReceipt,
+  createMockSdkVaa,
+  EXPECTED_GET_VAA_TIMEOUT_MS,
+  type MockedWormholeInstances,
+} from './utils/wormhole.e2e.test.utils.js';
 
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 
@@ -16,10 +15,9 @@ import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 // // and should point to services/WormholeVaaService.ts
 // jest.unmock('../../services/WormholeVaaService');
 
-import { WormholeVaaService } from '../../services/WormholeVaaService';
+import { type WormholeVaaService } from '../../services/WormholeVaaService.js';
 import {
   type ChainId,
-  type Network,
   type VAA,
   type WormholeMessageId,
   UniversalAddress as ActualUniversalAddress,
@@ -28,15 +26,15 @@ import {
   chainIdToChain as actualChainIdToChain,
 } from '@wormhole-foundation/sdk';
 // Logger and stringifyWithBigInt are used by the service, mocks are handled by utils
-// import logger from '../../utils/Logger';
-import { stringifyWithBigInt } from '../../utils/Numbers';
+// import logger from '../../utils/Logger.js';
+import { stringifyWithBigInt } from '../../utils/Numbers.js';
 import {
   testScenarios,
   // L1_CHAIN_ID_ETH, // Not directly used, derived from scenario in setup
   L2_CHAIN_ID_SUI, // Used in one test for conditional logic
   L2_CHAIN_ID_AVAX, // Used in one test for conditional logic
   TEST_NETWORK,
-} from '../data/wormhole.e2e.scenarios';
+} from '../data/wormhole.e2e.scenarios.js';
 
 describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks)', (scenario) => {
   let service: WormholeVaaService;

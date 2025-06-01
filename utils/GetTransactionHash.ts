@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import type { FundingTransaction } from '../types/FundingTransaction.type';
+import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 
 /**
  * Converts a hexadecimal string to a Buffer.
