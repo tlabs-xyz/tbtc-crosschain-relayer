@@ -18,6 +18,11 @@ import type { TransactionReceipt } from '@ethersproject/providers'; // Type impo
 import type { Deposit } from '../../types/Deposit.type'; // Type import
 import type { Reveal } from '../../types/Reveal.type'; // Type import
 
+// Import mock configurations
+import { mockEvm1Config } from '../data/mockEvm1.chain';
+import { mockEvm2Config } from '../data/mockEvm2.chain';
+import { faultyMockEvmConfig } from '../data/faultyMockEvm.chain';
+
 // Module-level state for mocks needs to be accessible after resetModules too.
 // These are fine here as they are not re-imported dynamically in the same way config is.
 const mockEvmChainDeposits = new Map<string, Map<string, Deposit>>();
@@ -68,6 +73,9 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
   let localApp: Express;
 
   beforeAll(async () => {
+    // Explicitly set SUPPORTED_CHAINS for this test suite's context
+    // This ensures that the dynamic import of '../../config' sees the correct value.
+    process.env.SUPPORTED_CHAINS = 'MockEVM1,MockEVM2,FaultyMockEVM,MockEndpointChain';
     jest.resetModules();
 
     // Mock Config utility if it's used directly by other modules after reset
@@ -101,7 +109,10 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     }
     // END DEBUGGING
 
-    (loadedChainConfigsActual as any)['mockEndpointChain'] = mockEndpointChainTestConfig;
+    (loadedChainConfigsActual as any)['MockEndpointChain'] = mockEndpointChainTestConfig;
+    (loadedChainConfigsActual as any)['MockEVM1'] = mockEvm1Config;
+    (loadedChainConfigsActual as any)['MockEVM2'] = mockEvm2Config;
+    (loadedChainConfigsActual as any)['FaultyMockEVM'] = faultyMockEvmConfig;
 
     // Mock EVMChainHandler AFTER resetting modules and BEFORE it's used by ChainHandlerFactory via registry.initialize
     // This mock needs to be re-applied because jest.resetModules() clears it.
