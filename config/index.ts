@@ -25,9 +25,6 @@ export interface AllChainConfigs {
   solanaDevnet?: SolanaChainConfig;
   starknetTestnet?: StarknetChainConfig;
   suiTestnet?: SuiChainConfig;
-  mockEVM1?: EvmChainConfig;
-  mockEVM2?: EvmChainConfig;
-  faultyMockEVM?: EvmChainConfig;
   [key: string]: AnyChainConfig | undefined;
 }
 
