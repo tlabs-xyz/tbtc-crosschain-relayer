@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Router } from 'express';
+import escapeHtml from 'escape-html';
 
 import Operations from '../controllers/Operations.controller';
 import Utils from '../controllers/Utils.controller';
@@ -27,11 +28,15 @@ const createChainValidator = (options: ChainValidationOptions = {}) => {
     const expressReq = req as RequestWithChainInfo;
     const { chainName } = req.params as { chainName: string };
 
+    if (options.allowAllKeyword && chainName === 'all') {
+      expressReq.chainHandler = undefined; // Special case for 'all'
+      return next();
+    }
+
     expressReq.chainName = chainName;
     const handler = chainHandlerRegistry.get(chainName);
 
     if (!handler) {
-      const escapeHtml = require('escape-html');
       return res.status(404).send(`Unknown chain: ${escapeHtml(chainName)}`);
     }
 
@@ -58,20 +63,13 @@ chainSpecificRouter.get('/deposit/:depositId', (req: Request, res: Response) => 
   const endpointController = new EndpointController(chainHandler!);
   return endpointController.getDepositStatus(req, res);
 });
-// Add other chain-specific routes here if any
-
-let routerInstanceIdCounter = 0;
 
 class RoutesSingleton {
   public router: Router;
-  private readonly instanceId: number;
   private static instance: RoutesSingleton;
 
   private constructor() {
-    this.instanceId = ++routerInstanceIdCounter;
-    console.log(
-      `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] CREATING ROUTER`,
-    );
+    console.log('[[[[[ RoutesSingleton CONSTRUCTOR ]]]]] CREATING ROUTER');
     this.router = Router();
     this.initializeRoutes();
   }
@@ -83,114 +81,192 @@ class RoutesSingleton {
     return RoutesSingleton.instance;
   }
 
-  public getInstanceId(): number {
-    return this.instanceId;
-  }
-
   private initializeRoutes(): void {
-    console.log(
-      `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] Initializing routes...`,
-    );
+    console.log('[[[[[ RoutesSingleton INITIALIZING ROUTES ]]]]] Initializing routes...');
     const utils = new Utils();
+    const operations = new Operations();
     const validateChainAndGetHandler = createChainValidator({ allowAllKeyword: true });
 
     // Mount the chain-specific router under /api/:chainName, AFTER validation middleware
     this.router.use('/api/:chainName', validateChainAndGetHandler, chainSpecificRouter);
     console.log(
-      `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] MOUNTED /api/:chainName with chainSpecificRouter`,
+      '[[[[[ RoutesSingleton MOUNTED ]]]]] MOUNTED /api/:chainName with chainSpecificRouter',
     );
 
     this.router.get('/', utils.defaultController);
     this.router.get('/status', utils.pingController);
-    console.log(
-      `[[[[[ RoutesSingleton CONSTRUCTOR - Instance ${this.instanceId} ]]]]] All routes initialized.`,
+
+    // Audit logs route for a specific chain
+    this.router.get(
+      '/api/:chainName/audit-logs',
+      validateChainAllowAll,
+      (req: Request, res: Response) => {
+        const { chainName } = req as RequestWithChainInfo;
+        // The controller expects chainName as a third argument.
+        return utils.auditLogsController(req, res, chainName!);
+      },
     );
+
+    // Diagnostic routes for a specific chain
+    this.router.get(
+      '/api/:chainName/diagnostics',
+      validateChainAllowAll,
+      (req: Request, res: Response) => {
+        const { chainName } = req as RequestWithChainInfo;
+        return operations.getAllOperations(req, res, chainName!);
+      },
+    );
+
+    this.router.get(
+      '/api/:chainName/diagnostics/queued',
+      validateChainAllowAll,
+      (req: Request, res: Response) => {
+        const { chainName } = req as RequestWithChainInfo;
+        return operations.getAllQueuedOperations(req, res, chainName!);
+      },
+    );
+
+    this.router.get(
+      '/api/:chainName/diagnostics/initialized',
+      validateChainAllowAll,
+      (req: Request, res: Response) => {
+        const { chainName } = req as RequestWithChainInfo;
+        return operations.getAllInitializedOperations(req, res, chainName!);
+      },
+    );
+
+    this.router.get(
+      '/api/:chainName/diagnostics/finalized',
+      validateChainAllowAll,
+      (req: Request, res: Response) => {
+        const { chainName } = req as RequestWithChainInfo;
+        return operations.getAllFinalizedOperations(req, res, chainName!);
+      },
+    );
+
+    // Multi-chain endpoint routes (require chainName as path param)
+    if (process.env.USE_ENDPOINT === 'true') {
+      // Endpoint for receiving reveal data
+      this.router.post(
+        '/api/:chainName/reveal',
+        validateChainStrict,
+        (req: Request, res: Response) => {
+          const { chainHandler, chainName } = req as RequestWithChainInfo;
+          const chainConfig = chainHandler?.config;
+
+          if (!chainConfig?.supportsRevealDepositAPI) {
+            logger.warn(
+              `Reveal deposit API called for chain ${chainName}, but it's not supported/enabled in config.`,
+            );
+            return res.status(405).json({
+              success: false,
+              error: `Reveal deposit API is not supported or enabled for chain: ${chainName}`,
+            });
+          }
+          const endpointController = new EndpointController(chainHandler!);
+          return endpointController.handleReveal(req, res);
+        },
+      );
+
+      // Endpoint for checking deposit status
+      this.router.get(
+        '/api/:chainName/deposit/:depositId',
+        validateChainStrict,
+        (req: Request, res: Response) => {
+          const { chainHandler } = req as RequestWithChainInfo;
+          const endpointController = new EndpointController(chainHandler!);
+          return endpointController.getDepositStatus(req, res);
+        },
+      );
+    }
+
+    console.log('[[[[[ RoutesSingleton ALL ROUTES INITIALIZED ]]]]] All routes initialized.');
   }
 }
 
 export const mainRoutes = RoutesSingleton.getInstance();
 export const router = mainRoutes.router;
 
-// Controllers
-const utils = new Utils();
-const operations = new Operations();
+// Controllers - These are now instantiated within initializeRoutes or used by chainSpecificRouter
+// const utils = new Utils(); // No longer needed here
+// const operations = new Operations(); // No longer needed here
 
-// Default route for the API
-router.get('/', utils.defaultController);
+// Default route for the API - Handled in initializeRoutes
+// router.get('/', utils.defaultController);
 
-// Ping route for the API
-router.get('/status', utils.pingController);
+// Ping route for the API - Handled in initializeRoutes
+// router.get('/status', utils.pingController);
 
-// Audit logs route for a specific chain
-router.get('/api/:chainName/audit-logs', validateChainAllowAll, (req: Request, res: Response) => {
-  const { chainName } = req as RequestWithChainInfo;
-  // The controller expects chainName as a third argument.
-  return utils.auditLogsController(req, res, chainName!);
-});
+// Audit logs route for a specific chain - Handled in initializeRoutes
+// router.get('/api/:chainName/audit-logs', validateChainAllowAll, (req: Request, res: Response) => {
+//   const { chainName } = req as RequestWithChainInfo;
+//   // The controller expects chainName as a third argument.
+//   return utils.auditLogsController(req, res, chainName!);
+// });
 
-// Diagnostic routes for a specific chain
-router.get('/api/:chainName/diagnostics', validateChainAllowAll, (req: Request, res: Response) => {
-  const { chainName } = req as RequestWithChainInfo;
-  return operations.getAllOperations(req, res, chainName!);
-});
+// Diagnostic routes for a specific chain - Handled in initializeRoutes
+// router.get('/api/:chainName/diagnostics', validateChainAllowAll, (req: Request, res: Response) => {
+//   const { chainName } = req as RequestWithChainInfo;
+//   return operations.getAllOperations(req, res, chainName!);
+// });
 
-router.get(
-  '/api/:chainName/diagnostics/queued',
-  validateChainAllowAll,
-  (req: Request, res: Response) => {
-    const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllQueuedOperations(req, res, chainName!);
-  },
-);
+// router.get(
+//   '/api/:chainName/diagnostics/queued',
+//   validateChainAllowAll,
+//   (req: Request, res: Response) => {
+//     const { chainName } = req as RequestWithChainInfo;
+//     return operations.getAllQueuedOperations(req, res, chainName!);
+//   },
+// );
 
-router.get(
-  '/api/:chainName/diagnostics/initialized',
-  validateChainAllowAll,
-  (req: Request, res: Response) => {
-    const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllInitializedOperations(req, res, chainName!);
-  },
-);
+// router.get(
+//   '/api/:chainName/diagnostics/initialized',
+//   validateChainAllowAll,
+//   (req: Request, res: Response) => {
+//     const { chainName } = req as RequestWithChainInfo;
+//     return operations.getAllInitializedOperations(req, res, chainName!);
+//   },
+// );
 
-router.get(
-  '/api/:chainName/diagnostics/finalized',
-  validateChainAllowAll,
-  (req: Request, res: Response) => {
-    const { chainName } = req as RequestWithChainInfo;
-    return operations.getAllFinalizedOperations(req, res, chainName!);
-  },
-);
+// router.get(
+//   '/api/:chainName/diagnostics/finalized',
+//   validateChainAllowAll,
+//   (req: Request, res: Response) => {
+//     const { chainName } = req as RequestWithChainInfo;
+//     return operations.getAllFinalizedOperations(req, res, chainName!);
+//   },
+// );
 
-// Multi-chain endpoint routes (require chainName as path param)
-if (process.env.USE_ENDPOINT === 'true') {
-  // Endpoint for receiving reveal data
-  router.post('/api/:chainName/reveal', validateChainStrict, (req: Request, res: Response) => {
-    const { chainHandler, chainName } = req as RequestWithChainInfo;
-    const chainConfig = chainHandler?.config;
+// Multi-chain endpoint routes (require chainName as path param) - Handled in initializeRoutes
+// if (process.env.USE_ENDPOINT === 'true') {
+//   // Endpoint for receiving reveal data
+//   router.post('/api/:chainName/reveal', validateChainStrict, (req: Request, res: Response) => {
+//     const { chainHandler, chainName } = req as RequestWithChainInfo;
+//     const chainConfig = chainHandler?.config;
 
-    if (!chainConfig?.supportsRevealDepositAPI) {
-      logger.warn(
-        `Reveal deposit API called for chain ${chainConfig}, but it's not supported/enabled in config.`,
-      );
-      return res.status(405).json({
-        success: false,
-        error: `Reveal deposit API is not supported or enabled for chain: ${chainName}`,
-      });
-    }
-    const endpointController = new EndpointController(chainHandler!);
-    return endpointController.handleReveal(req, res);
-  });
+//     if (!chainConfig?.supportsRevealDepositAPI) {
+//       logger.warn(
+//         `Reveal deposit API called for chain ${chainConfig}, but it's not supported/enabled in config.`,
+//       );
+//       return res.status(405).json({
+//         success: false,
+//         error: `Reveal deposit API is not supported or enabled for chain: ${chainName}`,
+//       });
+//     }
+//     const endpointController = new EndpointController(chainHandler!);
+//     return endpointController.handleReveal(req, res);
+//   });
 
-  // Endpoint for checking deposit status
-  router.get(
-    '/api/:chainName/deposit/:depositId',
-    validateChainStrict,
-    (req: Request, res: Response) => {
-      const { chainHandler } = req as RequestWithChainInfo;
-      const endpointController = new EndpointController(chainHandler!);
-      return endpointController.getDepositStatus(req, res);
-    },
-  );
-}
+//   // Endpoint for checking deposit status
+//   router.get(
+//     '/api/:chainName/deposit/:depositId',
+//     validateChainStrict,
+//     (req: Request, res: Response) => {
+//       const { chainHandler } = req as RequestWithChainInfo;
+//       const endpointController = new EndpointController(chainHandler!);
+//       return endpointController.getDepositStatus(req, res);
+//     },
+//   );
+// }
 
 export default router;
