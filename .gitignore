@@ -19,7 +19,6 @@ redemptions/
 /generated
 
 # *.md
-analysis.md
 tasks
 
 prisma/memory:
