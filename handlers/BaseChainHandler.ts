@@ -25,8 +25,7 @@ import { logDepositError } from '../utils/AuditLog.js';
 import type { AnyChainConfig } from '../config/index.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
-
-export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
+import { TIMEOUTS } from '../utils/Constants.js';
 
 export abstract class BaseChainHandler<T extends AnyChainConfig> implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
@@ -528,7 +527,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       // If lastActivityAt doesn't exist yet (e.g., freshly created via listener/endpoint), process immediately
       if (!deposit.dates.lastActivityAt) return true;
       // Otherwise, process only if enough time has passed since last activity
-      return now - deposit.dates.lastActivityAt > DEFAULT_DEPOSIT_RETRY_MS;
+      return now - deposit.dates.lastActivityAt > TIMEOUTS.DEFAULT_DEPOSIT_RETRY_MS;
     });
   }
 }

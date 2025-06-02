@@ -2,12 +2,7 @@ import { ethers } from 'ethers';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { L1BitcoinRedeemerABI } from '../interfaces/L1BitcoinRedeemer.js';
 import type { RedemptionRequestedEventData } from '../types/Redemption.type.js';
-
-const L1_TX_CONFIRMATION_TIMEOUT_MS = parseInt(
-  process.env.L1_TX_CONFIRMATION_TIMEOUT_MS || '300000',
-);
-const GAS_ESTIMATE_MULTIPLIER = 1.2; // Add 20% buffer to gas estimate
-const DEFAULT_L1_CONFIRMATIONS = 1; // Default number of confirmations to wait for
+import { TIMEOUTS, GAS_CONFIG, BLOCKCHAIN_CONFIG } from '../utils/Constants.js';
 
 export class L1RedemptionHandler {
   private l1Provider: ethers.providers.JsonRpcProvider;
@@ -28,11 +23,10 @@ export class L1RedemptionHandler {
   }
 
   /**
-   * Submits data (derived from L2 event and validated by VAA) to the L1BitcoinRedeemer contract
-   * to finalize the redemption.
-   * @param redemptionData - Data derived from L2 event and validated by VAA
-   * @param signedVaa - The  signed VAA data
-   * @returns true if redemption is successfully finalized on L1, false otherwise
+   * Submit redemption data to L1 contract
+   * @param redemptionData - The redemption data from the L2 event
+   * @param signedVaa - The signed VAA bytes
+   * @returns Promise<string | null> - The L1 transaction hash if successful, null otherwise
    */
   public async submitRedemptionDataToL1(
     redemptionData: RedemptionRequestedEventData,
@@ -40,14 +34,11 @@ export class L1RedemptionHandler {
   ): Promise<string | null> {
     logger.info(
       JSON.stringify({
-        // Stringify complex object
-        message: 'Attempting to finalize L2 redemption on L1',
+        message: 'Submitting redemption data to L1 contract finalizeL2Redemption for processing...',
         l2TransactionHash: redemptionData.l2TransactionHash,
-        relayerAddress: this.l1Signer.address,
-        l1Contract: this.l1BitcoinRedeemer.address,
         walletPubKeyHash: redemptionData.walletPubKeyHash,
-        mainUtxo: redemptionData.mainUtxo,
         amount: redemptionData.amount.toString(),
+        l1BitcoinRedeemerAddress: this.l1BitcoinRedeemer.address,
       }),
     );
 
@@ -74,10 +65,10 @@ export class L1RedemptionHandler {
       );
       const estimatedGas = await this.l1BitcoinRedeemer.estimateGas.finalizeL2Redemption(...args);
       const gasLimit = ethers.BigNumber.from(estimatedGas)
-        .mul(ethers.BigNumber.from(Math.round(GAS_ESTIMATE_MULTIPLIER * 100)))
+        .mul(ethers.BigNumber.from(Math.round(GAS_CONFIG.GAS_ESTIMATE_MULTIPLIER * 100)))
         .div(100);
       logger.info(
-        `Estimated gas: ${estimatedGas.toString()}, Gas limit with multiplier (${GAS_ESTIMATE_MULTIPLIER}x): ${gasLimit.toString()}`,
+        `Estimated gas: ${estimatedGas.toString()}, Gas limit with multiplier (${GAS_CONFIG.GAS_ESTIMATE_MULTIPLIER}x): ${gasLimit.toString()}`,
       );
 
       const tx = await this.l1BitcoinRedeemer.finalizeL2Redemption(...args, {
@@ -87,7 +78,6 @@ export class L1RedemptionHandler {
 
       logger.info(
         JSON.stringify({
-          // Stringify complex object
           message: 'L1 finalizeL2Redemption transaction submitted, awaiting confirmation...',
           l1TransactionHash: tx.hash,
           l2TransactionHash: redemptionData.l2TransactionHash,
@@ -99,7 +89,7 @@ export class L1RedemptionHandler {
       // However, ethers v5 tx.wait() timeout parameter is not for the wait itself but for the provider response per block.
       // For a true overall timeout, we need to race Promise.race([tx.wait(), timeoutPromise])
       logger.info(
-        `Awaiting L1 transaction confirmation for ${tx.hash}. Confirmations: ${DEFAULT_L1_CONFIRMATIONS}, Timeout: ${L1_TX_CONFIRMATION_TIMEOUT_MS}ms`,
+        `Awaiting L1 transaction confirmation for ${tx.hash}. Confirmations: ${BLOCKCHAIN_CONFIG.DEFAULT_L1_CONFIRMATIONS}, Timeout: ${TIMEOUTS.L1_TX_CONFIRMATION_TIMEOUT_MS}ms`,
       );
 
       const timeoutPromise = new Promise((_, reject) =>
@@ -107,22 +97,21 @@ export class L1RedemptionHandler {
           () =>
             reject(
               new Error(
-                `Timeout waiting for L1 transaction ${tx.hash} confirmation after ${L1_TX_CONFIRMATION_TIMEOUT_MS}ms`,
+                `Timeout waiting for L1 transaction ${tx.hash} confirmation after ${TIMEOUTS.L1_TX_CONFIRMATION_TIMEOUT_MS}ms`,
               ),
             ),
-          L1_TX_CONFIRMATION_TIMEOUT_MS,
+          TIMEOUTS.L1_TX_CONFIRMATION_TIMEOUT_MS,
         ),
       );
 
       const receipt = (await Promise.race([
-        tx.wait(DEFAULT_L1_CONFIRMATIONS),
+        tx.wait(BLOCKCHAIN_CONFIG.DEFAULT_L1_CONFIRMATIONS),
         timeoutPromise,
       ])) as ethers.providers.TransactionReceipt;
 
       if (receipt.status === 1) {
         logger.info(
           JSON.stringify({
-            // Stringify complex object
             message: 'L1 finalizeL2Redemption transaction successful!',
             l1TransactionHash: tx.hash,
             l2TransactionHash: redemptionData.l2TransactionHash,
@@ -133,7 +122,6 @@ export class L1RedemptionHandler {
       } else {
         logErrorContext(
           JSON.stringify({
-            // Stringify complex object
             message: 'L1 finalizeL2Redemption transaction failed (reverted on-chain).',
             l1TransactionHash: tx.hash,
             l2TransactionHash: redemptionData.l2TransactionHash,
@@ -148,7 +136,6 @@ export class L1RedemptionHandler {
       const err = error instanceof Error ? error : new Error(String(error));
       logErrorContext(
         JSON.stringify({
-          // Stringify complex object
           message: 'Error in finalizeL2Redemption on L1.',
           l2TransactionHash: redemptionData.l2TransactionHash,
           errorName: err.name,
