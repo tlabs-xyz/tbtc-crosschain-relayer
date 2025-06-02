@@ -14,6 +14,9 @@ import { RedemptionStatus } from '../types/Redemption.type.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
+// Import the default L1 chain ID constant
+const DEFAULT_TARGET_L1_CHAIN_ID: ChainId = 2; // Ethereum Mainnet
+
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;
   private l2BitcoinRedeemerContract?: ethers.Contract;
@@ -166,6 +169,7 @@ export class L2RedemptionService {
           redemption.id,
           this.l2WormholeChainId as ChainId,
           this.l2WormholeGatewayAddress,
+          DEFAULT_TARGET_L1_CHAIN_ID,
         );
         if (vaaDetails && vaaDetails.vaaBytes) {
           redemption.vaaBytes = Buffer.from(vaaDetails.vaaBytes).toString('hex');

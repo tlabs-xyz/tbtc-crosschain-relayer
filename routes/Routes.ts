@@ -69,7 +69,6 @@ class RoutesSingleton {
   private static instance: RoutesSingleton;
 
   private constructor() {
-    console.log('[[[[[ RoutesSingleton CONSTRUCTOR ]]]]] CREATING ROUTER');
     this.router = Router();
     this.initializeRoutes();
   }
@@ -82,16 +81,12 @@ class RoutesSingleton {
   }
 
   private initializeRoutes(): void {
-    console.log('[[[[[ RoutesSingleton INITIALIZING ROUTES ]]]]] Initializing routes...');
     const utils = new Utils();
     const operations = new Operations();
     const validateChainAndGetHandler = createChainValidator({ allowAllKeyword: true });
 
     // Mount the chain-specific router under /api/:chainName, AFTER validation middleware
     this.router.use('/api/:chainName', validateChainAndGetHandler, chainSpecificRouter);
-    console.log(
-      '[[[[[ RoutesSingleton MOUNTED ]]]]] MOUNTED /api/:chainName with chainSpecificRouter',
-    );
 
     this.router.get('/', utils.defaultController);
     this.router.get('/status', utils.pingController);
@@ -179,8 +174,6 @@ class RoutesSingleton {
         },
       );
     }
-
-    console.log('[[[[[ RoutesSingleton ALL ROUTES INITIALIZED ]]]]] All routes initialized.');
   }
 }
 
