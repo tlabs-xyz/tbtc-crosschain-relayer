@@ -1,6 +1,28 @@
 # Test Plan: `Core.ts` (Optimized Orchestration Testing)
 
-This document outlines an optimized test plan for `Core.ts` using a "Mock Heavy, Test Light" strategy that avoids redundant testing of business logic already covered in component tests.
+## 🚨 **IMPLEMENTATION STATUS: CRITICAL GAP**
+
+**Current Status:** ❌ **NO TESTS IMPLEMENTED** - This is a **HIGH PRIORITY** blocker  
+**Risk Level:** 🔴 **CRITICAL** - Core orchestration logic completely untested  
+**Required Action:** Implement ~20 integration tests immediately  
+**Dependencies:** Blocks comprehensive system coverage
+
+---
+
+## 📋 **Analysis Summary (Updated)**
+
+**Plan Quality:** ✅ Excellent optimization strategy  
+**Coverage Strategy:** ✅ Smart "Mock Heavy, Test Light" approach  
+**Implementation Gap:** 🔴 Complete - this is the most critical missing piece  
+**Cross-Plan Dependencies:** Core.ts orchestrates components tested in other plans
+
+**Why This Is Critical:**
+
+- Core.ts is the orchestration layer that coordinates all other services
+- Without these tests, cron job setup, multi-chain initialization, and error handling are untested
+- Other component tests assume orchestration works correctly
+
+---
 
 ## Testing Philosophy Recap
 
@@ -208,89 +230,64 @@ Test only pure logic that doesn't require complex mocking.
 
 ---
 
-## Dependencies on Existing Tests
+## **Cross-Plan Dependencies & Validation**
 
 This optimized plan **leverages existing comprehensive test coverage**:
 
 ✅ **CleanupDeposits tests** (`tests/integration/services/CleanupDeposits.test.ts` - 550 lines)
+**Status:** ✅ FULLY IMPLEMENTED
 
 - Covers all cleanup business logic, time calculations, environment variables
 - Referenced in Core.ts cron jobs but business logic not re-tested
 
 ✅ **CleanupDeposits E2E tests** (`tests/e2e/CleanupDeposits.e2e.test.ts` - 484 lines)
+**Status:** ✅ FULLY IMPLEMENTED
 
 - Covers end-to-end cleanup flows
 - Validates cleanup functionality works in real scenarios
 
-✅ **Chain Handler tests** (assumed to exist in separate files)
+✅ **L2RedemptionService tests** (Multiple files - Unit, Integration, E2E)
+**Status:** ✅ FULLY IMPLEMENTED
+
+- Core.ts orchestrates L2 services, business logic tested separately
+- Excellent separation of concerns achieved
+
+⚠️ **Chain Handler tests** (assumed to exist in separate files)
+**Status:** 🔍 REQUIRES VALIDATION
 
 - Cover deposit processing logic called by Core.ts cron jobs
 - Core.ts tests only verify handlers are called, not their internal logic
+- **Action Required:** Verify chain handler test coverage exists
 
 ---
 
-## Test Implementation Notes
+## **Implementation Priority (Updated)**
 
-**Mock Setup Pattern:**
+### **IMMEDIATE (Critical):**
 
-```typescript
-// tests/unit/services/Core.test.ts - Shared setup
-const mockChainHandler = {
-  config: { chainName: 'ethereum' },
-  processWormholeBridging: jest.fn(),
-  processFinalizeDeposits: jest.fn(),
-  processInitializeDeposits: jest.fn(),
-  supportsPastDepositCheck: jest.fn(() => true),
-  getLatestBlock: jest.fn(() => 12345),
-  checkForPastDeposits: jest.fn(),
-  initialize: jest.fn(),
-  setupListeners: jest.fn(),
-};
-```
+1. **🔴 Core.ts Integration Tests** - Blocking system coverage
+   - **Target:** ~15 integration tests
+   - **Focus:** Cron jobs, chain initialization, error handling
+   - **Timeline:** Implement first to unblock system confidence
 
-**Environment Variable Testing:**
+### **VALIDATION REQUIRED:**
 
-```typescript
-// Save/restore pattern for env var tests
-const originalSupportedChains = process.env.SUPPORTED_CHAINS;
-const originalCleanupEnabled = process.env.ENABLE_CLEANUP_CRON;
-beforeEach(() => {
-  delete process.env.SUPPORTED_CHAINS;
-  delete process.env.ENABLE_CLEANUP_CRON;
-});
-afterEach(() => {
-  process.env.SUPPORTED_CHAINS = originalSupportedChains;
-  process.env.ENABLE_CLEANUP_CRON = originalCleanupEnabled;
-});
-```
+2. **🔍 Chain Handler Coverage** - Verify existing coverage
+   - **Action:** Audit existing chain handler tests
+   - **Risk:** If missing, add to high priority list
 
-**Timer Mocking for Cron Tests:**
+### **FUTURE ENHANCEMENTS:**
 
-```typescript
-// Mock node-cron and jest timers
-beforeEach(() => {
-  jest.useFakeTimers();
-  jest.clearAllMocks();
-});
-afterEach(() => {
-  jest.useRealTimers();
-});
-```
+3. **📈 Performance Testing** - Not currently covered
+   - **Scope:** Cron job performance under load
+   - **Priority:** Lower, implement after core coverage complete
 
----
+**Success Criteria:**
 
-## Coverage Summary
-
-**Total Test Reduction: ~74%**
-
-- Traditional approach: ~200 tests (full business logic)
-- Optimized approach: ~20 tests (orchestration only)
-
-**Coverage Maintained:**
-
-- ✅ All business logic (tested in component tests)
-- ✅ All orchestration logic (tested in Core.ts tests)
-- ✅ All integration points (tested via mocked interfaces)
-- ✅ All error handling scenarios (tested at orchestration level)
+- [ ] All cron jobs tested with mocked dependencies
+- [ ] Chain initialization error handling validated
+- [ ] L2 service orchestration tested
+- [ ] Environment variable configuration tested
+- [ ] Concurrency control validated
 
 This approach provides **full confidence with minimal redundancy** by strategically layering tests and avoiding duplicate coverage of well-tested components.
