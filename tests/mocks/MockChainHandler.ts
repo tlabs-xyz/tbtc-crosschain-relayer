@@ -344,6 +344,15 @@ export class MockChainHandler implements ChainHandlerInterface {
   }
 
   /**
+   * Process Wormhole bridging for deposits
+   */
+  async processWormholeBridging(): Promise<void> {
+    logger.info('MockChainHandler: Processing Wormhole bridging...');
+    // Mock implementation - just log for now
+    logger.info('MockChainHandler: Wormhole bridging processing complete.');
+  }
+
+  /**
    * Check deposit status
    */
   async checkDepositStatus(depositId: string): Promise<DepositStatus | null> {
