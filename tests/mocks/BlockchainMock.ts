@@ -86,13 +86,11 @@ export class MockProvider extends EventEmitter {
  * Mock contract for testing
  */
 export class MockContract extends EventEmitter {
-  private address: string;
   private functions: Map<string, (...args: any[]) => any> = new Map();
   private provider: MockProvider;
 
-  constructor(address: string, provider: MockProvider) {
+  constructor(_address: string, provider: MockProvider) {
     super();
-    this.address = address;
     this.provider = provider;
 
     // Listen to provider events and re-emit them

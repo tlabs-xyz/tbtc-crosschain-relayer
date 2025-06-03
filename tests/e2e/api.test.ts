@@ -7,7 +7,7 @@ const originalNodeEnv = process.env.NODE_ENV;
 import request from 'supertest';
 import express from 'express';
 import type { Express } from 'express';
-import { ethers } from 'ethers'; // ethers is likely not affected by resetModules in this context
+import { ethers } from 'ethers';
 import { DepositStatus } from '../../types/DepositStatus.enum.js';
 import type { SolanaChainConfig } from '../../config/schemas/solana.chain.schema.js';
 import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
@@ -87,7 +87,6 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     // Mock Config utility if it's used directly by other modules after reset
     // This is a common pattern if Config.get() is used globally.
     jest.mock('../../utils/Config', () => {
-      // console.log('[api.test.ts] Applying Config mock factory (moved before dynamic imports)');
       const originalConfigModule = jest.requireActual('../../utils/Config') as any;
       return {
         ...originalConfigModule,
@@ -102,19 +101,6 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     initializationPromiseModule = await import('../..'); // Main index.ts
     loadedChainConfigsActual = chainConfigsModule.chainConfigs;
 
-    // DEBUGGING: Log what config/index.ts actually loaded
-    console.log('[api.test.ts] SUPPORTED_CHAINS for this test run:', process.env.SUPPORTED_CHAINS);
-    console.log(
-      '[api.test.ts] Keys from config/index.ts BEFORE manual add:',
-      Object.keys(loadedChainConfigsActual),
-    );
-    for (const key of Object.keys(loadedChainConfigsActual)) {
-      console.log(
-        `[api.test.ts] Config for ${key} (from config/index.ts): ${loadedChainConfigsActual[key] ? 'EXISTS and TRUTHY' : 'MISSING or FALSY'}`,
-      );
-    }
-    // END DEBUGGING
-
     (loadedChainConfigsActual as any)['MockEndpointChain'] = mockEndpointChainTestConfig;
     (loadedChainConfigsActual as any)['MockEVM1'] = mockEvm1Config;
     (loadedChainConfigsActual as any)['MockEVM2'] = mockEvm2Config;
@@ -123,7 +109,6 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     // Mock EVMChainHandler AFTER resetting modules and BEFORE it's used by ChainHandlerFactory via registry.initialize
     // This mock needs to be re-applied because jest.resetModules() clears it.
     jest.mock('../../handlers/EVMChainHandler', () => {
-      // console.log('[api.test.ts] Applying EVMChainHandler mock factory');
       return {
         EVMChainHandler: jest.fn().mockImplementation((config: EvmChainConfig) => {
           const chainName = config.chainName;
@@ -237,9 +222,6 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     activeChainConfigsArray = supportedChainKeysFromEnv
       .map((key) => loadedChainConfigsActual[key]) // Use the dynamically loaded and augmented configs
       .filter((config): config is AnyChainConfig => !!config);
-
-    // console.log('[api.test.ts] activeChainConfigsArray length:', activeChainConfigsArray.length);
-    // activeChainConfigsArray.forEach(c => console.log('[api.test.ts] Loaded for test:', c.chainName, c.useEndpoint));
 
     chainHandlerRegistryModule.chainHandlerRegistry.clear();
     await chainHandlerRegistryModule.chainHandlerRegistry.initialize(activeChainConfigsArray);
@@ -511,47 +493,9 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
         // Let's assume the mock handler can create a dummy deposit from this for finalize
         // or already has it from a reveal call.
         // When it's a full Deposit object, it would be like this:
-        const dummyDepositForFinalize: Partial<Deposit> & { id: string; chainName: string } = {
-          id: depositIdToUse,
-          chainName: mockEndpointChainTestConfig.chainName,
-          fundingTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          outputIndex: baseReveal.fundingOutputIndex,
-          hashes: {
-            btc: { btcTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)) }, // Mocked BTC tx hash
-            eth: { initializeTxHash: null, finalizeTxHash: null }, // Not applicable for Solana
-            solana: { bridgeTxHash: null }, // Will be set upon successful bridging
-          },
-          receipt: {
-            depositor: baseL2Sender,
-            blindingFactor: baseReveal.blindingFactor,
-            walletPublicKeyHash: baseReveal.walletPubKeyHash,
-            refundPublicKeyHash: baseReveal.refundPubKeyHash,
-            refundLocktime: baseReveal.refundLocktime,
-            extraData: baseL2DepositOwner, // Or some other relevant data
-          },
-          L1OutputEvent: {
-            // Mock L1 event data as it would have been captured
-            fundingTx: {} as any, // Simplified for mock
-            reveal: baseReveal,
-            l2DepositOwner: baseL2DepositOwner,
-            l2Sender: baseL2Sender,
-          },
-          owner: baseL2DepositOwner,
-          status: DepositStatus.INITIALIZED, // Assume it was initialized before finalizing
-          dates: {
-            createdAt: Date.now() - 2000,
-            initializationAt: Date.now() - 1000,
-            finalizationAt: null,
-            lastActivityAt: Date.now() - 1000,
-            awaitingWormholeVAAMessageSince: null,
-            bridgedAt: null,
-          },
-          wormholeInfo: { txHash: null, transferSequence: null, bridgingAttempted: false },
-          error: null,
-        };
         // For the purpose of the mock, sending just the ID is sufficient for `finalize` and `status`
         // as the mock handler will fetch/update based on this ID.
-        // If sending the full deposit object is intended, then `dummyDepositForFinalize` would be returned.
+        // If sending the full deposit object is intended, then a full deposit would be returned.
         return { depositId: depositIdToUse };
       }
       return {}; // Default empty object for other actions
@@ -677,7 +621,6 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
                 if (revealResponse.body.success) {
                   depositIdForTest = revealResponse.body.depositId;
                 } else {
-                  console.warn(`Prereq failed for ${chainName}: ${revealResponse.body.error}`);
                   depositIdForTest = null;
                 }
               }
@@ -723,7 +666,6 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
                 if (revealResponse.body.success) {
                   depositIdForTest = revealResponse.body.depositId;
                 } else {
-                  console.warn(`Prereq failed for ${chainName}: ${revealResponse.body.error}`);
                   depositIdForTest = null;
                 }
               }

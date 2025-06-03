@@ -82,7 +82,7 @@ describe('StarknetChainHandler', () => {
   // Define mock implementations here so they are in scope for beforeEach
   const mockWalletImpl = (privateKey: string, provider: any) => {
     if (typeof privateKey !== 'string' || !privateKey.startsWith('0x')) {
-      // console.warn('MockWallet invoked with potentially invalid privateKey:', privateKey);
+      // Invalid privateKey handling (no logging needed in test)
     }
     return {
       _isSigner: true,
@@ -362,7 +362,7 @@ describe('StarknetChainHandler', () => {
 
       expect(mockContractInstance.initializeDeposit).toHaveBeenCalledTimes(1);
       const expectedFormattedOwner = mockStarknetAddress.formatStarkNetAddressForContract(
-        mockDeposit.L1OutputEvent.l2DepositOwner,
+        mockDeposit.L1OutputEvent!.l2DepositOwner,
       );
       expect(mockContractInstance.initializeDeposit).toHaveBeenCalledWith(
         mockFundingTx,
@@ -374,7 +374,7 @@ describe('StarknetChainHandler', () => {
       expect(mockDepositsUtil.updateToInitializedDeposit).toHaveBeenCalledTimes(1);
       expect(mockDepositsUtil.updateToInitializedDeposit).toHaveBeenCalledWith(
         expect.objectContaining({ id: mockDeposit.id }),
-        expect.objectContaining({ transactionHash: '0xInitTxHashSuccess' }),
+        expect.objectContaining({ hash: '0xInitTxHashSuccess' }),
       );
       expect(mockDeposit.hashes.eth.initializeTxHash).toBe('0xInitTxHashSuccess');
     });
@@ -402,7 +402,7 @@ describe('StarknetChainHandler', () => {
       expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
         mockDeposit.id,
         'Invalid StarkNet recipient address.',
-        { address: mockDeposit.L1OutputEvent.l2DepositOwner },
+        { address: mockDeposit.L1OutputEvent!.l2DepositOwner },
       );
       expect(mockContractInstance.initializeDeposit).not.toHaveBeenCalled();
     });
@@ -454,8 +454,9 @@ describe('StarknetChainHandler', () => {
       expect(result).toBeUndefined();
       expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
         mockDeposit.id,
-        `Error during L1 initializeDeposit: ${errorMessage}`,
-        expect.any(Error),
+        `Failed to initialize deposit: ${errorMessage}`,
+        expect.any(Object),
+        mockStarknetConfig.chainName,
       );
     });
   });
@@ -497,8 +498,10 @@ describe('StarknetChainHandler', () => {
         },
       };
       const idForAssertion = mockDepositsUtil.getDepositId(
-        mockGetTransactionHashUtil.getFundingTxHash(mockDepositForFinalize.L1OutputEvent.fundingTx),
-        mockDepositForFinalize.L1OutputEvent.reveal.fundingOutputIndex,
+        mockGetTransactionHashUtil.getFundingTxHash(
+          mockDepositForFinalize.L1OutputEvent!.fundingTx,
+        ),
+        mockDepositForFinalize.L1OutputEvent!.reveal.fundingOutputIndex,
       ) as string;
       mockDepositForFinalize.id = idForAssertion;
 
@@ -521,8 +524,10 @@ describe('StarknetChainHandler', () => {
 
     it('should successfully finalize a deposit and return the transaction receipt', async () => {
       const expectedDepositId = mockDepositsUtil.getDepositId(
-        mockGetTransactionHashUtil.getFundingTxHash(mockDepositForFinalize.L1OutputEvent.fundingTx),
-        mockDepositForFinalize.L1OutputEvent.reveal.fundingOutputIndex,
+        mockGetTransactionHashUtil.getFundingTxHash(
+          mockDepositForFinalize.L1OutputEvent!.fundingTx,
+        ),
+        mockDepositForFinalize.L1OutputEvent!.reveal.fundingOutputIndex,
       );
 
       const result = await handler.finalizeDeposit(mockDepositForFinalize);
@@ -539,7 +544,7 @@ describe('StarknetChainHandler', () => {
       expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledTimes(1);
       expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
         mockDepositForFinalize,
-        expect.objectContaining({ transactionHash: '0xFinalizeTxHashSuccess' }),
+        expect.objectContaining({ hash: '0xFinalizeTxHashSuccess' }),
       );
     });
 
@@ -608,8 +613,9 @@ describe('StarknetChainHandler', () => {
       expect(result).toBeUndefined();
       expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
         mockDepositForFinalize.id,
-        `Error during L1 finalizeDeposit: ${errorMessage}`,
-        expect.any(Error),
+        `Failed to finalize deposit: ${errorMessage}`,
+        expect.any(Object),
+        mockStarknetConfig.chainName,
       );
     });
   });
@@ -923,8 +929,9 @@ describe('StarknetChainHandler', () => {
       expect(result).toBe(false);
       expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
         mockCheckDeposit.id,
-        expect.stringContaining(`Error checking deposit ${mockCheckDeposit.id} minting status`),
-        expect.any(Error),
+        `Error checking if deposit has been minted on tBTC: ${errorMessage}`,
+        expect.any(Object),
+        mockStarknetConfig.chainName,
       );
     });
 

@@ -144,10 +144,10 @@ describe('Deposits Util', () => {
       expect(deposit.receipt.refundPublicKeyHash).toBe(mockReveal.refundPubKeyHash);
       expect(deposit.receipt.refundLocktime).toBe(mockReveal.refundLocktime);
       expect(deposit.receipt.extraData).toBe(mockL2DepositOwner);
-      expect(deposit.L1OutputEvent.fundingTx).toEqual(mockFundingTx);
-      expect(deposit.L1OutputEvent.reveal).toEqual(mockReveal);
-      expect(deposit.L1OutputEvent.l2DepositOwner).toBe(mockL2DepositOwner);
-      expect(deposit.L1OutputEvent.l2Sender).toBe(mockL2Sender);
+      expect(deposit.L1OutputEvent!.fundingTx).toEqual(mockFundingTx);
+      expect(deposit.L1OutputEvent!.reveal).toEqual(mockReveal);
+      expect(deposit.L1OutputEvent!.l2DepositOwner).toBe(mockL2DepositOwner);
+      expect(deposit.L1OutputEvent!.l2Sender).toBe(mockL2Sender);
       expect(deposit.owner).toBe(mockL2DepositOwner);
       expect(deposit.status).toBe(DepositStatus.QUEUED);
       expect(deposit.dates.createdAt).toBe(mockTimestamp);

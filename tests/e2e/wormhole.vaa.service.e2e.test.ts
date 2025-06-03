@@ -3,12 +3,6 @@ process.env.USE_REAL_WORMHOLE_SERVICE = 'true'; // Signal global setup to NOT mo
 import type * as ethers from 'ethers'; // Keep this, it's used by the mock type
 import { jest } from '@jest/globals'; // Keep this for jest.fn
 // Import for typing if needed and for original UniversalAddress, etc.
-import {
-  UniversalAddress as ActualUniversalAddressSdk,
-  chainIdToChain as actualChainIdToChainSdk,
-  type PayloadLiteral,
-  type deserialize,
-} from '@wormhole-foundation/sdk';
 import type * as WormholeSdkModule from '@wormhole-foundation/sdk'; // Import the full module for typing
 import { toNative } from '@wormhole-foundation/sdk-connect'; // <<< ADDED IMPORT
 
@@ -17,20 +11,12 @@ import { toNative } from '@wormhole-foundation/sdk-connect'; // <<< ADDED IMPORT
 // eslint-disable-next-line no-var
 var mockDeserializeImplementation = jest.fn() as jest.Mock; // Less strict global mock type
 
-console.log(
-  '[DEBUG] Before jest.mock(@wormhole-foundation/sdk): mockDeserializeImplementation is defined:',
-  typeof mockDeserializeImplementation === 'function',
-);
-
 // --- START: SDK Mocks ---
 
 // Mock for the entire @wormhole-foundation/sdk module
 jest.mock('@wormhole-foundation/sdk', () => {
-  console.log('[DEBUG] Factory for jest.mock(@wormhole-foundation/sdk) EXECUTING.');
   if (typeof mockDeserializeImplementation !== 'function') {
-    console.error(
-      '[FATAL DEBUG] mockDeserializeImplementation is NOT a function inside SDK mock factory!',
-    );
+    throw new Error('mockDeserializeImplementation is NOT a function inside SDK mock factory!');
   }
   const actualSdk = jest.requireActual('@wormhole-foundation/sdk') as typeof WormholeSdkModule; // Type actualSdk
   const mockModule = {
@@ -41,10 +27,6 @@ jest.mock('@wormhole-foundation/sdk', () => {
     chainIdToChain: actualSdk.chainIdToChain,
     toChainId: actualSdk.toChainId,
   };
-  console.log(
-    '[DEBUG] Factory for jest.mock(@wormhole-foundation/sdk) returning mock module. deserialize is function:',
-    typeof mockModule.deserialize === 'function',
-  );
   return mockModule;
 });
 
@@ -58,7 +40,6 @@ type MockJsonRpcProviderInstanceMethods = {
 };
 const mockJsonRpcProviderConstructor = jest.fn(
   (_rpcUrl?: string): MockJsonRpcProviderInstanceMethods => {
-    console.log('[E2E TEST FILE DEBUG] mockJsonRpcProviderConstructor CALLED! URL:', _rpcUrl);
     return {
       getTransactionReceipt:
         jest.fn<(txHash: string) => Promise<ethers.providers.TransactionReceipt | null>>(),
@@ -101,10 +82,11 @@ import {
   type ChainId,
   type VAA,
   type WormholeMessageId,
-  UniversalAddress as ActualUniversalAddress,
+  UniversalAddress as _ActualUniversalAddress,
   type Chain,
   toChainId,
   chainIdToChain as actualChainIdToChain,
+  type PayloadLiteral,
 } from '@wormhole-foundation/sdk';
 // Logger and stringifyWithBigInt are used by the service, mocks are handled by utils
 // import logger from '../../utils/Logger.js';
@@ -127,20 +109,8 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
 
   beforeEach(async () => {
     jest.clearAllMocks();
-
     mocks = await setupWormholeMocksAndService(scenario, TEST_NETWORK);
     service = mocks.wormholeVaaService;
-
-    // console.log(
-    //   '[E2E Test DEBUG] After setupWormholeMocksAndService. mocks.mockL1TokenBridgeOperations defined:',
-    //   !!mocks.mockL1TokenBridgeOperations,
-    // );
-    // if (mocks.mockL1TokenBridgeOperations) {
-    //   console.log(
-    //     '[E2E Test DEBUG] mocks.mockL1TokenBridgeOperations.isTransferCompleted defined:',
-    //     !!mocks.mockL1TokenBridgeOperations.isTransferCompleted,
-    //   );
-    // }
 
     // Construct UniversalAddress consistently using toNative().toUniversalAddress()
     const emitterUniversalForTest = toNative(
@@ -186,9 +156,9 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
       bytes: mockVaaBytes,
       consistencyLevel: 15,
     });
-    // prettier-ignore
-    console.log(`[DEBUG E2E Test - .bytes SUCCESS mock] Returning mockParsedVaa. Bytes on this object: ${(mockParsedVaa as any).bytes?.join(',')}`);
-    mocks.mockGetVaaSdkImplementation.mockResolvedValue(mockParsedVaa as any);
+    mocks.mockGetVaaSdkImplementation.mockResolvedValue(
+      mockParsedVaa as VAA<'TokenBridge:TransferWithPayload'>,
+    );
 
     // Restore this line, ensuring the mockImplementation that caused issues is removed
     mocks.mockL1TokenBridgeOperations.isTransferCompleted.mockResolvedValue(true);
@@ -203,7 +173,7 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
     // However, since we are directly mocking what getVaa returns, this mockDeserializeImplementation
     // might not be strictly necessary for *this specific path* if getVaa is fully mocked.
     // Keeping it for now as it was part of previous logic, but it might be redundant if getVaa mock is sufficient.
-    mockDeserializeImplementation.mockImplementation((discriminator: any, bytesArg: any) => {
+    mockDeserializeImplementation.mockImplementation((_bytesArg: unknown, _payloadArg: unknown) => {
       // Content comparison for Uint8Array
       const areByteArraysEqual = (a: Uint8Array, b: Uint8Array) => {
         if (!a || !b || a.length !== b.length) return false; // Add null/undefined checks
@@ -213,20 +183,14 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
         return true;
       };
 
-      // Assuming bytesArg is Uint8Array at runtime for this specific path
-      if (!areByteArraysEqual(bytesArg as Uint8Array, mockVaaBytes)) {
-        // console.log('[DEBUG E2E Test] mockDeserializeImplementation: bytesArg did NOT match mockVaaBytes');
-        // console.log('[DEBUG E2E Test] bytesArg:', bytesArg, 'mockVaaBytes:', mockVaaBytes);
+      // Assuming _bytesArg is Uint8Array at runtime for this specific path
+      if (!areByteArraysEqual(_bytesArg as Uint8Array, mockVaaBytes)) {
         return null;
       }
 
-      // console.log(`[DEBUG E2E Test] mockDeserializeImplementation: bytesArg MATCHED mockVaaBytes. Discriminator: ${discriminator}`);
-
-      if (discriminator === 'TokenBridge:TransferWithPayload') {
-        // console.log('[DEBUG E2E Test] mockDeserializeImplementation: Returning mockParsedVaa for TransferWithPayload');
-        return mockParsedVaa as any;
+      if (_payloadArg === 'TokenBridge:TransferWithPayload') {
+        return mockParsedVaa as VAA<'TokenBridge:TransferWithPayload'>;
       }
-      // console.log('[DEBUG E2E Test] mockDeserializeImplementation: Returning null for other discriminators');
       return null;
     });
 
@@ -240,17 +204,6 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
       scenario.expectedEmitterAddress,
       scenario.targetL1ChainId,
     );
-
-    // console.log(
-    //   '[E2E Test DEBUG] Before checking isTransferCompleted. mocks.mockL1TokenBridgeOperations defined:',
-    //   !!mocks.mockL1TokenBridgeOperations,
-    // );
-    // if (mocks.mockL1TokenBridgeOperations) {
-    //   console.log(
-    //     '[E2E Test DEBUG] mocks.mockL1TokenBridgeOperations.isTransferCompleted defined:',
-    //     !!mocks.mockL1TokenBridgeOperations.isTransferCompleted,
-    //   );
-    // }
 
     expect(result).not.toBeNull();
     expect(result?.vaaBytes).toEqual(mockVaaBytes); // Changed from toBe to toEqual
@@ -355,25 +308,49 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
     });
 
     // Restore this essential mock for getVaa for this test case
-    mocks.mockGetVaaSdkImplementation.mockImplementation(async (msgId, discriminatorArg) => {
-      if (
-        msgId.emitter.equals(whMessageIdForParseTxMockSerialize.emitter) &&
-        msgId.sequence === whMessageIdForParseTxMockSerialize.sequence &&
-        (discriminatorArg === 'TokenBridge:TransferWithPayload' ||
-          discriminatorArg === 'TokenBridge:Transfer')
-      ) {
-        return mockVaaToSerialize as any;
-      }
-      return null; // Default to null if no match
-    });
+    mocks.mockGetVaaSdkImplementation.mockImplementation(
+      async <T extends PayloadLiteral>(msgId: WormholeMessageId, discriminatorArg: T) => {
+        if (
+          msgId.emitter.equals(whMessageIdForParseTxMockSerialize.emitter) &&
+          msgId.sequence === whMessageIdForParseTxMockSerialize.sequence &&
+          (discriminatorArg === 'TokenBridge:TransferWithPayload' ||
+            discriminatorArg === 'TokenBridge:Transfer')
+        ) {
+          return mockVaaToSerialize as VAA<T>;
+        }
+        return null; // Default to null if no match
+      },
+    );
 
     // mockDeserializeImplementation for TokenBridge:Transfer if needed by SDK internals (though getVaa mock should bypass)
-    mockDeserializeImplementation.mockImplementation((discriminator: any, bytesArg: any) => {
-      if (discriminator === 'TokenBridge:Transfer') {
-        return mockVaaToSerialize as any;
-      }
-      return null;
-    });
+    mockDeserializeImplementation.mockImplementation(
+      (_discriminator: unknown, _bytesArg: unknown) => {
+        // Content comparison for Uint8Array
+        const areByteArraysEqual = (a: Uint8Array, b: Uint8Array) => {
+          if (a.length !== b.length) return false;
+          for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+          }
+          return true;
+        };
+
+        // Check if bytesArg matches our expected mockSerializedBytes
+        if (areByteArraysEqual(mockSerializedBytes, _bytesArg as Uint8Array)) {
+          return mockVaaToSerialize as VAA<'TokenBridge:Transfer'>;
+        }
+        return null; // Default to null if no match
+      },
+    );
+
+    // mockDeserializeImplementation for TokenBridge:Transfer if needed by SDK internals (though getVaa mock should bypass)
+    mockDeserializeImplementation.mockImplementation(
+      (_discriminator: unknown, _bytesArg: unknown) => {
+        if (_discriminator === 'TokenBridge:Transfer') {
+          return mockVaaToSerialize as VAA<'TokenBridge:Transfer'>;
+        }
+        return null;
+      },
+    );
 
     // --- MODIFICATION START ---
     // Create a new, specific mock function for this test case
@@ -523,16 +500,22 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
     // If parseTransaction returns a message, but its emitter doesn't match what service expects,
     // then getVaa won't be called for that message.
 
-    mocks.mockGetVaaSdkImplementation.mockImplementation(async (msgId, _payloadName, _timeout) => {
-      // This mock should only return the VAA if the msgId matches the one with the *different* emitter
-      if (
-        msgId.emitter.equals(vaaEmitterUniversalDifferent) &&
-        msgId.sequence === EXAMPLE_SEQUENCE
-      ) {
-        return mockVaaWithDifferentEmitter as any;
-      }
-      return null;
-    });
+    mocks.mockGetVaaSdkImplementation.mockImplementation(
+      async <T extends PayloadLiteral>(
+        msgId: WormholeMessageId,
+        _payloadName: T,
+        _timeout?: number,
+      ) => {
+        // This mock should only return the VAA if the msgId matches the one with the *different* emitter
+        if (
+          msgId.emitter.equals(vaaEmitterUniversalDifferent) &&
+          msgId.sequence === EXAMPLE_SEQUENCE
+        ) {
+          return mockVaaWithDifferentEmitter as VAA<T>;
+        }
+        return null;
+      },
+    );
 
     // Similar to above, ensure only L2 getChain is called for parseTransaction
     // and L1 getChain is not called before isTransferCompleted determines VAA is invalid.
@@ -661,9 +644,6 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
 
     // Skip this test if L2 is Sui or Avax as the specific emitter chain check might not apply or behave differently
     if (scenario.l2ChainId === L2_CHAIN_ID_SUI || scenario.l2ChainId === L2_CHAIN_ID_AVAX) {
-      console.warn(
-        `Skipping VAA emitter chain mismatch test for L2 chain ${scenario.l2ChainName} as specific check may not apply.`,
-      );
       return;
     }
 
@@ -698,16 +678,22 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
       bytes: new Uint8Array([7, 8, 9, 0, 1]),
     });
 
-    mocks.mockGetVaaSdkImplementation.mockImplementation(async (msgId, _payloadName, _timeout) => {
-      if (
-        msgId.emitter.equals(emitterAddressForMismatchVaaUniversal) &&
-        toChainId(msgId.chain) === emitterChainForVaa &&
-        msgId.sequence === EXAMPLE_SEQUENCE
-      ) {
-        return mockVaaWithDifferentEmitterChain as any;
-      }
-      return null;
-    });
+    mocks.mockGetVaaSdkImplementation.mockImplementation(
+      async <T extends PayloadLiteral>(
+        msgId: WormholeMessageId,
+        _payloadName: T,
+        _timeout?: number,
+      ) => {
+        if (
+          msgId.emitter.equals(emitterAddressForMismatchVaaUniversal) &&
+          toChainId(msgId.chain) === emitterChainForVaa &&
+          msgId.sequence === EXAMPLE_SEQUENCE
+        ) {
+          return mockVaaWithDifferentEmitterChain as VAA<T>;
+        }
+        return null;
+      },
+    );
 
     // Specific getChain mock for this test
     const originalGetChain = mocks.mockWormholeSdkInstance.getChain.getMockImplementation();
@@ -747,5 +733,40 @@ describe.each(testScenarios)('WormholeVaaService E2E for $description (SDK mocks
 
     if (originalGetChain)
       mocks.mockWormholeSdkInstance.getChain.mockImplementation(originalGetChain);
+  });
+
+  it('should return null when VAA is not found in SDK and is not present on L1', async () => {
+    // Setup mock transaction receipt
+    const mockReceipt = createMockEthersReceipt(L2_EXAMPLE_TX_HASH, 1);
+    mocks.mockL2Provider.getTransactionReceipt.mockResolvedValue(mockReceipt);
+
+    // Setup parseTransaction to return the expected Wormhole message
+    mocks.mockL2ChainContext.parseTransaction.mockResolvedValue([currentTestMockWormholeMessageId]);
+
+    // Configure the SDK's getVAA to return null
+    mocks.mockGetVaaSdkImplementation.mockResolvedValue(null);
+
+    // Configure L1 TokenBridge operations to return false for isTransferCompleted
+    mocks.mockL1TokenBridgeOperations.isTransferCompleted.mockResolvedValue(false);
+
+    const result = await service.fetchAndVerifyVaaForL2Event(
+      L2_EXAMPLE_TX_HASH,
+      scenario.l2ChainId,
+      scenario.expectedEmitterAddress,
+      scenario.targetL1ChainId,
+    );
+
+    expect(result).toBeNull();
+    expect(mocks.mockGetVaaSdkImplementation).toHaveBeenCalledWith(
+      currentTestMockWormholeMessageId,
+      'TokenBridge:TransferWithPayload',
+      expect.any(Number),
+    );
+    expect(mocks.mockLogErrorContext).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `this.wh.getVaa did not return a VAA for message ID ${stringifyWithBigInt(currentTestMockWormholeMessageId)} after trying all discriminators`,
+      ),
+      expect.any(Error),
+    );
   });
 });
