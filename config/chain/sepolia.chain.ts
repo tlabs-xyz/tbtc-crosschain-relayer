@@ -3,7 +3,7 @@ import { NETWORK } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { commonChainInput } from './common.chain.js';
 import { CHAIN_TYPE } from '../schemas/common.schema.js';
-import { getEnv } from '../../utils/Env.js';
+import { getEnvOptional } from '../../utils/Env.js';
 
 type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
 
@@ -14,5 +14,7 @@ export const sepoliaTestnetChainInput: EvmChainInput = {
   chainName: 'SepoliaTestnet',
   chainType: CHAIN_TYPE.EVM,
   network: NETWORK.TESTNET,
-  privateKey: getEnv('CHAIN_SEPOLIATESTNET_PRIVATE_KEY'),
+  privateKey:
+    getEnvOptional('CHAIN_SEPOLIATESTNET_PRIVATE_KEY') ||
+    '0x0000000000000000000000000000000000000000000000000000000000000001',
 };
