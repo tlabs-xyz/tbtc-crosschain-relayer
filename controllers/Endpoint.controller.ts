@@ -97,18 +97,24 @@ export class EndpointController {
         message: 'Deposit initialized successfully',
         receipt: transactionReceipt,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logErrorContext('Error handling reveal endpoint:', error);
       const chainName = this.chainHandler.config.chainName;
 
       // Log error to audit log
       const depositId = req.body.fundingTx?.txHash || 'unknown';
-      logDepositError(depositId, 'Error handling reveal endpoint', error, chainName);
+      const errorExtra =
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : typeof error === 'object' && error !== null
+            ? (error as Record<string, unknown>)
+            : { message: String(error) };
+      logDepositError(depositId, 'Error handling reveal endpoint', errorExtra, chainName);
       logApiRequest(`/api/${chainName}/reveal`, 'POST', depositId, {}, 500, chainName);
 
       res.status(500).json({
         success: false,
-        error: error.message || 'Unknown error initializing deposit',
+        error: error instanceof Error ? error.message : 'Unknown error initializing deposit',
       });
     }
   }
@@ -154,13 +160,19 @@ export class EndpointController {
         depositId,
         status: numericStatus,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logErrorContext('Error getting deposit status:', error);
       const chainName = this.chainHandler.config.chainName;
 
       // Log error to audit log
       const depositIdFromParam = req.params.depositId || 'unknown';
-      logDepositError(depositIdFromParam, 'Error getting deposit status', error, chainName);
+      const errorExtra =
+        error instanceof Error
+          ? { message: error.message, stack: error.stack }
+          : typeof error === 'object' && error !== null
+            ? (error as Record<string, unknown>)
+            : { message: String(error) };
+      logDepositError(depositIdFromParam, 'Error getting deposit status', errorExtra, chainName);
       logApiRequest(
         `/api/${chainName}/deposit/${depositIdFromParam}`,
         'GET',
@@ -172,7 +184,7 @@ export class EndpointController {
 
       res.status(500).json({
         success: false,
-        error: error.message || 'Unknown error getting deposit status',
+        error: error instanceof Error ? error.message : 'Unknown error getting deposit status',
       });
     }
   }

@@ -9,7 +9,7 @@ import type { ResponseJson } from '../types/ResponseJson.type.js';
 
 export class CustomResponse {
   private res: Response;
-  private responseJson: ResponseJson;
+  private responseJson: ResponseJson<unknown>;
 
   constructor(res: Response) {
     this.res = res;
@@ -34,7 +34,7 @@ export class CustomResponse {
     this.res.status(400).send(this.responseJson);
   }
 
-  ok(message?: string, data?: any): void {
+  ok<T = unknown>(message?: string, data?: T): void {
     this.responseJson.error = false;
     this.responseJson.message = message || 'Operation successful';
     this.responseJson.data = data || null;
@@ -42,7 +42,7 @@ export class CustomResponse {
     this.res.status(200).send(this.responseJson);
   }
 
-  custom(codeStatus: number, message: string, err: any): void {
+  custom<T = unknown>(codeStatus: number, message: string, err: T): void {
     this.responseJson.error = true;
     this.responseJson.message = message;
     this.responseJson.data = err;

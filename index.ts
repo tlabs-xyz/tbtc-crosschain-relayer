@@ -110,12 +110,13 @@ const main = async () => {
 
       startCronJobs();
       logger.info('Cron jobs started.');
-    } catch (error: any) {
+    } catch (error: unknown) {
       logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);
       if (appConfig.NODE_ENV !== 'test') {
         process.exit(1);
       }
-      throw new Error(`Initialization failed in test mode: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
+      throw new Error(`Initialization failed in test mode: ${errorMessage}`);
     }
   }
 

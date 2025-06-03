@@ -4,6 +4,17 @@ import { logErrorContext } from '../utils/Logger.js';
 import { prisma } from '../utils/prisma.js';
 import { appConfig } from '../config/app.config.js';
 
+// Type for Prisma where clause for audit logs
+interface AuditLogWhereClause {
+  chainName?: string;
+  depositId?: string;
+  eventType?: string;
+  timestamp?: {
+    gte?: string;
+    lte?: string;
+  };
+}
+
 export default class Utils {
   /**
    * @name defaultController
@@ -11,7 +22,7 @@ export default class Utils {
    * @method GET
    * @returns {Object} API information
    */
-  defaultController = (req: Request, res: Response): void => {
+  defaultController = (_req: Request, res: Response): void => {
     const response = new CustomResponse(res);
     const version = appConfig.APP_VERSION;
     const name = appConfig.APP_NAME;
@@ -27,7 +38,7 @@ export default class Utils {
    * @method GET
    * @returns {Object} API status
    **/
-  pingController = async (req: Request, res: Response): Promise<void> => {
+  pingController = async (_req: Request, res: Response): Promise<void> => {
     const response = new CustomResponse(res);
 
     try {
@@ -78,14 +89,11 @@ export default class Utils {
         endDateISO = parsedEndDate.toISOString();
       }
 
-      const whereClause: any = {};
+      const whereClause: AuditLogWhereClause = {};
 
-      // If chainName can be 'all', you might want to omit the chainId filter.
-      // For now, assuming chainName maps directly to a specific chainId or is required.
+      // Handle chainName filtering - 'all' means no chain filter
       if (chainName && chainName.toLowerCase() !== 'all') {
-        whereClause.chainId = chainName;
-      } else if (!chainName || chainName.toLowerCase() !== 'all') {
-        return response.ko('Chain ID is required.');
+        whereClause.chainName = chainName;
       }
 
       if (depositId) {
@@ -118,16 +126,17 @@ export default class Utils {
         limit,
         fetchedCount: logs.length,
         filters: {
-          chainName: whereClause.chainId, // Reflects the actual chainId used in query
+          chainName: whereClause.chainName || 'all',
           depositId,
           eventType,
           startDate: startDateISO,
           endDate: endDateISO,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logErrorContext('Error retrieving audit logs:', error);
-      return response.custom(500, 'Error retrieving audit logs: ' + error.message, error);
+      return response.custom(500, 'Error retrieving audit logs: ' + errorMessage, error);
     }
   };
 }
