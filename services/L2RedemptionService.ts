@@ -17,6 +17,16 @@ import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 // Import the default L1 chain ID constant
 const DEFAULT_TARGET_L1_CHAIN_ID: ChainId = 2; // Ethereum Mainnet
 
+/**
+ * Helper function to safely extract error message
+ */
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+};
+
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;
   private l2BitcoinRedeemerContract?: ethers.Contract;
@@ -96,42 +106,49 @@ export class L2RedemptionService {
         amount: ethers.BigNumber, // event.args[3] - uint64
         rawEvent: ethers.Event, // The full event object from ethers.js
       ) => {
-        const eventData: RedemptionRequestedEventData = {
-          walletPubKeyHash,
-          mainUtxo,
-          redeemerOutputScript,
-          amount,
-          l2TransactionHash: rawEvent.transactionHash,
-        };
+        try {
+          const eventData: RedemptionRequestedEventData = {
+            walletPubKeyHash,
+            mainUtxo,
+            redeemerOutputScript,
+            amount,
+            l2TransactionHash: rawEvent.transactionHash,
+          };
 
-        const redemptionId = eventData.l2TransactionHash;
-        const existing = await RedemptionStore.getById(redemptionId);
-        if (existing) {
-          logger.info(`Redemption already exists for L2 tx: ${redemptionId}, skipping.`);
-          return;
+          const redemptionId = eventData.l2TransactionHash;
+          const existing = await RedemptionStore.getById(redemptionId);
+          if (existing) {
+            logger.info(`Redemption already exists for L2 tx: ${redemptionId}, skipping.`);
+            return;
+          }
+
+          const now = Date.now();
+          const redemption: Redemption = {
+            id: redemptionId,
+            chainId: this.chainConfig.chainName,
+            event: eventData,
+            vaaBytes: null,
+            vaaStatus: RedemptionStatus.PENDING,
+            l1SubmissionTxHash: null,
+            status: RedemptionStatus.PENDING,
+            error: null,
+            dates: {
+              createdAt: now,
+              vaaFetchedAt: null,
+              l1SubmittedAt: null,
+              completedAt: null,
+              lastActivityAt: now,
+            },
+            logs: [`Redemption created at ${new Date(now).toISOString()}`],
+          };
+          await RedemptionStore.create(redemption);
+          logger.info(`Redemption request persisted for L2 tx: ${redemptionId}`);
+        } catch (error: unknown) {
+          logErrorContext(
+            `Error processing RedemptionRequested event for tx ${rawEvent.transactionHash}:`,
+            error,
+          );
         }
-
-        const now = Date.now();
-        const redemption: Redemption = {
-          id: redemptionId,
-          chainId: this.chainConfig.chainName,
-          event: eventData,
-          vaaBytes: null,
-          vaaStatus: RedemptionStatus.PENDING,
-          l1SubmissionTxHash: null,
-          status: RedemptionStatus.PENDING,
-          error: null,
-          dates: {
-            createdAt: now,
-            vaaFetchedAt: null,
-            l1SubmittedAt: null,
-            completedAt: null,
-            lastActivityAt: now,
-          },
-          logs: [`Redemption created at ${new Date(now).toISOString()}`],
-        };
-        await RedemptionStore.create(redemption);
-        logger.info(`Redemption request persisted for L2 tx: ${redemptionId}`);
       },
     );
 
@@ -179,27 +196,45 @@ export class L2RedemptionService {
           redemption.dates.lastActivityAt = Date.now();
           redemption.error = null;
           redemption.logs?.push(`VAA fetched at ${new Date().toISOString()}`);
-          await RedemptionStore.update(redemption);
-          logger.info(`VAA fetched and redemption updated: ${redemption.id}`);
+          try {
+            await RedemptionStore.update(redemption);
+            logger.info(`VAA fetched and redemption updated: ${redemption.id}`);
+          } catch (updateError: unknown) {
+            logger.error(
+              `Failed to update redemption ${redemption.id} after VAA fetch: ${getErrorMessage(updateError)}`,
+            );
+          }
         } else {
           redemption.vaaStatus = RedemptionStatus.VAA_FAILED;
           redemption.status = RedemptionStatus.VAA_FAILED;
           redemption.dates.lastActivityAt = Date.now();
           redemption.error = 'VAA fetch/verify failed';
           redemption.logs?.push(`VAA fetch failed at ${new Date().toISOString()}`);
-          await RedemptionStore.update(redemption);
-          logger.warn(`VAA fetch failed for redemption: ${redemption.id}`);
+          try {
+            await RedemptionStore.update(redemption);
+            logger.warn(`VAA fetch failed for redemption: ${redemption.id}`);
+          } catch (updateError: unknown) {
+            logger.error(
+              `Failed to update redemption ${redemption.id} after VAA failure: ${getErrorMessage(updateError)}`,
+            );
+          }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         redemption.vaaStatus = RedemptionStatus.VAA_FAILED;
         redemption.status = RedemptionStatus.VAA_FAILED;
         redemption.dates.lastActivityAt = Date.now();
-        redemption.error = error?.message || String(error);
+        redemption.error = getErrorMessage(error);
         redemption.logs?.push(
           `VAA fetch error at ${new Date().toISOString()}: ${redemption.error}`,
         );
-        await RedemptionStore.update(redemption);
-        logger.error(`Error fetching VAA for redemption ${redemption.id}: ${redemption.error}`);
+        try {
+          await RedemptionStore.update(redemption);
+          logger.error(`Error fetching VAA for redemption ${redemption.id}: ${redemption.error}`);
+        } catch (updateError: unknown) {
+          logger.error(
+            `Failed to update redemption ${redemption.id} after VAA error: ${getErrorMessage(updateError)}`,
+          );
+        }
       }
     }
   }
@@ -218,8 +253,14 @@ export class L2RedemptionService {
           redemption.logs?.push(
             `L1 submission failed at ${new Date().toISOString()}: No VAA bytes.`,
           );
-          await RedemptionStore.update(redemption);
-          logger.error(`Redemption ${redemption.id} missing VAA bytes, cannot submit to L1.`);
+          try {
+            await RedemptionStore.update(redemption);
+            logger.error(`Redemption ${redemption.id} missing VAA bytes, cannot submit to L1.`);
+          } catch (updateError: unknown) {
+            logger.error(
+              `Failed to update redemption ${redemption.id} after missing VAA bytes: ${getErrorMessage(updateError)}`,
+            );
+          }
           continue;
         }
         // Convert hex string to Uint8Array
@@ -238,28 +279,115 @@ export class L2RedemptionService {
           redemption.logs?.push(
             `L1 submission succeeded at ${new Date().toISOString()} (tx: ${l1TxHash})`,
           );
-          await RedemptionStore.update(redemption);
-          logger.info(
-            `Redemption ${redemption.id} successfully submitted to L1 and marked COMPLETED. L1 tx: ${l1TxHash}`,
-          );
+          try {
+            await RedemptionStore.update(redemption);
+            logger.info(
+              `Redemption ${redemption.id} successfully submitted to L1 and marked COMPLETED. L1 tx: ${l1TxHash}`,
+            );
+          } catch (updateError: unknown) {
+            logger.error(
+              `Failed to update redemption ${redemption.id} after L1 success: ${getErrorMessage(updateError)}`,
+            );
+          }
         } else {
           redemption.status = RedemptionStatus.FAILED;
           redemption.dates.lastActivityAt = Date.now();
           redemption.error = 'L1 submission failed (see logs for details)';
           redemption.logs?.push(`L1 submission failed at ${new Date().toISOString()}`);
-          await RedemptionStore.update(redemption);
-          logger.error(`Redemption ${redemption.id} failed L1 submission.`);
+          try {
+            await RedemptionStore.update(redemption);
+            logger.error(`Redemption ${redemption.id} failed L1 submission.`);
+          } catch (updateError: unknown) {
+            logger.error(
+              `Failed to update redemption ${redemption.id} after L1 failure: ${getErrorMessage(updateError)}`,
+            );
+          }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         redemption.status = RedemptionStatus.FAILED;
         redemption.dates.lastActivityAt = Date.now();
-        redemption.error = error?.message || String(error);
+        redemption.error = getErrorMessage(error);
         redemption.logs?.push(
           `L1 submission error at ${new Date().toISOString()}: ${redemption.error}`,
         );
-        await RedemptionStore.update(redemption);
-        logger.error(`Error submitting redemption ${redemption.id} to L1: ${redemption.error}`);
+        try {
+          await RedemptionStore.update(redemption);
+          logger.error(`Error submitting redemption ${redemption.id} to L1: ${redemption.error}`);
+        } catch (updateError: unknown) {
+          logger.error(
+            `Failed to update redemption ${redemption.id} after L1 error: ${getErrorMessage(updateError)}`,
+          );
+        }
       }
     }
+  }
+
+  /**
+   * Public method to handle redemption requested events directly (used by tests)
+   */
+  public async handleRedemptionRequested(
+    walletPubKeyHash: string,
+    mainUtxo: BitcoinTxUtxo,
+    redeemerOutputScript: string,
+    amount: ethers.BigNumber,
+    rawEvent: { transactionHash: string },
+  ): Promise<void> {
+    try {
+      const eventData: RedemptionRequestedEventData = {
+        walletPubKeyHash,
+        mainUtxo,
+        redeemerOutputScript,
+        amount,
+        l2TransactionHash: rawEvent.transactionHash,
+      };
+
+      const redemptionId = eventData.l2TransactionHash;
+      const existing = await RedemptionStore.getById(redemptionId);
+      if (existing) {
+        logger.info(`Redemption already exists for L2 tx: ${redemptionId}, skipping.`);
+        return;
+      }
+
+      const now = Date.now();
+      const redemption: Redemption = {
+        id: redemptionId,
+        chainId: this.chainConfig.chainName,
+        event: eventData,
+        vaaBytes: null,
+        vaaStatus: RedemptionStatus.PENDING,
+        l1SubmissionTxHash: null,
+        status: RedemptionStatus.PENDING,
+        error: null,
+        dates: {
+          createdAt: now,
+          vaaFetchedAt: null,
+          l1SubmittedAt: null,
+          completedAt: null,
+          lastActivityAt: now,
+        },
+        logs: [`Redemption created at ${new Date(now).toISOString()}`],
+      };
+      await RedemptionStore.create(redemption);
+      logger.info(`Redemption request persisted for L2 tx: ${redemptionId}`);
+    } catch (error: unknown) {
+      logErrorContext(
+        `Error processing RedemptionRequested event for tx ${rawEvent.transactionHash}:`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Public method to process VAA fetching for pending redemptions (used by tests)
+   */
+  public async processVaaFetching(): Promise<void> {
+    await this.processPendingRedemptions();
+  }
+
+  /**
+   * Public method to process L1 submission for VAA-ready redemptions (used by tests)
+   */
+  public async processL1Submission(): Promise<void> {
+    await this.processVaaFetchedRedemptions();
   }
 }

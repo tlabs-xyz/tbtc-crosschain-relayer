@@ -7,19 +7,28 @@ import {
   chainIdToChain,
   type WormholeMessageId,
   type VAA,
+  type Chain,
 } from '@wormhole-foundation/sdk';
 import { toNative } from '@wormhole-foundation/sdk-connect';
 import evmPlatform from '@wormhole-foundation/sdk/platforms/evm';
 import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { stringifyWithBigInt } from '../utils/Numbers.js';
-import { TIMEOUTS, BLOCKCHAIN_CONFIG, PROTOCOL_CONFIG } from '../utils/Constants.js';
+import {
+  TIMEOUTS,
+  BLOCKCHAIN_CONFIG,
+  PROTOCOL_CONFIG,
+  type SupportedPayloadName,
+} from '../utils/Constants.js';
 
 type ParsedVaaWithPayload = VAA<'TokenBridge:Transfer'> | VAA<'TokenBridge:TransferWithPayload'>;
 
 // Configuration constants
 const DEFAULT_WORMHOLE_NETWORK: Network = 'Testnet';
-const DEFAULT_SDK_PLATFORMS_MODULES = [evmPlatform, solanaPlatform];
+const DEFAULT_SDK_PLATFORMS_MODULES = [
+  () => Promise.resolve(evmPlatform),
+  () => Promise.resolve(solanaPlatform),
+];
 
 interface VaaFetchResult {
   vaaBytes: Uint8Array;
@@ -46,7 +55,7 @@ export class WormholeVaaService {
   public static async create(
     l2Rpc: string,
     network: Network = DEFAULT_WORMHOLE_NETWORK,
-    platformModules: any[] = DEFAULT_SDK_PLATFORMS_MODULES,
+    platformModules = DEFAULT_SDK_PLATFORMS_MODULES,
   ): Promise<WormholeVaaService> {
     const service = new WormholeVaaService(l2Rpc);
     service.wh = await wormhole(network, platformModules);
@@ -142,9 +151,10 @@ export class WormholeVaaService {
 
     try {
       receipt = await this.l2Provider.getTransactionReceipt(l2TransactionHash);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       logErrorContext(
-        `Failed to get L2 transaction receipt for ${l2TransactionHash}. Original error: ${error.message}`,
+        `Failed to get L2 transaction receipt for ${l2TransactionHash}. Original error: ${errorMessage}`,
         error,
       );
       return null;
@@ -175,7 +185,7 @@ export class WormholeVaaService {
     emitterAddress: string,
     l2TransactionHash: string,
   ): Promise<WormholeMessageId | null> {
-    const chain = this.wh.getChain(emitterChainName as any);
+    const chain = this.wh.getChain(emitterChainName as Chain);
     const wormholeMessageIds = await chain.parseTransaction(receipt.transactionHash);
 
     if (!wormholeMessageIds || wormholeMessageIds.length === 0) {
@@ -187,7 +197,7 @@ export class WormholeVaaService {
     }
 
     const expectedEmitterUniversalAddress = toNative(
-      emitterChainName as any,
+      emitterChainName as Chain,
       emitterAddress,
     ).toUniversalAddress();
 
@@ -228,8 +238,8 @@ export class WormholeVaaService {
           fetchedParsedVaa = vaaResult as ParsedVaaWithPayload;
           break; // Successfully got VAA, exit loop
         }
-      } catch (error: any) {
-        lastError = error;
+      } catch (error: unknown) {
+        lastError = error instanceof Error ? error : new Error(String(error));
         // Continue trying next discriminator
       }
     }
@@ -268,7 +278,7 @@ export class WormholeVaaService {
 
     // Validate payload name
     const payloadName = vaaData.payloadLiteral || vaaData.payloadName;
-    if (!PROTOCOL_CONFIG.SUPPORTED_PAYLOAD_NAMES.includes(payloadName as any)) {
+    if (!this.isSupportedPayloadName(payloadName)) {
       logErrorContext(
         `[WormholeVaaService] Payload name mismatch. Expected: ${PROTOCOL_CONFIG.SUPPORTED_PAYLOAD_NAMES.join(' or ')}, Got: ${payloadName}.`,
         new Error('VAA payload name mismatch'),
@@ -286,18 +296,22 @@ export class WormholeVaaService {
   ): Promise<boolean> {
     const vaaData = fetchedParsedVaa as unknown as VaaData;
 
-    if (!PROTOCOL_CONFIG.SUPPORTED_PAYLOAD_NAMES.includes(vaaData.payloadName as any)) {
+    // Use the same payload name resolution logic as validateVaaProtocolAndPayload
+    const payloadName = vaaData.payloadLiteral || vaaData.payloadName;
+    if (!this.isSupportedPayloadName(payloadName)) {
       return true; // Skip check for unsupported payload types
     }
 
     try {
-      const l1Chain = this.wh.getChain(targetL1ChainName as any);
+      const l1Chain = this.wh.getChain(targetL1ChainName as Chain);
       const tokenBridge = await l1Chain.getTokenBridge();
-      const isCompleted = await tokenBridge.isTransferCompleted(fetchedParsedVaa as any);
+      const isCompleted = await tokenBridge.isTransferCompleted(
+        fetchedParsedVaa as VAA<'TokenBridge:Transfer'>,
+      );
 
       if (!isCompleted) {
         logErrorContext(
-          `Token bridge transfer VAA not completed on L1 (${targetL1ChainName}) for ${l2TransactionHash}. VAA Seq: ${vaaData.sequence}, Type: ${vaaData.payloadName}`,
+          `Token bridge transfer VAA not completed on L1 (${targetL1ChainName}) for ${l2TransactionHash}. VAA Seq: ${vaaData.sequence}, Type: ${payloadName}`,
           new Error('VAA transfer not completed on L1'),
         );
         return false;
@@ -307,9 +321,10 @@ export class WormholeVaaService {
         );
         return true;
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
       logErrorContext(
-        `Error checking VAA completion on L1 (${targetL1ChainName}): ${e.message}`,
+        `Error checking VAA completion on L1 (${targetL1ChainName}): ${errorMessage}`,
         e,
       );
       return false;
@@ -333,7 +348,7 @@ export class WormholeVaaService {
   ): boolean {
     const expectedEmitterChainName = chainIdToChain(expectedEmitterChainId);
     const expectedEmitterUA = toNative(
-      expectedEmitterChainName as any,
+      expectedEmitterChainName as Chain,
       expectedNativeEmitterAddress,
     ).toUniversalAddress();
 
@@ -368,5 +383,12 @@ export class WormholeVaaService {
     }
 
     return true;
+  }
+
+  /**
+   * Type guard to check if a string is a supported payload name
+   */
+  private isSupportedPayloadName(payloadName: string): payloadName is SupportedPayloadName {
+    return PROTOCOL_CONFIG.SUPPORTED_PAYLOAD_NAMES.includes(payloadName as SupportedPayloadName);
   }
 }
