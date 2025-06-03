@@ -1,18 +1,18 @@
 declare module 'abi-wan-kanabi-v1' {
-  const content: any;
+  const content: unknown;
   export = content;
 }
 
 declare module 'abi-wan-kanabi-v1/index' {
-  export type TAbi = any;
-  export type TFunctionName = any;
-  export type FunctionArgs<TAbi, TFunctionName> = any[];
-  export const abi: any;
-  export const f: any;
-  export const args: any;
+  export type TAbi = unknown;
+  export type TFunctionName = string;
+  export type FunctionArgs<_TAbi = unknown, _TFunctionName = string> = unknown[];
+  export const abi: unknown;
+  export const f: unknown;
+  export const args: unknown;
 }
 
 declare module 'abi-wan-kanabi-v1/kanabi' {
-  export type PrimitiveTypeLookup<TAbi> = any;
-  export type Abi = any;
+  export type PrimitiveTypeLookup<_TAbi = unknown> = unknown;
+  export type Abi = unknown;
 }
