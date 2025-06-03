@@ -1,4 +1,3 @@
-import { ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
 import type { Deposit } from '../types/Deposit.type';
 import { DepositStatus } from '../types/DepositStatus.enum';

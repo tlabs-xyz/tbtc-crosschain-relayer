@@ -29,8 +29,8 @@ export default logger;
  * @param message The primary log message.
  * @param error The error object or data.
  */
-export const logErrorContext = (message: string, error: any) => {
-  const logDetails: { err?: Error; errorData?: any } = {};
+export const logErrorContext = (message: string, error: Error | unknown) => {
+  const logDetails: { err?: Error; errorData?: unknown } = {};
   if (error instanceof Error) {
     logDetails.err = error;
   } else {
@@ -45,7 +45,7 @@ export const logErrorContext = (message: string, error: any) => {
  * @param cronJobName - A descriptive name of the cron job (e.g., "deposit processing", "redemption processing").
  * @param error - The error object.
  */
-export function logChainCronError(chainName: string, cronJobName: string, error: any): void {
+export function logChainCronError(chainName: string, cronJobName: string, error: Error | unknown): void {
   logErrorContext(`Error in ${cronJobName} cron job for chain ${chainName}:`, error);
 }
 
@@ -54,6 +54,6 @@ export function logChainCronError(chainName: string, cronJobName: string, error:
  * @param cronJobName - A descriptive name of the cron job (e.g., "deposit cleanup").
  * @param error - The error object.
  */
-export function logGlobalCronError(cronJobName: string, error: any): void {
+export function logGlobalCronError(cronJobName: string, error: Error | unknown): void {
   logErrorContext(`Error in global ${cronJobName} cron job:`, error);
 }
