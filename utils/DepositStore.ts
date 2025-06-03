@@ -125,17 +125,40 @@ export class DepositStore {
     }
   }
 
-  static async getByStatus(status: DepositStatus, chainName?: string): Promise<Deposit[]> {
+  static async getAllByChain(chainName: string = 'all'): Promise<Deposit[]> {
     try {
-      const whereClause: DepositWhereClause = { status: status };
-      if (chainName) {
+      const whereClause: DepositWhereClause = {};
+
+      // Only filter by chainName if it's provided and not 'all'
+      if (chainName && chainName.toLowerCase() !== 'all') {
         whereClause.chainName = chainName;
       }
+
       const records = await prisma.deposit.findMany({ where: whereClause });
       return records.map(deserializeDeposit);
     } catch (err: unknown) {
       logErrorContext(
-        `Failed to fetch deposits by status${chainName ? ` for chain ${chainName}` : ''}:`,
+        `Failed to fetch all deposits${chainName && chainName.toLowerCase() !== 'all' ? ` for chain ${chainName}` : ''}:`,
+        err as ErrorLike,
+      );
+      return [];
+    }
+  }
+
+  static async getByStatus(status: DepositStatus, chainName: string = 'all'): Promise<Deposit[]> {
+    try {
+      const whereClause: DepositWhereClause = { status: status };
+
+      // Only filter by chainName if it's provided and not 'all'
+      if (chainName && chainName.toLowerCase() !== 'all') {
+        whereClause.chainName = chainName;
+      }
+
+      const records = await prisma.deposit.findMany({ where: whereClause });
+      return records.map(deserializeDeposit);
+    } catch (err: unknown) {
+      logErrorContext(
+        `Failed to fetch deposits by status${chainName && chainName.toLowerCase() !== 'all' ? ` for chain ${chainName}` : ''}:`,
         err as ErrorLike,
       );
       return [];

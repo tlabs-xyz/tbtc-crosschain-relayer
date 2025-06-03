@@ -1,7 +1,6 @@
 import type { Request, Response } from 'express';
 import CustomResponse from '../helpers/CustomResponse.helper.js';
 import { logErrorContext } from '../utils/Logger.js';
-import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { DepositStore } from '../utils/DepositStore.js';
 
@@ -22,15 +21,7 @@ export default class Operations {
   getAllOperations = async (_req: Request, res: Response, chainName: string): Promise<void> => {
     const response = new CustomResponse(res);
     try {
-      let operations: Deposit[];
-
-      if (chainName && chainName.toLowerCase() !== 'all') {
-        // Get all deposits and filter by chainName
-        const allDeposits = await DepositStore.getAll();
-        operations = allDeposits.filter((deposit) => deposit.chainName === chainName);
-      } else {
-        operations = await DepositStore.getAll();
-      }
+      const operations = await DepositStore.getAllByChain(chainName);
 
       // Sort by creation date descending
       operations.sort((a, b) => {
@@ -62,10 +53,7 @@ export default class Operations {
   ): Promise<void> => {
     const response = new CustomResponse(res);
     try {
-      const operations = await DepositStore.getByStatus(
-        DepositStatus.QUEUED,
-        chainName && chainName.toLowerCase() !== 'all' ? chainName : undefined,
-      );
+      const operations = await DepositStore.getByStatus(DepositStatus.QUEUED, chainName);
 
       // Sort by creation date descending
       operations.sort((a, b) => {
@@ -97,10 +85,7 @@ export default class Operations {
   ): Promise<void> => {
     const response = new CustomResponse(res);
     try {
-      const operations = await DepositStore.getByStatus(
-        DepositStatus.INITIALIZED,
-        chainName && chainName.toLowerCase() !== 'all' ? chainName : undefined,
-      );
+      const operations = await DepositStore.getByStatus(DepositStatus.INITIALIZED, chainName);
 
       // Sort by creation date descending
       operations.sort((a, b) => {
@@ -132,10 +117,7 @@ export default class Operations {
   ): Promise<void> => {
     const response = new CustomResponse(res);
     try {
-      const operations = await DepositStore.getByStatus(
-        DepositStatus.FINALIZED,
-        chainName && chainName.toLowerCase() !== 'all' ? chainName : undefined,
-      );
+      const operations = await DepositStore.getByStatus(DepositStatus.FINALIZED, chainName);
 
       // Sort by creation date descending
       operations.sort((a, b) => {
