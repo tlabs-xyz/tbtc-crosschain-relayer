@@ -38,7 +38,7 @@ export type Deposit = {
     reveal: Reveal;
     l2DepositOwner: string;
     l2Sender: string;
-  };
+  } | null;
   dates: {
     createdAt: EpochTimeStamp | null;
     initializationAt: EpochTimeStamp | null;

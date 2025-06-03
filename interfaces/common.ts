@@ -1,7 +1,10 @@
 import type { Listener } from '@ethersproject/providers';
 import type { Event, EventFilter } from 'ethers';
 
-export interface TypedEvent<TArgsArray extends Array<any> = any, TArgsObject = any> extends Event {
+export interface TypedEvent<
+  TArgsArray extends ReadonlyArray<unknown> = ReadonlyArray<unknown>,
+  TArgsObject = Record<string, unknown>,
+> extends Event {
   args: TArgsArray & TArgsObject;
 }
 
@@ -21,11 +24,12 @@ export interface OnEvent<TRes> {
   (eventName: string, listener: Listener): TRes;
 }
 
-export type MinEthersFactory<C, ARGS> = {
-  deploy(...a: ARGS[]): Promise<C>;
+export type MinEthersFactory<C, ARGS extends ReadonlyArray<unknown>> = {
+  deploy(...a: ARGS): Promise<C>;
 };
 
-export type GetContractTypeFromFactory<F> = F extends MinEthersFactory<infer C, any> ? C : never;
+export type GetContractTypeFromFactory<F> =
+  F extends MinEthersFactory<infer C, ReadonlyArray<unknown>> ? C : never;
 
 export type GetARGsTypeFromFactory<F> =
-  F extends MinEthersFactory<any, any> ? Parameters<F['deploy']> : never;
+  F extends MinEthersFactory<unknown, infer ARGS> ? ARGS : never;

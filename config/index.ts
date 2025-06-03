@@ -35,6 +35,11 @@ const chainSchemaRegistry = {
   solanaDevnet: { schema: SolanaChainConfigSchema, input: solanaDevnetChainInput },
   starknetTestnet: { schema: StarknetChainConfigSchema, input: starknetTestnetChainInput },
   suiTestnet: { schema: SuiChainConfigSchema, input: suiTestnetChainInput },
+} as const;
+
+type ChainSchemaRegistryEntry = {
+  schema: z.ZodType<AnyChainConfig>;
+  input: Record<string, unknown>;
 };
 
 export const chainConfigs: AllChainConfigs = {};
@@ -64,18 +69,26 @@ if (supportedChainsEnv && supportedChainsEnv.trim() !== '') {
   );
 }
 
-const effectiveChainSchemaRegistry: Partial<any> = {};
+const effectiveChainSchemaRegistry: Partial<
+  Record<keyof typeof chainSchemaRegistry, ChainSchemaRegistryEntry>
+> = {};
 for (const key in chainSchemaRegistry) {
   if (Object.prototype.hasOwnProperty.call(chainSchemaRegistry, key)) {
     if (chainsToLoad) {
       if (chainsToLoad.includes(key)) {
-        effectiveChainSchemaRegistry[key as keyof typeof chainSchemaRegistry] =
-          chainSchemaRegistry[key as keyof typeof chainSchemaRegistry];
+        const entry = chainSchemaRegistry[key as keyof typeof chainSchemaRegistry];
+        effectiveChainSchemaRegistry[key as keyof typeof chainSchemaRegistry] = {
+          schema: entry.schema as z.ZodType<AnyChainConfig>,
+          input: entry.input,
+        };
       }
     } else {
       // Load all if chainsToLoad is null
-      effectiveChainSchemaRegistry[key as keyof typeof chainSchemaRegistry] =
-        chainSchemaRegistry[key as keyof typeof chainSchemaRegistry];
+      const entry = chainSchemaRegistry[key as keyof typeof chainSchemaRegistry];
+      effectiveChainSchemaRegistry[key as keyof typeof chainSchemaRegistry] = {
+        schema: entry.schema as z.ZodType<AnyChainConfig>,
+        input: entry.input,
+      };
     }
   }
 }
@@ -85,9 +98,9 @@ for (const [key, entry] of Object.entries(effectiveChainSchemaRegistry)) {
 
   try {
     logger.info(`Attempting to load configuration for chain: ${key}`);
-    chainConfigs[key] = entry.schema.parse(entry.input);
+    chainConfigs[key] = entry.schema.parse(entry.input) as AnyChainConfig;
     logger.info(`Successfully loaded configuration for chain: ${key}`);
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasChainConfigErrors = true;
     if (error instanceof z.ZodError) {
       logger.error(`Config validation failed for '${key}'. Flattened errors:`, error.flatten());
