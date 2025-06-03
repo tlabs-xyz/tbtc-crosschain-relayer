@@ -22,14 +22,30 @@ process.env.CORS_URL = 'http://localhost:4001';
 // --- Storage ---
 process.env.JSON_PATH = './test-data/';
 
-// --- Database (In-memory/Mock for Tests) ---
-process.env.POSTGRES_HOST = 'localhost';
-process.env.POSTGRES_PORT = '5433'; // Different port for test DB
-process.env.POSTGRES_USER = 'test_user';
-process.env.POSTGRES_PASSWORD = 'test_password';
-process.env.POSTGRES_DB = 'tbtc_relayer_test';
-process.env.DATABASE_URL =
-  'postgresql://test_user:test_password@localhost:5433/tbtc_relayer_test?schema=public';
+// --- Database Configuration ---
+// Check if we're in CI environment (DATABASE_URL already set) or local development
+const isCI = process.env.CI === 'true' || process.env.DATABASE_URL?.includes('postgres:5432');
+
+if (!isCI && !process.env.DATABASE_URL) {
+  // Local test database configuration
+  process.env.POSTGRES_HOST = 'localhost';
+  process.env.POSTGRES_PORT = '5433'; // Different port for test DB
+  process.env.POSTGRES_USER = 'test_user';
+  process.env.POSTGRES_PASSWORD = 'test_password';
+  process.env.POSTGRES_DB = 'tbtc_relayer_test';
+  process.env.DATABASE_URL =
+    'postgresql://test_user:test_password@localhost:5433/tbtc_relayer_test?schema=public';
+}
+// If DATABASE_URL is already set (CI environment), keep the existing database config
+// but ensure other database-related env vars are consistent
+else if (process.env.DATABASE_URL) {
+  const url = new URL(process.env.DATABASE_URL);
+  process.env.POSTGRES_HOST = url.hostname;
+  process.env.POSTGRES_PORT = url.port || '5432';
+  process.env.POSTGRES_USER = url.username;
+  process.env.POSTGRES_PASSWORD = url.password;
+  process.env.POSTGRES_DB = url.pathname.slice(1); // Remove leading slash
+}
 
 // --- Supported Chains (Limited set for testing) ---
 process.env.SUPPORTED_CHAINS = 'sepoliaTestnet,solanaDevnet';

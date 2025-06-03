@@ -128,7 +128,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       logger.info(
         `StarkNet L2 RPC (${this.config.l2Rpc}) and private key are configured for ${this.config.chainName}. StarkNet L2 provider/account initialization will be implemented in a future iteration.`,
       );
-      
+
       // FUTURE: Initialize StarkNet L2 provider and account for direct L2 interactions
       // This will enable:
       // 1. Direct L2 deposit event monitoring (alternative to L1 bridge events)
@@ -138,8 +138,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       //   const { RpcProvider, Account } = await import('starknet');
       //   this.starknetL2Provider = new RpcProvider({ nodeUrl: this.config.l2Rpc });
       //   this.starknetL2Account = new Account(
-      //     this.starknetL2Provider, 
-      //     this.config.starknetDeployerAddress, 
+      //     this.starknetL2Provider,
+      //     this.config.starknetDeployerAddress,
       //     this.config.starknetPrivateKey
       //   );
       //   logger.info(`StarkNet L2 provider and account initialized for ${this.config.chainName}`);
@@ -334,11 +334,11 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
   async getLatestBlock(): Promise<number> {
     if (this.config.useEndpoint) return 0;
-    
+
     logger.warn(
       `StarkNet getLatestBlock NOT YET IMPLEMENTED for ${this.config.chainName}. Returning 0.`,
     );
-    
+
     // FUTURE: Implement StarkNet L2 block number retrieval
     // When StarkNet L2 provider is available, this should:
     // 1. Query the latest block from StarkNet L2 RPC
@@ -354,9 +354,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     latestBlock: number; // Represents block number
   }): Promise<void> {
     if (this.config.useEndpoint) return;
-    
+
     logger.warn(`StarkNet checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
-    
+
     // FUTURE: Implement StarkNet L2 past event scanning
     // When StarkNet L2 provider is available, this should:
     // 1. Calculate start block from pastTimeInMinutes

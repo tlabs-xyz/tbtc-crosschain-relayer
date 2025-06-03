@@ -3,9 +3,6 @@ import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
 import {
-  buildL1RpcUrl,
-  buildL2RpcUrl,
-  buildL2WsUrl,
   TBTC_VAULT_MAINNET,
   L1_CONFIRMATIONS,
   FEATURE_FLAGS,
@@ -30,17 +27,13 @@ export const arbitrumMainnetChainInput: EvmChainInput = {
   // L2 = Arbitrum Mainnet (minter functionality deployment)
 
   // L1 RPC: Ethereum Mainnet (core tBTC protocol layer)
-  l1Rpc: buildL1RpcUrl(),
+  l1Rpc: getEnv('ETHEREUM_MAINNET_RPC'),
 
   // L2 RPC: Arbitrum Mainnet (minter deployment layer)
-  l2Rpc: buildL2RpcUrl('CHAIN_ARBITRUMMAINNET_L2_RPC', 'arb-mainnet', PUBLIC_RPCS['arbitrum-one']),
+  l2Rpc: getEnv('CHAIN_ARBITRUMMAINNET_L2_RPC', PUBLIC_RPCS['arbitrum-one']),
 
   // L2 WebSocket: Arbitrum Mainnet (for real-time minter events)
-  l2WsRpc: buildL2WsUrl(
-    'CHAIN_ARBITRUMMAINNET_L2_WS_RPC',
-    'arb-mainnet',
-    PUBLIC_WS_RPCS['arbitrum-one'],
-  ),
+  l2WsRpc: getEnv('CHAIN_ARBITRUMMAINNET_L2_WS_RPC', PUBLIC_WS_RPCS['arbitrum-one']),
 
   // Block Configuration - Static defaults with optional environment override
   l2StartBlock: getEnvNumber('CHAIN_ARBITRUMMAINNET_L2_START_BLOCK', 247865814), // Arbitrum block for minter events

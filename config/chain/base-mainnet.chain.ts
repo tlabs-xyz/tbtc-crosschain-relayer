@@ -3,9 +3,6 @@ import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
 import {
-  buildL1RpcUrl,
-  buildL2RpcUrl,
-  buildL2WsUrl,
   TBTC_VAULT_MAINNET,
   L1_CONFIRMATIONS,
   FEATURE_FLAGS,
@@ -30,17 +27,13 @@ export const baseMainnetChainInput: EvmChainInput = {
   // L2 = Base Mainnet (minter functionality deployment)
 
   // L1 RPC: Ethereum Mainnet (core tBTC protocol layer)
-  l1Rpc: buildL1RpcUrl(),
+  l1Rpc: getEnv('ETHEREUM_MAINNET_RPC'),
 
   // L2 RPC: Base Mainnet (minter deployment layer - backup instance)
-  l2Rpc: buildL2RpcUrl('CHAIN_BASEMAINNET_L2_RPC', 'base-mainnet', PUBLIC_RPCS['base-mainnet']),
+  l2Rpc: getEnv('CHAIN_BASEMAINNET_L2_RPC', PUBLIC_RPCS['base-mainnet']),
 
   // L2 WebSocket: Base Mainnet (for real-time minter events - backup)
-  l2WsRpc: buildL2WsUrl(
-    'CHAIN_BASEMAINNET_L2_WS_RPC',
-    'base-mainnet',
-    PUBLIC_WS_RPCS['base-mainnet'],
-  ),
+  l2WsRpc: getEnv('CHAIN_BASEMAINNET_L2_WS_RPC', PUBLIC_WS_RPCS['base-mainnet']),
 
   // Block Configuration - Static defaults with optional environment override
   l2StartBlock: getEnvNumber('CHAIN_BASEMAINNET_L2_START_BLOCK', 26922966), // Base block for minter events
@@ -57,5 +50,5 @@ export const baseMainnetChainInput: EvmChainInput = {
 
   // Feature Flags - Backup instance defaults (typically disabled)
   useEndpoint: FEATURE_FLAGS.USE_ENDPOINT, // Use direct blockchain listeners for better reliability
-  enableL2Redemption: FEATURE_FLAGS.ENABLE_L2_REDEMPTION_BACKUP, // Backup instance - disable minter functionality to prevent conflicts
+  enableL2Redemption: FEATURE_FLAGS.ENABLE_L2_REDEMPTION_MAINNET,
 };

@@ -3,9 +3,6 @@ import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
 import {
-  buildL1RpcUrl,
-  buildL2RpcUrl,
-  buildL2WsUrl,
   TBTC_VAULT_TESTNET,
   L1_CONFIRMATIONS,
   FEATURE_FLAGS,
@@ -30,21 +27,13 @@ export const baseSepoliaTestnetChainInput: EvmChainInput = {
   // L2 = Base Sepolia (minter functionality deployment - testnet)
 
   // L1 RPC: Ethereum Sepolia (core tBTC protocol layer - testnet)
-  l1Rpc: buildL1RpcUrl(true),
+  l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC'),
 
   // L2 RPC: Base Sepolia (minter deployment layer - testnet)
-  l2Rpc: buildL2RpcUrl(
-    'CHAIN_BASESEPOLIATESTNET_L2_RPC',
-    'base-sepolia',
-    PUBLIC_RPCS['base-sepolia'],
-  ),
+  l2Rpc: getEnv('CHAIN_BASESEPOLIATESTNET_L2_RPC', PUBLIC_RPCS['base-sepolia']),
 
   // L2 WebSocket: Base Sepolia (for real-time minter events - testnet)
-  l2WsRpc: buildL2WsUrl(
-    'CHAIN_BASESEPOLIATESTNET_L2_WS_RPC',
-    'base-sepolia',
-    PUBLIC_WS_RPCS['base-sepolia'],
-  ),
+  l2WsRpc: getEnv('CHAIN_BASESEPOLIATESTNET_L2_WS_RPC', PUBLIC_WS_RPCS['base-sepolia']),
 
   // Block Configuration - Static defaults with optional environment override
   l2StartBlock: getEnvNumber('CHAIN_BASESEPOLIATESTNET_L2_START_BLOCK', 123456), // Base Sepolia block for minter events

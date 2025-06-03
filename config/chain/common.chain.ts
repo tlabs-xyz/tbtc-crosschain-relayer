@@ -58,49 +58,6 @@ export const PUBLIC_WS_RPCS = {
 } as const;
 
 // =============================================================================
-// SHARED RPC URL BUILDERS
-// =============================================================================
-
-/**
- * Builds L1 (Ethereum) RPC URL with smart fallbacks
- * Priority: 1) Shared L1 env var, 2) Public fallback
- */
-export const buildL1RpcUrl = (isTestnet = false): string => {
-  const publicFallback = isTestnet
-    ? 'https://ethereum-sepolia.rpc.grove.city/v1/62b3314e123e6f00424e5e75'
-    : 'https://ethereum-mainnet.rpc.grove.city/v1/62b3314e123e6f00424e5e75';
-
-  // Use shared L1 environment variables instead of chain-specific ones
-  const sharedL1EnvVar = isTestnet ? 'ETHEREUM_SEPOLIA_RPC' : 'ETHEREUM_MAINNET_RPC';
-
-  return getEnv(sharedL1EnvVar, publicFallback);
-};
-
-/**
- * Builds L2 (Target Network) RPC URL with smart fallbacks
- * Priority: 1) Environment override, 2) Public fallback
- */
-export const buildL2RpcUrl = (
-  envVarName: string,
-  network: string,
-  publicFallback: string,
-): string => {
-  return getEnv(envVarName, publicFallback);
-};
-
-/**
- * Builds L2 WebSocket URL with smart fallbacks
- * Priority: 1) Environment override, 2) Public fallback
- */
-export const buildL2WsUrl = (
-  envVarName: string,
-  network: string,
-  publicFallback: string,
-): string => {
-  return getEnv(envVarName, publicFallback);
-};
-
-// =============================================================================
 // SHARED CONFIGURATION DEFAULTS
 // =============================================================================
 
@@ -114,9 +71,8 @@ export const L1_CONFIRMATIONS = {
 // Common feature flags
 export const FEATURE_FLAGS = {
   USE_ENDPOINT: false, // Use direct blockchain listeners (default)
-  ENABLE_L2_REDEMPTION_MAINNET: true, // Enable minter functionality (mainnet)
-  ENABLE_L2_REDEMPTION_TESTNET: true, // Enable minter functionality (testnet)
-  ENABLE_L2_REDEMPTION_BACKUP: false, // Disable for backup instances
+  ENABLE_L2_REDEMPTION_MAINNET: true,
+  ENABLE_L2_REDEMPTION_TESTNET: true,
 } as const;
 
 // =============================================================================
@@ -131,7 +87,7 @@ export const commonChainInput: CommonChainInput = {
   // L2 = Arbitrum Sepolia (minter functionality deployment - testnet)
 
   // L1 RPC: Ethereum Sepolia (core tBTC protocol layer - testnet)
-  l1Rpc: buildL1RpcUrl(true),
+  l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC'),
 
   // L2 RPC: Arbitrum Sepolia (minter deployment layer - testnet)
   l2Rpc: 'https://sepolia.arbitrum.io/rpc',

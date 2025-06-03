@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
 import type { SolanaChainConfigSchema } from '../schemas/solana.chain.schema.js';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
-import { buildL1RpcUrl } from './common.chain.js';
 
 type SolanaChainInput = z.input<typeof SolanaChainConfigSchema>;
 
@@ -12,9 +11,9 @@ export const solanaDevnetImportedChainInput: SolanaChainInput = {
   network: NETWORK.DEVNET,
 
   // RPC Configuration from legacy: L1_RPC (Ethereum Sepolia), L2_RPC (Solana Devnet)
-  l1Rpc: buildL1RpcUrl(true), // Use shared Ethereum Sepolia RPC for testnet
-  l2Rpc: getEnv('CHAIN_SOLANADEVNETIMPORTED_L2_RPC', 'https://api.devnet.solana.com'),
-  l2WsRpc: getEnv('CHAIN_SOLANADEVNETIMPORTED_L2_WS_RPC', 'wss://api.devnet.solana.com'),
+  l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC'),
+  l2Rpc: getEnv('CHAIN_SOLANADEVNETIMPORTED_L2_RPC'),
+  l2WsRpc: getEnv('CHAIN_SOLANADEVNETIMPORTED_L2_WS_RPC'),
 
   // Block Configuration
   l2StartBlock: getEnvNumber('CHAIN_SOLANADEVNETIMPORTED_L2_START_BLOCK', 0),
