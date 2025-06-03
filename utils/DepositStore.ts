@@ -2,16 +2,18 @@ import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import logger, { logErrorContext } from './Logger.js';
 import { prisma } from '../utils/prisma.js';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 function serializeDeposit(deposit: Deposit): Prisma.DepositCreateInput {
   // Only JSON fields need to be stringified for Prisma Json type
   return {
     ...deposit,
-    hashes: deposit.hashes,
-    receipt: deposit.receipt,
-    L1OutputEvent: deposit.L1OutputEvent ?? null,
-    dates: deposit.dates,
+    hashes: deposit.hashes as Prisma.InputJsonValue,
+    receipt: deposit.receipt as Prisma.InputJsonValue,
+    L1OutputEvent: deposit.L1OutputEvent
+      ? (deposit.L1OutputEvent as unknown as Prisma.InputJsonValue)
+      : Prisma.JsonNull,
+    dates: deposit.dates as Prisma.InputJsonValue,
     status: deposit.status,
   };
 }

@@ -65,7 +65,7 @@ export class RedemptionStore {
 
   static async update(redemption: Redemption): Promise<void> {
     try {
-      const result = await prisma.redemption.update({
+      const _result = await prisma.redemption.update({
         where: {
           id: redemption.id,
         },
