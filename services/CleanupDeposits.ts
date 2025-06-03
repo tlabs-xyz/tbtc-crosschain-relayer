@@ -1,7 +1,6 @@
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import logger from '../utils/Logger.js';
-import { logErrorContext } from '../utils/Logger.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import { logDepositDeleted } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 
@@ -27,34 +26,55 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 /**
- * @name cleanQueuedDeposits
- * @description Cleans up the deposits that have been in the QUEUED state for more than 48 hours.
- * @returns {Promise<void>} A promise that resolves when the old queued deposits are deleted.
+ * Constants for cleanup configuration
  */
-export const cleanQueuedDeposits = async (): Promise<void> => {
-  try {
-    const REMOVE_QUEUED_TIME_MS: number =
-      parseInt(process.env.CLEAN_QUEUED_TIME || '48', 10) * 60 * 60 * 1000;
+const CLEANUP_CONFIG = {
+  MS_PER_HOUR: 60 * 60 * 1000,
+  DEFAULT_QUEUED_HOURS: 48,
+  DEFAULT_FINALIZED_HOURS: 12,
+  DEFAULT_BRIDGED_HOURS: 12,
+} as const;
 
-    const operations: Deposit[] = await DepositStore.getByStatus(DepositStatus.QUEUED);
+/**
+ * Configuration for cleanup operations
+ */
+interface CleanupConfig {
+  status: DepositStatus;
+  envVar: string;
+  defaultHours: number;
+  dateField: keyof Deposit['dates'];
+  statusName: string;
+}
+
+/**
+ * Generic cleanup function for deposits based on age
+ */
+const cleanupDepositsByAge = async (config: CleanupConfig): Promise<void> => {
+  try {
+    const timeoutHours = parseInt(process.env[config.envVar] || String(config.defaultHours), 10);
+    const timeoutMs = timeoutHours * CLEANUP_CONFIG.MS_PER_HOUR;
+
+    const deposits = await DepositStore.getByStatus(config.status);
     const currentTime = Date.now();
 
-    for (const { id, dates } of operations) {
+    for (const { id, dates } of deposits) {
       try {
-        const createdAt = dates?.createdAt ? new Date(dates.createdAt).getTime() : null;
-        if (!createdAt) continue;
+        const dateValue = dates?.[config.dateField];
+        const timestamp = dateValue ? new Date(dateValue).getTime() : null;
 
-        const ageInMs = currentTime - createdAt;
+        if (!timestamp) continue;
 
-        if (ageInMs > REMOVE_QUEUED_TIME_MS) {
-          const ageInHours = (ageInMs / (60 * 60 * 1000)).toFixed(2);
+        const ageInMs = currentTime - timestamp;
+
+        if (ageInMs > timeoutMs) {
+          const ageInHours = (ageInMs / CLEANUP_CONFIG.MS_PER_HOUR).toFixed(2);
 
           try {
             const deposit = await DepositStore.getById(id);
             if (deposit) {
               await logDepositDeleted(
                 deposit,
-                `QUEUED deposit exceeded age limit (${ageInHours} hours)`,
+                `${config.statusName} deposit exceeded age limit (${ageInHours} hours)`,
               );
             }
           } catch (auditError: unknown) {
@@ -66,7 +86,7 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
 
           try {
             await DepositStore.delete(id);
-            logger.info(`Deleted QUEUED deposit ${id} (age: ${ageInHours} hours)`);
+            logger.info(`Deleted ${config.statusName} deposit ${id} (age: ${ageInHours} hours)`);
           } catch (deleteError: unknown) {
             logger.error(`Failed to delete deposit ${id}: ${getErrorMessage(deleteError)}`);
           }
@@ -76,9 +96,24 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
       }
     }
   } catch (error: unknown) {
-    logErrorContext('Error in cleanQueuedDeposits:', error);
+    logErrorContext(`Error in cleanup${config.statusName}Deposits:`, error);
     throw error;
   }
+};
+
+/**
+ * @name cleanQueuedDeposits
+ * @description Cleans up the deposits that have been in the QUEUED state for more than 48 hours.
+ * @returns {Promise<void>} A promise that resolves when the old queued deposits are deleted.
+ */
+export const cleanQueuedDeposits = async (): Promise<void> => {
+  await cleanupDepositsByAge({
+    status: DepositStatus.QUEUED,
+    envVar: 'CLEAN_QUEUED_TIME',
+    defaultHours: CLEANUP_CONFIG.DEFAULT_QUEUED_HOURS,
+    dateField: 'createdAt',
+    statusName: 'QUEUED',
+  });
 };
 
 /**
@@ -87,56 +122,13 @@ export const cleanQueuedDeposits = async (): Promise<void> => {
  * @returns {Promise<void>} A promise that resolves when the old finalized deposits are deleted.
  */
 export const cleanFinalizedDeposits = async (): Promise<void> => {
-  try {
-    const REMOVE_FINALIZED_TIME_MS: number =
-      parseInt(process.env.CLEAN_FINALIZED_TIME || '12', 10) * 60 * 60 * 1000;
-
-    const operations: Deposit[] = await DepositStore.getByStatus(DepositStatus.FINALIZED);
-    const currentTime = Date.now();
-
-    for (const { id, dates } of operations) {
-      try {
-        const finalizationAt = dates?.finalizationAt
-          ? new Date(dates.finalizationAt).getTime()
-          : null;
-        if (!finalizationAt) {
-          continue;
-        }
-
-        const ageInMs = currentTime - finalizationAt;
-
-        if (ageInMs > REMOVE_FINALIZED_TIME_MS) {
-          const ageInHours = (ageInMs / (60 * 60 * 1000)).toFixed(2);
-
-          try {
-            const deposit = await DepositStore.getById(id);
-            if (deposit) {
-              await logDepositDeleted(
-                deposit,
-                `FINALIZED deposit exceeded age limit (${ageInHours} hours)`,
-              );
-            }
-          } catch (auditError: unknown) {
-            logger.error(
-              `Failed to create audit log for deposit ${id}: ${getErrorMessage(auditError)}`,
-            );
-          }
-
-          try {
-            await DepositStore.delete(id);
-            logger.info(`Deleted FINALIZED deposit ${id} (age: ${ageInHours} hours)`);
-          } catch (deleteError: unknown) {
-            logger.error(`Failed to delete deposit ${id}: ${getErrorMessage(deleteError)}`);
-          }
-        }
-      } catch (error: unknown) {
-        logger.error(`Error processing deposit ${id} for cleanup: ${getErrorMessage(error)}`);
-      }
-    }
-  } catch (error: unknown) {
-    logErrorContext('Error in cleanFinalizedDeposits:', error);
-    throw error;
-  }
+  await cleanupDepositsByAge({
+    status: DepositStatus.FINALIZED,
+    envVar: 'CLEAN_FINALIZED_TIME',
+    defaultHours: CLEANUP_CONFIG.DEFAULT_FINALIZED_HOURS,
+    dateField: 'finalizationAt',
+    statusName: 'FINALIZED',
+  });
 };
 
 /**
@@ -145,50 +137,11 @@ export const cleanFinalizedDeposits = async (): Promise<void> => {
  * @returns {Promise<void>} A promise that resolves when the old awaiting vaa deposits are deleted.
  */
 export const cleanBridgedDeposits = async (): Promise<void> => {
-  try {
-    const REMOVE_BRIDGED_TIME_MS: number =
-      parseInt(process.env.CLEAN_BRIDGED_TIME || '12', 10) * 60 * 60 * 1000;
-
-    const operations: Deposit[] = await DepositStore.getByStatus(DepositStatus.BRIDGED);
-    const currentTime = Date.now();
-
-    for (const { id, dates } of operations) {
-      try {
-        const bridgedAt = dates?.bridgedAt ? new Date(dates.bridgedAt).getTime() : null;
-        if (!bridgedAt) continue;
-
-        const ageInMs = currentTime - bridgedAt;
-
-        if (ageInMs > REMOVE_BRIDGED_TIME_MS) {
-          const ageInHours = (ageInMs / (60 * 60 * 1000)).toFixed(2);
-
-          try {
-            const deposit = await DepositStore.getById(id);
-            if (deposit) {
-              await logDepositDeleted(
-                deposit,
-                `BRIDGED deposit exceeded age limit (${ageInHours} hours)`,
-              );
-            }
-          } catch (auditError: unknown) {
-            logger.error(
-              `Failed to create audit log for deposit ${id}: ${getErrorMessage(auditError)}`,
-            );
-          }
-
-          try {
-            await DepositStore.delete(id);
-            logger.info(`Deleted BRIDGED deposit ${id} (age: ${ageInHours} hours)`);
-          } catch (deleteError: unknown) {
-            logger.error(`Failed to delete deposit ${id}: ${getErrorMessage(deleteError)}`);
-          }
-        }
-      } catch (error: unknown) {
-        logger.error(`Error processing deposit ${id} for cleanup: ${getErrorMessage(error)}`);
-      }
-    }
-  } catch (error: unknown) {
-    logErrorContext('Error in cleanBridgedDeposits:', error);
-    throw error;
-  }
+  await cleanupDepositsByAge({
+    status: DepositStatus.BRIDGED,
+    envVar: 'CLEAN_BRIDGED_TIME',
+    defaultHours: CLEANUP_CONFIG.DEFAULT_BRIDGED_HOURS,
+    dateField: 'bridgedAt',
+    statusName: 'BRIDGED',
+  });
 };
