@@ -13,19 +13,10 @@ import type {
 import { RedemptionStatus } from '../types/Redemption.type.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import { toSerializableError } from '../types/Error.types.js';
 
 // Import the default L1 chain ID constant
 const DEFAULT_TARGET_L1_CHAIN_ID: ChainId = 2; // Ethereum Mainnet
-
-/**
- * Helper function to safely extract error message
- */
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-};
 
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;
@@ -201,7 +192,7 @@ export class L2RedemptionService {
             logger.info(`VAA fetched and redemption updated: ${redemption.id}`);
           } catch (updateError: unknown) {
             logger.error(
-              `Failed to update redemption ${redemption.id} after VAA fetch: ${getErrorMessage(updateError)}`,
+              `Failed to update redemption ${redemption.id} after VAA fetch: ${toSerializableError(updateError).message}`,
             );
           }
         } else {
@@ -215,7 +206,7 @@ export class L2RedemptionService {
             logger.warn(`VAA fetch failed for redemption: ${redemption.id}`);
           } catch (updateError: unknown) {
             logger.error(
-              `Failed to update redemption ${redemption.id} after VAA failure: ${getErrorMessage(updateError)}`,
+              `Failed to update redemption ${redemption.id} after VAA failure: ${toSerializableError(updateError).message}`,
             );
           }
         }
@@ -223,7 +214,7 @@ export class L2RedemptionService {
         redemption.vaaStatus = RedemptionStatus.VAA_FAILED;
         redemption.status = RedemptionStatus.VAA_FAILED;
         redemption.dates.lastActivityAt = Date.now();
-        redemption.error = getErrorMessage(error);
+        redemption.error = toSerializableError(error).message;
         redemption.logs?.push(
           `VAA fetch error at ${new Date().toISOString()}: ${redemption.error}`,
         );
@@ -232,7 +223,7 @@ export class L2RedemptionService {
           logger.error(`Error fetching VAA for redemption ${redemption.id}: ${redemption.error}`);
         } catch (updateError: unknown) {
           logger.error(
-            `Failed to update redemption ${redemption.id} after VAA error: ${getErrorMessage(updateError)}`,
+            `Failed to update redemption ${redemption.id} after VAA error: ${toSerializableError(updateError).message}`,
           );
         }
       }
@@ -258,7 +249,7 @@ export class L2RedemptionService {
             logger.error(`Redemption ${redemption.id} missing VAA bytes, cannot submit to L1.`);
           } catch (updateError: unknown) {
             logger.error(
-              `Failed to update redemption ${redemption.id} after missing VAA bytes: ${getErrorMessage(updateError)}`,
+              `Failed to update redemption ${redemption.id} after missing VAA bytes: ${toSerializableError(updateError).message}`,
             );
           }
           continue;
@@ -286,7 +277,7 @@ export class L2RedemptionService {
             );
           } catch (updateError: unknown) {
             logger.error(
-              `Failed to update redemption ${redemption.id} after L1 success: ${getErrorMessage(updateError)}`,
+              `Failed to update redemption ${redemption.id} after L1 success: ${toSerializableError(updateError).message}`,
             );
           }
         } else {
@@ -299,14 +290,14 @@ export class L2RedemptionService {
             logger.error(`Redemption ${redemption.id} failed L1 submission.`);
           } catch (updateError: unknown) {
             logger.error(
-              `Failed to update redemption ${redemption.id} after L1 failure: ${getErrorMessage(updateError)}`,
+              `Failed to update redemption ${redemption.id} after L1 failure: ${toSerializableError(updateError).message}`,
             );
           }
         }
       } catch (error: unknown) {
         redemption.status = RedemptionStatus.FAILED;
         redemption.dates.lastActivityAt = Date.now();
-        redemption.error = getErrorMessage(error);
+        redemption.error = toSerializableError(error).message;
         redemption.logs?.push(
           `L1 submission error at ${new Date().toISOString()}: ${redemption.error}`,
         );
@@ -315,7 +306,7 @@ export class L2RedemptionService {
           logger.error(`Error submitting redemption ${redemption.id} to L1: ${redemption.error}`);
         } catch (updateError: unknown) {
           logger.error(
-            `Failed to update redemption ${redemption.id} after L1 error: ${getErrorMessage(updateError)}`,
+            `Failed to update redemption ${redemption.id} after L1 error: ${toSerializableError(updateError).message}`,
           );
         }
       }

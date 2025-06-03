@@ -3,6 +3,7 @@ import logger, { logErrorContext } from '../utils/Logger.js';
 import { L1BitcoinRedeemerABI } from '../interfaces/L1BitcoinRedeemer.js';
 import type { RedemptionRequestedEventData } from '../types/Redemption.type.js';
 import { TIMEOUTS, GAS_CONFIG, BLOCKCHAIN_CONFIG } from '../utils/Constants.js';
+import { toSerializableError } from '../types/Error.types.js';
 
 export class L1RedemptionHandler {
   private l1Provider: ethers.providers.JsonRpcProvider;
@@ -133,32 +134,15 @@ export class L1RedemptionHandler {
         return null;
       }
     } catch (error: unknown) {
-      const err = error instanceof Error ? error : new Error(String(error));
-
-      // Safely access error properties with type guards
-      const errorDetails =
-        error && typeof error === 'object' && 'error' in error ? (error as any).error : undefined;
-      const transaction =
-        error && typeof error === 'object' && 'transaction' in error
-          ? (error as any).transaction
-          : undefined;
-      const receipt =
-        error && typeof error === 'object' && 'receipt' in error
-          ? (error as any).receipt
-          : undefined;
+      const serializedError = toSerializableError(error);
 
       logErrorContext(
         JSON.stringify({
           message: 'Error in finalizeL2Redemption on L1.',
           l2TransactionHash: redemptionData.l2TransactionHash,
-          errorName: err.name,
-          errorMessage: err.message,
-          errorStack: err.stack,
-          errorDetails,
-          transaction,
-          receipt,
+          error: serializedError,
         }),
-        err,
+        error instanceof Error ? error : new Error(String(error)),
       );
       return null;
     }

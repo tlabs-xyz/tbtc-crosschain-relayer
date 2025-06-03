@@ -12,6 +12,7 @@ import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
 import { logDepositError } from '../utils/AuditLog.js';
+import { toSerializableError } from '../types/Error.types.js';
 
 import { BaseChainHandler } from './BaseChainHandler.js';
 import type { Reveal } from '../types/Reveal.type.js';
@@ -93,17 +94,13 @@ export class EVMChainHandler
             await this.initializeDeposit(deposit);
           } catch (error: unknown) {
             logErrorContext(
-              `L2 Listener | Error in DepositInitialized handler | ID: ${depositId}: ${error instanceof Error ? error.message : String(error)}`,
+              `L2 Listener | Error in DepositInitialized handler | ID: ${depositId}: ${toSerializableError(error).message}`,
               error,
             );
             logDepositError(
               depositId,
-              `Error processing L2 DepositInitialized event: ${error instanceof Error ? error.message : String(error)}`,
-              error instanceof Error
-                ? { message: error.message, stack: error.stack }
-                : typeof error === 'object' && error !== null
-                  ? (error as Record<string, unknown>)
-                  : { message: String(error) },
+              `Error processing L2 DepositInitialized event: ${toSerializableError(error).message}`,
+              toSerializableError(error),
               this.config.chainName,
             );
           }
@@ -150,7 +147,7 @@ export class EVMChainHandler
       const currentTime = Math.floor(Date.now() / 1000);
       const pastTime = currentTime - options.pastTimeInMinutes * 60;
 
-      const { startBlock, endBlock } = await this._getBlocksByTimestampEVM(
+      const { startBlock, endBlock } = await this.getBlocksByTimestampEVM(
         pastTime,
         options.latestBlock,
       );
@@ -211,23 +208,19 @@ export class EVMChainHandler
       }
     } catch (error: unknown) {
       logErrorContext(
-        `checkForPastDeposits | Error checking past EVM deposits for ${this.config.chainName}: ${error instanceof Error ? error.message : String(error)}`,
+        `checkForPastDeposits | Error checking past EVM deposits for ${this.config.chainName}: ${toSerializableError(error).message}`,
         error,
       );
       logDepositError(
         'past-check-evm',
-        `Error checking past EVM deposits: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error
-          ? { message: error.message, stack: error.stack }
-          : typeof error === 'object' && error !== null
-            ? (error as Record<string, unknown>)
-            : { message: String(error) },
+        `Error checking past EVM deposits: ${toSerializableError(error).message}`,
+        toSerializableError(error),
         this.config.chainName,
       );
     }
   }
 
-  private async _getBlocksByTimestampEVM(
+  private async getBlocksByTimestampEVM(
     timestamp: number,
     latestBlock: number,
   ): Promise<{
@@ -236,7 +229,7 @@ export class EVMChainHandler
   }> {
     if (!this.l2Provider) {
       logger.warn(
-        `_getBlocksByTimestampEVM | L2 Provider not available for ${this.config.chainName}. Returning default range.`,
+        `getBlocksByTimestampEVM | L2 Provider not available for ${this.config.chainName}. Returning default range.`,
       );
       return {
         startBlock: this.config.l2StartBlock ?? 0,
@@ -252,13 +245,13 @@ export class EVMChainHandler
 
     if (high < low) {
       logger.warn(
-        `_getBlocksByTimestampEVM | latestBlock (${high}) is less than START_BLOCK (${low}). Returning START_BLOCK for both range ends.`,
+        `getBlocksByTimestampEVM | latestBlock (${high}) is less than START_BLOCK (${low}). Returning START_BLOCK for both range ends.`,
       );
       return { startBlock: START_BLOCK, endBlock: START_BLOCK };
     }
 
     logger.debug(
-      `_getBlocksByTimestampEVM | Starting binary search for timestamp ${timestamp} between blocks ${low} and ${high}`,
+      `getBlocksByTimestampEVM | Starting binary search for timestamp ${timestamp} between blocks ${low} and ${high}`,
     );
 
     try {
@@ -292,7 +285,7 @@ export class EVMChainHandler
       }
     } catch (error) {
       logErrorContext(
-        `_getBlocksByTimestampEVM | Error during binary search for ${this.config.chainName}: ${error}`,
+        `getBlocksByTimestampEVM | Error during binary search for ${this.config.chainName}: ${error}`,
         error,
       );
       startBlock = START_BLOCK;
@@ -302,7 +295,7 @@ export class EVMChainHandler
     const endBlock = Math.max(startBlock, currentLatestBlock);
 
     logger.debug(
-      `_getBlocksByTimestampEVM | Binary search result for ${this.config.chainName}: startBlock=${startBlock}, endBlock=${endBlock}`,
+      `getBlocksByTimestampEVM | Binary search result for ${this.config.chainName}: startBlock=${startBlock}, endBlock=${endBlock}`,
     );
     return { startBlock, endBlock };
   }

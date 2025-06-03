@@ -20,6 +20,7 @@ import {
   PROTOCOL_CONFIG,
   type SupportedPayloadName,
 } from '../utils/Constants.js';
+import { toSerializableError } from '../types/Error.types.js';
 
 type ParsedVaaWithPayload = VAA<'TokenBridge:Transfer'> | VAA<'TokenBridge:TransferWithPayload'>;
 
@@ -152,9 +153,8 @@ export class WormholeVaaService {
     try {
       receipt = await this.l2Provider.getTransactionReceipt(l2TransactionHash);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       logErrorContext(
-        `Failed to get L2 transaction receipt for ${l2TransactionHash}. Original error: ${errorMessage}`,
+        `Failed to get L2 transaction receipt for ${l2TransactionHash}. Original error: ${toSerializableError(error).message}`,
         error,
       );
       return null;
@@ -239,7 +239,7 @@ export class WormholeVaaService {
           break; // Successfully got VAA, exit loop
         }
       } catch (error: unknown) {
-        lastError = error instanceof Error ? error : new Error(String(error));
+        lastError = error instanceof Error ? error : new Error(toSerializableError(error).message);
         // Continue trying next discriminator
       }
     }
@@ -322,9 +322,8 @@ export class WormholeVaaService {
         return true;
       }
     } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : String(e);
       logErrorContext(
-        `Error checking VAA completion on L1 (${targetL1ChainName}): ${errorMessage}`,
+        `Error checking VAA completion on L1 (${targetL1ChainName}): ${toSerializableError(e).message}`,
         e,
       );
       return false;

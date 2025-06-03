@@ -7,6 +7,7 @@ import { type DepositStatus } from '../types/DepositStatus.enum.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import { DepositStore } from '../utils/DepositStore.js';
+import { toSerializableError } from '../types/Error.types.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -103,12 +104,7 @@ export class EndpointController {
 
       // Log error to audit log
       const depositId = req.body.fundingTx?.txHash || 'unknown';
-      const errorExtra =
-        error instanceof Error
-          ? { message: error.message, stack: error.stack }
-          : typeof error === 'object' && error !== null
-            ? (error as Record<string, unknown>)
-            : { message: String(error) };
+      const errorExtra = toSerializableError(error);
       logDepositError(depositId, 'Error handling reveal endpoint', errorExtra, chainName);
       logApiRequest(`/api/${chainName}/reveal`, 'POST', depositId, {}, 500, chainName);
 
@@ -166,12 +162,7 @@ export class EndpointController {
 
       // Log error to audit log
       const depositIdFromParam = req.params.depositId || 'unknown';
-      const errorExtra =
-        error instanceof Error
-          ? { message: error.message, stack: error.stack }
-          : typeof error === 'object' && error !== null
-            ? (error as Record<string, unknown>)
-            : { message: String(error) };
+      const errorExtra = toSerializableError(error);
       logDepositError(depositIdFromParam, 'Error getting deposit status', errorExtra, chainName);
       logApiRequest(
         `/api/${chainName}/deposit/${depositIdFromParam}`,

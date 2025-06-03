@@ -3,6 +3,7 @@ import CustomResponse from '../helpers/CustomResponse.helper.js';
 import { logErrorContext } from '../utils/Logger.js';
 import { prisma } from '../utils/prisma.js';
 import { appConfig } from '../config/app.config.js';
+import { toSerializableError } from '../types/Error.types.js';
 
 // Type for Prisma where clause for audit logs
 interface AuditLogWhereClause {
@@ -134,9 +135,13 @@ export default class Utils {
         },
       });
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const serializedError = toSerializableError(error);
       logErrorContext('Error retrieving audit logs:', error);
-      return response.custom(500, 'Error retrieving audit logs: ' + errorMessage, error);
+      return response.custom(
+        500,
+        'Error retrieving audit logs: ' + serializedError.message,
+        serializedError,
+      );
     }
   };
 }
