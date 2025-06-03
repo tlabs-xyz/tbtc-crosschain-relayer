@@ -1,6 +1,7 @@
 import { CallData } from 'starknet';
 import { ethers } from 'ethers';
 import * as bitcoin from 'bitcoinjs-lib';
+import logger from './Logger';
 
 /**
  * Validates a StarkNet address.
@@ -26,7 +27,7 @@ export function validateStarkNetAddress(address: string): boolean {
     // Length of a felt252 hex string can be up to 64 characters after '0x'.
     // Smallest is '0x0'.
     return address.length > 2 && address.length <= 66;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -100,7 +101,7 @@ export function extractAddressFromBitcoinScript(script: Buffer | string): string
     }
     return null;
   } catch (error) {
-    console.error('Error extracting address from Bitcoin script:', error);
+    logger.error('Error extracting address from Bitcoin script:', error);
     return null;
   }
 }
