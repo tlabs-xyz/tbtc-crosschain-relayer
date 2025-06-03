@@ -2,8 +2,9 @@ import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import logger, { logErrorContext } from './Logger.js';
 import { prisma } from '../utils/prisma.js';
+import type { Prisma } from '@prisma/client';
 
-function serializeDeposit(deposit: Deposit): any {
+function serializeDeposit(deposit: Deposit): Prisma.DepositCreateInput {
   // Only JSON fields need to be stringified for Prisma Json type
   return {
     ...deposit,
@@ -22,8 +23,8 @@ export class DepositStore {
         data: serializeDeposit(deposit),
       });
       logger.info(`Deposit created: ${deposit.id}`);
-    } catch (err: any) {
-      if (err.code === 'P2002') {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         logger.warn(`Deposit already exists: ${deposit.id}`);
       } else {
         logErrorContext(`Failed to create deposit ${deposit.id}:`, err);
@@ -67,7 +68,7 @@ export class DepositStore {
 
   static async getByStatus(status: DepositStatus, chainId?: string): Promise<Deposit[]> {
     try {
-      const whereClause: any = { status };
+      const whereClause: Prisma.DepositWhereInput = { status };
       if (chainId) {
         whereClause.chainId = chainId;
       }
@@ -86,8 +87,8 @@ export class DepositStore {
     try {
       await prisma.deposit.delete({ where: { id } });
       logger.info(`Deposit deleted: ${id}`);
-    } catch (err: any) {
-      if (err.code === 'P2025') {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2025') {
         logger.warn(`Deposit not found for delete: ${id}`);
       } else {
         logErrorContext(`Failed to delete deposit ${id}:`, err);

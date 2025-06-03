@@ -15,6 +15,11 @@ import {
 } from './AuditLog.js';
 import { type Reveal } from '../types/Reveal.type.js';
 
+// Type for transaction objects with hash property
+interface TransactionWithHash {
+  hash: string;
+}
+
 /**
  * @name createDeposit
  * @description Creates a new deposit object with the data provided by the event listener.
@@ -24,8 +29,8 @@ import { type Reveal } from '../types/Reveal.type.js';
  *
  * @param {FundingTransaction} fundingTx - The Bitcoin funding transaction.
  * @param {Reveal} reveal - An object containing reveal parameters related to the Bitcoin deposit.
- * @param {any} l2DepositOwner - The owner of the deposit on the L2 network.
- * @param {any} l2Sender - The sender address on the L2 network.
+ * @param {string} l2DepositOwner - The owner of the deposit on the L2 network.
+ * @param {string} l2Sender - The sender address on the L2 network.
  * @param {string} chainId - The chain ID of the deposit.
  *
  * @returns {Deposit} A structured deposit object containing detailed information for various uses in the system.
@@ -34,8 +39,8 @@ import { type Reveal } from '../types/Reveal.type.js';
 export const createDeposit = (
   fundingTx: FundingTransaction,
   reveal: Reveal,
-  l2DepositOwner: any,
-  l2Sender: any,
+  l2DepositOwner: string,
+  l2Sender: string,
   chainId: string,
 ): Deposit => {
   const fundingTxHash = getFundingTxHash(fundingTx);
@@ -108,9 +113,9 @@ export const createDeposit = (
  * records the finalization timestamp, and stores the finalization transaction hash in the deposit object.
  * The updated deposit object is then written to the JSON storage.
  * @param {Deposit} deposit - The deposit object to be updated.
- * @param {any} tx - The transaction object containing the finalization transaction hash.
+ * @param {TransactionWithHash} tx - The transaction object containing the finalization transaction hash.
  */
-export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error?: string) => {
+export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: TransactionWithHash, error?: string) => {
   const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.FINALIZED : deposit.status;
   const newFinalizationAt = tx ? Date.now() : deposit.dates.finalizationAt;
@@ -159,9 +164,9 @@ export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: any, error
  * records the initialization timestamp, and stores the initialization transaction hash in the deposit object.
  * The updated deposit object is then written to the JSON storage.
  * @param {Deposit} deposit - The deposit object to be updated.
- * @param {any} tx - The transaction object containing the initialization transaction hash.
+ * @param {TransactionWithHash} tx - The transaction object containing the initialization transaction hash.
  */
-export const updateToInitializedDeposit = async (deposit: Deposit, tx?: any, error?: string) => {
+export const updateToInitializedDeposit = async (deposit: Deposit, tx?: TransactionWithHash, error?: string) => {
   const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.INITIALIZED : deposit.status;
   const newInitializationAt = tx ? Date.now() : deposit.dates.initializationAt;
