@@ -3,8 +3,8 @@ import type { Event, EventFilter } from 'ethers';
 
 // Generic constraint for event arguments - must be an array-like structure
 export interface TypedEvent<
-  TArgsArray extends readonly unknown[] = readonly unknown[], 
-  TArgsObject = Record<string, unknown>
+  TArgsArray extends readonly unknown[] = readonly unknown[],
+  TArgsObject = Record<string, unknown>,
 > extends Event {
   args: TArgsArray & TArgsObject;
 }
@@ -30,7 +30,8 @@ export type MinEthersFactory<C, ARGS extends readonly unknown[]> = {
   deploy(...a: ARGS): Promise<C>;
 };
 
-export type GetContractTypeFromFactory<F> = F extends MinEthersFactory<infer C, readonly unknown[]> ? C : never;
+export type GetContractTypeFromFactory<F> =
+  F extends MinEthersFactory<infer C, readonly unknown[]> ? C : never;
 
 export type GetARGsTypeFromFactory<F> =
   F extends MinEthersFactory<unknown, infer ARGS> ? ARGS : never;

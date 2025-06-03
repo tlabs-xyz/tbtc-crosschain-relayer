@@ -115,7 +115,11 @@ export const createDeposit = (
  * @param {Deposit} deposit - The deposit object to be updated.
  * @param {TransactionWithHash} tx - The transaction object containing the finalization transaction hash.
  */
-export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: TransactionWithHash, error?: string) => {
+export const updateToFinalizedDeposit = async (
+  deposit: Deposit,
+  tx?: TransactionWithHash,
+  error?: string,
+) => {
   const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.FINALIZED : deposit.status;
   const newFinalizationAt = tx ? Date.now() : deposit.dates.finalizationAt;
@@ -166,7 +170,11 @@ export const updateToFinalizedDeposit = async (deposit: Deposit, tx?: Transactio
  * @param {Deposit} deposit - The deposit object to be updated.
  * @param {TransactionWithHash} tx - The transaction object containing the initialization transaction hash.
  */
-export const updateToInitializedDeposit = async (deposit: Deposit, tx?: TransactionWithHash, error?: string) => {
+export const updateToInitializedDeposit = async (
+  deposit: Deposit,
+  tx?: TransactionWithHash,
+  error?: string,
+) => {
   const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.INITIALIZED : deposit.status;
   const newInitializationAt = tx ? Date.now() : deposit.dates.initializationAt;

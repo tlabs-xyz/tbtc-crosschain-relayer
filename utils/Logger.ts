@@ -45,7 +45,11 @@ export const logErrorContext = (message: string, error: Error | unknown) => {
  * @param cronJobName - A descriptive name of the cron job (e.g., "deposit processing", "redemption processing").
  * @param error - The error object.
  */
-export function logChainCronError(chainName: string, cronJobName: string, error: Error | unknown): void {
+export function logChainCronError(
+  chainName: string,
+  cronJobName: string,
+  error: Error | unknown,
+): void {
   logErrorContext(`Error in ${cronJobName} cron job for chain ${chainName}:`, error);
 }
 
