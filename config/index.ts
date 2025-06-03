@@ -104,13 +104,22 @@ for (const [key, entry] of Object.entries(effectiveChainSchemaRegistry)) {
     hasChainConfigErrors = true;
     if (error instanceof z.ZodError) {
       const flattenedErrors = error.flatten();
-      logger.error(`Config validation failed for '${key}'. Flattened errors:`, flattenedErrors);
+      logger.error(
+        `Config validation failed for '${key}'. Flattened errors:`,
+        JSON.stringify(flattenedErrors, null, 2),
+      );
       // Also log the detailed issues
       if (flattenedErrors.fieldErrors && Object.keys(flattenedErrors.fieldErrors).length > 0) {
-        logger.error(`Field errors for '${key}':`, flattenedErrors.fieldErrors);
+        logger.error(
+          `Field errors for '${key}':`,
+          JSON.stringify(flattenedErrors.fieldErrors, null, 2),
+        );
       }
       if (flattenedErrors.formErrors && flattenedErrors.formErrors.length > 0) {
-        logger.error(`Form errors for '${key}':`, flattenedErrors.formErrors);
+        logger.error(
+          `Form errors for '${key}':`,
+          JSON.stringify(flattenedErrors.formErrors, null, 2),
+        );
       }
     } else {
       logger.error(
