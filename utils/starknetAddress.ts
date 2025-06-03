@@ -1,52 +1,100 @@
 import { CallData } from 'starknet';
 import { ethers } from 'ethers';
 import * as bitcoin from 'bitcoinjs-lib';
-import logger from './Logger';
+import logger from './Logger.js';
+
+// Constants for StarkNet address validation
+const STARKNET_ADDRESS_MIN_LENGTH = 3; // '0x0'
+const STARKNET_ADDRESS_MAX_LENGTH = 66; // '0x' + 64 hex chars (32 bytes)
+const STARKNET_FELT252_MAX_BYTES = 32; // Felt252 is at most 32 bytes
 
 /**
- * Validates a StarkNet address.
+ * Validates a StarkNet address (felt252 format).
  *
- * @param address The StarkNet address to validate.
- * @returns True if the address is valid, false otherwise.
+ * StarkNet addresses are represented as felt252 values, which are:
+ * - Hexadecimal strings starting with '0x'
+ * - At most 252 bits (31.5 bytes), but commonly padded to 32 bytes
+ * - Can be shorter if leading zeros are omitted
+ *
+ * @param address - The StarkNet address to validate
+ * @returns True if the address is valid, false otherwise
+ *
+ * @example
+ * ```typescript
+ * validateStarkNetAddress('0x123abc') // true
+ * validateStarkNetAddress('0x0') // true
+ * validateStarkNetAddress('invalid') // false
+ * ```
  */
 export function validateStarkNetAddress(address: string): boolean {
   try {
-    // starknet.js's CallData.compile accepts an address and will throw if it's invalid.
-    // We can use a simple CairoOption type for validation.
-    // A valid address is a felt252, which CallData.compile can handle.
-    CallData.compile({ addr: address });
-    // Additional check: StarkNet addresses are typically 66 characters long (0x + 64 hex chars)
-    // or shorter if leading zeros are omitted. Max length is 66.
-    // Felt252 can be up to 252 bits, so hex can be up to 63 chars + 0x prefix.
-    // Starknet.js `isAddress` or similar dedicated function would be ideal if available in future versions
-    // For now, CallData.compile is a robust check.
-    // Let's ensure it's a hex string and check length.
+    // Type and basic format validation
+    if (typeof address !== 'string' || !address) {
+      return false;
+    }
+
+    // Check if it's a valid hex string
     if (!ethers.utils.isHexString(address)) {
       return false;
     }
-    // Length of a felt252 hex string can be up to 64 characters after '0x'.
-    // Smallest is '0x0'.
-    return address.length > 2 && address.length <= 66;
-  } catch {
+
+    // Check length constraints for felt252
+    if (
+      address.length < STARKNET_ADDRESS_MIN_LENGTH ||
+      address.length > STARKNET_ADDRESS_MAX_LENGTH
+    ) {
+      return false;
+    }
+
+    // Use starknet.js CallData.compile for robust validation
+    // This will throw if the address cannot be compiled as a valid felt252
+    CallData.compile({ addr: address });
+
+    return true;
+  } catch (error) {
+    // Log validation failures for debugging (at debug level to avoid spam)
+    logger.debug(`StarkNet address validation failed for '${address}':`, error);
     return false;
   }
 }
 
 /**
- * Formats a StarkNet address (felt252) into a bytes32 hex string for L1 contract calls.
+ * Formats a StarkNet address (felt252) into a standardized bytes32 hex string for L1 contract calls.
  *
- * @param address The StarkNet address to format.
- * @returns The address formatted as a bytes32 hex string.
- * @throws If the address is invalid or cannot be formatted.
+ * This function ensures the address is exactly 32 bytes (64 hex chars + '0x' prefix)
+ * by padding with leading zeros if necessary. This is required for Ethereum smart
+ * contract interactions where addresses must be bytes32.
+ *
+ * @param address - The StarkNet address to format (felt252 hex string)
+ * @returns The address formatted as a bytes32 hex string (66 chars total)
+ * @throws Error if the address is invalid or cannot be formatted
+ *
+ * @example
+ * ```typescript
+ * formatStarkNetAddressForContract('0x123')
+ * // Returns: '0x0000000000000000000000000000000000000000000000000000000000000123'
+ * ```
  */
 export function formatStarkNetAddressForContract(address: string): string {
   if (!validateStarkNetAddress(address)) {
-    throw new Error(`Invalid StarkNet address: ${address}`);
+    throw new Error(`Invalid StarkNet address for contract formatting: ${address}`);
   }
-  // StarkNet addresses (felt252) are already less than or equal to 32 bytes.
-  // We need to pad them to ensure they are exactly 32 bytes.
-  // ethers.utils.hexZeroPad expects a hex string.
-  return ethers.utils.hexZeroPad(address, 32);
+
+  try {
+    // Ensure exactly 32 bytes (64 hex chars) with leading zero padding
+    const formatted = ethers.utils.hexZeroPad(address, STARKNET_FELT252_MAX_BYTES);
+
+    // Verify the formatted result is still a valid StarkNet address
+    if (!ethers.utils.isHexString(formatted) || formatted.length !== 66) {
+      throw new Error(`Failed to format address to bytes32: result length ${formatted.length}`);
+    }
+
+    return formatted;
+  } catch (error) {
+    const errorMsg = `Failed to format StarkNet address '${address}' for contract: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    logger.error(errorMsg);
+    throw new Error(errorMsg);
+  }
 }
 
 /**
