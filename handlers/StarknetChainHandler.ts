@@ -45,15 +45,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       logger.info(`StarknetChainHandler constructed and validated for ${this.config.chainName}`);
     } catch (error: unknown) {
       logger.error(
-        `Invalid StarkNet configuration for ${config.chainName}: ${error instanceof Error ? error.message : String(error)}`,
-        {
-          zodErrors:
-            error instanceof Error && 'errors' in error
-              ? (error as { errors?: unknown }).errors
-              : undefined,
-        },
+        `Invalid StarkNet configuration for ${config.chainName}: ${toSerializableError(error).message}`,
       );
-      // Throw a new error to halt initialization if config is invalid
       throw new Error(
         `Invalid StarkNet configuration for ${config.chainName}. Please check logs for details.`,
       );
@@ -122,13 +115,14 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         );
       }
     } catch (error: unknown) {
-      logger.error(
-        `Failed to instantiate StarkGate L1 contract instances for ${this.config.chainName}: ${error instanceof Error ? error.message : String(error)}`,
+      logErrorContext(
+        `Failed to instantiate StarkGate L1 contract instances for ${this.config.chainName}: ${toSerializableError(error).message}`,
         error,
       );
-      throw new Error(
-        `Failed to instantiate StarkGate L1 contract instances for ${this.config.chainName}. Error: ${error instanceof Error ? error.message : String(error)}`,
+      logger.error(
+        `Failed to instantiate StarkGate L1 contract instances for ${this.config.chainName}. Error: ${toSerializableError(error).message}`,
       );
+      throw error;
     }
 
     if (this.config.l2Rpc && this.config.starknetPrivateKey) {
@@ -192,8 +186,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     if (this.config.l2StartBlock > 0) {
       this.checkForPastL1DepositorEvents({ fromBlock: this.config.l2StartBlock }).catch((error) => {
-        logger.error(
-          `Error during initial scan for past L1 Depositor bridge events for ${this.config.chainName}: ${error instanceof Error ? error.message : String(error)}`,
+        logErrorContext(
+          `Error during initial scan for past L1 Depositor bridge events for ${this.config.chainName}: ${toSerializableError(error).message}`,
           error,
         );
       });
@@ -257,8 +251,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         );
       }
     } catch (error: unknown) {
-      logger.error(
-        `Error querying past TBTCBridgedToStarkNet L1 events for ${this.config.chainName}: ${error instanceof Error ? error.message : String(error)}`,
+      logErrorContext(
+        `Error querying past TBTCBridgedToStarkNet L1 events for ${this.config.chainName}: ${toSerializableError(error).message}`,
         error,
       );
     }
@@ -324,8 +318,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         `${logPrefix} Deposit updated to BRIDGED. ID: ${depositId}. L1 Tx: ${transactionHash}`,
       );
     } catch (error: unknown) {
-      logger.error(
-        `Error processing TBTCBridgedToStarkNet event for ${this.config.chainName}: ${error instanceof Error ? error.message : String(error)}`,
+      logErrorContext(
+        `Error processing TBTCBridgedToStarkNet event for ${this.config.chainName}: ${toSerializableError(error).message}`,
         error,
       );
     }
@@ -455,7 +449,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         return undefined;
       }
     } catch (error: unknown) {
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = toSerializableError(error).message;
       logger.error(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
       logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
       logDepositError(
@@ -576,7 +570,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         return undefined;
       }
     } catch (error: unknown) {
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = toSerializableError(error).message;
       logger.error(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
       logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
       logDepositError(
@@ -659,21 +653,20 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         return false;
       }
     } catch (error: unknown) {
-      logger.error(
-        `Error checking if deposit ${deposit.id} has been minted on tBTC: ${error instanceof Error ? error.message : String(error)}`,
+      logErrorContext(
+        `Error checking if deposit ${deposit.id} has been minted on tBTC: ${toSerializableError(error).message}`,
         error,
       );
-      logErrorContext(
-        `Error checking if deposit ${deposit.id} has been minted on tBTC: ${error instanceof Error ? error.message : String(error)}`,
-        error,
+      logger.error(
+        `Error checking if deposit ${deposit.id} has been minted on tBTC: ${toSerializableError(error).message}`,
       );
       logDepositError(
         deposit.id,
-        `Error checking if deposit has been minted on tBTC: ${error instanceof Error ? error.message : String(error)}`,
+        `Error checking if deposit has been minted on tBTC: ${toSerializableError(error).message}`,
         toSerializableError(error),
         deposit.chainName,
       );
-      return false; // Assume not minted on error
+      return false;
     }
   }
 }
