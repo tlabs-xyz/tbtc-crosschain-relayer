@@ -16,4 +16,5 @@ export const starknetTestnetChainInput: StarknetChainInput = {
 
   // Required by StarknetChainBaseSchema
   starknetPrivateKey: getEnv('CHAIN_STARKNETTESTNET_PRIVATE_KEY'),
+  starknetDeployerAddress: getEnv('CHAIN_STARKNETTESTNET_DEPLOYER_ADDRESS'),
 };
