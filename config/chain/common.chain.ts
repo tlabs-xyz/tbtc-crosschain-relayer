@@ -1,6 +1,5 @@
 import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
-import { z } from 'zod';
-import { getEnv } from '../../utils/Env.js';
+import { type z } from 'zod';
 
 type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 
@@ -11,7 +10,6 @@ export const commonChainInput: CommonChainInput = {
   l1BitcoinRedeemerAddress: '0x2222222222222222222222222222222222222222',
   l2BitcoinRedeemerAddress: '0x3333333333333333333333333333333333333333',
   l2WormholeGatewayAddress: '0x4444444444444444444444444444444444444444',
-  privateKey: getEnv('CHAIN_SEPOLIATESTNET_PRIVATE_KEY'),
   l2ContractAddress: '0x5555555555555555555555555555555555555555',
   l2WormholeChainId: 10001,
   l2WsRpc: 'wss://sepolia.arbitrum.io/feed',

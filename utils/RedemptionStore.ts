@@ -2,8 +2,37 @@ import type { Redemption, RedemptionStatus } from '../types/Redemption.type.js';
 import logger, { logErrorContext } from './Logger.js';
 import { ethers } from 'ethers';
 import { prisma } from '../utils/prisma.js';
+import type { JsonValue, InputJsonValue } from '@prisma/client/runtime/library';
 
-function serializeRedemptionData(redemption: Redemption): any {
+// Interface for the serialized data blob that gets stored in the database
+interface SerializedRedemptionData {
+  event?: {
+    walletPubKeyHash: string;
+    mainUtxo: {
+      txHash: string;
+      txOutputIndex: number;
+      txOutputValue: string;
+    };
+    redeemerOutputScript: string;
+    amount: string; // BigNumber serialized as string
+    l2TransactionHash: string;
+  };
+  vaaBytes?: string | null;
+  vaaStatus?: RedemptionStatus;
+  l1SubmissionTxHash?: string | null;
+  error?: string | null;
+  dates?: {
+    createdAt: number;
+    vaaFetchedAt: number | null;
+    l1SubmittedAt: number | null;
+    completedAt: number | null;
+    lastActivityAt: number;
+  };
+  logs?: string[];
+  [key: string]: unknown; // Index signature for Prisma JSON compatibility
+}
+
+function serializeRedemptionData(redemption: Redemption): InputJsonValue {
   // Clone the redemption object and remove top-level fields that are separate columns in Prisma
   const dataBlob: Partial<Redemption> = { ...redemption };
   delete dataBlob.id;
@@ -11,24 +40,42 @@ function serializeRedemptionData(redemption: Redemption): any {
   delete dataBlob.status;
 
   // Handle BigNumber serialization within the remaining dataBlob parts
-  const r = JSON.parse(JSON.stringify(dataBlob)); // Basic deep clone for further manipulation
+  const r = JSON.parse(JSON.stringify(dataBlob)) as SerializedRedemptionData; // Basic deep clone for further manipulation
   if (r.event) {
-    if (r.event.amount && ethers.BigNumber.isBigNumber(r.event.amount)) {
-      r.event.amount = r.event.amount.toString();
+    if (r.event.amount && ethers.BigNumber.isBigNumber(dataBlob.event?.amount)) {
+      r.event.amount = (dataBlob.event.amount as ethers.BigNumber).toString();
     }
     if (
       r.event.mainUtxo &&
       r.event.mainUtxo.txOutputValue &&
-      ethers.BigNumber.isBigNumber(r.event.mainUtxo.txOutputValue)
+      dataBlob.event?.mainUtxo &&
+      ethers.BigNumber.isBigNumber(dataBlob.event.mainUtxo.txOutputValue)
     ) {
-      r.event.mainUtxo.txOutputValue = r.event.mainUtxo.txOutputValue.toString();
+      r.event.mainUtxo.txOutputValue = (
+        dataBlob.event.mainUtxo.txOutputValue as ethers.BigNumber
+      ).toString();
     }
   }
-  return r; // This is the object to be stored in the 'data' JSON field
+  return r as InputJsonValue; // This is the object to be stored in the 'data' JSON field
 }
 
-function deserializeRedemptionData(dataBlob: any): Omit<Redemption, 'id' | 'chainId' | 'status'> {
-  const partial: any = { ...dataBlob }; // Clone the data blob from DB
+function isSerializedRedemptionData(data: JsonValue): data is SerializedRedemptionData & JsonValue {
+  return typeof data === 'object' && data !== null && !Array.isArray(data);
+}
+
+function deserializeRedemptionData(
+  dataBlob: JsonValue,
+): Omit<Redemption, 'id' | 'chainId' | 'status'> {
+  if (!isSerializedRedemptionData(dataBlob)) {
+    throw new Error('Invalid serialized redemption data format');
+  }
+
+  // Ensure dataBlob is an object before spreading
+  if (typeof dataBlob !== 'object' || dataBlob === null || Array.isArray(dataBlob)) {
+    throw new Error('Invalid serialized redemption data format');
+  }
+
+  const partial = { ...dataBlob } as unknown as Partial<Redemption>; // Clone the data blob from DB
 
   if (partial.event) {
     if (partial.event.amount && typeof partial.event.amount === 'string') {
@@ -47,14 +94,14 @@ export class RedemptionStore {
       await prisma.redemption.create({
         data: {
           id: redemption.id,
-          chainId: redemption.chainId,
+          chainName: redemption.chainId, // Note: using chainName in DB but chainId in code for now
           status: redemption.status.toString(),
           data: serializeRedemptionData(redemption as Redemption), // Pass the full object for serialization logic
         },
       });
       logger.info(`Redemption created: ${redemption.id}`);
-    } catch (err: any) {
-      if (err.code === 'P2002') {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         logger.warn(`Redemption already exists: ${redemption.id}`);
       } else {
         logErrorContext(`Failed to create redemption ${redemption.id}:`, err);
@@ -65,20 +112,20 @@ export class RedemptionStore {
 
   static async update(redemption: Redemption): Promise<void> {
     try {
-      const result = await prisma.redemption.update({
+      await prisma.redemption.update({
         where: {
           id: redemption.id,
         },
         data: {
-          chainId: redemption.chainId,
+          chainName: redemption.chainId, // Note: using chainName in DB but chainId in code for now
           status: redemption.status.toString(),
           data: serializeRedemptionData(redemption),
         },
       });
 
       logger.info(`Redemption updated: ${redemption.id}`);
-    } catch (err: any) {
-      if (err.code === 'P2025') {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2025') {
         logger.warn(`Redemption ${redemption.id} not found for update.`);
         throw new Error(`Redemption ${redemption.id} update failed. Record not found.`);
       }
@@ -96,7 +143,7 @@ export class RedemptionStore {
 
       return {
         id: record.id,
-        chainId: record.chainId,
+        chainId: record.chainName, // Note: mapping chainName from DB back to chainId in code
         status: record.status as unknown as RedemptionStatus,
         ...deserializedBlobParts,
       } as Redemption;
@@ -109,11 +156,11 @@ export class RedemptionStore {
   static async getAll(): Promise<Redemption[]> {
     try {
       const records = await prisma.redemption.findMany();
-      return records.map((record: any) => {
+      return records.map((record) => {
         const deserializedBlobParts = deserializeRedemptionData(record.data);
         return {
           id: record.id,
-          chainId: record.chainId,
+          chainId: record.chainName, // Note: mapping chainName from DB back to chainId in code
           status: record.status as unknown as RedemptionStatus,
           ...deserializedBlobParts,
         } as Redemption;
@@ -126,16 +173,16 @@ export class RedemptionStore {
 
   static async getByStatus(status: RedemptionStatus, chainId?: string): Promise<Redemption[]> {
     try {
-      const whereClause: any = { status: status.toString() };
+      const whereClause: { status: string; chainName?: string } = { status: status.toString() };
       if (chainId) {
-        whereClause.chainId = chainId;
+        whereClause.chainName = chainId; // Note: using chainName in DB query
       }
       const records = await prisma.redemption.findMany({ where: whereClause });
-      return records.map((record: any) => {
+      return records.map((record) => {
         const deserializedBlobParts = deserializeRedemptionData(record.data);
         return {
           id: record.id,
-          chainId: record.chainId,
+          chainId: record.chainName, // Note: mapping chainName from DB back to chainId in code
           status: record.status as unknown as RedemptionStatus,
           ...deserializedBlobParts,
         } as Redemption;
@@ -153,8 +200,8 @@ export class RedemptionStore {
     try {
       await prisma.redemption.delete({ where: { id } });
       logger.info(`Redemption deleted: ${id}`);
-    } catch (err: any) {
-      if (err.code === 'P2025') {
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2025') {
         logger.warn(`Redemption not found for delete: ${id}`);
       } else {
         logErrorContext(`Failed to delete redemption ${id}:`, err);

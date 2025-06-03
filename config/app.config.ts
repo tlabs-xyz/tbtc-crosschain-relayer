@@ -5,7 +5,7 @@ import { AppConfigSchema, type AppConfig } from './schemas/app.schema.js';
 export const appConfig: AppConfig = (() => {
   try {
     return AppConfigSchema.parse(process.env);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       logger.error('Application configuration validation failed:', error.flatten());
     } else {

@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import { type ethers } from 'ethers';
 
 /**
  * Enum representing the possible states of a redemption process

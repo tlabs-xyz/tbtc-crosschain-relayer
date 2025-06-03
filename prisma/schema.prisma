@@ -1,3 +1,6 @@
+//
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,11 +15,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// TODO: Consider renaming chainId to chainName
-
 model Deposit {
   id        String   @id
-  chainId   String
+  chainName String
   fundingTxHash String
   outputIndex Int
   hashes    Json
@@ -25,9 +26,10 @@ model Deposit {
   status    Int
   L1OutputEvent Json?
   dates     Json
+  wormholeInfo Json
   error     String?
 
-  @@index([chainId])
+  @@index([chainName])
 }
 
 model AuditLog {
@@ -37,17 +39,16 @@ model AuditLog {
   depositId  String?
   data       Json
   errorCode  Int?
-  // TODO: Consider making chainId non-nullable for consistent querying.
-  chainId    String?
+  chainName  String?
 
-  @@index([chainId])
+  @@index([chainName])
 }
 
 model Redemption {
   id        String   @id
-  chainId   String
+  chainName String
   status    String
   data      Json
 
-  @@index([chainId])
+  @@index([chainName])
 }

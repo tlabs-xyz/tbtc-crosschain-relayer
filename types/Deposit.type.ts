@@ -1,10 +1,10 @@
 import type { FundingTransaction } from './FundingTransaction.type.js';
 import type { Reveal } from './Reveal.type.js';
-import { DepositStatus } from './DepositStatus.enum.js';
+import { type DepositStatus } from './DepositStatus.enum.js';
 
 export type Deposit = {
   id: string;
-  chainId: string;
+  chainName: string;
   fundingTxHash: string;
   outputIndex: number;
   hashes: {
@@ -38,7 +38,7 @@ export type Deposit = {
     reveal: Reveal;
     l2DepositOwner: string;
     l2Sender: string;
-  };
+  } | null;
   dates: {
     createdAt: EpochTimeStamp | null;
     initializationAt: EpochTimeStamp | null;

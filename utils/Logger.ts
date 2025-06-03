@@ -1,4 +1,5 @@
 import pino from 'pino';
+import type { ErrorLike, SerializableError } from '../types/Error.types.js';
 
 const APP_NAME = (process.env.APP_NAME || 'tBTC Cross-Chain Relayer').toUpperCase();
 
@@ -29,13 +30,20 @@ export default logger;
  * @param message The primary log message.
  * @param error The error object or data.
  */
-export const logErrorContext = (message: string, error: any) => {
-  const logDetails: { err?: Error; errorData?: any } = {};
+export const logErrorContext = (message: string, error: ErrorLike): void => {
+  const logDetails: { err?: Error; errorData?: SerializableError } = {};
+
   if (error instanceof Error) {
     logDetails.err = error;
   } else {
-    logDetails.errorData = error;
+    // Convert any error-like object to a serializable format
+    logDetails.errorData = {
+      name: 'Error',
+      message: typeof error === 'string' ? error : String(error),
+      ...(error && typeof error === 'object' ? error : {}),
+    };
   }
+
   logger.error(logDetails, message);
 };
 
@@ -45,7 +53,7 @@ export const logErrorContext = (message: string, error: any) => {
  * @param cronJobName - A descriptive name of the cron job (e.g., "deposit processing", "redemption processing").
  * @param error - The error object.
  */
-export function logChainCronError(chainName: string, cronJobName: string, error: any): void {
+export function logChainCronError(chainName: string, cronJobName: string, error: ErrorLike): void {
   logErrorContext(`Error in ${cronJobName} cron job for chain ${chainName}:`, error);
 }
 
@@ -54,6 +62,6 @@ export function logChainCronError(chainName: string, cronJobName: string, error:
  * @param cronJobName - A descriptive name of the cron job (e.g., "deposit cleanup").
  * @param error - The error object.
  */
-export function logGlobalCronError(cronJobName: string, error: any): void {
+export function logGlobalCronError(cronJobName: string, error: ErrorLike): void {
   logErrorContext(`Error in global ${cronJobName} cron job:`, error);
 }

@@ -36,7 +36,6 @@ const mockReceipt = {
  */
 export class MockChainHandler implements ChainHandlerInterface {
   public config: AnyChainConfig;
-  private initialized: boolean = false;
   private deposits: Map<string, Deposit> = new Map();
   private listeners: Map<string, ((...args: any[]) => void)[]> = new Map();
   private processingDelayMs: number = 100; // Simulate processing delay
@@ -274,6 +273,9 @@ export class MockChainHandler implements ChainHandlerInterface {
       this.emitEvent('DepositInitialized', deposit.id);
       return mockReceipt;
     }
+
+    // Return undefined if deposit is not in QUEUED status
+    return undefined;
   }
 
   /**
@@ -310,6 +312,9 @@ export class MockChainHandler implements ChainHandlerInterface {
       this.emitEvent('DepositFinalized', deposit.id);
       return mockReceipt;
     }
+
+    // Return undefined if deposit is not in INITIALIZED status
+    return undefined;
   }
 
   /**
@@ -336,6 +341,15 @@ export class MockChainHandler implements ChainHandlerInterface {
       }
     }
     logger.info('MockChainHandler: Finalize deposits processing complete.');
+  }
+
+  /**
+   * Process Wormhole bridging for deposits
+   */
+  async processWormholeBridging(): Promise<void> {
+    logger.info('MockChainHandler: Processing Wormhole bridging...');
+    // Mock implementation - just log for now
+    logger.info('MockChainHandler: Wormhole bridging processing complete.');
   }
 
   /**

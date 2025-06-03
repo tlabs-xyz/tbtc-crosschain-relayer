@@ -14,63 +14,81 @@ import {
 import { L2RedemptionService } from './L2RedemptionService.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
-import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
+import { type BaseChainHandler } from '../handlers/BaseChainHandler.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 
-let effectiveChainConfigs: AnyChainConfig[] = [];
+let effectiveChainConfigs: AnyChainConfig[] | null = null;
 
-const supportedChainsEnv = process.env.SUPPORTED_CHAINS;
+// Function to get effective chain configurations
+function getEffectiveChainConfigs(): AnyChainConfig[] {
+  if (effectiveChainConfigs !== null) {
+    return effectiveChainConfigs;
+  }
 
-if (supportedChainsEnv && supportedChainsEnv.trim() !== '') {
-  const supportedChainKeys = supportedChainsEnv
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  effectiveChainConfigs = [];
+  const supportedChainsEnv = process.env.SUPPORTED_CHAINS;
 
-  if (supportedChainKeys.length > 0) {
-    logger.info(
-      `SUPPORTED_CHAINS environment variable set. Attempting to load: ${supportedChainKeys.join(', ')}`,
-    );
-    supportedChainKeys.forEach((chainKey) => {
-      const config = chainConfigs[chainKey];
-      if (config) {
-        effectiveChainConfigs.push(config);
-      } else {
-        logger.warn(
-          `Configuration for chain key '${chainKey}' specified in SUPPORTED_CHAINS not found in loaded chainConfigs. Skipping.`,
-        );
-      }
-    });
+  if (supportedChainsEnv && supportedChainsEnv.trim() !== '') {
+    const supportedChainKeys = supportedChainsEnv
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
 
-    if (effectiveChainConfigs.length === 0) {
-      logger.error(
-        'No valid chain configurations were loaded based on SUPPORTED_CHAINS. The relayer may not operate as expected. Please check your SUPPORTED_CHAINS environment variable and individual chain configuration files.',
+    if (supportedChainKeys.length > 0) {
+      logger.info(
+        `SUPPORTED_CHAINS environment variable set. Attempting to load: ${supportedChainKeys.join(', ')}`,
       );
-      // Consider process.exit(1) for non-test, non-API_ONLY_MODE environments
+      supportedChainKeys.forEach((chainKey) => {
+        const config = chainConfigs[chainKey];
+        if (config) {
+          effectiveChainConfigs!.push(config);
+        } else {
+          logger.warn(
+            `Configuration for chain key '${chainKey}' specified in SUPPORTED_CHAINS not found in loaded chainConfigs. Skipping.`,
+          );
+        }
+      });
+
+      if (effectiveChainConfigs!.length === 0) {
+        logger.error(
+          'No valid chain configurations were loaded based on SUPPORTED_CHAINS. The relayer may not operate as expected. Please check your SUPPORTED_CHAINS environment variable and individual chain configuration files.',
+        );
+        // Consider process.exit(1) for non-test, non-API_ONLY_MODE environments
+      }
+    } else {
+      logger.warn(
+        'SUPPORTED_CHAINS environment variable is set but resulted in an empty list of chains after parsing. All loaded chain configurations will be used.',
+      );
+      effectiveChainConfigs = Object.values(chainConfigs).filter(
+        (config): config is AnyChainConfig => config !== null && config !== undefined,
+      );
     }
   } else {
-    logger.warn(
-      'SUPPORTED_CHAINS environment variable is set but resulted in an empty list of chains after parsing. All loaded chain configurations will be used.',
+    logger.info(
+      'SUPPORTED_CHAINS environment variable not set or is empty. All loaded chain configurations will be used.',
     );
     effectiveChainConfigs = Object.values(chainConfigs).filter(
       (config): config is AnyChainConfig => config !== null && config !== undefined,
     );
   }
-} else {
-  logger.info(
-    'SUPPORTED_CHAINS environment variable not set or is empty. All loaded chain configurations will be used.',
-  );
-  effectiveChainConfigs = Object.values(chainConfigs).filter(
-    (config): config is AnyChainConfig => config !== null && config !== undefined,
-  );
+
+  return effectiveChainConfigs;
 }
 
-const chainConfigsArray: AnyChainConfig[] = effectiveChainConfigs;
+// Function to reset chain configs (for testing)
+export function resetChainConfigs(): void {
+  effectiveChainConfigs = null;
+}
+
+// Function to reset L2 redemption services (for testing)
+export function resetL2RedemptionServices(): void {
+  l2RedemptionServices.clear();
+}
 
 const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
 
 export const startCronJobs = () => {
-  logger.debug('Starting multi-chain cron job setup...');
+  logger.info('Starting multi-chain cron job setup...');
 
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
@@ -119,9 +137,6 @@ export const startCronJobs = () => {
           if (handler.supportsPastDepositCheck()) {
             const latestBlock = await handler.getLatestBlock();
             if (latestBlock > 0) {
-              logger.debug(
-                `Running checkForPastDeposits for ${chainName} (Latest Block/Slot: ${latestBlock})`,
-              );
               await handler.checkForPastDeposits({
                 pastTimeInMinutes: 60,
                 latestBlock: latestBlock,
@@ -131,10 +146,6 @@ export const startCronJobs = () => {
                 `Skipping checkForPastDeposits for ${chainName} - Invalid latestBlock received: ${latestBlock}`,
               );
             }
-          } else {
-            logger.debug(
-              `Skipping checkForPastDeposits for ${chainName} - Handler does not support it (e.g., using endpoint).`,
-            );
           }
         } catch (error) {
           logErrorContext(`Error in past deposits cron job for ${chainName}:`, error);
@@ -181,10 +192,12 @@ export const startCronJobs = () => {
     logger.info('Cleanup cron jobs DISABLED by environment variable ENABLE_CLEANUP_CRON.');
   }
 
-  logger.debug('Multi-chain cron job setup complete.');
+  logger.info('Multi-chain cron job setup complete.');
 };
 
 export async function initializeAllChains(): Promise<void> {
+  const chainConfigsArray = getEffectiveChainConfigs();
+
   if (chainConfigsArray.length === 0) {
     logger.warn('No chain configurations loaded. Relayer might not operate on any chain.');
     return;
@@ -208,7 +221,7 @@ export async function initializeAllChains(): Promise<void> {
         logger.info(`Successfully initialized handler for ${chainName}`);
         await handler.setupListeners();
         logger.info(`Successfully set up listeners for ${chainName}`);
-      } catch (error: any) {
+      } catch (error: unknown) {
         logErrorContext(`Failed to initialize or set up listeners for ${chainName}:`, error);
         // Decide if we should exit or continue without this chain
         // For now, logging the error and continuing
@@ -220,6 +233,8 @@ export async function initializeAllChains(): Promise<void> {
 }
 
 export async function initializeAllL2RedemptionServices(): Promise<void> {
+  const chainConfigsArray = getEffectiveChainConfigs();
+
   const evmChainConfigs = chainConfigsArray.filter(
     (config) => config.chainType === CHAIN_TYPE.EVM,
   ) as EvmChainConfig[];
@@ -234,6 +249,7 @@ export async function initializeAllL2RedemptionServices(): Promise<void> {
   logger.info('Initializing L2 Redemption Services for configured EVM chains...');
   for (const config of evmChainConfigs) {
     const chainName = config.chainName as string;
+
     if (config.enableL2Redemption) {
       if (!l2RedemptionServices.has(chainName)) {
         logger.info(`Initializing L2RedemptionService for ${chainName}...`);
@@ -245,7 +261,7 @@ export async function initializeAllL2RedemptionServices(): Promise<void> {
           logErrorContext(`Failed to initialize L2RedemptionService for ${chainName}:`, error);
         }
       } else {
-        logger.debug(`L2RedemptionService for ${chainName} already initialized.`);
+        logger.info(`L2RedemptionService for ${chainName} already initialized.`);
       }
     } else {
       logger.info(`L2RedemptionService disabled for ${chainName} by configuration.`);

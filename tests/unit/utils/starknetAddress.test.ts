@@ -52,7 +52,7 @@ describe('StarkNet Address Utilities', () => {
     });
 
     it('should return false for an address that causes compile to throw', () => {
-      const errorAddress = '0xErrorTrigger';
+      const errorAddress = '0x123abc'; // Valid hex string that will reach compile
       mockCompile.mockImplementation(() => {
         throw new Error('Cairo compilation error');
       });
@@ -91,7 +91,7 @@ describe('StarkNet Address Utilities', () => {
         throw new Error('Cairo compilation error');
       });
       expect(() => formatStarkNetAddressForContract(invalidAddress)).toThrow(
-        'Invalid StarkNet address: not-a-valid-address',
+        'Invalid StarkNet address for contract formatting: not-a-valid-address',
       );
     });
   });

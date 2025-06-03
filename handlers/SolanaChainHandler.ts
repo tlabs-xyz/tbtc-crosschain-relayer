@@ -32,7 +32,6 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
 
   constructor(config: SolanaChainConfig) {
     super(config);
-    logger.debug(`Constructing SolanaChainHandler for ${this.config.chainName}`);
     if (config.chainType !== CHAIN_TYPE.SOLANA) {
       throw new Error(`Incorrect chain type ${config.chainType} provided to SolanaChainHandler.`);
     }
@@ -43,8 +42,6 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
    * Sets up Solana connection, Anchor provider, and loads your Wormhole Gateway program.
    */
   protected initializeL2() {
-    logger.debug(`Initializing Solana L2 components for ${this.config.chainName}`);
-
     if (!this.config.l2Rpc) {
       logger.warn(
         `Solana L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`,
@@ -82,7 +79,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
       );
 
       this.ethereumWormholeContext = this.wormhole.getChain('Ethereum' as Chain);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logErrorContext(`Error initializing Solana L2 for ${this.config.chainName}`, error);
       throw error;
     }
@@ -111,7 +108,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
     }
     try {
       return await this.connection.getSlot(DEFAULT_COMMITMENT_LEVEL);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logErrorContext('Error getting latest Solana slot', error);
       return 0;
     }
@@ -139,14 +136,14 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
     const finalizedDepositReceipt = await super.finalizeDeposit(deposit);
 
     if (!finalizedDepositReceipt) {
-      return;
+      return undefined;
     }
     logger.info(`Finalizing deposit ${deposit.id} on Solana...`);
 
     const l1Receipt = finalizedDepositReceipt;
     if (!l1Receipt) {
       logger.warn(`No finalize receipt found for deposit ${deposit.id}; cannot parse logs.`);
-      return;
+      return undefined;
     }
 
     let transferSequence: string | null = null;
@@ -161,17 +158,18 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
           break;
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logErrorContext(`Error parsing L1 logs for deposit ${deposit.id}`, error);
     }
 
     if (!transferSequence) {
       logger.warn(`Could not find transferSequence in logs for deposit ${deposit.id}.`);
-      return;
+      return finalizedDepositReceipt;
     }
 
     await updateToAwaitingWormholeVAA(l1Receipt.transactionHash, deposit, transferSequence);
     logger.info(`Deposit ${deposit.id} now awaiting Wormhole VAA.`);
+    return finalizedDepositReceipt;
   }
 
   public async bridgeSolanaDeposit(deposit: Deposit): Promise<void> {
@@ -256,8 +254,8 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
       );
 
       updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid);
-    } catch (error: any) {
-      const reason = error.message || 'Unknown bridging error';
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : 'Unknown bridging error';
       logger.warn(`Wormhole bridging not ready for deposit ${deposit.id}: ${reason}`);
     }
   }

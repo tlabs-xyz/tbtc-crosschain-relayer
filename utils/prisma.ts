@@ -2,5 +2,12 @@ import { PrismaClient as PrismaClientTest } from '@prisma/client-test';
 import { PrismaClient as PrismaClientProd } from '@prisma/client';
 
 // Workaround for TypeScript deep instantiation error in multi-client setups
-export const prisma =
-  process.env.NODE_ENV === 'test' ? new PrismaClientTest() : (new PrismaClientProd() as any);
+// Use explicit type assertion to avoid union type complexity
+const createPrismaClient = (): PrismaClientProd => {
+  if (process.env.NODE_ENV === 'test') {
+    return new PrismaClientTest() as PrismaClientProd;
+  }
+  return new PrismaClientProd();
+};
+
+export const prisma = createPrismaClient();

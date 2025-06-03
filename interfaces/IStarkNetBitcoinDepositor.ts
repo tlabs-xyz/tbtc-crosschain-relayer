@@ -1,6 +1,6 @@
 import {
-  BaseContract,
-  BigNumber,
+  type BaseContract,
+  type BigNumber,
   type BigNumberish,
   type BytesLike,
   type CallOverrides,
@@ -8,10 +8,10 @@ import {
   type Overrides,
   type PayableOverrides,
   type PopulatedTransaction,
-  Signer,
-  utils,
+  type Signer,
+  type utils,
 } from 'ethers';
-import { FunctionFragment, type Result, EventFragment } from '@ethersproject/abi';
+import { type FunctionFragment, type Result, type EventFragment } from '@ethersproject/abi';
 import { type Listener, type Provider } from '@ethersproject/providers';
 import {
   type TypedEventFilter,

@@ -22,7 +22,7 @@ export const CommonChainConfigSchema = z.object({
   chainName: z.string().default('Unknown Chain'),
 
   // These are optional
-  privateKey: z.string().min(1, 'privateKey is required and must not be empty'),
+  privateKey: z.string().min(1, 'privateKey must not be empty if provided').optional(),
 
   // We expect these to remain the same for all chains
   network: z.nativeEnum(NETWORK).default(NETWORK.TESTNET),

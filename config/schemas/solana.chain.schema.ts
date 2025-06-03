@@ -14,7 +14,7 @@ const SolanaChainBaseSchema = z.object({
     })
     .min(1, 'SOLANA_PRIVATE_KEY must not be empty.'),
   solanaCommitment: z.enum(['processed', 'confirmed', 'finalized']).default('confirmed'),
-  solanaSignerKeyBase: z.string().optional(), // TODO: Optional?
+  solanaSignerKeyBase: z.string().optional(),
 });
 
 const CommonConfigForSolana = CommonChainConfigSchema.omit({ privateKey: true });

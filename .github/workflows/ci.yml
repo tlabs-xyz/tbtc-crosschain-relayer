@@ -33,13 +33,11 @@ jobs:
           node --version
           yarn install --frozen-lockfile --ignore-optional
 
-      # TODO: Enable those after fixing the linting errors
+      - name: Lint
+        run: yarn lint
 
-      # - name: Lint
-      # run: yarn lint
-
-      # - name: Format check
-      # run: yarn format
+      - name: Format check
+        run: yarn format
 
       - name: Detect unused dependencies
         run: yarn depcheck
@@ -53,9 +51,6 @@ jobs:
       - name: Start Docker Compose services
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 
-      - name: Reset database
-        run: docker compose exec -T -e NODE_OPTIONS="--max-old-space-size=1024" tbtc-relayer-dev npx prisma migrate reset --force --skip-seed
-
       - name: Wait for services to become healthy
         run: .github/scripts/wait-for-healthy-services.sh
         shell: bash
@@ -64,7 +59,6 @@ jobs:
         run: yarn test:coverage
 
       - name: Stop Docker Compose services
-        if: always()
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml down
 
       - name: Upload coverage as artifact
