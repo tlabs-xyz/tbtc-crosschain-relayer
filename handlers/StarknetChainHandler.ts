@@ -126,14 +126,23 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     if (this.config.l2Rpc && this.config.starknetPrivateKey) {
       logger.info(
-        `StarkNet L2 RPC (${this.config.l2Rpc}) and private key are configured for ${this.config.chainName}. Actual StarkNet L2 provider/account initialization will be handled in a subsequent task.`,
+        `StarkNet L2 RPC (${this.config.l2Rpc}) and private key are configured for ${this.config.chainName}. StarkNet L2 provider/account initialization will be implemented in a future iteration.`,
       );
-      // TODO: Initialize StarkNet L2 provider and account (e.g., using starknet.js RpcProvider, Account)
-      // Example:
-      // const { RpcProvider, Account } = await import('starknet');
-      // this.starknetL2Provider = new RpcProvider({ nodeUrl: this.config.l2Rpc });
-      // this.starknetL2Account = new Account(this.starknetL2Provider, this.config.starknetDeployerAddress, this.config.starknetPrivateKey);
-      // logger.info(`StarkNet L2 provider and account would be initialized here for ${this.config.chainName}`);
+      
+      // FUTURE: Initialize StarkNet L2 provider and account for direct L2 interactions
+      // This will enable:
+      // 1. Direct L2 deposit event monitoring (alternative to L1 bridge events)
+      // 2. L2 transaction validation and confirmation
+      // 3. Past L2 event scanning for missed deposits
+      // Implementation approach:
+      //   const { RpcProvider, Account } = await import('starknet');
+      //   this.starknetL2Provider = new RpcProvider({ nodeUrl: this.config.l2Rpc });
+      //   this.starknetL2Account = new Account(
+      //     this.starknetL2Provider, 
+      //     this.config.starknetDeployerAddress, 
+      //     this.config.starknetPrivateKey
+      //   );
+      //   logger.info(`StarkNet L2 provider and account initialized for ${this.config.chainName}`);
     } else {
       logger.warn(
         `StarkNet L2 RPC or starknetPrivateKey not configured for ${this.config.chainName}. Full StarkNet L2 features (direct L2 interaction) will be disabled.`,
@@ -325,12 +334,19 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
   async getLatestBlock(): Promise<number> {
     if (this.config.useEndpoint) return 0;
+    
     logger.warn(
       `StarkNet getLatestBlock NOT YET IMPLEMENTED for ${this.config.chainName}. Returning 0.`,
     );
-    // TODO: Implement logic to get the latest StarkNet block number
-    // Example: const block = await this.starknetProvider.getBlock('latest'); return block.block_number;
-    return 0; // Placeholder
+    
+    // FUTURE: Implement StarkNet L2 block number retrieval
+    // When StarkNet L2 provider is available, this should:
+    // 1. Query the latest block from StarkNet L2 RPC
+    // 2. Return the block number for past deposit scanning
+    // Example implementation:
+    //   const block = await this.starknetL2Provider.getBlock('latest');
+    //   return block.block_number;
+    return 0; // Placeholder - indicates L2 past deposit scanning not available
   }
 
   async checkForPastDeposits(_options: {
@@ -338,10 +354,23 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     latestBlock: number; // Represents block number
   }): Promise<void> {
     if (this.config.useEndpoint) return;
+    
     logger.warn(`StarkNet checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
-    // TODO: Implement logic to query past StarkNet events
-    // Example: await this.starknetProvider.getEvents({ from_block: { block_number: startBlock }, to_block: { block_number: endBlock }, address: contractAddress, keys: ['EVENT_SELECTOR'] });
-    // Need to map pastTimeInMinutes to block numbers.
+    
+    // FUTURE: Implement StarkNet L2 past event scanning
+    // When StarkNet L2 provider is available, this should:
+    // 1. Calculate start block from pastTimeInMinutes
+    // 2. Query StarkNet events between start block and latest block
+    // 3. Process any missed deposit-related events
+    // Example implementation:
+    //   const startBlock = latestBlock - Math.floor(pastTimeInMinutes * 60 / STARKNET_AVG_BLOCK_TIME);
+    //   const events = await this.starknetL2Provider.getEvents({
+    //     from_block: { block_number: startBlock },
+    //     to_block: { block_number: latestBlock },
+    //     address: this.config.l2ContractAddress,
+    //     keys: ['DEPOSIT_EVENT_SELECTOR']
+    //   });
+    //   // Process events...
   }
 
   /**
@@ -419,7 +448,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         logger.info(
           `${logPrefix} L1 finalizeDeposit transaction successful. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`,
         );
-        await updateToFinalizedDeposit(deposit, txReceipt);
+        await updateToFinalizedDeposit(deposit, { hash: txReceipt.transactionHash });
         return txReceipt;
       } else {
         const revertMsg = `${logPrefix} L1 finalizeDeposit transaction reverted. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`;
@@ -519,7 +548,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         logger.info(
           `${logPrefix} L1 initializeDeposit transaction successful. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`,
         );
-        await updateToInitializedDeposit(deposit, txReceipt);
+        await updateToInitializedDeposit(deposit, { hash: txReceipt.transactionHash });
         return txReceipt;
       } else {
         const revertMsg = `${logPrefix} L1 initializeDeposit transaction reverted. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`;
