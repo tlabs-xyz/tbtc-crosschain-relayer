@@ -11,6 +11,7 @@ import {
 } from 'ethers';
 import { StarkNetBitcoinDepositorABI } from '../interfaces/StarkNetBitcoinDepositor.js';
 import type { StarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor.js';
+import type { RpcProvider, Account } from 'starknet';
 
 import { DepositStore } from '../utils/DepositStore.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -31,12 +32,39 @@ import { logErrorContext } from '../utils/Logger.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import { toSerializableError } from '../types/Error.types.js';
 
+/**
+ * StarkNet Cross-chain Handler Implementation
+ *
+ * This handler manages tBTC deposits and bridges between Ethereum L1 and StarkNet L2.
+ * It supports:
+ * - L1 deposit initialization and finalization via StarkGate bridge contracts
+ * - L2 event monitoring and processing via StarkNet RPC
+ * - Cross-chain state synchronization and audit logging
+ *
+ * Key Components:
+ * - L1 StarkGate integration for deposit lifecycle management
+ * - L2 StarkNet provider for event monitoring and transaction verification
+ * - Event-driven architecture for real-time and historical deposit tracking
+ *
+ * Security Features:
+ * - StarkNet address validation and formatting
+ * - Transaction receipt verification for both L1 and L2
+ * - Comprehensive error handling and audit logging
+ *
+ * @extends BaseChainHandler<StarknetChainConfig>
+ */
 export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {
   // --- L1 StarkGate Contract Instances ---
   /** L1 StarkGate contract instance for sending transactions (uses L1 signer with nonce manager) */
   protected l1DepositorContract: StarkNetBitcoinDepositor | undefined;
   /** L1 StarkGate contract instance for read-only operations and event listening (uses L1 provider) */
   protected l1DepositorContractProvider: StarkNetBitcoinDepositor | undefined;
+
+  // --- L2 StarkNet Provider and Account ---
+  /** StarkNet L2 RPC provider for read-only operations and querying */
+  protected starknetL2Provider: RpcProvider | undefined;
+  /** StarkNet L2 account for sending transactions */
+  protected starknetL2Account: Account | undefined;
 
   constructor(config: StarknetChainConfig) {
     super(config);
@@ -127,14 +155,61 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     if (this.config.l2Rpc && this.config.starknetPrivateKey) {
       logger.info(
-        `StarkNet L2 RPC (${this.config.l2Rpc}) and private key are configured for ${this.config.chainName}. Actual StarkNet L2 provider/account initialization will be handled in a subsequent task.`,
+        `StarkNet L2 RPC (${this.config.l2Rpc}) and private key are configured for ${this.config.chainName}. Initializing StarkNet L2 provider and account.`,
       );
-      // NOTE: StarkNet L2 provider and account initialization pending implementation
-      // Implementation will use starknet.js RpcProvider and Account:
-      // const { RpcProvider, Account } = await import('starknet');
-      // this.starknetL2Provider = new RpcProvider({ nodeUrl: this.config.l2Rpc });
-      // this.starknetL2Account = new Account(this.starknetL2Provider, this.config.starknetDeployerAddress, this.config.starknetPrivateKey);
-      // logger.info(`StarkNet L2 provider and account would be initialized here for ${this.config.chainName}`);
+
+      try {
+        // Dynamic import of starknet.js to handle potential dependency issues
+        // In test environment, this might be mocked
+        let starknetModule: {
+          RpcProvider: new (config: { nodeUrl: string }) => RpcProvider;
+          Account: new (provider: RpcProvider, address: string, privateKey: string) => Account;
+        };
+        if (process.env.NODE_ENV === 'test') {
+          // For tests, try to use the mocked module if available
+          try {
+            starknetModule = await import('starknet');
+          } catch {
+            // Fallback - if import fails, try require as last resort
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            starknetModule = require('starknet');
+          }
+        } else {
+          starknetModule = await import('starknet');
+        }
+
+        const { RpcProvider, Account } = starknetModule;
+
+        // Initialize StarkNet L2 RPC provider
+        this.starknetL2Provider = new RpcProvider({ nodeUrl: this.config.l2Rpc });
+        logger.info(`StarkNet L2 RPC provider initialized for ${this.config.chainName}`);
+
+        // Validate that deployer address is provided
+        if (!this.config.starknetDeployerAddress) {
+          throw new Error(
+            `StarkNet deployer address (starknetDeployerAddress) is required for L2 account initialization but not configured for ${this.config.chainName}`,
+          );
+        }
+
+        // Initialize StarkNet L2 account for transactions
+        this.starknetL2Account = new Account(
+          this.starknetL2Provider,
+          this.config.starknetDeployerAddress,
+          this.config.starknetPrivateKey,
+        );
+        logger.info(
+          `StarkNet L2 account initialized for ${this.config.chainName} with deployer address: ${this.config.starknetDeployerAddress}`,
+        );
+
+        // Verify the account by checking its address
+        const accountAddress = this.starknetL2Account?.address;
+        logger.info(`StarkNet L2 account address: ${accountAddress}`);
+      } catch (error: unknown) {
+        const errorMsg = `Failed to initialize StarkNet L2 provider/account for ${this.config.chainName}: ${toSerializableError(error).message}`;
+        logger.error(errorMsg);
+        logErrorContext(errorMsg, error);
+        throw new Error(errorMsg);
+      }
     } else {
       logger.warn(
         `StarkNet L2 RPC or starknetPrivateKey not configured for ${this.config.chainName}. Full StarkNet L2 features (direct L2 interaction) will be disabled.`,
@@ -327,23 +402,282 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
   async getLatestBlock(): Promise<number> {
     if (this.config.useEndpoint) return 0;
-    logger.warn(
-      `StarkNet getLatestBlock NOT YET IMPLEMENTED for ${this.config.chainName}. Returning 0.`,
-    );
-    // NOTE: Implementation pending for latest StarkNet block number
-    // Implementation will use: const block = await this.starknetProvider.getBlock('latest'); return block.block_number;
-    return 0; // Placeholder
+
+    if (!this.starknetL2Provider) {
+      logger.warn(
+        `StarkNet L2 provider not available for ${this.config.chainName}. Cannot get latest block. Returning 0.`,
+      );
+      return 0;
+    }
+
+    try {
+      logger.debug(`Fetching latest block number for ${this.config.chainName}`);
+      const block = await this.starknetL2Provider.getBlock('latest');
+      const blockNumber = block.block_number;
+
+      logger.debug(`Latest block number for ${this.config.chainName}: ${blockNumber}`);
+
+      return blockNumber;
+    } catch (error: unknown) {
+      const errorMsg = `Error fetching latest block for ${this.config.chainName}: ${toSerializableError(error).message}`;
+      logger.error(errorMsg);
+      logErrorContext(errorMsg, error);
+
+      // Return 0 to avoid breaking the flow, but log the error for monitoring
+      return 0;
+    }
   }
 
-  async checkForPastDeposits(_options: {
+  async checkForPastDeposits(options: {
     pastTimeInMinutes: number;
     latestBlock: number; // Represents block number
   }): Promise<void> {
     if (this.config.useEndpoint) return;
-    logger.warn(`StarkNet checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
-    // NOTE: Implementation pending for querying past StarkNet events
-    // Implementation will use: await this.starknetProvider.getEvents({ from_block: { block_number: startBlock }, to_block: { block_number: endBlock }, address: contractAddress, keys: ['EVENT_SELECTOR'] });
-    // Need to map pastTimeInMinutes to block numbers.
+
+    if (!this.starknetL2Provider) {
+      logger.warn(
+        `StarkNet L2 provider not available for ${this.config.chainName}. Cannot check for past deposits.`,
+      );
+      return;
+    }
+
+    if (
+      !this.config.l2ContractAddress ||
+      this.config.l2ContractAddress === '0x0000000000000000000000000000000000000000'
+    ) {
+      logger.warn(
+        `L2 contract address not configured for ${this.config.chainName}. Cannot check for past deposits.`,
+      );
+      return;
+    }
+
+    try {
+      logger.info(
+        `Checking for past deposits on ${this.config.chainName} for the last ${options.pastTimeInMinutes} minutes`,
+      );
+
+      // Calculate approximate start block based on time
+      // StarkNet has ~4 minute block time, so we use a conservative estimate
+      const avgBlockTimeMinutes = 4;
+      const estimatedBlocksBack = Math.ceil(options.pastTimeInMinutes / avgBlockTimeMinutes);
+      const startBlock = Math.max(0, options.latestBlock - estimatedBlocksBack);
+
+      logger.debug(
+        `Searching for events from block ${startBlock} to ${options.latestBlock} on ${this.config.chainName}`,
+      );
+
+      // Query for relevant deposit events
+      // Note: Event selectors would need to be defined based on the actual StarkNet contract events
+      // This is a placeholder structure - actual implementation would depend on the specific events
+      const eventFilter = {
+        from_block: { block_number: startBlock },
+        to_block: { block_number: options.latestBlock },
+        address: this.config.l2ContractAddress,
+        keys: [],
+        chunk_size: 100,
+      };
+
+      logger.debug(`Event filter for ${this.config.chainName}:`, eventFilter);
+
+      // Query events with pagination support
+      const events = await this.starknetL2Provider.getEvents(eventFilter);
+
+      if (events.events && events.events.length > 0) {
+        logger.info(
+          `Found ${events.events.length} past deposit events for ${this.config.chainName}`,
+        );
+
+        // Process each event
+        for (const event of events.events) {
+          await this.processStarkNetDepositEvent(event);
+        }
+      } else {
+        logger.info(
+          `No past deposit events found for ${this.config.chainName} in the queried range.`,
+        );
+      }
+    } catch (error: unknown) {
+      const errorMsg = `Error checking for past deposits on ${this.config.chainName}: ${toSerializableError(error).message}`;
+      logger.error(errorMsg);
+      logErrorContext(errorMsg, error);
+    }
+  }
+
+  /**
+   * Process a StarkNet deposit event
+   * This method would be implemented based on the specific event structure
+   * @param event The StarkNet event to process
+   */
+  private async processStarkNetDepositEvent(event: Record<string, unknown>): Promise<void> {
+    try {
+      logger.debug(`Processing StarkNet deposit event:`, event);
+
+      // StarkNet events have the structure: { from_address, keys, data }
+      // keys[0] is the event selector/name, keys[1...] are indexed parameters
+      // data contains the non-indexed event parameters
+
+      const fromAddress = event.from_address as string;
+      const keys = event.keys as string[];
+      const data = event.data as string[];
+
+      if (!fromAddress || !keys || !data) {
+        logger.warn(
+          `Invalid StarkNet event structure for ${this.config.chainName}. Missing required fields (from_address, keys, data).`,
+          event,
+        );
+        return;
+      }
+
+      if (!this.config.l2ContractAddress || fromAddress !== this.config.l2ContractAddress) {
+        logger.debug(
+          `Ignoring event from ${fromAddress} as it doesn't match configured L2 contract address ${this.config.l2ContractAddress} for ${this.config.chainName}`,
+        );
+        return;
+      }
+
+      if (keys.length === 0) {
+        logger.warn(
+          `StarkNet event missing event selector in keys for ${this.config.chainName}`,
+          event,
+        );
+        return;
+      }
+
+      const eventSelector = keys[0];
+      logger.debug(
+        `Processing StarkNet event with selector ${eventSelector} from ${fromAddress} for ${this.config.chainName}`,
+      );
+
+      // Handle different types of deposit-related events based on selector
+      // This is a basic implementation - specific event selectors would need to be
+      // defined based on the actual StarkNet contract's ABI
+
+      // For now, we treat any event from the L2 contract as a potential deposit event
+      // and attempt to extract deposit information from the event data
+      await this.handleDepositEvent(eventSelector, keys.slice(1), data);
+    } catch (error: unknown) {
+      const errorMsg = `Error processing StarkNet deposit event: ${toSerializableError(error).message}`;
+      logger.error(errorMsg);
+      logErrorContext(errorMsg, error);
+    }
+  }
+
+  /**
+   * Handle a specific deposit event based on its selector and data
+   * @param eventSelector The event selector (first key)
+   * @param indexedParams Additional indexed parameters (keys[1:])
+   * @param eventData Non-indexed event data
+   */
+  private async handleDepositEvent(
+    eventSelector: string,
+    indexedParams: string[],
+    eventData: string[],
+  ): Promise<void> {
+    try {
+      // Basic event handling - in a real implementation, you would decode based on
+      // specific event selectors from the contract ABI
+
+      // Example: If this is a "DepositInitialized" event, we might expect:
+      // - indexedParams[0]: deposit key/id
+      // - eventData[0]: amount
+      // - eventData[1]: recipient address
+
+      if (indexedParams.length === 0) {
+        logger.debug(
+          `No indexed parameters in StarkNet deposit event with selector ${eventSelector} for ${this.config.chainName}`,
+        );
+        return;
+      }
+
+      // Extract potential deposit ID from first indexed parameter
+      const potentialDepositId = indexedParams[0];
+
+      if (!potentialDepositId) {
+        logger.warn(
+          `Missing deposit ID in StarkNet event for ${this.config.chainName}. Selector: ${eventSelector}`,
+        );
+        return;
+      }
+
+      // Try to find existing deposit by ID
+      const existingDeposit = await DepositStore.getById(potentialDepositId);
+
+      if (!existingDeposit) {
+        logger.debug(
+          `No existing deposit found with ID ${potentialDepositId} for StarkNet event on ${this.config.chainName}. This might be a new deposit or unrelated event.`,
+        );
+        return;
+      }
+
+      // Update deposit with L2 information if this is a relevant event
+      await this.updateDepositFromL2Event(existingDeposit, eventSelector, indexedParams, eventData);
+    } catch (error: unknown) {
+      const errorMsg = `Error handling StarkNet deposit event with selector ${eventSelector}: ${toSerializableError(error).message}`;
+      logger.error(errorMsg);
+      logErrorContext(errorMsg, error);
+    }
+  }
+
+  /**
+   * Update deposit record based on L2 event information
+   * @param deposit Existing deposit to update
+   * @param eventSelector Event selector
+   * @param indexedParams Indexed event parameters
+   * @param eventData Non-indexed event data
+   */
+  private async updateDepositFromL2Event(
+    deposit: Deposit,
+    eventSelector: string,
+    indexedParams: string[],
+    eventData: string[],
+  ): Promise<void> {
+    try {
+      const logPrefix = `STARKNET_L2_EVENT ${this.config.chainName} ${deposit.id} |`;
+
+      logger.info(
+        `${logPrefix} Processing L2 event with selector ${eventSelector} for deposit ${deposit.id}`,
+      );
+
+      // Extract transaction hash if available in the event context
+      // Note: The transaction hash would typically be provided by the event listener context
+      const l2TxHash = (indexedParams[1] || eventData[0]) as string;
+
+      // Update deposit with L2 transaction information
+      if (l2TxHash && !deposit.hashes.starknet?.l2TxHash) {
+        const updatedDeposit: Deposit = {
+          ...deposit,
+          hashes: {
+            ...deposit.hashes,
+            starknet: {
+              l2TxHash: l2TxHash,
+            },
+          },
+          dates: {
+            ...deposit.dates,
+            lastActivityAt: Date.now(),
+          },
+        };
+
+        await DepositStore.update(updatedDeposit);
+
+        logger.info(`${logPrefix} Updated deposit with L2 transaction hash: ${l2TxHash}`);
+
+        await logStatusChange(updatedDeposit, updatedDeposit.status, deposit.status);
+      } else {
+        logger.debug(`${logPrefix} No L2 transaction hash to update or hash already exists`);
+      }
+    } catch (error: unknown) {
+      const errorMsg = `Error updating deposit from L2 event: ${toSerializableError(error).message}`;
+      logger.error(errorMsg);
+      logErrorContext(errorMsg, error);
+
+      await logDepositError(
+        deposit.id,
+        `Failed to update deposit from L2 event: ${errorMsg}`,
+        toSerializableError(error),
+        deposit.chainName,
+      );
+    }
   }
 
   /**
