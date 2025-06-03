@@ -28,6 +28,9 @@ export class L2RedemptionService {
     this.chainConfig = chainConfig; // Store the chainConfig
     this.l2Provider = new ethers.providers.JsonRpcProvider(chainConfig.l2Rpc);
 
+    // Bitcoin Redeemer contracts are not currently deployed in tBTC v2
+    // This service will be updated when these contracts are implemented
+    /*
     if (chainConfig.l2BitcoinRedeemerAddress) {
       this.l2BitcoinRedeemerContract = new ethers.Contract(
         chainConfig.l2BitcoinRedeemerAddress,
@@ -42,6 +45,10 @@ export class L2RedemptionService {
         `L2RedemptionService: l2BitcoinRedeemerAddress is not configured for chain ${chainConfig.chainName}. L2 redemption event listening will be disabled for this chain.`,
       );
     }
+    */
+    logger.info(
+      'L2RedemptionService initialized but Bitcoin Redeemer contracts are not yet deployed in tBTC v2',
+    );
 
     this.l2WormholeChainId = chainConfig.l2WormholeChainId;
     this.l2WormholeGatewayAddress = chainConfig.l2WormholeGatewayAddress;
@@ -50,9 +57,10 @@ export class L2RedemptionService {
     logger.info(
       `Wormhole VAA Service will be configured for L2 Wormhole Gateway: ${chainConfig.l2WormholeGatewayAddress} on chain ID: ${chainConfig.l2WormholeChainId}.`,
     );
-    logger.info(
-      `L1 Redemption Handler configured for L1BitcoinRedeemer: ${chainConfig.l1BitcoinRedeemerAddress} on ${chainConfig.l1Rpc}.`,
-    );
+    // TODO: Update when Bitcoin Redeemer contracts are implemented
+    // logger.info(
+    //   `L1 Redemption Handler configured for L1BitcoinRedeemer: ${chainConfig.l1BitcoinRedeemerAddress} on ${chainConfig.l1Rpc}.`,
+    // );
   }
 
   // Async operations cannot be performed in the constructor, so we put them here
@@ -66,7 +74,8 @@ export class L2RedemptionService {
     return instance;
   }
 
-  public startListening(): void {
+  public async startListening(): Promise<void> {
+    /*
     if (!this.l2BitcoinRedeemerContract) {
       logger.info(
         `Skipping 'RedemptionRequested' event listening for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
@@ -135,6 +144,8 @@ export class L2RedemptionService {
     this.l2Provider.on('error', (error) => {
       logErrorContext('L2 Provider emitted an error:', error);
     });
+    */
+    logger.info('L2 redemption listening skipped - contracts not yet available');
   }
 
   public stopListening(): void {

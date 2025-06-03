@@ -17,6 +17,9 @@ Based on [L2 tBTC SDK Relayer Implementation](https://thresholdnetwork.notion.si
     - [Manual Migration](#manual-migration)
     - [Backup Database](#backup-database)
     - [Restore Database](#restore-database)
+  - [Testing](#testing)
+    - [Test Database Setup](#test-database-setup)
+    - [Running Tests](#running-tests)
 
 ## Project Overview
 
@@ -90,3 +93,50 @@ To restore from a backup:
 ```bash
 npm run db:restore
 ```
+
+## Testing
+
+### Test Database Setup
+
+Integration tests require a separate test database running on port `5433`. Use the provided script to manage the test database:
+
+```bash
+# Start the test database
+./scripts/test-db.sh start
+
+# Check test database status  
+./scripts/test-db.sh status
+
+# View test database logs
+./scripts/test-db.sh logs
+
+# Stop the test database
+./scripts/test-db.sh stop
+
+# Restart the test database
+./scripts/test-db.sh restart
+```
+
+The test database will automatically:
+- Run PostgreSQL 15 in a Docker container
+- Create the `tbtc_relayer_test` database
+- Set up the correct schema using Prisma
+- Use port `5433` to avoid conflicts with the main database
+
+### Running Tests
+
+```bash
+# Run all tests
+yarn test
+
+# Run only unit tests
+yarn test --testPathPattern="unit"
+
+# Run only integration tests (requires test database)
+yarn test --testPathPattern="integration"
+
+# Run a specific test file
+yarn test tests/integration/controllers/Endpoint.controller.test.ts
+```
+
+**Note:** Integration tests require the test database to be running. Make sure to start it with `./scripts/test-db.sh start` before running integration tests.
