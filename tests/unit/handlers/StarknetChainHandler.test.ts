@@ -81,9 +81,8 @@ describe('StarknetChainHandler', () => {
 
   // Define mock implementations here so they are in scope for beforeEach
   const mockWalletImpl = (privateKey: string, provider: any) => {
-    console.log('>>>>> MOCK ethers.Wallet CONSTRUCTOR CALLED (via spyOn) <<<<<');
     if (typeof privateKey !== 'string' || !privateKey.startsWith('0x')) {
-      // console.warn('MockWallet invoked with potentially invalid privateKey:', privateKey);
+      // Validate privateKey format in tests
     }
     return {
       _isSigner: true,
@@ -368,7 +367,7 @@ describe('StarknetChainHandler', () => {
       expect(mockDepositsUtil.updateToInitializedDeposit).toHaveBeenCalledTimes(1);
       expect(mockDepositsUtil.updateToInitializedDeposit).toHaveBeenCalledWith(
         expect.objectContaining({ id: mockDeposit.id }),
-        expect.objectContaining({ transactionHash: '0xInitTxHashSuccess' }),
+        expect.objectContaining({ hash: '0xInitTxHashSuccess' }),
       );
       expect(mockDeposit.hashes.eth.initializeTxHash).toBe('0xInitTxHashSuccess');
     });
@@ -533,7 +532,7 @@ describe('StarknetChainHandler', () => {
       expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledTimes(1);
       expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
         mockDepositForFinalize,
-        expect.objectContaining({ transactionHash: '0xFinalizeTxHashSuccess' }),
+        expect.objectContaining({ hash: '0xFinalizeTxHashSuccess' }),
       );
     });
 
@@ -677,7 +676,6 @@ describe('StarknetChainHandler', () => {
       expect(mockDepositStore.update).toHaveBeenCalledTimes(1);
       const updatedDepositArgument = mockDepositStore.update.mock.calls[0][0] as Deposit;
 
-      // console.log('DEBUGGING TEST - updatedDepositArgument.hashes.starknet:', updatedDepositArgument.hashes.starknet);
       expect(updatedDepositArgument.status).toBe(DepositStatus.BRIDGED);
       expect(updatedDepositArgument.hashes.starknet?.l1BridgeTxHash).toBe(mockL1TxHash);
       expect(updatedDepositArgument.dates.bridgedAt).toBeDefined();
