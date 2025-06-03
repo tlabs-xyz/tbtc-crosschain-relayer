@@ -132,8 +132,21 @@ export class L1RedemptionHandler {
         );
         return null;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
+
+      // Safely access error properties with type guards
+      const errorDetails =
+        error && typeof error === 'object' && 'error' in error ? (error as any).error : undefined;
+      const transaction =
+        error && typeof error === 'object' && 'transaction' in error
+          ? (error as any).transaction
+          : undefined;
+      const receipt =
+        error && typeof error === 'object' && 'receipt' in error
+          ? (error as any).receipt
+          : undefined;
+
       logErrorContext(
         JSON.stringify({
           message: 'Error in finalizeL2Redemption on L1.',
@@ -141,9 +154,9 @@ export class L1RedemptionHandler {
           errorName: err.name,
           errorMessage: err.message,
           errorStack: err.stack,
-          errorDetails: error.error,
-          transaction: error.transaction,
-          receipt: error.receipt,
+          errorDetails,
+          transaction,
+          receipt,
         }),
         err,
       );

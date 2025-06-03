@@ -13,11 +13,7 @@ import { NETWORK } from '../config/schemas/common.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import {
-  updateToInitializedDeposit,
-  updateToFinalizedDeposit,
-  updateLastActivity,
-} from '../utils/Deposits.js';
+import { updateToInitializedDeposit, updateToFinalizedDeposit } from '../utils/Deposits.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
@@ -26,6 +22,17 @@ import type { AnyChainConfig } from '../config/index.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import { TIMEOUTS } from '../utils/Constants.js';
+import { toSerializableError } from '../types/Error.types.js';
+
+// Helper function to extract error reason without using any
+function getErrorReason(error: unknown): string {
+  if (error instanceof Error) {
+    // Check for ethers.js error with reason property
+    const ethersError = error as Error & { reason?: string };
+    return ethersError.reason ?? error.message;
+  }
+  return String(error);
+}
 
 export abstract class BaseChainHandler<T extends AnyChainConfig> implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
@@ -40,11 +47,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
 
   constructor(config: T) {
     this.config = config;
-    logger.debug(`Constructing BaseChainHandler for ${this.config.chainName}`);
   }
 
   async initialize(): Promise<void> {
-    logger.debug(`Initializing Base L1 components for ${this.config.chainName}`);
+    logger.info(`Initializing chain handler for ${this.config.chainName}`);
 
     // --- L1 Setup ---
     // Common L1 configuration checks
@@ -77,20 +83,13 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         L1BitcoinDepositorABI,
         this.nonceManagerL1,
       );
-      this.tbtcVault = new ethers.Contract( // Keep for completeness, though not sending txs currently
-        this.config.vaultAddress,
-        TBTCVaultABI,
-        this.l1Signer, // Use l1Signer here, not nonceManagerL1 unless needed
-      );
+      this.tbtcVault = new ethers.Contract(this.config.vaultAddress, TBTCVaultABI, this.l1Signer);
     } else {
       // For non-EVM chains, l1Signer and related contracts might not be needed
       // or would require a different setup.
-      // For now, we ensure they are not initialized if privateKey is not applicable.
       logger.warn(
         `L1 Signer and transaction-capable contracts not initialized for non-EVM chain ${this.config.chainName} in BaseChainHandler. This might be expected.`,
       );
-      // Ensure these are undefined or handled appropriately if accessed later
-      // For instance, methods requiring l1Signer should check its existence or chainType.
     }
 
     const ethereumNetwork =
@@ -105,7 +104,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         },
       },
     });
-    // this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc); // Moved up
 
     // L1 Contracts for reading/listening (do not require signer)
     this.l1BitcoinDepositorProvider = new ethers.Contract(
@@ -118,61 +116,51 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       TBTCVaultABI,
       this.l1Provider,
     );
-    logger.debug(`Base L1 components initialized for ${this.config.chainName}`);
 
     // --- L2 Setup (delegated to subclasses) ---
     this.initializeL2();
 
-    logger.debug(`Chain handler fully initialized for ${this.config.chainName}`);
+    logger.info(`Chain handler initialized for ${this.config.chainName}`);
   }
 
   async setupListeners(): Promise<void> {
-    logger.debug(`Setting up Base L1 listeners for ${this.config.chainName}`);
     await this.setupL1Listeners();
-    logger.debug(`Setting up L2 listeners (delegated) for ${this.config.chainName}`);
     await this.setupL2Listeners();
-    logger.debug(`All event listeners setup complete for ${this.config.chainName}`);
+    logger.info(`Event listeners active for ${this.config.chainName}`);
   }
 
   // --- L1 Listener Setup ---
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      async (minter, depositKey, _depositor, _optimisticMintingDebt) => {
+      async (_minter, depositKey, _depositor, _optimisticMintingDebt) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
           const deposit: Deposit | null = await DepositStore.getById(depositId);
           if (deposit) {
-            logger.debug(`Received OptimisticMintingFinalized event for Deposit ID: ${deposit.id}`);
             // Check if already finalized to avoid redundant calls/logs
             if (deposit.status !== DepositStatus.FINALIZED) {
-              logger.debug(`Finalizing deposit ${deposit.id}...`);
               this.finalizeDeposit(deposit);
-            } else {
-              logger.debug(`Deposit ${deposit.id} already finalized locally. Ignoring event.`);
             }
           } else {
             logger.warn(
               `Received OptimisticMintingFinalized event for unknown Deposit Key: ${depositId}`,
             );
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           logErrorContext(
-            `Error in OptimisticMintingFinalized handler: ${error.message ?? error}`,
+            `Error in OptimisticMintingFinalized handler: ${error instanceof Error ? error.message : String(error)}`,
             error,
           );
           logDepositError(
             depositKey?.toString() ?? 'unknown-deposit-key',
             `Error processing OptimisticMintingFinalized event for key ${depositKey?.toString()}`,
-            error,
+            toSerializableError(error),
             this.config.chainName,
           );
         }
       },
-    );
-    logger.debug(
-      `TBTCVault OptimisticMintingFinalized listener setup for ${this.config.chainName}`,
     );
   }
 
@@ -186,7 +174,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       logger.warn(
         `INITIALIZE | Deposit already processed locally | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
       );
-      return;
+      return undefined;
     }
     if (!deposit.L1OutputEvent) {
       const errorMsg = 'Missing L1OutputEvent data for initialization';
@@ -194,25 +182,25 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         `INITIALIZE | ERROR | Missing L1OutputEvent data | ID: ${deposit.id}`,
         new Error(errorMsg),
       );
-      logDepositError(deposit.id, errorMsg, new Error(errorMsg), deposit.chainName);
-      updateToInitializedDeposit(deposit, null, 'Missing L1OutputEvent data'); // Mark as error
-      return;
+      logDepositError(
+        deposit.id,
+        errorMsg,
+        toSerializableError(new Error(errorMsg)),
+        deposit.chainName,
+      );
+      updateToInitializedDeposit(deposit, undefined, 'Missing L1OutputEvent data'); // Mark as error
+      return undefined;
     }
 
     try {
-      logger.debug(`INITIALIZE | Pre-call checking... | ID: ${deposit.id}`);
       // Pre-call check against L1BitcoinDepositor using the provider instance
       await this.l1BitcoinDepositorProvider.callStatic.initializeDeposit(
         deposit.L1OutputEvent.fundingTx,
         deposit.L1OutputEvent.reveal,
         deposit.L1OutputEvent.l2DepositOwner,
       );
-      logger.debug(`INITIALIZE | Pre-call successful | ID: ${deposit.id}`);
 
       const currentNonce = await this.nonceManagerL1.getTransactionCount('latest');
-      logger.debug(
-        `INITIALIZE | Sending transaction with nonce ${currentNonce} | ID: ${deposit.id}`,
-      );
 
       // Send transaction using L1BitcoinDepositor with nonce manager
       const tx = await this.l1BitcoinDepositor.initializeDeposit(
@@ -222,113 +210,98 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         { nonce: currentNonce },
       );
 
-      logger.debug(`INITIALIZE | Waiting to be mined | ID: ${deposit.id} | TxHash: ${tx.hash}`);
+      logger.info(`INITIALIZE | Transaction sent | ID: ${deposit.id} | TxHash: ${tx.hash}`);
+
       // Wait for the transaction to be mined
       const receipt = await tx.wait();
-      logger.debug(
-        `INITIALIZE | Transaction mined | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
+      logger.info(
+        `INITIALIZE | Transaction mined | ID: ${deposit.id} | Block: ${receipt.blockNumber}`,
       );
 
       // Update the deposit status in the JSON storage upon successful mining
       updateToInitializedDeposit(deposit, receipt, undefined); // Pass receipt for txHash etc.
 
       return receipt; // Return the receipt for further processing if needed
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Error Handling - Check if it's a specific revert reason or common issue
-      const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
+      const reason = getErrorReason(error);
       logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
       logDepositError(
         deposit.id,
         `Failed to initialize deposit: ${reason}`,
-        error,
+        toSerializableError(error),
         deposit.chainName,
       );
       // Update status to reflect error, preventing immediate retries unless logic changes
-      updateToInitializedDeposit(deposit, null, `Error: ${reason}`);
+      updateToInitializedDeposit(deposit, undefined, `Error: ${reason}`);
+      return undefined;
     }
   }
 
   async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    // Check if already finalized locally
+    // Check if already finalized to avoid redundant L1 calls
     if (deposit.status === DepositStatus.FINALIZED) {
-      logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
-      return;
+      logger.warn(`FINALIZE | Deposit already finalized | ID: ${deposit.id}`);
+      return undefined;
     }
-    // Ensure it was initialized or mark as error if called prematurely
-    if (deposit.status !== DepositStatus.INITIALIZED) {
-      const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
+
+    // Check for required data
+    if (!deposit.hashes.eth.initializeTxHash) {
+      const errorMsg = 'Missing initializeTxHash for finalization';
       logErrorContext(
-        `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
+        `FINALIZE | ERROR | Missing initializeTxHash | ID: ${deposit.id}`,
         new Error(errorMsg),
       );
       logDepositError(
         deposit.id,
         errorMsg,
-        new Error('Invalid status for finalize'),
+        toSerializableError(new Error(errorMsg)),
         deposit.chainName,
       );
-      // Optionally mark with error? updateToFinalizedDeposit(deposit, null, 'Invalid status for finalize')? Or just let process loop retry?
-      // For now, just return, assuming the process loop or event handler called this correctly.
-      return;
+      updateToFinalizedDeposit(deposit, undefined, 'Missing initializeTxHash'); // Mark as error
+      return undefined;
     }
 
     try {
-      logger.debug(`FINALIZE | Quoting fee... | ID: ${deposit.id}`);
-      // Use provider instance for read-only quote
-      const value = (await this.l1BitcoinDepositorProvider.quoteFinalizeDeposit()).toString();
-      logger.debug(`FINALIZE | Fee quoted: ${value} wei | ID: ${deposit.id}`);
+      // Quote L1 fee
+      const value = await this.l1BitcoinDepositorProvider.finalizationFee();
 
-      logger.debug(`FINALIZE | Pre-call checking... | ID: ${deposit.id}`);
-      // Use provider instance for callStatic
-      await this.l1BitcoinDepositorProvider.callStatic.finalizeDeposit(deposit.id, {
-        value: value,
-      });
-      logger.debug(`FINALIZE | Pre-call successful for finalizeDeposit | ID: ${deposit.id}`);
+      // Pre-call check against L1BitcoinDepositor using the provider instance
+      await this.l1BitcoinDepositorProvider.callStatic.finalizeDeposit(
+        deposit.hashes.eth.initializeTxHash,
+        { value },
+      );
 
       const currentNonce = await this.nonceManagerL1.getTransactionCount('latest');
-      logger.debug(
-        `FINALIZE | Sending L1 finalize transaction with nonce ${currentNonce} | ID: ${deposit.id}`,
+
+      // Send transaction using L1BitcoinDepositor with nonce manager
+      const tx = await this.l1BitcoinDepositor.finalizeDeposit(
+        deposit.hashes.eth.initializeTxHash,
+        {
+          value,
+          nonce: currentNonce,
+        },
       );
 
-      // Use signer contract instance with nonce manager for the actual transaction
-      const tx = await this.l1BitcoinDepositor.finalizeDeposit(deposit.id, {
-        value: value,
-        nonce: currentNonce,
-      });
+      logger.info(`FINALIZE | Transaction sent | ID: ${deposit.id} | TxHash: ${tx.hash}`);
 
-      logger.debug(
-        `FINALIZE | L1 finalize transaction sent | ID: ${deposit.id} | TxHash: ${tx.hash}`,
-      );
       // Wait for the transaction to be mined
       const receipt = await tx.wait();
-      logger.debug(
-        `FINALIZE | L1 finalize transaction mined | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
+      logger.info(
+        `FINALIZE | Transaction mined | ID: ${deposit.id} | Block: ${receipt.blockNumber}`,
       );
 
-      // Update status upon successful mining
-      updateToFinalizedDeposit(deposit, receipt); // Pass only deposit and receipt on success
+      // Update the deposit status in the JSON storage upon successful mining
+      updateToFinalizedDeposit(deposit, receipt, undefined);
 
       return receipt;
-    } catch (error: any) {
-      const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
-
-      // Specific handling for the "Deposit not finalized by the bridge" case
-      if (reason.includes('Deposit not finalized by the bridge')) {
-        logger.warn(`FINALIZE | WAITING (Bridge Delay) | ID: ${deposit.id} | Reason: ${reason}`);
-        // Don't mark as error, just update activity to allow retry after TIME_TO_RETRY
-        await updateLastActivity(deposit);
-      } else {
-        // Handle other errors
-        logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
-        logDepositError(
-          deposit.id,
-          `Failed to finalize deposit: ${reason}`,
-          error,
-          deposit.chainName,
-        );
-        // Mark as error to potentially prevent immediate retries depending on cleanup logic
-        updateToFinalizedDeposit(deposit, null, `Error: ${reason}`);
-      }
+    } catch (error: unknown) {
+      const errorMessage = getErrorReason(error);
+      logger.error(`FINALIZE | Failed for ID: ${deposit.id} | Error: ${errorMessage}`);
+      logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id}`, error);
+      logDepositError(deposit.id, errorMessage, toSerializableError(error), deposit.chainName);
+      updateToFinalizedDeposit(deposit, undefined, errorMessage);
+      return undefined;
     }
   }
 
@@ -338,7 +311,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       const status: number = await this.l1BitcoinDepositorProvider.deposits(depositId);
       // Ensure the status is a valid enum value before returning
       if (Object.values(DepositStatus).includes(status as DepositStatus)) {
-        // logger.info(`Checked L1 Status for ID ${depositId}: ${DepositStatus[status]}`); // Verbose
         return status as DepositStatus;
       } else {
         logger.warn(
@@ -346,11 +318,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         );
         return null; // Indicate invalid status received
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Check if the error indicates the deposit doesn't exist (e.g., contract reverts)
       // This depends heavily on the specific contract behavior for invalid IDs.
       // For now, assume any error means status is uncertain.
-      const reason = error.reason ?? error.message ?? 'Unknown error fetching status';
+      const reason = getErrorReason(error);
       logErrorContext(`Error fetching L1 deposit status for ID ${depositId}: ${reason}`, error);
       return null; // Indicate status couldn't be reliably fetched
     }
@@ -358,119 +330,53 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
 
   // --- Batch Processing Logic ---
   async processInitializeDeposits(): Promise<void> {
-    logger.debug(`PROCESS INITIALIZE | Running for chain ${this.config.chainName}`);
-    const depositsToInitialize = await DepositStore.getByStatus(
-      DepositStatus.QUEUED,
-      this.config.chainName,
-    );
-    const filteredDeposits = this.filterDepositsActivityTime(depositsToInitialize);
+    logger.info(`Processing initialize deposits for ${this.config.chainName}`);
+    const operations: Deposit[] = await DepositStore.getByStatus(DepositStatus.QUEUED);
+    const filteredOperations: Deposit[] = this.filterDepositsActivityTime(operations);
 
-    if (filteredDeposits.length === 0) {
+    if (filteredOperations.length === 0) {
       return;
     }
 
-    logger.debug(
-      `PROCESS_INIT | Initializing ${filteredDeposits.length} deposits for chain ${this.config.chainName}`,
-    );
-
-    for (const deposit of filteredDeposits) {
-      const updatedDeposit = await updateLastActivity(deposit); // Update activity time *before* potential async operations
-
-      // Check L1 contract status *before* attempting initialization
-      const contractStatus = await this.checkDepositStatus(updatedDeposit.id);
-      // logger.info(`INITIALIZE | Checked L1 Status for ID ${updatedDeposit.id}: ${DepositStatus[contractStatus ?? -1] ?? 'Unknown/Error'}`); // Verbose
-
-      switch (contractStatus) {
-        case DepositStatus.INITIALIZED:
-          logger.warn(
-            `INITIALIZE | Deposit already initialized on L1 (local status was QUEUED) | ID: ${updatedDeposit.id}`,
-          );
-          // Update local status to match L1
-          updateToInitializedDeposit(updatedDeposit, null, 'Deposit found initialized on L1');
-          break;
-
-        case DepositStatus.QUEUED:
-        case null: // Includes case where deposit ID doesn't exist on L1 yet (expected for QUEUED) or fetch failed
-          // Attempt to initialize (the method handles internal checks/errors)
-          logger.debug(`INITIALIZE | Attempting initialization for ID: ${updatedDeposit.id}`);
-          await this.initializeDeposit(updatedDeposit);
-          break;
-
-        case DepositStatus.FINALIZED:
-          logger.warn(
-            `INITIALIZE | Deposit already finalized on L1 (local status was QUEUED) | ID: ${updatedDeposit.id}`,
-          );
-          // Update local status to match L1
-          updateToFinalizedDeposit(updatedDeposit, null, 'Deposit found finalized on L1');
-          break;
-
-        default:
-          // This case should ideally not be reached if checkDepositStatus filters invalid numbers
-          logger.warn(
-            `INITIALIZE | Unhandled L1 deposit status (${contractStatus}) for ID: ${updatedDeposit.id}`,
-          );
-          break;
+    for (const deposit of filteredOperations) {
+      const updatedDeposit = await DepositStore.getById(deposit.id);
+      if (!updatedDeposit) {
+        continue;
       }
+
+      // Double-check status to avoid race conditions
+      if (
+        updatedDeposit.status === DepositStatus.INITIALIZED ||
+        updatedDeposit.status === DepositStatus.FINALIZED
+      ) {
+        continue;
+      }
+
+      await this.initializeDeposit(updatedDeposit);
     }
   }
 
   async processFinalizeDeposits(): Promise<void> {
-    logger.debug(`PROCESS FINALIZE | Running for chain ${this.config.chainName}`);
-    const depositsToFinalize = await DepositStore.getByStatus(
-      DepositStatus.INITIALIZED,
-      this.config.chainName,
-    );
-    const filteredDeposits = this.filterDepositsActivityTime(depositsToFinalize);
+    logger.info(`Processing finalize deposits for ${this.config.chainName}`);
+    const operations: Deposit[] = await DepositStore.getByStatus(DepositStatus.INITIALIZED);
+    const filteredOperations: Deposit[] = this.filterDepositsActivityTime(operations);
 
-    if (filteredDeposits.length === 0) {
+    if (filteredOperations.length === 0) {
       return;
     }
 
-    logger.debug(
-      `PROCESS_FINALIZE | Finalizing ${filteredDeposits.length} deposits for chain ${this.config.chainName}`,
-    );
-
-    for (const deposit of filteredDeposits) {
-      const updatedDeposit = await updateLastActivity(deposit); // Update activity time
-
-      // Check L1 contract status *before* attempting finalization
-      const contractStatus = await this.checkDepositStatus(updatedDeposit.id);
-      // logger.info(`FINALIZE | Checked L1 Status for ID ${updatedDeposit.id}: ${DepositStatus[contractStatus ?? -1] ?? 'Unknown/Error'}`); // Verbose
-
-      switch (contractStatus) {
-        case DepositStatus.INITIALIZED:
-          // Attempt to finalize (method handles internal checks/errors like bridge delay)
-          logger.debug(`FINALIZE | Attempting finalization for ID: ${updatedDeposit.id}`);
-          await this.finalizeDeposit(updatedDeposit);
-          break;
-
-        case DepositStatus.FINALIZED:
-          logger.warn(
-            `FINALIZE | Deposit already finalized on L1 (local status was INITIALIZED) | ID: ${updatedDeposit.id}`,
-          );
-          // Update local status to match L1
-          updateToFinalizedDeposit(updatedDeposit, null, 'Deposit found finalized on L1');
-          break;
-
-        // Should not happen if local state is INITIALIZED, but handle defensively
-        case DepositStatus.QUEUED:
-          logger.warn(
-            `FINALIZE | Deposit found as QUEUED on L1 unexpectedly (local status was INITIALIZED) | ID: ${updatedDeposit.id}`,
-          );
-          // Revert local state? Log and let processInitializeDeposits handle it?
-          // For now, just log. processInitializeDeposits should eventually correct it.
-          break;
-        case null:
-          const errorMsg = `Could not fetch L1 status or deposit not found on L1 (local status was INITIALIZED) | ID: ${updatedDeposit.id}`;
-          logErrorContext(errorMsg, new Error(errorMsg));
-          // Keep local status as INITIALIZED and let retry happen after TIME_TO_RETRY.
-          break;
-        default:
-          logger.warn(
-            `FINALIZE | Unhandled L1 deposit status (${contractStatus}) for ID: ${updatedDeposit.id}`,
-          );
-          break;
+    for (const deposit of filteredOperations) {
+      const updatedDeposit = await DepositStore.getById(deposit.id);
+      if (!updatedDeposit) {
+        continue;
       }
+
+      // Double-check status to avoid race conditions
+      if (updatedDeposit.status === DepositStatus.FINALIZED) {
+        continue;
+      }
+
+      await this.finalizeDeposit(updatedDeposit);
     }
   }
 
@@ -517,7 +423,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       this.config.l2ContractAddress &&
       !this.config.useEndpoint
     );
-    // logger.info(`Base supportsPastDepositCheck: ${supports} (L2Rpc: ${!!this.config.l2Rpc}, L2Contract: ${!!this.config.l2ContractAddress}, UseEndpoint: ${this.config.useEndpoint})`); // Verbose
     return supports;
   }
 

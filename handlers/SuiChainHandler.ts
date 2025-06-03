@@ -6,16 +6,15 @@ import { BaseChainHandler } from './BaseChainHandler.js';
 export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   constructor(config: SuiChainConfig) {
     super(config);
-    logger.debug(`Constructing SuiChainHandler for ${this.config.chainName}`);
     if (config.chainType !== CHAIN_TYPE.SUI) {
       throw new Error(`Incorrect chain type ${config.chainType} provided to SuiChainHandler.`);
     }
   }
 
   protected async initializeL2(): Promise<void> {
-    logger.debug(`Initializing Sui L2 components for ${this.config.chainName}`);
     if (this.config.l2Rpc) {
-      // TODO: Initialize Sui client (e.g., using @mysten/sui.js)
+      // NOTE: Sui L2 client initialization pending implementation
+      // Implementation will use @mysten/sui.js:
       // const { SuiClient, getFullnodeUrl } = await import('@mysten/sui');
       // const fullnodeUrl = getFullnodeUrl('testnet'); // Or use this.config.l2Rpc
       // this.suiClient = new SuiClient({ url: fullnodeUrl });
@@ -28,11 +27,11 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   protected async setupL2Listeners(): Promise<void> {
     if (!this.config.useEndpoint) {
       logger.warn(`Sui L2 Listener setup NOT YET IMPLEMENTED for ${this.config.chainName}.`);
-      // TODO: Implement Sui event subscription
-      // Example: await this.suiClient.subscribeEvent({ filter: { MoveModule: { package: '<PACKAGE_ID>', module: '<MODULE_NAME>' } }, onMessage: callback });
+      // NOTE: Sui event subscription pending implementation
+      // Implementation will use: await this.suiClient.subscribeEvent({ filter: { MoveModule: { package: '<PACKAGE_ID>', module: '<MODULE_NAME>' } }, onMessage: callback });
       // Requires Sui Move module equivalent of L2BitcoinDepositor events.
     } else {
-      logger.debug(`Sui L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`);
+      logger.info(`Sui L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`);
     }
   }
 
@@ -41,8 +40,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     logger.warn(
       `Sui getLatestBlock (checkpoint sequence number) NOT YET IMPLEMENTED for ${this.config.chainName}. Returning 0.`,
     );
-    // TODO: Implement logic to get the latest Sui checkpoint sequence number
-    // Example: const checkpoint = await this.suiClient.getLatestCheckpointSequenceNumber(); return Number(checkpoint);
+    // NOTE: Implementation pending for latest Sui checkpoint sequence number
+    // Implementation will use: const checkpoint = await this.suiClient.getLatestCheckpointSequenceNumber(); return Number(checkpoint);
     return 0; // Placeholder
   }
 
@@ -52,8 +51,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   }): Promise<void> {
     if (this.config.useEndpoint) return;
     logger.warn(`Sui checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
-    // TODO: Implement logic to query past Sui events
-    // Example: await this.suiClient.queryEvents({ query: { MoveModule: { ... } }, order: 'descending', limit: 50 });
+    // NOTE: Implementation pending for querying past Sui events
+    // Implementation will use: await this.suiClient.queryEvents({ query: { MoveModule: { ... } }, order: 'descending', limit: 50 });
     // Will need ways to filter by time or checkpoint range.
   }
 
