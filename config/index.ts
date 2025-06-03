@@ -103,12 +103,25 @@ for (const [key, entry] of Object.entries(effectiveChainSchemaRegistry)) {
   } catch (error: unknown) {
     hasChainConfigErrors = true;
     if (error instanceof z.ZodError) {
-      logger.error(`Config validation failed for '${key}'. Flattened errors:`, error.flatten());
+      const flattenedErrors = error.flatten();
+      logger.error(`Config validation failed for '${key}'. Flattened errors:`, flattenedErrors);
+      // Also log the detailed issues
+      if (flattenedErrors.fieldErrors && Object.keys(flattenedErrors.fieldErrors).length > 0) {
+        logger.error(`Field errors for '${key}':`, flattenedErrors.fieldErrors);
+      }
+      if (flattenedErrors.formErrors && flattenedErrors.formErrors.length > 0) {
+        logger.error(`Form errors for '${key}':`, flattenedErrors.formErrors);
+      }
     } else {
       logger.error(
         `An unexpected error occurred while loading chain configuration for '${key}':`,
         error,
       );
+      // Log the error details
+      if (error instanceof Error) {
+        logger.error(`Error message: ${error.message}`);
+        logger.error(`Error stack: ${error.stack}`);
+      }
     }
   }
 }
