@@ -1,7 +1,9 @@
-import type { CommonChainConfigSchema } from '../schemas/common.schema';
-import { NETWORK } from '../schemas/common.schema';
+import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
+import { NETWORK } from '../schemas/common.schema.js';
 import { z } from 'zod';
 import { getEnv } from '../../utils/Env.js';
+// Re-export for convenience
+export type { CommonChainInput } from '../schemas/common.schema.js';
 
 type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 
@@ -93,6 +95,12 @@ export const FEATURE_FLAGS = {
   ENABLE_L2_REDEMPTION_DEVNET: true,
 };
 
+/**
+ * Returns a partial common chain input configuration for the given network.
+ * Used to provide shared defaults and structure for EVM, Sui, and other chain configs.
+ * @param targetNetwork The network to generate config for (mainnet, testnet, devnet)
+ * @returns Partial<CommonChainInput> with shared defaults
+ */
 export const getCommonChainInput = (targetNetwork: NETWORK): Partial<CommonChainInput> => {
   const l1ConfValue = L1_CONFIRMATIONS[targetNetwork] ?? L1_CONFIRMATIONS[NETWORK.TESTNET];
 
