@@ -30,17 +30,29 @@ async function loadEnvironment() {
 }
 
 /**
- * Setup mock environment variables for CI validation by importing existing test setup
+ * Setup mock environment variables for CI validation
+ * Note: Most environment variables are now provided by docker-compose.ci.yml
+ * This function handles any additional setup if needed
  */
 async function setupCIMockEnvironment() {
   const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
 
   if (!isCI) {
-    return; // Only set mocks in CI environment
+    return; // Only needed in CI environment
   }
 
-  // Import the existing test setup which already has all the mock environment variables
-  await import('../tests/setup.ts');
+  // Set basic app configuration if not already provided
+  process.env.NODE_ENV = process.env.NODE_ENV || 'test';
+  process.env.APP_NAME = process.env.APP_NAME || 'tBTC Relayer Test';
+  process.env.APP_VERSION = process.env.APP_VERSION || '1.0.0-test';
+  process.env.API_ONLY_MODE = process.env.API_ONLY_MODE || 'true';
+  process.env.ENABLE_CLEANUP_CRON = process.env.ENABLE_CLEANUP_CRON || 'false';
+
+  // Set minimal database URL if not provided (fallback for local CI runs)
+  if (!process.env.DATABASE_URL) {
+    process.env.DATABASE_URL =
+      'postgresql://test_user:test_password@localhost:5433/tbtc_relayer_test?schema=public';
+  }
 }
 
 /**
