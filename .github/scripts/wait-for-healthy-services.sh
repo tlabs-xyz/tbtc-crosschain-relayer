@@ -43,15 +43,22 @@ while [ $ELAPSED_SECONDS -lt $TIMEOUT_SECONDS ]; do
       break # Break inner loop, re-check all services after interval
     fi
 
-    # shellcheck disable=SC2016 # We want literal $ in --format for docker inspect
-    HEALTH_STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' $CONTAINER_ID)
-    
+    # Check if the container has a healthcheck defined
+    HEALTH_CHECK_DEFINED=$(docker inspect --format='{{if .State.Health}}true{{else}}false{{end}}' $CONTAINER_ID)
+    if [ "$HEALTH_CHECK_DEFINED" != "true" ]; then
+      echo "Error: Service '$SERVICE_NAME' (Container: $CONTAINER_ID) does NOT have a healthcheck defined. Failing immediately."
+      echo "--- Application Logs from Docker Compose for $SERVICE_NAME ---"
+      docker compose $COMPOSE_FILES logs $SERVICE_NAME
+      exit 1
+    fi
+
+    # Container has healthcheck - check its status
+    HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_ID)
     if [ "$HEALTH_STATUS" = "healthy" ]; then
       echo "Service '$SERVICE_NAME' (Container: $CONTAINER_ID) is healthy."
     elif [ "$HEALTH_STATUS" = "unhealthy" ]; then
       echo "Error: Service '$SERVICE_NAME' (Container: $CONTAINER_ID) reported as unhealthy."
       echo "--- Healthcheck Log from Docker Inspect for $SERVICE_NAME (Container: $CONTAINER_ID) ---"
-      # shellcheck disable=SC2016 # We want literal $ in --format for docker inspect
       docker inspect $CONTAINER_ID --format='{{json .State.Health.Log}}' | tail -n 10
       echo "--- Application Logs from Docker Compose for $SERVICE_NAME ---"
       docker compose $COMPOSE_FILES logs $SERVICE_NAME
@@ -68,7 +75,6 @@ while [ $ELAPSED_SECONDS -lt $TIMEOUT_SECONDS ]; do
     exit 0 # All services are healthy, success!
   fi
 
-  # If we reach here, it means either not all services are healthy yet, or a container ID wasn't found and we broke the inner loop.
   sleep $INTERVAL_SECONDS
   ELAPSED_SECONDS=$((ELAPSED_SECONDS + INTERVAL_SECONDS))
 done
@@ -78,15 +84,20 @@ echo "--- Final Status of Services --- "
 for SERVICE_NAME in $SERVICE_NAMES; do
   CONTAINER_ID=$(docker compose $COMPOSE_FILES ps -q $SERVICE_NAME)
   if [ ! -z "$CONTAINER_ID" ]; then
-      # shellcheck disable=SC2016 # We want literal $ in --format for docker inspect
-      HEALTH_STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no healthcheck defined or not running{{end}}' $CONTAINER_ID)
-      echo "Service '$SERVICE_NAME' (Container: $CONTAINER_ID) status: $HEALTH_STATUS"
-      if [ "$HEALTH_STATUS" = "unhealthy" ] || [ "$HEALTH_STATUS" = "starting" ]; then
-          echo "--- Healthcheck Log for $SERVICE_NAME (Container: $CONTAINER_ID) ---"
-          # shellcheck disable=SC2016 # We want literal $ in --format for docker inspect
-          docker inspect $CONTAINER_ID --format='{{json .State.Health.Log}}' | tail -n 10
-          echo "--- App Logs for $SERVICE_NAME ---"
-          docker compose $COMPOSE_FILES logs $SERVICE_NAME
+      HEALTH_CHECK_DEFINED=$(docker inspect --format='{{if .State.Health}}true{{else}}false{{end}}' $CONTAINER_ID)
+      if [ "$HEALTH_CHECK_DEFINED" = "true" ]; then
+        HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_ID)
+        echo "Service '$SERVICE_NAME' (Container: $CONTAINER_ID) health status: $HEALTH_STATUS"
+        if [ "$HEALTH_STATUS" = "unhealthy" ] || [ "$HEALTH_STATUS" = "starting" ]; then
+            echo "--- Healthcheck Log for $SERVICE_NAME (Container: $CONTAINER_ID) ---"
+            docker inspect $CONTAINER_ID --format='{{json .State.Health.Log}}' | tail -n 10
+            echo "--- App Logs for $SERVICE_NAME ---"
+            docker compose $COMPOSE_FILES logs $SERVICE_NAME
+        fi
+      else
+        echo "Error: Service '$SERVICE_NAME' (Container: $CONTAINER_ID) does NOT have a healthcheck defined."
+        echo "--- App Logs for $SERVICE_NAME ---"
+        docker compose $COMPOSE_FILES logs $SERVICE_NAME
       fi    
   else
       echo "Service '$SERVICE_NAME' container not found in final status check."

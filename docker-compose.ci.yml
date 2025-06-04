@@ -7,9 +7,18 @@ services:
 
   tbtc-relayer-dev:
     environment:
-      NODE_ENV: test
+      NODE_ENV: development
       API_ONLY_MODE: true
       VERBOSE_APP: true
+
+      # Application configuration
+      APP_NAME: "tBTC Relayer (CI)"
+      APP_VERSION: "1.0.0-ci"
+      HOST_PORT: 4000
+      APP_PORT: 3000
+      
+      # Supported chains for CI
+      SUPPORTED_CHAINS: "sepoliaTestnet,solanaDevnet,starknetTestnet,suiTestnet,arbitrumMainnet,baseMainnet,baseSepoliaTestnet,solanaDevnetImported"
 
       # Database configuration
       POSTGRES_USER: postgres
@@ -39,3 +48,16 @@ services:
       target: development
     command: node dist/index.js
     volumes: [] # Avoid volumes from the base docker-compose.yml
+    
+    # Ensure the service waits for postgres to be healthy
+    depends_on:
+      postgres:
+        condition: service_healthy
+    
+    # Add healthcheck to monitor if the service is running properly
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--connect-timeout", "3", "--max-time", "5", "http://localhost:3000/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

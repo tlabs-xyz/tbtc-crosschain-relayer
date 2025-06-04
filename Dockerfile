@@ -2,7 +2,7 @@ FROM node:20-alpine3.21 AS development
 
 WORKDIR /usr/app
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git curl
 RUN git config --global url."https://".insteadOf git://
 
 COPY package.json yarn.lock ./
