@@ -1,16 +1,36 @@
 FROM node:20-alpine3.21 AS development 
 
+# Add this for cache busting
+ARG CACHE_BUSTER
+RUN echo "Development stage cache buster: ${CACHE_BUSTER}"
+
 WORKDIR /usr/app
 
-RUN apk add --no-cache git curl
-RUN git config --global url."https://".insteadOf git://
+# Combine RUN commands
+RUN apk add --no-cache git curl && \
+    git config --global url."https://".insteadOf git://
 
 COPY package.json yarn.lock ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
 
 RUN yarn install --frozen-lockfile --production=false
 
-COPY . .
+# Be more specific with COPY for source files
+# Adjust these paths if your source structure is different
+COPY tsconfig.json ./
+COPY index.ts ./
+# Assuming your source code is in these folders or similar top-level folders/files
+# Add/remove/adjust as per your project structure
+# COPY src/ ./src/ # Removed as src/ directory does not exist at project root
+COPY helpers/ ./helpers/
+COPY services/ ./services/
+COPY utils/ ./utils/
+COPY controllers/ ./controllers/
+COPY handlers/ ./handlers/
+COPY interfaces/ ./interfaces/
+COPY routes/ ./routes/
+COPY config/ ./config/
+COPY types/ ./types/
 
 RUN yarn build
 
@@ -21,7 +41,6 @@ ENV NODE_ENV=${NODE_ENV}
 
 WORKDIR /usr/app
 
-
 COPY package.json yarn.lock ./
 COPY prisma/schema.prisma ./prisma/schema.prisma
 
@@ -29,6 +48,7 @@ RUN yarn install --frozen-lockfile --production=true
 
 COPY --from=development /usr/app/dist ./dist
 
+# curl is used for HEALTHCHECK. This is generally fine on Alpine as curl is small.
 RUN apk add --no-cache curl
 
 ARG APP_PORT=3000
@@ -40,7 +60,8 @@ HEALTHCHECK --interval=5s --timeout=5s --start-period=5s --retries=10 \
 EXPOSE ${APP_PORT}
 
 # Add entrypoint script for running migrations and starting the app
-COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# This COPY should be specific to the final script needed, not the whole scripts/ dir if it contains other dev scripts.
+COPY --from=development /usr/app/scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
