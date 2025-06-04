@@ -10,13 +10,13 @@ services:
       NODE_ENV: test
       API_ONLY_MODE: true
       VERBOSE_APP: true
-      
+
       # Database configuration
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: tbtc_relayer
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tbtc_relayer
-      
+
       # Mock private keys for CI validation (safe test values)
       CHAIN_SEPOLIATESTNET_PRIVATE_KEY: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
       CHAIN_ARBITRUMMAINNET_PRIVATE_KEY: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -26,15 +26,15 @@ services:
       CHAIN_STARKNETTESTNET_PRIVATE_KEY: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
       CHAIN_SUITESTNET_PRIVATE_KEY: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
       CHAIN_SOLANADEVNETIMPORTED_SOLANA_PRIVATE_KEY: "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"
-      
+
       # Mock RPC URLs for CI validation
       ETHEREUM_MAINNET_RPC: "https://mock-ethereum-mainnet.test.com"
       CHAIN_SOLANADEVNETIMPORTED_L2_RPC: "https://mock-solana-devnet.test.com"
       CHAIN_SOLANADEVNETIMPORTED_L2_WS_RPC: "wss://mock-solana-devnet-ws.test.com"
-    
+
     ports:
       - "3000:3000"
-      
+
     build:
       target: development
     command: node dist/index.js

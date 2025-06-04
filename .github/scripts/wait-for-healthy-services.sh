@@ -91,7 +91,7 @@ for SERVICE_NAME in $SERVICE_NAMES; do
   else
       echo "Service '$SERVICE_NAME' container not found in final status check."
       echo "--- Attempting to get logs for '$SERVICE_NAME' (if it ever existed) ---"
-      docker compose $COMPOSE_FILES logs --tail="50" $SERVICE_NAME || echo "Logs for '$SERVICE_NAME' not available."
+      docker compose $COMPOSE_FILES logs --tail="500" $SERVICE_NAME || echo "Logs for '$SERVICE_NAME' not available."
   fi
 done
 docker compose $COMPOSE_FILES ps -a
