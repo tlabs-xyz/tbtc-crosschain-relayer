@@ -15,6 +15,7 @@ import { getBaseMainnetChainInput } from './chain/baseMainnet.chain';
 import { getSolanaDevnetImportedChainInput } from './chain/solanaDevnetImported.chain';
 import baseLogger from '../utils/Logger.js';
 import { writeFileSync } from 'fs';
+import { appConfig } from './app.config.js';
 
 export type AnyChainConfig =
   | EvmChainConfig
@@ -177,7 +178,7 @@ let mainChainConfigs: AllChainConfigs = {};
 let mainChainConfigErrors: ChainValidationError[] = [];
 
 try {
-  const supportedChainsEnv = process.env.SUPPORTED_CHAINS;
+  const supportedChainsEnv = appConfig.SUPPORTED_CHAINS;
   let chainsToLoad: string[];
 
   if (supportedChainsEnv && supportedChainsEnv.trim() !== '') {

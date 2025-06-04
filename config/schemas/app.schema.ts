@@ -26,6 +26,7 @@ export const AppConfigSchema = z.object({
   CLEAN_FINALIZED_TIME: z.coerce.number().int().positive().default(12),
   CLEAN_BRIDGED_TIME: z.coerce.number().int().positive().default(12),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  SUPPORTED_CHAINS: z.string().optional(),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
