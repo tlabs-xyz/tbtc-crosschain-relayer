@@ -207,6 +207,25 @@ async function validateEnvironmentReadiness(): Promise<boolean> {
 }
 
 /**
+ * Gracefully shuts down the script with proper log flushing
+ */
+async function gracefulShutdown(exitCode: number): Promise<void> {
+  const { logger } = await importConfigModules();
+
+  try {
+    // Flush logs if the logger supports it (Pino does)
+    if (typeof (logger as any).flush === 'function') {
+      await (logger as any).flush();
+    }
+  } catch (flushError) {
+    console.error(`[${SCRIPT_NAME}] Failed to flush logs:`, flushError);
+  }
+
+  // Set exit code and let Node.js exit naturally
+  process.exitCode = exitCode;
+}
+
+/**
  * Main validation function
  */
 async function main(): Promise<void> {
@@ -236,27 +255,27 @@ async function main(): Promise<void> {
   if (allValid) {
     logger.info(`[${SCRIPT_NAME}] ✅ All configuration validation passed (${duration}ms)`);
     logger.info(`[${SCRIPT_NAME}] Server startup configuration is ready`);
-    process.exit(0);
+    await gracefulShutdown(0);
   } else {
     logger.error(`[${SCRIPT_NAME}] ❌ Configuration validation failed (${duration}ms)`);
     logger.error(`[${SCRIPT_NAME}] Server would fail to start with current configuration`);
-    process.exit(1);
+    await gracefulShutdown(1);
   }
 }
 
 // Handle unhandled errors gracefully
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', async (reason, promise) => {
   console.error(`[${SCRIPT_NAME}] Unhandled Rejection at:`, promise, 'reason:', reason);
-  process.exit(1);
+  await gracefulShutdown(1);
 });
 
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', async (error) => {
   console.error(`[${SCRIPT_NAME}] Uncaught Exception:`, error);
-  process.exit(1);
+  await gracefulShutdown(1);
 });
 
 // Execute main function
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(`[${SCRIPT_NAME}] Script execution failed:`, error);
-  process.exit(1);
+  await gracefulShutdown(1);
 });

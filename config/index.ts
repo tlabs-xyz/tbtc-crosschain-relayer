@@ -92,7 +92,7 @@ if (hasChainConfigErrors) {
   logger.error(
     'One or more chain configurations failed to load. Please check logs above. Exiting.',
   );
-  // process.exit(1); // Temporarily disabled for debugging
+  process.exit(1);
 }
 
 logger.info(`Successfully loaded ${Object.keys(chainConfigs).length} chain configuration(s).`);

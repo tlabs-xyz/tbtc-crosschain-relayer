@@ -46,6 +46,7 @@ export const WORMHOLE_GATEWAYS = {
 // Public RPC endpoints (HTTP)
 export const PUBLIC_RPCS = {
   'arbitrum-one': 'https://arbitrum-one.publicnode.com',
+  'arbitrum-sepolia': 'https://sepolia.arbitrum.io/rpc',
   'base-mainnet': 'https://base-mainnet.publicnode.com',
   'base-sepolia': 'https://base-sepolia.publicnode.com',
 } as const;
@@ -53,6 +54,7 @@ export const PUBLIC_RPCS = {
 // Public WebSocket endpoints
 export const PUBLIC_WS_RPCS = {
   'arbitrum-one': 'wss://arbitrum-one.publicnode.com',
+  'arbitrum-sepolia': 'wss://sepolia.arbitrum.io/feed',
   'base-mainnet': 'wss://base-mainnet.publicnode.com',
   'base-sepolia': 'wss://base-sepolia.publicnode.com',
 } as const;
@@ -90,10 +92,10 @@ export const commonChainInput: CommonChainInput = {
   l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC'),
 
   // L2 RPC: Arbitrum Sepolia (minter deployment layer - testnet)
-  l2Rpc: 'https://sepolia.arbitrum.io/rpc',
+  l2Rpc: getEnv('CHAIN_SEPOLIATESTNET_L2_RPC', PUBLIC_RPCS['arbitrum-sepolia']),
 
   // L2 WebSocket: Arbitrum Sepolia (for real-time minter events - testnet)
-  l2WsRpc: 'wss://sepolia.arbitrum.io/feed',
+  l2WsRpc: getEnv('CHAIN_SEPOLIATESTNET_L2_WS_RPC', PUBLIC_WS_RPCS['arbitrum-sepolia']),
 
   // Environment variables - SENSITIVE VALUES ONLY
   privateKey: getEnv('CHAIN_SEPOLIATESTNET_PRIVATE_KEY'),

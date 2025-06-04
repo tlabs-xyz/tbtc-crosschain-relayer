@@ -48,5 +48,5 @@ export const solanaDevnetImportedChainInput: SolanaChainInput = {
 
   // Feature Flags from legacy: USE_ENDPOINT = true
   useEndpoint: false,
-  enableL2Redemption: true,
+  enableL2Redemption: false,
 };
