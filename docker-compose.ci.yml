@@ -1,7 +1,5 @@
 services:
   tbtc-relayer-dev:
-    env_file:
-      - .env
     environment:
       API_ONLY_MODE: true
       VERBOSE_APP: true
