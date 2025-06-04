@@ -8,7 +8,7 @@ services:
   tbtc-relayer-dev:
     env_file:
       - .env
-      - .env.test.base
+      - env.test.base
     environment:
       NODE_ENV: development
       APP_NAME: "tBTC Relayer (CI)"
@@ -23,13 +23,23 @@ services:
       target: development
     command: node dist/index.js
     volumes: []
-    
+
     depends_on:
       postgres:
         condition: service_healthy
-    
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "--connect-timeout", "3", "--max-time", "5", "http://localhost:${APP_PORT:-3000}/status"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "--connect-timeout",
+          "3",
+          "--max-time",
+          "5",
+          "http://localhost:${APP_PORT:-3000}/status",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

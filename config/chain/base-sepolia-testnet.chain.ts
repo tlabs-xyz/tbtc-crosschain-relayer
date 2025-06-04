@@ -3,13 +3,13 @@ import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
 import {
-  TBTC_VAULT_TESTNET,
   L1_CONFIRMATIONS,
   FEATURE_FLAGS,
   WORMHOLE_CHAIN_IDS,
   WORMHOLE_GATEWAYS,
   PUBLIC_RPCS,
   PUBLIC_WS_RPCS,
+  VAULT_ADDRESSES,
 } from './common.chain.js';
 
 type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
@@ -45,7 +45,7 @@ export const baseSepoliaTestnetChainInput: EvmChainInput = {
   // Contract Addresses - VERIFIED from imported-configs/base-sepolia-tbtc-arb-relayer.env
   l1ContractAddress: '0x59FAE614867b66421b44D1Ed3461e6B6a4B50106', // L1BitcoinDepositor on Ethereum Sepolia ✅ VERIFIED
   l2ContractAddress: '0xDEbD9aA9BC4845c7Cd2d9a997F82A2Daea540bD5', // L2BitcoinDepositor on Base Sepolia ✅ VERIFIED
-  vaultAddress: TBTC_VAULT_TESTNET, // TBTCVault on Ethereum Sepolia ✅ VERIFIED
+  vaultAddress: VAULT_ADDRESSES[NETWORK.TESTNET], // TBTCVault on Ethereum Sepolia ✅ VERIFIED
 
   // Wormhole Configuration - RESEARCHED from Wormhole docs (see plan.md)
   l2WormholeGatewayAddress: WORMHOLE_GATEWAYS.BASE_SEPOLIA, // Wormhole Gateway on Base Sepolia ✅ RESEARCHED

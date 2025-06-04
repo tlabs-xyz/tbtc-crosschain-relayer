@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 
-// Load shared mock configurations from .env.test.base
-dotenv.config({ path: '.env.test.base' });
+// Load shared mock configurations from env.test.base
+dotenv.config({ path: 'env.test.base' });
 
 // Override or set Jest-specific environment variables
 process.env.NODE_ENV = 'test';
@@ -12,7 +12,7 @@ process.env.HOST_PORT = '4001'; // Different port for tests
 process.env.APP_PORT = '3001'; // Different port for tests
 
 // --- CORS URL for Jest test execution context ---
-// If .env.test.base provides a CORS_URL, it will be used unless overridden here.
+// If env.test.base provides a CORS_URL, it will be used unless overridden here.
 // This explicitly sets it for the Jest context if a different one is needed.
 process.env.CORS_URL = 'http://localhost:4001';
 
@@ -50,9 +50,9 @@ else if (process.env.DATABASE_URL) {
 }
 
 // --- Supported Chains (Minimal set for focused and faster Jest tests) ---
-// This overrides the SUPPORTED_CHAINS loaded from .env.test.base for the Jest execution context.
+// This overrides the SUPPORTED_CHAINS loaded from env.test.base for the Jest execution context.
 process.env.SUPPORTED_CHAINS = 'sepoliaTestnet,solanaDevnet';
 
 // Variables like VERBOSE_APP, API_ONLY_MODE, ENABLE_CLEANUP_CRON, CLEAN_*, JSON_PATH,
 // all mock private keys, RPC URLs, and block configurations are now expected to be loaded
-// from .env.test.base by the dotenv.config() call at the top.
+// from env.test.base by the dotenv.config() call at the top.

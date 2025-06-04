@@ -53,15 +53,15 @@ docker compose up --build
 To start the application in development mode, run:
 
 ```bash
-npm run dev
+yarn dev
 ```
 
 ## Project Scripts
 
-The following npm scripts are avaliable:
+The following yarn scripts are avaliable:
 
-    -   `npm run dev`: Runs the application in development mode.
-    -   `npm start`: Runs the application in production mode
+    -   `yarn dev`: Runs the application in development mode.
+    -   `yarn start`: Runs the application in production mode
 
 ## CI - GitHub Actions
 
@@ -79,64 +79,62 @@ Migrations are run automatically when the app starts in Docker (production mode)
 ### Manual Migration
 To run migrations manually:
 ```bash
-npm run db:migrate
+yarn db:migrate
 ```
 
 ### Backup Database
 To create a backup (PostgreSQL):
 ```bash
-npm run db:backup
+yarn db:backup
 ```
 
 ### Restore Database
 To restore from a backup:
 ```bash
-npm run db:restore
+yarn db:restore
 ```
 
 ## Testing
 
-### Test Database Setup
-
-Integration tests require a separate test database running on port `5433`. Use the provided script to manage the test database:
+Tests are run using Jest. Integration and End-to-End (E2E) tests require the Docker services, including the PostgreSQL database (on port 5432), to be running. You can start these services using:
 
 ```bash
-# Start the test database
-./scripts/test-db.sh start
-
-# Check test database status  
-./scripts/test-db.sh status
-
-# View test database logs
-./scripts/test-db.sh logs
-
-# Stop the test database
-./scripts/test-db.sh stop
-
-# Restart the test database
-./scripts/test-db.sh restart
+docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 ```
 
-The test database will automatically:
-- Run PostgreSQL 15 in a Docker container
-- Create the `tbtc_relayer_test` database
-- Set up the correct schema using Prisma
-- Use port `5433` to avoid conflicts with the main database
+In the CI environment, the database is automatically reset before tests. For local testing, you might need to manage your database state manually or use the `yarn db:reset` script if you need a clean slate:
+
+```bash
+yarn db:reset
+```
 
 ### Running Tests
 
+The following commands can be used to run tests:
+
 ```bash
-# Run all tests
+# Run all tests (unit, integration, and E2E)
+# Ensure Docker services are running for integration/E2E tests
 yarn test
 
-# Run only unit tests
-yarn test --testPathPattern="unit"
+# Run only unit tests (do not require Docker services)
+yarn test:unit
 
-# Run only integration tests (requires test database)
-yarn test --testPathPattern="integration"
+# Run only integration tests (requires Docker services)
+yarn test:integration
 
-# Run a specific test file
+# Run only End-to-End (E2E) tests (requires Docker services)
+yarn test:e2e
+
+# Generate a test coverage report
+yarn test:coverage
+
+# Run tests in watch mode
+yarn test:watch
+
+# Run a specific test file (example)
+# Replace with the actual path to your test file
 yarn test tests/integration/controllers/Endpoint.controller.test.ts
 ```
 
-**Note:** Integration tests require the test database to be running. Make sure to start it with `./scripts/test-db.sh start` before running integration tests.
+**Note:** For integration and E2E tests, ensure your Docker services (especially the database) are up and running. If you encounter issues with data from previous test runs, consider resetting your database.
