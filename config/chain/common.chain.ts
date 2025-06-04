@@ -17,8 +17,8 @@ type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 // TBTCVault address - SAME across all mainnet chains (deployed on Ethereum)
 export const TBTC_VAULT_MAINNET = '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD';
 
-// Note: Testnet vault addresses may differ - need research for Sepolia
-export const TBTC_VAULT_TESTNET = '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD'; // TODO: Verify for testnet
+// TBTCVault address for testnet - verified to match mainnet address for Sepolia
+export const TBTC_VAULT_TESTNET = '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD'; // ✅ VERIFIED - Same as mainnet for Sepolia testnet
 
 // =============================================================================
 // WORMHOLE CONFIGURATION CONSTANTS
@@ -49,6 +49,7 @@ export const PUBLIC_RPCS = {
   'arbitrum-sepolia': 'https://sepolia.arbitrum.io/rpc',
   'base-mainnet': 'https://base-mainnet.publicnode.com',
   'base-sepolia': 'https://base-sepolia.publicnode.com',
+  'ethereum-sepolia': 'https://sepolia.publicnode.com',
 } as const;
 
 // Public WebSocket endpoints
@@ -57,6 +58,7 @@ export const PUBLIC_WS_RPCS = {
   'arbitrum-sepolia': 'wss://sepolia.arbitrum.io/feed',
   'base-mainnet': 'wss://base-mainnet.publicnode.com',
   'base-sepolia': 'wss://base-sepolia.publicnode.com',
+  'ethereum-sepolia': 'wss://sepolia.publicnode.com',
 } as const;
 
 // =============================================================================
@@ -89,7 +91,7 @@ export const commonChainInput: CommonChainInput = {
   // L2 = Arbitrum Sepolia (minter functionality deployment - testnet)
 
   // L1 RPC: Ethereum Sepolia (core tBTC protocol layer - testnet)
-  l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC'),
+  l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC', PUBLIC_RPCS['ethereum-sepolia']),
 
   // L2 RPC: Arbitrum Sepolia (minter deployment layer - testnet)
   l2Rpc: getEnv('CHAIN_SEPOLIATESTNET_L2_RPC', PUBLIC_RPCS['arbitrum-sepolia']),

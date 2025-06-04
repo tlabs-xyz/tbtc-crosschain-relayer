@@ -27,7 +27,7 @@ export const baseSepoliaTestnetChainInput: EvmChainInput = {
   // L2 = Base Sepolia (minter functionality deployment - testnet)
 
   // L1 RPC: Ethereum Sepolia (core tBTC protocol layer - testnet)
-  l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC'),
+  l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC', PUBLIC_RPCS['ethereum-sepolia']),
 
   // L2 RPC: Base Sepolia (minter deployment layer - testnet)
   l2Rpc: getEnv('CHAIN_BASESEPOLIATESTNET_L2_RPC', PUBLIC_RPCS['base-sepolia']),
