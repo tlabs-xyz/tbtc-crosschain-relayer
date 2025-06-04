@@ -1,10 +1,23 @@
 services:
+  postgres:
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tbtc_relayer
+
   tbtc-relayer-dev:
     environment:
       NODE_ENV: test
       API_ONLY_MODE: true
       VERBOSE_APP: true
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      HOST_PORT: 3000
+      APP_PORT: 3000
+      
+      # Database configuration
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tbtc_relayer
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tbtc_relayer
       
       # Mock private keys for CI validation (safe test values)
       CHAIN_SEPOLIATESTNET_PRIVATE_KEY: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
