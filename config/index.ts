@@ -1,18 +1,18 @@
 import { z } from 'zod';
-import { EvmChainConfigSchema, type EvmChainConfig } from './schemas/evm.chain.schema';
-import { SolanaChainConfigSchema, type SolanaChainConfig } from './schemas/solana.chain.schema';
+import { EvmChainConfigSchema, type EvmChainConfig } from './schemas/evm.chain.schema.js';
+import { SolanaChainConfigSchema, type SolanaChainConfig } from './schemas/solana.chain.schema.js';
 import {
   StarknetChainConfigSchema,
   type StarknetChainConfig,
-} from './schemas/starknet.chain.schema';
-import { SuiChainConfigSchema, type SuiChainConfig } from './schemas/sui.chain.schema';
-import { getSepoliaTestnetChainInput } from './chain/sepolia.chain';
-import { getSolanaDevnetChainInput } from './chain/solana.chain';
-import { getStarknetTestnetChainInput } from './chain/starknet.chain';
-import { getSuiTestnetChainInput } from './chain/sui.chain';
-import { getArbitrumMainnetChainInput } from './chain/arbitrumMainnet.chain';
-import { getBaseMainnetChainInput } from './chain/baseMainnet.chain';
-import { getSolanaDevnetImportedChainInput } from './chain/solanaDevnetImported.chain';
+} from './schemas/starknet.chain.schema.js';
+import { SuiChainConfigSchema, type SuiChainConfig } from './schemas/sui.chain.schema.js';
+import { getSepoliaTestnetChainInput } from './chain/sepolia.chain.js';
+import { getSolanaDevnetChainInput } from './chain/solana.chain.js';
+import { getStarknetTestnetChainInput } from './chain/starknet.chain.js';
+import { getSuiTestnetChainInput } from './chain/sui.chain.js';
+import { getArbitrumMainnetChainInput } from './chain/arbitrumMainnet.chain.js';
+import { getBaseMainnetChainInput } from './chain/baseMainnet.chain.js';
+import { getSolanaDevnetImportedChainInput } from './chain/solanaDevnetImported.chain.js';
 import baseLogger from '../utils/Logger.js';
 import { writeFileSync } from 'fs';
 import { appConfig } from './app.config.js';
