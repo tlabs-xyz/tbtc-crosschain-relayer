@@ -10,10 +10,9 @@ import { sepoliaTestnetChainInput } from './chain/sepolia.chain.js';
 import { solanaDevnetChainInput } from './chain/solana.chain.js';
 import { starknetTestnetChainInput } from './chain/starknet.chain.js';
 import { suiTestnetChainInput } from './chain/sui.chain.js';
-import { arbitrumMainnetChainInput } from './chain/arbitrum-mainnet.chain.js';
-import { baseMainnetChainInput } from './chain/base-mainnet.chain.js';
-import { baseSepoliaTestnetChainInput } from './chain/base-sepolia-testnet.chain.js';
-import { solanaDevnetImportedChainInput } from './chain/solana-devnet-imported.chain.js';
+import { arbitrumMainnetChainInput } from './chain/arbitrumMainnet.chain.js';
+import { baseMainnetChainInput } from './chain/baseMainnet.chain.js';
+import { solanaDevnetImportedChainInput } from './chain/solanaDevnetImported.chain.js';
 import logger from '../utils/Logger.js';
 import { writeFileSync } from 'fs';
 
@@ -33,13 +32,12 @@ export interface AllChainConfigs {
   // Legacy chain configurations
   arbitrumMainnet?: EvmChainConfig;
   baseMainnet?: EvmChainConfig;
-  baseSepoliaTestnet?: EvmChainConfig;
   solanaDevnetImported?: SolanaChainConfig;
   [key: string]: AnyChainConfig | undefined;
 }
 
 // Registry for chain configurations
-// The 'input' can be an empty object {} if all values are defaulted in the Zod schema or sourced from ENV via preprocessors.
+// Each entry provides the Zod schema and the corresponding input object for parsing.
 const chainSchemaRegistry = {
   sepoliaTestnet: { schema: EvmChainConfigSchema, input: sepoliaTestnetChainInput },
   solanaDevnet: { schema: SolanaChainConfigSchema, input: solanaDevnetChainInput },
@@ -47,7 +45,6 @@ const chainSchemaRegistry = {
   suiTestnet: { schema: SuiChainConfigSchema, input: suiTestnetChainInput },
   arbitrumMainnet: { schema: EvmChainConfigSchema, input: arbitrumMainnetChainInput },
   baseMainnet: { schema: EvmChainConfigSchema, input: baseMainnetChainInput },
-  baseSepoliaTestnet: { schema: EvmChainConfigSchema, input: baseSepoliaTestnetChainInput },
   solanaDevnetImported: { schema: SolanaChainConfigSchema, input: solanaDevnetImportedChainInput },
 };
 
@@ -59,8 +56,7 @@ logger.info('Loading chain configurations...');
 for (const [key, entry] of Object.entries(chainSchemaRegistry)) {
   try {
     logger.info(`Attempting to load configuration for chain: ${key}`);
-    // The 'input' field from the registry is passed to .parse()
-    // If input is an empty object, Zod relies on defaults and preprocessors
+    // The 'input' field from the registry (e.g., sepoliaTestnetChainInput) is passed to .parse()
     chainConfigs[key] = entry.schema.parse(entry.input);
     logger.info(`Successfully loaded configuration for chain: ${key}`);
   } catch (error: any) {
