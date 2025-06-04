@@ -1,20 +1,46 @@
 import { z } from 'zod';
-import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
+import { NETWORK } from '../schemas/common.schema.js';
 import type { SolanaChainConfigSchema } from '../schemas/solana.chain.schema.js';
-import { getEnv } from '../../utils/Env.js';
-import { commonChainInput } from './common.chain.js';
+import { getEnv, getEnvNumber } from '../../utils/Env.js';
+import { WORMHOLE_CHAIN_IDS, PUBLIC_RPCS, PUBLIC_WS_RPCS } from './common.chain.js';
+import { getSolanaCommonInput } from './solana-common.js';
 
 type SolanaChainInput = z.input<typeof SolanaChainConfigSchema>;
 
-export const solanaDevnetChainInput: SolanaChainInput = {
-  ...commonChainInput,
+// A more complete generic Solana Devnet configuration
+export const getSolanaDevnetChainInput = (): SolanaChainInput => {
+  const commonDevnetSolanaInput = getSolanaCommonInput(NETWORK.DEVNET);
 
-  // Overrides
-  chainName: 'SolanaDevnet',
-  chainType: CHAIN_TYPE.SOLANA,
-  network: NETWORK.DEVNET,
+  const config: SolanaChainInput = {
+    // Explicitly assign properties from commonDevnetSolanaInput, asserting non-null where appropriate
+    network: commonDevnetSolanaInput.network!,
+    chainType: commonDevnetSolanaInput.chainType!,
+    l1Rpc: commonDevnetSolanaInput.l1Rpc!,
+    vaultAddress: commonDevnetSolanaInput.vaultAddress!,
+    l1ContractAddress: commonDevnetSolanaInput.l1ContractAddress!,
+    l1Confirmations: commonDevnetSolanaInput.l1Confirmations!,
+    enableL2Redemption: commonDevnetSolanaInput.enableL2Redemption!,
+    useEndpoint: commonDevnetSolanaInput.useEndpoint!,
+    supportsRevealDepositAPI:
+      commonDevnetSolanaInput.supportsRevealDepositAPI === undefined
+        ? false
+        : commonDevnetSolanaInput.supportsRevealDepositAPI,
+    endpointUrl: commonDevnetSolanaInput.endpointUrl,
+    solanaCommitment: commonDevnetSolanaInput.solanaCommitment!,
 
-  // Required by SolanaChainBaseSchema
-  solanaPrivateKey: getEnv('CHAIN_SOLANADEVNET_PRIVATE_KEY'),
-  solanaCommitment: 'confirmed',
+    // SolanaDevnet-specific overrides and additions
+    chainName: 'SolanaDevnet',
+    l2Rpc: getEnv('CHAIN_SOLANADEVNET_L2_RPC', PUBLIC_RPCS['solana-devnet']),
+    l2WsRpc: getEnv('CHAIN_SOLANADEVNET_L2_WS_RPC', PUBLIC_WS_RPCS['solana-devnet']),
+    l2StartBlock: getEnvNumber('CHAIN_SOLANADEVNET_L2_START_BLOCK', 0),
+    l2ContractAddress: getEnv(
+      'CHAIN_SOLANADEVNET_L2_CONTRACT_ADDRESS',
+      '11111111111111111111111111111111', // Placeholder for Solana L2 contract
+    ),
+    l2WormholeGatewayAddress: 'MockSolanaWgway11111111111111111111111111',
+    l2WormholeChainId: WORMHOLE_CHAIN_IDS.SOLANA,
+    solanaPrivateKey: getEnv('CHAIN_SOLANADEVNET_SOLANA_PRIVATE_KEY'),
+    solanaSignerKeyBase: getEnv('CHAIN_SOLANADEVNET_SOLANA_KEY_BASE'),
+  };
+  return config;
 };

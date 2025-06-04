@@ -26,6 +26,28 @@ export const AppConfigSchema = z.object({
   CLEAN_FINALIZED_TIME: z.coerce.number().int().positive().default(12),
   CLEAN_BRIDGED_TIME: z.coerce.number().int().positive().default(12),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  SUPPORTED_CHAINS: z
+    .string()
+    .refine(
+      (value) => {
+        const validChains = [
+          'sepoliaTestnet',
+          'solanaDevnet',
+          'starknetTestnet',
+          'suiTestnet',
+          'arbitrumMainnet',
+          'baseMainnet',
+          'baseSepoliaTestnet',
+          'solanaDevnetImported',
+        ];
+        const chains = value.split(',').map((chain) => chain.trim());
+        return chains.every((chain) => validChains.includes(chain));
+      },
+      {
+        message: 'SUPPORTED_CHAINS must contain only valid chain names',
+      },
+    )
+    .optional(),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;

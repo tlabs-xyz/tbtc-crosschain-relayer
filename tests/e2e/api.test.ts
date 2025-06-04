@@ -42,7 +42,7 @@ describe('API Endpoints - Multi-Chain', () => {
       const response = await request(app).get('/status');
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
-        message: 'Operation succesful',
+        message: 'Operation successful',
         data: null,
         error: false,
       });
@@ -155,13 +155,9 @@ describe('API Endpoints - Multi-Chain', () => {
             );
           } else {
             if (chainConfig?.supportsRevealDepositAPI) {
-              console.warn(
-                `Skipping GET /api/${chainName}/deposit/:depositId test because prerequisite reveal failed or was not applicable.`,
-              );
+              test.skip('Prerequisite reveal failed - skipping deposit status test');
             } else {
-              console.warn(
-                `Skipping GET /api/${chainName}/deposit/:depositId because reveal API is not supported for this chain.`,
-              );
+              test.skip('Reveal API not supported for this chain - skipping deposit status test');
             }
           }
         });

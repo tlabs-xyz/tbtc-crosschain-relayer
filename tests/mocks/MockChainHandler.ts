@@ -40,6 +40,8 @@ export class MockChainHandler implements ChainHandlerInterface {
   private deposits: Map<string, Deposit> = new Map();
   private listeners: Map<string, ((...args: any[]) => void)[]> = new Map();
   private processingDelayMs: number = 100; // Simulate processing delay
+  private services: any[] = []; // Mock services array
+  private logger = logger; // Add logger property
 
   constructor(config: Partial<AnyChainConfig> = {}) {
     this.addTestDeposits();
@@ -56,8 +58,7 @@ export class MockChainHandler implements ChainHandlerInterface {
       l2WsRpc: 'ws://localhost:8547',
       l1ContractAddress: ethers.constants.AddressZero,
       l2ContractAddress: ethers.constants.AddressZero,
-      l1BitcoinRedeemerAddress: ethers.constants.AddressZero,
-      l2BitcoinRedeemerAddress: ethers.constants.AddressZero,
+      // Bitcoin Redeemer addresses removed - these contracts don't exist in tBTC v2
       l2WormholeGatewayAddress: ethers.constants.AddressZero,
       l2WormholeChainId: 0,
       vaultAddress: ethers.constants.AddressZero,
@@ -87,9 +88,7 @@ export class MockChainHandler implements ChainHandlerInterface {
           l2WsRpc: (config as EvmChainConfig).l2WsRpc || baseProperties.l2WsRpc,
           l2ContractAddress:
             (config as EvmChainConfig).l2ContractAddress || baseProperties.l2ContractAddress,
-          l2BitcoinRedeemerAddress:
-            (config as EvmChainConfig).l2BitcoinRedeemerAddress ||
-            baseProperties.l2BitcoinRedeemerAddress,
+          // Bitcoin Redeemer address removed - these contracts don't exist in tBTC v2
           l2WormholeGatewayAddress:
             (config as EvmChainConfig).l2WormholeGatewayAddress ||
             baseProperties.l2WormholeGatewayAddress,
@@ -141,6 +140,14 @@ export class MockChainHandler implements ChainHandlerInterface {
     }
 
     this.config = finalConfig;
+
+    // L2 Redemption functionality commented out since Bitcoin Redeemer contracts don't exist
+    // if (config.enableL2Redemption) {
+    //   const l2RedeemerAddress = `0x${'L2REDEEMER'.padEnd(40, '0')}`;
+    //   this.services.push(
+    //     new MockL2RedemptionService(config, l2RedeemerAddress, this.logger),
+    //   );
+    // }
   }
 
   /**

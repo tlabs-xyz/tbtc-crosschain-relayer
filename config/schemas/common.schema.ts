@@ -46,30 +46,44 @@ export const CommonChainConfigSchema = z.object({
 
   enableL2Redemption: z.coerce.boolean().default(false),
 
+  // tBTC Protocol Architecture:
+  // L1 = Main protocol layer (Ethereum mainnet/testnet) where core tBTC protocol is deployed
+  // L2 = Minter deployment layer (Arbitrum, Base, etc.) where minting functionality is deployed
+
+  // L1 RPC: Ethereum mainnet/testnet (core tBTC protocol layer)
   l1Rpc: z.string().url('l1Rpc must be a valid URL'),
+
+  // L2 RPC: Target network (Arbitrum, Base, etc.) where minters are deployed
   l2Rpc: z.string().url('l2Rpc must be a valid URL'),
+
+  // L2 WebSocket: Target network for real-time minter event monitoring
   l2WsRpc: z.string().url('l2WsRpc must be a valid WebSocket URL'),
 
-  l1ContractAddress: EthereumAddressSchema,
-  l2ContractAddress: EthereumAddressSchema,
+  // Contract Addresses in tBTC Protocol:
+  // L1: Bitcoin depositor contracts on Ethereum
+  // L2: Bitcoin depositor contracts on target network (Arbitrum, Base, etc.)
+  l1ContractAddress: EthereumAddressSchema, // L1BitcoinDepositor on Ethereum
+  l2ContractAddress: EthereumAddressSchema, // L2BitcoinDepositor on target network
 
-  l1BitcoinRedeemerAddress: EthereumAddressSchema,
-  /**
-   * Optional address of the L2BitcoinRedeemer contract/program.
-   * Not all chains will have L2 redemption functionality, or it may be deployed
-   * later than minting. Non-EVM chains, for example, might initially lack a
-   * specific L2BitcoinRedeemer program while still supporting tBTC minting.
-   */
-  l2BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
+  // Bitcoin Redeemer contracts are not currently deployed in tBTC v2
+  // Based on research of official Threshold docs and tBTC v2 GitHub repo
+  // These features may be added in future versions
+  // l1BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
+  // l2BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
 
-  l2WormholeGatewayAddress: EthereumAddressSchema,
-  l2WormholeChainId: z.coerce.number().int().nonnegative(),
+  // Wormhole Configuration for cross-chain messaging
+  l2WormholeGatewayAddress: EthereumAddressSchema, // Wormhole Gateway on target network
+  l2WormholeChainId: z.coerce.number().int().nonnegative(), // Wormhole Chain ID for target network
 
+  // Block Configuration:
+  // L2 start block: Where to begin monitoring minter events on target network
+  // L1 confirmations: How many Ethereum blocks to wait for transaction finality
   l2StartBlock: z.coerce.number().int().nonnegative(),
-  vaultAddress: EthereumAddressSchema,
+  vaultAddress: EthereumAddressSchema, // TBTCVault on Ethereum
 
-  // Number of L1 block confirmations to wait for transactions.
+  // Number of L1 (Ethereum) block confirmations to wait for transactions.
   l1Confirmations: z.coerce.number().int().positive().default(1),
 });
 
 export type CommonChainConfig = z.infer<typeof CommonChainConfigSchema>;
+export type CommonChainInput = z.input<typeof CommonChainConfigSchema>;

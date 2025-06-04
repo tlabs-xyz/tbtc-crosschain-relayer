@@ -18,21 +18,18 @@ export enum AuditEventType {
 }
 
 /**
- * Append an event to the audit log (DB)
- * @param eventType Type of the event
- * @param depositId ID of the deposit
- * @param data Additional data to log
+ * Append to audit log
  */
 export const appendToAuditLog = async (
   eventType: AuditEventType,
   depositId: string | null,
-  data: any,
+  data: Record<string, unknown>,
 ): Promise<void> => {
   let errorCode: number | undefined = undefined;
   if (data && typeof data.code === 'number') {
     errorCode = data.code;
     // Remove code from data to avoid duplication
-    const { code, ...rest } = data;
+    const { code: _code, ...rest } = data;
     data = rest;
   }
   await prisma.auditLog.create({
@@ -175,7 +172,7 @@ export const logApiRequest = async (
   endpoint: string,
   method: string,
   depositId: string | null,
-  requestData: any = {},
+  requestData: Record<string, unknown> = {},
   responseStatus: number = 200,
 ): Promise<void> => {
   await appendToAuditLog(AuditEventType.API_REQUEST, depositId || 'no-deposit-id', {
@@ -192,7 +189,7 @@ export const logApiRequest = async (
 export const logDepositError = async (
   depositId: string,
   message: string,
-  extra?: any,
+  extra?: Record<string, unknown>,
 ): Promise<void> => {
   const data = { message, ...(extra || {}) };
   await appendToAuditLog(AuditEventType.ERROR, depositId, data);
