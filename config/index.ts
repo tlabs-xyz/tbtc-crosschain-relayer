@@ -226,7 +226,9 @@ try {
           baseLogger.error(`Zod Error details: ${JSON.stringify(err.error, null, 2)}`);
         } else {
           // For raw Error objects or other non-Zod errors, use Object.getOwnPropertyNames for better serialization
-          baseLogger.error(`Error details: ${JSON.stringify(err.error, Object.getOwnPropertyNames(err.error), 2)}`);
+          baseLogger.error(
+            `Error details: ${JSON.stringify(err.error, Object.getOwnPropertyNames(err.error), 2)}`,
+          );
         }
       } catch {
         baseLogger.error('Failed to stringify error details. Logging raw objects:');
@@ -269,7 +271,9 @@ try {
   baseLogger.error(`Error Message: ${e.message || 'No message property'}`);
   baseLogger.error(`Error Type: ${e.constructor ? e.constructor.name : typeof e}`);
   try {
-    baseLogger.error(`Full Error Object (stringified): ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`);
+    baseLogger.error(
+      `Full Error Object (stringified): ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
+    );
   } catch {
     baseLogger.error('Full Error Object (could not stringify, logging raw): ', e);
   }

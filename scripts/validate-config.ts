@@ -185,10 +185,16 @@ async function validateChainConfigs(): Promise<boolean> {
       validationErrors.forEach((err) => {
         logger.error(`Chain Key: '${err.chainKey}'`);
         try {
-          logger.error(`Input provided for '${err.chainKey}':\n${JSON.stringify(err.input, null, 2)}`);
-          logger.error(`Error details for '${err.chainKey}':\n${JSON.stringify(err.error, null, 2)}`);
+          logger.error(
+            `Input provided for '${err.chainKey}':\n${JSON.stringify(err.input, null, 2)}`,
+          );
+          logger.error(
+            `Error details for '${err.chainKey}':\n${JSON.stringify(err.error, null, 2)}`,
+          );
         } catch {
-          logger.error(`Failed to stringify details for chain '${err.chainKey}'. Logging raw objects:`);
+          logger.error(
+            `Failed to stringify details for chain '${err.chainKey}'. Logging raw objects:`,
+          );
           logger.error('Raw Input:', err.input);
           logger.error('Raw Error:', err.error);
         }
