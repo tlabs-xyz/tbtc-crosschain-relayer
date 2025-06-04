@@ -10,8 +10,6 @@ services:
       NODE_ENV: test
       API_ONLY_MODE: true
       VERBOSE_APP: true
-      HOST_PORT: 3000
-      APP_PORT: 3000
       
       # Database configuration
       POSTGRES_USER: postgres
@@ -33,6 +31,9 @@ services:
       ETHEREUM_MAINNET_RPC: "https://mock-ethereum-mainnet.test.com"
       CHAIN_SOLANADEVNETIMPORTED_L2_RPC: "https://mock-solana-devnet.test.com"
       CHAIN_SOLANADEVNETIMPORTED_L2_WS_RPC: "wss://mock-solana-devnet-ws.test.com"
+    
+    ports:
+      - "3000:3000"
       
     build:
       target: development
