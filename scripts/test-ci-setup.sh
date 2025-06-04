@@ -15,10 +15,18 @@ echo "2. Waiting for services to become healthy..."
 # Test service endpoints
 echo "3. Testing service endpoints..."
 echo "Testing /status endpoint..."
-curl -f http://localhost:3000/status || echo "Failed to reach /status endpoint"
+if ! curl -f http://localhost:3000/status; then
+  echo "Error: Failed to reach /status endpoint. Exiting."
+  exit 1
+fi
+echo "/status endpoint test passed."
 
 echo "Testing root endpoint..."
-curl -f http://localhost:3000/ || echo "Failed to reach root endpoint"
+if ! curl -f http://localhost:3000/; then
+  echo "Error: Failed to reach root endpoint. Exiting."
+  exit 1
+fi
+echo "Root endpoint test passed."
 
 # Validate configuration
 echo "4. Validating configuration..."
