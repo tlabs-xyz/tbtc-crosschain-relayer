@@ -58,7 +58,7 @@ jobs:
         shell: bash
 
       - name: Validate configuration
-        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm tbtc-relayer-dev yarn run validate-config:test
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm tbtc-relayer-dev yarn run validate-config
 
       - name: Reset database
         run: npx prisma migrate reset --force --skip-seed
