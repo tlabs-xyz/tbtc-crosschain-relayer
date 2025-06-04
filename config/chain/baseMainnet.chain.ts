@@ -9,24 +9,45 @@ import {
   PUBLIC_WS_RPCS,
   getCommonChainInput,
 } from './common.chain.js';
+import type { CommonChainInput } from '../schemas/common.schema.js';
 
 type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
 
 export const getBaseMainnetChainInput = (): EvmChainInput => {
   const commonMainnetInput = getCommonChainInput(NETWORK.MAINNET);
 
+  // Validate required properties from commonMainnetInput
+  const requiredFields: Array<keyof Partial<CommonChainInput>> = [
+    'network',
+    'l1Rpc',
+    'vaultAddress',
+    'l1ContractAddress',
+    'l1Confirmations',
+    'enableL2Redemption',
+    'useEndpoint',
+  ];
+  for (const field of requiredFields) {
+    if (
+      typeof field === 'string' &&
+      (commonMainnetInput[field] === undefined || commonMainnetInput[field] === null)
+    ) {
+      throw new Error(
+        `getBaseMainnetChainInput: Missing required field '${String(field)}' in commonMainnetInput.`,
+      );
+    }
+  }
+
   const config: EvmChainInput = {
-    // Explicitly assign all properties from commonMainnetInput or defaults
-    network: commonMainnetInput.network!, // Should be NETWORK.MAINNET
-    l1Rpc: commonMainnetInput.l1Rpc!,
-    vaultAddress: commonMainnetInput.vaultAddress!,
-    l1ContractAddress: commonMainnetInput.l1ContractAddress!,
+    network: commonMainnetInput.network as NETWORK,
+    l1Rpc: commonMainnetInput.l1Rpc as string,
+    vaultAddress: commonMainnetInput.vaultAddress as string,
+    l1ContractAddress: commonMainnetInput.l1ContractAddress as string,
     l1Confirmations: getEnvNumber(
       'CHAIN_BASEMAINNET_L1_CONFIRMATIONS',
-      commonMainnetInput.l1Confirmations!, // Default to value from commonMainnetInput
+      commonMainnetInput.l1Confirmations as number,
     ),
-    enableL2Redemption: commonMainnetInput.enableL2Redemption!,
-    useEndpoint: commonMainnetInput.useEndpoint!,
+    enableL2Redemption: commonMainnetInput.enableL2Redemption as boolean,
+    useEndpoint: commonMainnetInput.useEndpoint as boolean,
     supportsRevealDepositAPI:
       commonMainnetInput.supportsRevealDepositAPI === undefined
         ? false

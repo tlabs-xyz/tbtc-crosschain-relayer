@@ -86,3 +86,4 @@ export const CommonChainConfigSchema = z.object({
 });
 
 export type CommonChainConfig = z.infer<typeof CommonChainConfigSchema>;
+export type CommonChainInput = z.input<typeof CommonChainConfigSchema>;

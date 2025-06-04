@@ -9,23 +9,44 @@ import {
   PUBLIC_WS_RPCS,
   getCommonChainInput,
 } from './common.chain.js';
+import type { CommonChainInput } from '../schemas/common.schema.js';
 
 type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
 
 export const getBaseSepoliaTestnetChainInput = (): EvmChainInput => {
   const commonTestnetInput = getCommonChainInput(NETWORK.TESTNET);
 
+  // Validate required properties from commonTestnetInput
+  const requiredFields: Array<keyof Partial<CommonChainInput>> = [
+    'network',
+    'l1Rpc',
+    'vaultAddress',
+    'l1Confirmations',
+    'enableL2Redemption',
+    'useEndpoint',
+  ];
+  for (const field of requiredFields) {
+    if (
+      typeof field === 'string' &&
+      (commonTestnetInput[field] === undefined || commonTestnetInput[field] === null)
+    ) {
+      throw new Error(
+        `getBaseSepoliaTestnetChainInput: Missing required field '${String(field)}' in commonTestnetInput.`,
+      );
+    }
+  }
+
   const config: EvmChainInput = {
-    network: commonTestnetInput.network!,
-    l1Rpc: commonTestnetInput.l1Rpc!,
-    vaultAddress: commonTestnetInput.vaultAddress!,
+    network: commonTestnetInput.network as NETWORK,
+    l1Rpc: commonTestnetInput.l1Rpc as string,
+    vaultAddress: commonTestnetInput.vaultAddress as string,
     l1ContractAddress: '0x59FAE614867b66421b44D1Ed3461e6B6a4B50106',
     l1Confirmations: getEnvNumber(
       'CHAIN_BASESEPOLIATESTNET_L1_CONFIRMATIONS',
-      commonTestnetInput.l1Confirmations!,
+      commonTestnetInput.l1Confirmations as number,
     ),
-    enableL2Redemption: commonTestnetInput.enableL2Redemption!,
-    useEndpoint: commonTestnetInput.useEndpoint!,
+    enableL2Redemption: commonTestnetInput.enableL2Redemption as boolean,
+    useEndpoint: commonTestnetInput.useEndpoint as boolean,
     supportsRevealDepositAPI:
       commonTestnetInput.supportsRevealDepositAPI === undefined
         ? false
