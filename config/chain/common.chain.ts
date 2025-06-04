@@ -1,5 +1,5 @@
-import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
-import { NETWORK } from '../schemas/common.schema.js';
+import type { CommonChainConfigSchema } from '../schemas/common.schema';
+import { NETWORK } from '../schemas/common.schema';
 import { z } from 'zod';
 import { getEnv } from '../../utils/Env.js';
 
@@ -15,12 +15,13 @@ type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 export const VAULT_ADDRESSES = {
   [NETWORK.MAINNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD',
   [NETWORK.TESTNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD',
+  [NETWORK.DEVNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD',
 } as const;
 
 export const L1_CONTRACT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0xC83A3EbC17F11F69F9782e50b017C8A53d72662A',
-  [NETWORK.TESTNET]: '0x75A6e4A7C8fAa162192FAD6C1F7A6d48992c619A',
-  [NETWORK.DEVNET]: '0x75A6e4A7C8fAa162192FAD6C1F7A6d48992c619A', // Assuming Devnet uses Testnet L1 contracts
+  [NETWORK.MAINNET]: '0xF462413315Ee37AEBD0f5cA4296D9F3F3D9C4A59',
+  [NETWORK.TESTNET]: '0xF462413315Ee37AEBD0f5cA4296D9F3F3D9C4A59',
+  [NETWORK.DEVNET]: '0xF462413315Ee37AEBD0f5cA4296D9F3F3D9C4A59',
 } as const;
 
 // =============================================================================
@@ -57,6 +58,7 @@ export const PUBLIC_RPCS = {
   'arbitrum-sepolia': 'https://sepolia.arbitrum.io/rpc',
   'base-mainnet': 'https://base-mainnet.publicnode.com',
   'base-sepolia': 'https://base-sepolia.publicnode.com',
+  'ethereum-mainnet': 'https://mainnet.publicnode.com',
   'ethereum-sepolia': 'https://sepolia.publicnode.com',
   'solana-devnet': 'https://api.devnet.solana.com',
 } as const;
@@ -67,6 +69,7 @@ export const PUBLIC_WS_RPCS = {
   'arbitrum-sepolia': 'wss://sepolia.arbitrum.io/feed',
   'base-mainnet': 'wss://base-mainnet.publicnode.com',
   'base-sepolia': 'wss://base-sepolia.publicnode.com',
+  'ethereum-mainnet': 'wss://mainnet.publicnode.com',
   'ethereum-sepolia': 'wss://sepolia.publicnode.com',
   'solana-devnet': 'wss://api.devnet.solana.com',
 } as const;
@@ -77,32 +80,40 @@ export const PUBLIC_WS_RPCS = {
 
 // Standard confirmation counts by network type
 export const L1_CONFIRMATIONS = {
-  MAINNET: 6, // Production security
-  MAINNET_HIGH: 12, // Enhanced production security
-  TESTNET: 3, // Faster testing
+  [NETWORK.MAINNET]: 6,
+  [NETWORK.TESTNET]: 3,
+  [NETWORK.DEVNET]: 3,
 } as const;
 
 // Common feature flags
 export const FEATURE_FLAGS = {
-  USE_ENDPOINT: false, // Use direct blockchain listeners (default)
+  USE_ENDPOINT: false,
   ENABLE_L2_REDEMPTION_MAINNET: true,
   ENABLE_L2_REDEMPTION_TESTNET: true,
+  ENABLE_L2_REDEMPTION_DEVNET: true,
 };
 
-// Default common values, intended to be shared primarily by MAINNET configurations.
-// Specific configurations (including testnets) can override these.
-export const commonChainInput: Partial<CommonChainInput> = {
-  // Core network and L1 settings - typically common for mainnet deployments
-  network: NETWORK.MAINNET,
-  l1Rpc: getEnv('ETHEREUM_MAINNET_RPC'),
-  vaultAddress: VAULT_ADDRESSES[NETWORK.MAINNET],
-  l1Confirmations: L1_CONFIRMATIONS.MAINNET,
-  l1ContractAddress: L1_CONTRACT_ADDRESSES[NETWORK.MAINNET],
-  useEndpoint: FEATURE_FLAGS.USE_ENDPOINT,
-  enableL2Redemption: FEATURE_FLAGS.ENABLE_L2_REDEMPTION_MAINNET,
+export const getCommonChainInput = (targetNetwork: NETWORK): Partial<CommonChainInput> => {
+  const l1ConfValue = L1_CONFIRMATIONS[targetNetwork] ?? L1_CONFIRMATIONS[NETWORK.TESTNET];
 
-  // Fields that were previously 'undefined as unknown as <type>' have been removed.
-  // They are now expected to be explicitly defined in each specific chain configuration
-  // that spreads commonChainInput (or a derivative of it).
-  // Zod schemas will enforce their presence and correct type during config loading.
+  const commonInput: Partial<CommonChainInput> = {
+    network: targetNetwork,
+    useEndpoint: FEATURE_FLAGS.USE_ENDPOINT,
+    l1Rpc:
+      targetNetwork === NETWORK.MAINNET
+        ? getEnv('ETHEREUM_MAINNET_RPC', PUBLIC_RPCS['ethereum-mainnet'])
+        : getEnv('ETHEREUM_SEPOLIA_RPC', PUBLIC_RPCS['ethereum-sepolia']),
+    vaultAddress: VAULT_ADDRESSES[targetNetwork] || VAULT_ADDRESSES[NETWORK.TESTNET],
+    l1ContractAddress:
+      L1_CONTRACT_ADDRESSES[targetNetwork] || L1_CONTRACT_ADDRESSES[NETWORK.TESTNET],
+    l1Confirmations: l1ConfValue,
+    enableL2Redemption:
+      targetNetwork === NETWORK.MAINNET
+        ? FEATURE_FLAGS.ENABLE_L2_REDEMPTION_MAINNET
+        : targetNetwork === NETWORK.TESTNET
+          ? FEATURE_FLAGS.ENABLE_L2_REDEMPTION_TESTNET
+          : FEATURE_FLAGS.ENABLE_L2_REDEMPTION_DEVNET,
+  };
+
+  return commonInput;
 };

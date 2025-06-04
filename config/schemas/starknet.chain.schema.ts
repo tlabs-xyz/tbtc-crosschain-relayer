@@ -35,6 +35,19 @@ export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetC
     l2WormholeGatewayAddress: z
       .string()
       .min(1, 'l2WormholeGatewayAddress is required for StarkNet'),
+
+    /**
+     * L2 WebSocket RPC endpoint for the StarkNet chain.
+     * IMPORTANT: This field is currently NOT USED by the `StarknetChainHandler`.
+     * The L2 interaction logic for StarkNet (which might use WebSockets for event
+     * monitoring or other purposes) is planned for future implementation.
+     *
+     * This field is included in the schema for forward compatibility and to maintain
+     * structural consistency with other chain configurations.
+     * It can be an empty string or a valid WebSocket URL. If a URL is provided,
+     * it will be validated, but the application logic will not connect to it for StarkNet.
+     */
+    l2WsRpc: z.string().url('l2WsRpc must be a valid WebSocket URL').optional().or(z.literal('')),
   })
   .refine((data) => data.chainType === CHAIN_TYPE.STARKNET, {
     message: 'Chain type must be Starknet for StarknetChainConfigSchema.',
