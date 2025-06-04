@@ -48,20 +48,25 @@ jobs:
         run: yarn build
 
       - name: Setup .env file
-        run: cat .env.example > .env
+        run: cp .env.example .env
 
       - name: Start Docker Compose services
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
-
-      - name: Reset database
-        run: docker compose exec -T -e NODE_OPTIONS="--max-old-space-size=1024" tbtc-relayer-dev npx prisma migrate reset --force --skip-seed
 
       - name: Wait for services to become healthy
         run: .github/scripts/wait-for-healthy-services.sh
         shell: bash
 
+      - name: Reset database
+        run: npx prisma migrate reset --force --skip-seed
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tbtc_relayer?schema=public
+
       - name: Run tests
         run: yarn test:coverage
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tbtc_relayer?schema=public
 
       - name: Stop Docker Compose services
         if: always()
