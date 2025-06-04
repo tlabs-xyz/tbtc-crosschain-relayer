@@ -23,9 +23,9 @@ export const getSuiTestnetChainInput = (): SuiChainInput => {
     'l1Confirmations',
     'enableL2Redemption',
     'useEndpoint',
-    'suiPrivateKey',
-    'l2ContractAddress',
-    'l2WormholeGatewayAddress',
+    // 'suiPrivateKey', // This field is populated later from env; getEnv handles missing variable.
+    // 'l2ContractAddress', // This field is populated later from env or default; getEnv handles this.
+    // 'l2WormholeGatewayAddress', // This field is populated later from env or default; getEnv handles this.
   ];
   for (const field of requiredFields) {
     if (
