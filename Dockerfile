@@ -31,6 +31,8 @@ COPY interfaces/ ./interfaces/
 COPY routes/ ./routes/
 COPY config/ ./config/
 COPY types/ ./types/
+COPY scripts/ ./scripts/
+COPY target/ ./target/
 
 RUN yarn build
 
