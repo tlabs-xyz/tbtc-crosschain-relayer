@@ -57,6 +57,9 @@ jobs:
         run: .github/scripts/wait-for-healthy-services.sh
         shell: bash
 
+      - name: Validate configuration
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm tbtc-relayer-dev yarn run validate-config:test
+
       - name: Reset database
         run: npx prisma migrate reset --force --skip-seed
         env:
