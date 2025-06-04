@@ -36,7 +36,7 @@ export const solanaDevnetChainInput: SolanaChainInput = {
   // == Contract Addresses (Overrides using Testnet values for Devnet) ==
   l1ContractAddress: L1_CONTRACT_ADDRESSES[NETWORK.TESTNET], // Reverted: Devnet uses Testnet L1 contracts
   vaultAddress: VAULT_ADDRESSES[NETWORK.TESTNET], // Reverted: Devnet uses Testnet Vault
-  l2ContractAddress: '11111111111111111111111111111111', // Reverted: Placeholder for Solana Program ID
+  l2ContractAddress: getEnv('CHAIN_SOLANADEVNET_L2_CONTRACT_ADDRESS', '11111111111111111111111111111111'), // Use ENV var, fallback to placeholder
 
   // == Wormhole Configuration (Placeholders - Adjust for actual Solana Devnet Wormhole) ==
   l2WormholeGatewayAddress: 'MockSolanaWgway11111111111111111111111111',

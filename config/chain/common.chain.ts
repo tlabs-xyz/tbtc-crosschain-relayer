@@ -91,7 +91,7 @@ export const FEATURE_FLAGS = {
 
 // Default common values, intended to be shared primarily by MAINNET configurations.
 // Specific configurations (including testnets) can override these.
-export const commonChainInput: CommonChainInput = {
+export const commonChainInput: Partial<CommonChainInput> = {
   // Core network and L1 settings - typically common for mainnet deployments
   network: NETWORK.MAINNET,
   l1Rpc: getEnv('ETHEREUM_MAINNET_RPC'),
@@ -101,16 +101,8 @@ export const commonChainInput: CommonChainInput = {
   useEndpoint: FEATURE_FLAGS.USE_ENDPOINT,
   enableL2Redemption: FEATURE_FLAGS.ENABLE_L2_REDEMPTION_MAINNET,
 
-  // The following fields are set to 'undefined as unknown as <type>' to satisfy the
-  // CommonChainInput type definition. They are REQUIRED to be defined in specific
-  // chain configuration files that spread commonChainInput. Zod schemas will enforce
-  // their presence and correct type during config loading.
-  privateKey: undefined as unknown as string, // REQUIRED per chain
-  l2ContractAddress: undefined as unknown as string, // REQUIRED per chain
-  l2Rpc: undefined as unknown as string, // REQUIRED per chain
-  l2WsRpc: undefined as unknown as string, // REQUIRED per chain
-  l2WormholeGatewayAddress: undefined as unknown as string, // REQUIRED per chain
-  l2WormholeChainId: undefined as unknown as number, // REQUIRED per chain
-  l2StartBlock: undefined as unknown as number, // REQUIRED per chain
-  chainName: undefined as unknown as string, // REQUIRED per chain
+  // Fields that were previously 'undefined as unknown as <type>' have been removed.
+  // They are now expected to be explicitly defined in each specific chain configuration
+  // that spreads commonChainInput (or a derivative of it).
+  // Zod schemas will enforce their presence and correct type during config loading.
 };
