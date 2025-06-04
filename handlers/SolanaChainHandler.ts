@@ -13,7 +13,7 @@ import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 import { type Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json' assert { type: 'json' };
+import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json' with { type: 'json' };
 import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
 import { DepositStore } from '../utils/DepositStore.js';
 
