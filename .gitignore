@@ -27,5 +27,3 @@ prisma/memory:
 *.diff
 
 *.log
-
-.do
