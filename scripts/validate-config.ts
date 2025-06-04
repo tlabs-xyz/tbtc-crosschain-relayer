@@ -30,6 +30,20 @@ async function loadEnvironment() {
 }
 
 /**
+ * Setup mock environment variables for CI validation by importing existing test setup
+ */
+async function setupCIMockEnvironment() {
+  const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+
+  if (!isCI) {
+    return; // Only set mocks in CI environment
+  }
+
+  // Import the existing test setup which already has all the mock environment variables
+  await import('../tests/setup.ts');
+}
+
+/**
  * Dynamically imports modules after environment setup
  */
 async function importConfigModules() {
@@ -241,6 +255,9 @@ async function main(): Promise<void> {
 
   // Load environment variables first (skip dotenv in CI)
   await loadEnvironment();
+
+  // Setup mock environment variables for CI validation
+  await setupCIMockEnvironment();
 
   const { logger } = await importConfigModules();
   logger.info(`[${SCRIPT_NAME}] Environment setup complete, beginning validation...`);
