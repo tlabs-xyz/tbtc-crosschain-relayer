@@ -73,9 +73,81 @@ export interface ChainValidationError {
   isZodError?: boolean; // Flag to distinguish Zod errors for logging
 }
 
+function handleValidationError(
+  key: string,
+  error: any,
+  input: any,
+  logger: typeof baseLogger,
+): ChainValidationError {
+  const isZodError = error instanceof z.ZodError;
+  const errorPayloadToStore = isZodError ? error.flatten() : error;
+  const errorDetails: ChainValidationError = {
+    chainKey: key,
+    error: errorPayloadToStore,
+    input,
+    isZodError,
+  };
+
+  if (isZodError) {
+    const zodErrorData = {
+      chain: key,
+      flattened: error.flatten(),
+      errors: error.errors,
+      inputAttempted: input,
+    };
+    logger.error(
+      `Config validation failed for '${key}'. Flattened Zod errors: ${JSON.stringify(zodErrorData.flattened, null, 2)}`,
+    );
+  } else {
+    logger.error(`--------------------------------------------------------------------`);
+    logger.error(`--- UNEXPECTED ERROR loading/validating chain '${key}' ---`);
+    logger.error(`--------------------------------------------------------------------`);
+    logger.error(`Chain Key: ${key}`);
+    logger.error(`Error Message: ${error.message || 'No message property'}`);
+    logger.error(`Error Type: ${error.constructor ? error.constructor.name : typeof error}`);
+    try {
+      logger.error(
+        `Full Error Object (stringified): ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
+      );
+    } catch {
+      logger.error('Full Error Object (could not stringify, logging raw):', error);
+    }
+    if (error.stack) {
+      logger.error('Stack Trace:', error.stack);
+    }
+    logger.error(`Input that may have caused error:`, JSON.stringify(input, null, 2));
+    logger.error(`--------------------------------------------------------------------`);
+  }
+  return errorDetails;
+}
+
+function validateSingleChain(
+  key: string,
+  entry: ChainSchemaRegistryEntry,
+  logger: typeof baseLogger,
+): { config?: AnyChainConfig; error?: ChainValidationError } {
+  let inputForThisChain: any = null;
+  try {
+    logger.info(`Attempting to load and validate configuration for chain: ${key}`);
+    inputForThisChain = entry.getInputFunc();
+    const config = entry.schema.parse(inputForThisChain) as AnyChainConfig;
+    logger.info(`Successfully loaded configuration for chain: ${key}`);
+    return { config };
+  } catch (error: any) {
+    let capturedInput: any;
+    if (inputForThisChain === null) {
+      capturedInput = `Input data could not be retrieved for chain '${key}'. The failure occurred during input generation with error: ${error instanceof Error ? error.message : String(error)}`;
+    } else {
+      capturedInput = inputForThisChain;
+    }
+    const validationError = handleValidationError(key, error, capturedInput, logger);
+    return { error: validationError };
+  }
+}
+
 export function loadAndValidateChainConfigs(
   targetChainKeys: string[],
-  logger: typeof baseLogger, // Expecting a logger instance
+  logger: typeof baseLogger,
 ): { configs: AllChainConfigs; validationErrors: ChainValidationError[] } {
   const loadedConfigs: AllChainConfigs = {};
   const validationErrors: ChainValidationError[] = [];
@@ -94,70 +166,11 @@ export function loadAndValidateChainConfigs(
       });
       continue;
     }
-
-    let inputForThisChain: any = null; // Variable to store input if getInputFunc succeeds
-    try {
-      logger.info(`Attempting to load and validate configuration for chain: ${key}`);
-      inputForThisChain = entry.getInputFunc();
-      loadedConfigs[key] = entry.schema.parse(inputForThisChain) as AnyChainConfig;
-      logger.info(`Successfully loaded configuration for chain: ${key}`);
-    } catch (error: any) {
-      const isZodError = error instanceof z.ZodError;
-      const errorPayloadToStore = isZodError ? error.flatten() : error; // Store raw error if not Zod
-
-      let capturedInput: any;
-      if (inputForThisChain === null) {
-        // This means entry.getInputFunc() itself failed. The 'error' variable holds this failure.
-        capturedInput = `Input data could not be retrieved for chain '${key}'. The failure occurred during input generation with error: ${error instanceof Error ? error.message : String(error)}`;
-      } else {
-        // entry.getInputFunc() succeeded, so inputForThisChain is the data that was attempted to be parsed.
-        // This branch is typically for ZodErrors, where parsing inputForThisChain failed.
-        capturedInput = inputForThisChain;
-      }
-
-      const errorDetails: ChainValidationError = {
-        chainKey: key,
-        error: errorPayloadToStore,
-        input: capturedInput,
-        isZodError: isZodError,
-      };
-      validationErrors.push(errorDetails);
-
-      if (isZodError) {
-        const zodErrorData = {
-          chain: key,
-          flattened: error.flatten(),
-          errors: error.errors,
-          inputAttempted: errorDetails.input,
-        };
-        logger.error(
-          `Config validation failed for '${key}'. Flattened Zod errors: ${JSON.stringify(zodErrorData.flattened, null, 2)}`,
-        );
-      } else {
-        // Enhanced logging for non-Zod errors
-        logger.error(`--------------------------------------------------------------------`);
-        logger.error(`--- UNEXPECTED ERROR loading/validating chain '${key}' ---`);
-        logger.error(`--------------------------------------------------------------------`);
-        logger.error(`Chain Key: ${key}`);
-        logger.error(`Error Message: ${error.message || 'No message property'}`);
-        logger.error(`Error Type: ${error.constructor ? error.constructor.name : typeof error}`);
-        // Avoid serializing potentially huge or circular objects directly with logger if it struggles
-        try {
-          logger.error(
-            `Full Error Object (stringified): ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-          );
-        } catch {
-          logger.error('Full Error Object (could not stringify, logging raw):', error);
-        }
-        if (error.stack) {
-          logger.error('Stack Trace:', error.stack);
-        }
-        logger.error(
-          `Input that may have caused error:`,
-          JSON.stringify(errorDetails.input, null, 2),
-        );
-        logger.error(`--------------------------------------------------------------------`);
-      }
+    const { config, error } = validateSingleChain(key, entry, logger);
+    if (config) {
+      loadedConfigs[key] = config;
+    } else if (error) {
+      validationErrors.push(error);
     }
   }
 

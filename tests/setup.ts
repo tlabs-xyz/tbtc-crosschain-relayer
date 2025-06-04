@@ -29,7 +29,7 @@ if (!isCI && !process.env.DATABASE_URL) {
   process.env.POSTGRES_PASSWORD = 'test_password';
   process.env.POSTGRES_DB = 'tbtc_relayer_test';
   process.env.DATABASE_URL =
-    'postgresql://test_user:test_password@localhost:5433/tbtc_relayer_test?schema=public';
+    'postgresql://postgres:postgres@localhost:5432/tbtc_relayer?schema=public';
 }
 // If DATABASE_URL is already set (e.g., by CI runner for host operations like Prisma migrate),
 // ensure other POSTGRES_ env vars are consistent if they are used by any test setup logic.

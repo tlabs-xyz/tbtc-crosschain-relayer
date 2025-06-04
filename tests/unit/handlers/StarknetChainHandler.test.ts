@@ -6,7 +6,7 @@ import {
 import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
 import { DepositStore } from '../../../utils/DepositStore.js';
 import logger from '../../../utils/Logger.js';
-import { DepositStatus } from '../../../types/DepositStatus.enum';
+import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import type { Reveal } from '../../../types/Reveal.type.js';
 import * as starknetAddressUtils from '../../../utils/starknetAddress.js';
