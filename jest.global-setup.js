@@ -4,10 +4,15 @@ module.exports = async () => {
   // Ensure the Postgres schema is up to date before tests
   // Using `db push` as a more direct way to ensure schema matches for tests.
 
-  // Use DATABASE_URL from environment, with fallback for local development
+  // Use DATABASE_URL from environment if set, otherwise use fallback for local development
   const testDatabaseUrl =
     process.env.DATABASE_URL ||
     'postgresql://test_user:test_password@localhost:5433/tbtc_relayer_test?schema=public';
+
+  console.log(
+    'Jest Global Setup: Using database:',
+    testDatabaseUrl.replace(/\/\/[^@]+@/, '//***:***@'),
+  );
 
   // Set the test database URL for Prisma commands
   const testEnv = {

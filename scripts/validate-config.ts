@@ -17,9 +17,17 @@
  * - 1: Configuration validation failed
  */
 
-import 'dotenv/config';
-
 const SCRIPT_NAME = 'validate-config';
+
+/**
+ * Load environment variables if not in CI
+ */
+async function loadEnvironment() {
+  // Only load dotenv in non-CI environments since CI sets environment variables directly
+  if (process.env.CI !== 'true' && process.env.GITHUB_ACTIONS !== 'true') {
+    await import('dotenv/config');
+  }
+}
 
 /**
  * Dynamically imports modules after environment setup
@@ -230,6 +238,9 @@ async function gracefulShutdown(exitCode: number): Promise<void> {
  */
 async function main(): Promise<void> {
   console.log(`[${SCRIPT_NAME}] Starting configuration validation...`);
+
+  // Load environment variables first (skip dotenv in CI)
+  await loadEnvironment();
 
   const { logger } = await importConfigModules();
   logger.info(`[${SCRIPT_NAME}] Environment setup complete, beginning validation...`);
