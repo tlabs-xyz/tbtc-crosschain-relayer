@@ -1,4 +1,5 @@
 import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
+import { NETWORK } from '../schemas/common.schema.js';
 import { z } from 'zod';
 import { getEnv } from '../../utils/Env.js';
 
@@ -10,26 +11,33 @@ type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 // This file contains shared configuration patterns and constants used across
 // multiple chain configurations to reduce duplication and ensure consistency.
 
-// =============================================================================
-// SHARED CONTRACT ADDRESSES
-// =============================================================================
+// Vault Addresses by network type
+export const VAULT_ADDRESSES = {
+  [NETWORK.MAINNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD',
+  [NETWORK.TESTNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD',
+} as const;
 
-// TBTCVault address - SAME across all mainnet chains (deployed on Ethereum)
-export const TBTC_VAULT_MAINNET = '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD';
-
-// TBTCVault address for testnet - verified to match mainnet address for Sepolia
-export const TBTC_VAULT_TESTNET = '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD'; // ✅ VERIFIED - Same as mainnet for Sepolia testnet
+export const L1_CONTRACT_ADDRESSES = {
+  [NETWORK.MAINNET]: '0xC83A3EbC17F11F69F9782e50b017C8A53d72662A',
+  [NETWORK.TESTNET]: '0x75A6e4A7C8fAa162192FAD6C1F7A6d48992c619A',
+  [NETWORK.DEVNET]: '0x75A6e4A7C8fAa162192FAD6C1F7A6d48992c619A', // Assuming Devnet uses Testnet L1 contracts
+} as const;
 
 // =============================================================================
 // WORMHOLE CONFIGURATION CONSTANTS
 // =============================================================================
 
-// Wormhole Chain IDs (only verified ones we actually use)
+// General Wormhole Chain IDs - these may or may not map 1:1 to our internal chain IDs
+// Ref: https://docs.wormhole.com/wormhole/reference/constants
 export const WORMHOLE_CHAIN_IDS = {
+  // EVM
   ARBITRUM_ONE: 23,
   BASE: 30,
-  BASE_SEPOLIA: 10004,
-  ARBITRUM_SEPOLIA: 10003, // needs verification
+  // EVM Testnets/Devnets
+  BASE_SEPOLIA: 10004, // Arbitrum Sepolia Wormhole Chain ID (Testnet)
+  ARBITRUM_SEPOLIA: 10003, // Verified: https://docs.wormhole.com/wormhole/reference/constants#testnet -> arbitrum-sepolia
+  // Non-EVM
+  SOLANA: 1,
 } as const;
 
 // Wormhole Gateway Addresses (only verified ones)
@@ -50,6 +58,7 @@ export const PUBLIC_RPCS = {
   'base-mainnet': 'https://base-mainnet.publicnode.com',
   'base-sepolia': 'https://base-sepolia.publicnode.com',
   'ethereum-sepolia': 'https://sepolia.publicnode.com',
+  'solana-devnet': 'https://api.devnet.solana.com',
 } as const;
 
 // Public WebSocket endpoints
@@ -59,6 +68,7 @@ export const PUBLIC_WS_RPCS = {
   'base-mainnet': 'wss://base-mainnet.publicnode.com',
   'base-sepolia': 'wss://base-sepolia.publicnode.com',
   'ethereum-sepolia': 'wss://sepolia.publicnode.com',
+  'solana-devnet': 'wss://api.devnet.solana.com',
 } as const;
 
 // =============================================================================
@@ -77,63 +87,30 @@ export const FEATURE_FLAGS = {
   USE_ENDPOINT: false, // Use direct blockchain listeners (default)
   ENABLE_L2_REDEMPTION_MAINNET: true,
   ENABLE_L2_REDEMPTION_TESTNET: true,
-} as const;
-
-// =============================================================================
-// SEPOLIA TESTNET COMMON CONFIGURATION
-// =============================================================================
-// This is the original common configuration for Sepolia testnet
-// TODO: Replace mock addresses with real testnet addresses
-
-export const commonChainInput: CommonChainInput = {
-  // tBTC Protocol Architecture for Sepolia Testnet:
-  // L1 = Ethereum Sepolia (core tBTC protocol deployment - testnet)
-  // L2 = Arbitrum Sepolia (minter functionality deployment - testnet)
-
-  // L1 RPC: Ethereum Sepolia (core tBTC protocol layer - testnet)
-  l1Rpc: getEnv('ETHEREUM_SEPOLIA_RPC', PUBLIC_RPCS['ethereum-sepolia']),
-
-  // L2 RPC: Arbitrum Sepolia (minter deployment layer - testnet)
-  l2Rpc: getEnv('CHAIN_SEPOLIATESTNET_L2_RPC', PUBLIC_RPCS['arbitrum-sepolia']),
-
-  // L2 WebSocket: Arbitrum Sepolia (for real-time minter events - testnet)
-  l2WsRpc: getEnv('CHAIN_SEPOLIATESTNET_L2_WS_RPC', PUBLIC_WS_RPCS['arbitrum-sepolia']),
-
-  // Environment variables - SENSITIVE VALUES ONLY
-  privateKey: getEnv('CHAIN_SEPOLIATESTNET_PRIVATE_KEY'),
-
-  // Block Configuration
-  l2StartBlock: 100000, // Conservative testnet start block
-  l1Confirmations: L1_CONFIRMATIONS.TESTNET, // Faster testnet confirmations
-
-  // Contract Addresses - TODO: Replace with real testnet addresses
-  // URGENT: These are MOCK addresses that will cause failures!
-  l1ContractAddress: '0x1111111111111111111111111111111111111111', // MOCK - L1BitcoinDepositor on Ethereum Sepolia
-  l2ContractAddress: '0x5555555555555555555555555555555555555555', // MOCK - L2BitcoinDepositor on Arbitrum Sepolia
-  vaultAddress: TBTC_VAULT_TESTNET, // TODO: Verify testnet vault address
-
-  // Wormhole Configuration - TODO: Replace with real testnet values
-  l2WormholeGatewayAddress: '0x4444444444444444444444444444444444444444', // MOCK - Wormhole Gateway on Arbitrum Sepolia
-  l2WormholeChainId: 10003, // Arbitrum Sepolia Wormhole Chain ID (needs verification)
-
-  // Feature Flags - Testnet defaults
-  useEndpoint: FEATURE_FLAGS.USE_ENDPOINT,
-  enableL2Redemption: FEATURE_FLAGS.ENABLE_L2_REDEMPTION_TESTNET,
 };
 
-/*
- * URGENT TODO - SEPOLIA TESTNET CONFIGURATION:
- *
- * The commonChainInput configuration still contains MOCK addresses!
- * This needs to be updated with real Sepolia testnet addresses:
- *
- * REQUIRED RESEARCH:
- * 1. L1BitcoinDepositor address on Ethereum Sepolia
- * 2. L2BitcoinDepositor address on Arbitrum Sepolia
- * 3. TBTCVault address for Sepolia testnet (may be same as mainnet)
- * 4. Wormhole Gateway address on Arbitrum Sepolia
- * 5. Verify Wormhole Chain ID for Arbitrum Sepolia (10003)
- *
- * IMPACT: Any chains using commonChainInput will have non-functional addresses
- * PRIORITY: High - affects testnet functionality
- */
+// Default common values, intended to be shared primarily by MAINNET configurations.
+// Specific configurations (including testnets) can override these.
+export const commonChainInput: CommonChainInput = {
+  // Core network and L1 settings - typically common for mainnet deployments
+  network: NETWORK.MAINNET,
+  l1Rpc: getEnv('ETHEREUM_MAINNET_RPC'),
+  vaultAddress: VAULT_ADDRESSES[NETWORK.MAINNET],
+  l1Confirmations: L1_CONFIRMATIONS.MAINNET,
+  l1ContractAddress: L1_CONTRACT_ADDRESSES[NETWORK.MAINNET],
+  useEndpoint: FEATURE_FLAGS.USE_ENDPOINT,
+  enableL2Redemption: FEATURE_FLAGS.ENABLE_L2_REDEMPTION_MAINNET,
+
+  // The following fields are set to 'undefined as unknown as <type>' to satisfy the
+  // CommonChainInput type definition. They are REQUIRED to be defined in specific
+  // chain configuration files that spread commonChainInput. Zod schemas will enforce
+  // their presence and correct type during config loading.
+  privateKey: undefined as unknown as string, // REQUIRED per chain
+  l2ContractAddress: undefined as unknown as string, // REQUIRED per chain
+  l2Rpc: undefined as unknown as string, // REQUIRED per chain
+  l2WsRpc: undefined as unknown as string, // REQUIRED per chain
+  l2WormholeGatewayAddress: undefined as unknown as string, // REQUIRED per chain
+  l2WormholeChainId: undefined as unknown as number, // REQUIRED per chain
+  l2StartBlock: undefined as unknown as number, // REQUIRED per chain
+  chainName: undefined as unknown as string, // REQUIRED per chain
+};
