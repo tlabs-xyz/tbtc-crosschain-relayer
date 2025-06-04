@@ -19,14 +19,22 @@ const StarknetChainBaseSchema = z.object({
     .default('0'),
 });
 
+// Omit privateKey as it's handled by starknetPrivateKey
 const CommonConfigForStarknet = CommonChainConfigSchema.omit({ privateKey: true });
 
 export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetChainBaseSchema)
   .extend({
+    // Ensure these specific StarkNet fields are part of the final schema shape
     chainType: StarknetChainBaseSchema.shape.chainType,
     chainName: StarknetChainBaseSchema.shape.chainName,
     starknetPrivateKey: StarknetChainBaseSchema.shape.starknetPrivateKey,
     l1FeeAmountWei: StarknetChainBaseSchema.shape.l1FeeAmountWei,
+
+    // Override inherited EthereumAddressSchema with a generic string for StarkNet addresses
+    l2ContractAddress: z.string().min(1, 'l2ContractAddress is required for StarkNet'),
+    l2WormholeGatewayAddress: z
+      .string()
+      .min(1, 'l2WormholeGatewayAddress is required for StarkNet'),
   })
   .refine((data) => data.chainType === CHAIN_TYPE.STARKNET, {
     message: 'Chain type must be Starknet for StarknetChainConfigSchema.',
