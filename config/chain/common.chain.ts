@@ -38,8 +38,8 @@ export const WORMHOLE_CHAIN_IDS = {
   ARBITRUM_ONE: 23,
   BASE: 30,
   // EVM Testnets/Devnets
-  BASE_SEPOLIA: 10004, // Arbitrum Sepolia Wormhole Chain ID (Testnet)
-  ARBITRUM_SEPOLIA: 10003, // Verified: https://docs.wormhole.com/wormhole/reference/constants#testnet -> arbitrum-sepolia
+  BASE_SEPOLIA: 10004,
+  ARBITRUM_SEPOLIA: 10003,
   // Non-EVM
   SOLANA: 1,
 } as const;
