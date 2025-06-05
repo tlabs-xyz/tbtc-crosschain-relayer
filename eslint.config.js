@@ -79,11 +79,27 @@ export default [
       prettier: prettierPlugin,
       import: importPlugin,
     },
+    settings: {
+      'import/resolver': {
+        typescript: {
+          alwaysTryTypes: true,
+        },
+        node: {
+          extensions: ['.js', '.jsx', '.ts', '.tsx', '.d.ts'],
+        },
+      },
+      'import/parsers': {
+        // Specify parser for .ts/.tsx files
+        '@typescript-eslint/parser': ['.ts', '.tsx'],
+      },
+    },
     rules: {
       // Start with recommended rules and override as needed
       ...tsPlugin.configs.recommended.rules,
       ...tsPlugin.configs['eslint-recommended'].overrides[0].rules,
       ...prettierConfig.rules,
+      ...(importPlugin.configs.recommended ? importPlugin.configs.recommended.rules : {}),
+      ...(importPlugin.configs.typescript ? importPlugin.configs.typescript.rules : {}),
 
       // Custom rules / Overrides from .eslintrc.js
       '@typescript-eslint/no-unused-vars': [
@@ -106,7 +122,9 @@ export default [
         'ignorePackages',
         {
           js: 'always',
+          jsx: 'always',
           ts: 'never',
+          tsx: 'never',
         },
       ],
     },
