@@ -20,6 +20,33 @@ ingress:
           prefix: /
 name: tbtc-crosschain-relayer
 region: nyc
+
+# Pre-deploy job for database migrations
+# jobs:
+#   - name: db-migrate-job
+#     kind: PRE_DEPLOY
+#     # Source configuration (mirrors the main service)
+#     github:
+#       repo: tlabs-xyz/tbtc-crosschain-relayer
+#       branch: main
+#       deploy_on_push: true # Keep consistent with service, though for a job it runs on deploy anyway
+#     dockerfile_path: /Dockerfile # Same Dockerfile as the service
+#     source_dir: / # Same source directory as the service
+
+#     run_command: npx prisma migrate deploy
+
+#     envs:
+#       - key: DATABASE_URL
+#         scope: RUN_TIME
+#         value: ${db-postgresql-nyc3-52188-tbtc-re.DATABASE_URL} # Binding to the database component
+#       - key: NODE_ENV
+#         scope: RUN_TIME
+#         type: GENERAL
+#         value: "production" # Good practice for prisma commands
+
+#     instance_count: 1
+#     instance_size_slug: basic-xxs # Use a small instance type for migrations
+
 services:
   - dockerfile_path: /Dockerfile
     envs:
@@ -65,7 +92,7 @@ services:
       - key: CORS_URL
         scope: RUN_TIME
         type: GENERAL
-        value: "http://localhost:8080"
+        value: "https://tbtc-crosschain-relayer-swmku.ondigitalocean.app"
       - key: CLEAN_QUEUED_TIME
         scope: RUN_TIME
         type: GENERAL
