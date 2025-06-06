@@ -180,7 +180,7 @@ async function validateChainConfigs(errors: ValidationError[]): Promise<void> {
           logger.error(errObj);
         }
         logger.info(
-          '[${SCRIPT_NAME}] Proceeding without chain config validation as no chains are defined or specified, and in test/API_ONLY_MODE.',
+          `[${SCRIPT_NAME}] Proceeding without chain config validation as no chains are defined or specified, and in test/API_ONLY_MODE.`,
         );
         return;
       }
