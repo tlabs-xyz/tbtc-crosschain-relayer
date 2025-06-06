@@ -26,7 +26,8 @@ export class EndpointController {
       logger.debug('Received reveal data via endpoint');
 
       // Extract data from request body
-      const { fundingTx, reveal, l2DepositOwner, l2Sender, destinationChainDepositOwner } = req.body;
+      const { fundingTx, reveal, l2DepositOwner, l2Sender, destinationChainDepositOwner } =
+        req.body;
 
       // Log API request
       logApiRequest('/api/reveal', 'POST', null, {
@@ -65,6 +66,11 @@ export class EndpointController {
         logger.warn(
           `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
         );
+        res.status(409).json({
+          success: false,
+          error: 'Deposit already exists',
+          depositId: depositId,
+        });
         return;
       }
 
@@ -80,16 +86,44 @@ export class EndpointController {
       );
       logger.debug(`Created deposit with ID: ${deposit.id}`);
 
+      // Save deposit to database before initializing
+      try {
+        await DepositStore.create(deposit);
+        logger.info(`Deposit saved to database with ID: ${deposit.id}`);
+      } catch (error: any) {
+        logger.error(`Failed to save deposit to database: ${error.message}`);
+        logDepositError(depositId, 'Failed to save deposit to database', error);
+
+        res.status(500).json({
+          success: false,
+          error: 'Failed to save deposit to database',
+          depositId: deposit.id,
+        });
+        return;
+      }
+
       // Initialize the deposit
       const transactionReceipt = await this.chainHandler.initializeDeposit(deposit);
 
-      // Return success
-      res.status(200).json({
-        success: true,
-        depositId: deposit.id,
-        message: 'Deposit initialized successfully',
-        receipt: transactionReceipt,
-      });
+      // Check if initialization was successful
+      if (transactionReceipt) {
+        // Return success only if initialization succeeded
+        res.status(200).json({
+          success: true,
+          depositId: deposit.id,
+          message: 'Deposit initialized successfully',
+          receipt: transactionReceipt,
+        });
+      } else {
+        // Initialization failed
+        logger.error(`Deposit initialization failed for ID: ${deposit.id}`);
+        res.status(500).json({
+          success: false,
+          error: 'Deposit initialization failed',
+          depositId: deposit.id,
+          message: 'Deposit was saved but initialization on L1 failed',
+        });
+      }
     } catch (error: any) {
       logErrorContext('Error handling reveal endpoint:', error);
 

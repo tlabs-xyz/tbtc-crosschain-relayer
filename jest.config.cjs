@@ -6,6 +6,7 @@ module.exports = {
   testMatch: ['**/*.test.ts'],
   moduleFileExtensions: ['js', 'mjs', 'cjs', 'ts', 'mts', 'cts', 'json', 'node'],
   verbose: true,
+  forceExit: true,
   collectCoverageFrom: [
     'controllers/**/*.ts',
     'handlers/**/*.ts',

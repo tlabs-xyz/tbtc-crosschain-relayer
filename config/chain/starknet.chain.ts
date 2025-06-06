@@ -60,10 +60,8 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     l2Rpc: getEnv('CHAIN_STARKNETTESTNET_L2_RPC', 'https://starknet-sepolia.public.blastapi.io'),
     l2WsRpc: getEnv('CHAIN_STARKNETTESTNET_L2_WS_RPC', ''),
     l2StartBlock: getEnvNumber('CHAIN_STARKNETTESTNET_L2_START_BLOCK', 0),
-    l2ContractAddress: getEnv(
-      'CHAIN_STARKNETTESTNET_L2_CONTRACT_ADDRESS',
-      '0xc2fe2522A5673E56da0D6b754b2d5cA3E9e3e64B',
-    ),
+    l2ContractAddress: getEnv('CHAIN_STARKNETTESTNET_L2_CONTRACT_ADDRESS'),
+    // TODO: Not needed, uses StarkGate
     l2WormholeGatewayAddress: getEnv(
       'CHAIN_STARKNETTESTNET_WORMHOLE_GATEWAY',
       '0x98B5e2e6a481508c24B8b6A0b3A5b6A0b3A5b6A0',
