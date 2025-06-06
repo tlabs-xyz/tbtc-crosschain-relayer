@@ -37,6 +37,53 @@ import { NodeEnv } from './config/schemas/app.schema.js';
 const app: Express = express();
 
 // -------------------------------------------------------------------------
+// |                        EXTRACTED SETUP FUNCTIONS                      |
+// -------------------------------------------------------------------------
+function setupMiddleware(app: Express) {
+  if (appConfig.CORS_ENABLED) {
+    const corsOptions = {
+      credentials: true,
+      origin: appConfig.CORS_URL,
+    };
+    app.use(cors(corsOptions));
+    logger.info(`CORS enabled for origin: ${appConfig.CORS_URL || '*'}`);
+  }
+
+  app.use(helmet());
+  app.disable('x-powered-by');
+  app.use(compression() as unknown as RequestHandler);
+  app.use(express.json({ limit: '8mb' }));
+  app.use(express.urlencoded({ limit: '8mb', extended: true }));
+
+  // Apply rate limiting
+  const limiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 1000, // Limit each IP to 1000 requests per `window` (here, per 5 minutes)
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    message: 'Too many requests from this IP, please try again after 5 minutes',
+  });
+  app.use(limiter);
+  logger.info('Rate limiting middleware applied globally.');
+}
+
+function setupRoutes(app: Express) {
+  app.use(Routes);
+}
+
+async function initializeBackgroundServices() {
+  logger.info('Attempting to initialize all chain handlers...');
+  await initializeAllChains();
+
+  logger.info('Attempting to initialize all L2 redemption listeners...');
+  await initializeAllL2RedemptionServices();
+  logger.info('All L2 redemption listeners initialized successfully.');
+
+  startCronJobs();
+  logger.info('Cron jobs started.');
+}
+
+// -------------------------------------------------------------------------
 // |                          MAIN ASYNC FUNCTION                          |
 // -------------------------------------------------------------------------
 const main = async () => {
@@ -78,36 +125,12 @@ const main = async () => {
   // -------------------------------------------------------------------------
   // |                         MIDDLEWARE SETUP                            |
   // -------------------------------------------------------------------------
-  if (appConfig.CORS_ENABLED) {
-    const corsOptions = {
-      credentials: true,
-      origin: appConfig.CORS_URL,
-    };
-    app.use(cors(corsOptions));
-    logger.info(`CORS enabled for origin: ${appConfig.CORS_URL || '*'}`);
-  }
-
-  app.use(helmet());
-  app.disable('x-powered-by');
-  app.use(compression() as unknown as RequestHandler);
-  app.use(express.json({ limit: '8mb' }));
-  app.use(express.urlencoded({ limit: '8mb', extended: true }));
-
-  // Apply rate limiting
-  const limiter = rateLimit({
-    windowMs: 5 * 60 * 1000, // 5 minutes
-    max: 1000, // Limit each IP to 1000 requests per `window` (here, per 5 minutes)
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    message: 'Too many requests from this IP, please try again after 5 minutes',
-  });
-  app.use(limiter);
-  logger.info('Rate limiting middleware applied globally.');
+  setupMiddleware(app);
 
   // -------------------------------------------------------------------------
   // |                                 ROUTES                                |
   // -------------------------------------------------------------------------
-  app.use(Routes);
+  setupRoutes(app);
 
   // -------------------------------------------------------------------------
   // |                        BACKGROUND SERVICES                          |
@@ -135,15 +158,7 @@ const main = async () => {
     }
   } else {
     try {
-      logger.info('Attempting to initialize all chain handlers...');
-      await initializeAllChains();
-
-      logger.info('Attempting to initialize all L2 redemption listeners...');
-      await initializeAllL2RedemptionServices();
-      logger.info('All L2 redemption listeners initialized successfully.');
-
-      startCronJobs();
-      logger.info('Cron jobs started.');
+      await initializeBackgroundServices();
     } catch (error: any) {
       logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);
       if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
