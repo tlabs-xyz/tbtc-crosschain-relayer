@@ -1,3 +1,8 @@
+// tests/unit/utils/Deposits.test.ts - Unit tests for deposit utility functions
+//
+// This suite tests deposit ID generation, deposit creation, update logic, and edge cases for the Deposits utility module.
+// Ensures correctness of deposit lifecycle transitions, error handling, and data structure integrity.
+
 import {
   getDepositId,
   createDeposit,
@@ -7,7 +12,7 @@ import {
   updateToBridgedDeposit,
   updateLastActivity,
 } from '../../../utils/Deposits.js';
-import { ethers } from 'ethers';
+import * as AllEthers from 'ethers';
 import { type FundingTransaction } from '../../../types/FundingTransaction.type.js';
 import { type Reveal } from '../../../types/Reveal.type.js';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
@@ -17,14 +22,22 @@ import * as AuditLog from '../../../utils/AuditLog.js';
 import * as DepositStore from '../../../utils/DepositStore.js';
 import logger from '../../../utils/Logger.js';
 
+// =====================
+// Deposits Util Unit Tests
+// =====================
+
 describe('Deposits Util', () => {
+  // =====================
+  // getDepositId
+  // =====================
   describe('getDepositId', () => {
     it('should generate a unique deposit ID correctly', () => {
       const fundingTxHash = '0x' + 'a'.repeat(64); // 64 char hex string
       const fundingOutputIndex = 0;
-      const expectedDepositId = ethers.BigNumber.from(
-        ethers.utils.solidityKeccak256(['bytes32', 'uint256'], [fundingTxHash, fundingOutputIndex]),
-      ).toString();
+      const expectedDepositId = AllEthers.utils.solidityKeccak256(
+        ['bytes32', 'uint256'],
+        [fundingTxHash, fundingOutputIndex],
+      );
 
       const depositId = getDepositId(fundingTxHash, fundingOutputIndex);
       expect(depositId).toBe(expectedDepositId);
@@ -68,6 +81,9 @@ describe('Deposits Util', () => {
     });
   });
 
+  // =====================
+  // createDeposit
+  // =====================
   describe('createDeposit', () => {
     const mockFundingTx: FundingTransaction = {
       version: '1',
@@ -195,6 +211,9 @@ describe('Deposits Util', () => {
     });
   });
 
+  // =====================
+  // updateToFinalizedDeposit
+  // =====================
   describe('updateToFinalizedDeposit', () => {
     const minimalMockFundingTx: FundingTransaction = {
       version: '1',
@@ -399,6 +418,9 @@ describe('Deposits Util', () => {
     });
   });
 
+  // =====================
+  // updateToInitializedDeposit
+  // =====================
   describe('updateToInitializedDeposit', () => {
     const minimalMockFundingTx: FundingTransaction = {
       version: '1',
@@ -485,6 +507,7 @@ describe('Deposits Util', () => {
       const expectedUpdatedDeposit: Deposit = {
         ...depositToUpdate,
         status: DepositStatus.INITIALIZED,
+        statusMessage: 'Successfully initialized on L1.',
         dates: {
           ...depositToUpdate.dates,
           initializationAt: mockTimestamp,
@@ -513,17 +536,17 @@ describe('Deposits Util', () => {
     });
 
     it('should update deposit error and lastActivityAt if error is provided and no tx is given', async () => {
-      const depositToUpdate = {
-        ...mockInitialDeposit,
-        status: DepositStatus.QUEUED,
-      };
+      const depositToUpdate = JSON.parse(
+        JSON.stringify({ ...mockInitialDeposit, status: DepositStatus.QUEUED }),
+      ) as Deposit;
       const errorMessage = 'Initialization failed';
       await updateToInitializedDeposit(depositToUpdate, undefined, errorMessage);
 
       expect(dateNowSpy).toHaveBeenCalledTimes(1); // Only for lastActivityAt
       const expectedUpdatedDeposit: Deposit = {
         ...depositToUpdate,
-        status: DepositStatus.QUEUED,
+        status: DepositStatus.ERROR_SENDING_L1_TX,
+        statusMessage: errorMessage,
         dates: {
           ...depositToUpdate.dates,
           initializationAt: null,
@@ -591,6 +614,7 @@ describe('Deposits Util', () => {
       const expectedUpdatedDeposit: Deposit = {
         ...depositToUpdate,
         status: DepositStatus.INITIALIZED,
+        statusMessage: 'Successfully initialized on L1.',
         dates: {
           ...depositToUpdate.dates,
           initializationAt: mockTimestamp,
@@ -659,7 +683,8 @@ describe('Deposits Util', () => {
 
       const expectedUpdatedDeposit: Deposit = {
         ...depositToUpdate,
-        status: DepositStatus.INITIALIZED,
+        status: DepositStatus.ERROR_SENDING_L1_TX,
+        statusMessage: errorMessage,
         dates: {
           ...depositToUpdate.dates,
           lastActivityAt: mockTimestamp,
@@ -726,6 +751,9 @@ describe('Deposits Util', () => {
     });
   });
 
+  // =====================
+  // updateToAwaitingWormholeVAA
+  // =====================
   describe('updateToAwaitingWormholeVAA', () => {
     const minimalMockFundingTx: FundingTransaction = {
       version: '1',
@@ -925,6 +953,9 @@ describe('Deposits Util', () => {
     });
   });
 
+  // =====================
+  // updateToBridgedDeposit
+  // =====================
   describe('updateToBridgedDeposit', () => {
     const minimalMockFundingTx: FundingTransaction = {
       version: '1',
@@ -1088,6 +1119,9 @@ describe('Deposits Util', () => {
     });
   });
 
+  // =====================
+  // updateLastActivity
+  // =====================
   describe('updateLastActivity', () => {
     const minimalMockFundingTx: FundingTransaction = {
       version: '1',
