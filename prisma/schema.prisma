@@ -25,6 +25,7 @@ model Deposit {
   status    Int
   L1OutputEvent Json?
   dates     Json
+  wormholeInfo Json?
   error     String?
 
   @@index([chainId])

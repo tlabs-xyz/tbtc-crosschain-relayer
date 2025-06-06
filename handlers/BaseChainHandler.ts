@@ -61,6 +61,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
 
     // Initialize L1 provider first as it's needed by the signer
+    logger.info(`Initializing L1 provider for ${this.config.chainName} with RPC: ${this.config.l1Rpc}`);
     this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc);
 
     // EVM-specific L1 setup (Signer)

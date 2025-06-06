@@ -26,7 +26,7 @@ export class EndpointController {
       logger.debug('Received reveal data via endpoint');
 
       // Extract data from request body
-      const { fundingTx, reveal, l2DepositOwner, l2Sender } = req.body;
+      const { fundingTx, reveal, l2DepositOwner, l2Sender, destinationChainDepositOwner } = req.body;
 
       // Log API request
       logApiRequest('/api/reveal', 'POST', null, {
@@ -69,10 +69,12 @@ export class EndpointController {
       }
 
       // Create deposit object
+      // For StarkNet, use destinationChainDepositOwner if provided, otherwise fall back to l2DepositOwner
+      const depositOwner = destinationChainDepositOwner || l2DepositOwner;
       const deposit = createDeposit(
         fundingTx,
         revealData,
-        l2DepositOwner,
+        depositOwner,
         l2Sender,
         this.chainHandler.config.chainName,
       );

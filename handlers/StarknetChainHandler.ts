@@ -530,6 +530,21 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       logger.debug(`${logPrefix} L1 Contract Funding Tx Arg:`, fundingTx);
       logger.debug(`${logPrefix} L1 Contract Reveal Arg:`, reveal);
 
+      // Estimate gas first
+      try {
+        const gasEstimate = await this.l1DepositorContract.estimateGas.initializeDeposit(
+          fundingTx,
+          reveal,
+          formattedL2DepositOwnerAsBytes32,
+          txOverrides,
+        );
+        logger.info(`${logPrefix} Estimated gas: ${gasEstimate.toString()}`);
+        txOverrides.gasLimit = gasEstimate.mul(120).div(100); // Add 20% buffer
+      } catch (gasError: any) {
+        logger.error(`${logPrefix} Gas estimation failed: ${gasError.message}`, gasError);
+        // Continue without gas limit override
+      }
+
       const txResponse = await this.l1DepositorContract.initializeDeposit(
         fundingTx,
         reveal,

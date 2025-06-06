@@ -39,7 +39,10 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
       commonTestnetStarknetInput.chainType as import('../schemas/common.schema.js').CHAIN_TYPE.STARKNET,
     l1Rpc: commonTestnetStarknetInput.l1Rpc as string,
     vaultAddress: commonTestnetStarknetInput.vaultAddress as string,
-    l1ContractAddress: commonTestnetStarknetInput.l1ContractAddress as string,
+    l1ContractAddress: getEnv(
+      'CHAIN_STARKNETTESTNET_L1_CONTRACT_ADDRESS',
+      commonTestnetStarknetInput.l1ContractAddress as string,
+    ),
     l1Confirmations: commonTestnetStarknetInput.l1Confirmations as number,
     enableL2Redemption: commonTestnetStarknetInput.enableL2Redemption as boolean,
     useEndpoint: commonTestnetStarknetInput.useEndpoint as boolean,
