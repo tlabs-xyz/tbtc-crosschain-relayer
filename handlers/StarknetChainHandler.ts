@@ -383,10 +383,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   public async finalizeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
-    const depositId = getDepositId(
-      getFundingTxHash(deposit.L1OutputEvent.fundingTx),
-      deposit.L1OutputEvent.reveal.fundingOutputIndex,
-    );
+    // Use the actual deposit ID from the database, not a recalculated one
+    // The Bridge contract may use a different calculation method
+    const depositId = deposit.id;
     const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${depositId} |`;
 
     logger.info(`${logPrefix} Attempting to finalize deposit on L1 Depositor contract.`);
@@ -407,19 +406,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       return undefined;
     }
 
-    if (!deposit.hashes.starknet?.l2TxHash) {
-      logger.warn(
-        `${logPrefix} Deposit does not have an L2 transaction hash (starknet.l2TxHash). Cannot trigger L1 finalization. Ensure L2 minting is confirmed.`,
-      );
-      await logDepositError(
-        deposit.id,
-        'Deposit missing L2 transaction hash. L2 minting not confirmed before L1 finalization attempt.',
-        {
-          currentStatus: deposit.status,
-        },
-      );
-      return undefined;
-    }
+    // NOTE: StarkNet flow does NOT require L2 transaction hash before finalization
+    // The flow is: Initialize → Bridge mints tBTC → Finalize → Send to L2
+    // L2 transaction happens AFTER finalization, not before
 
     const dynamicFee: ethers.BigNumber =
       await this.l1DepositorContract.quoteFinalizeDepositDynamic();
