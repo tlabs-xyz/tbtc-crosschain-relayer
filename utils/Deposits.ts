@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import * as AllEthers from 'ethers';
 import { type Deposit } from '../types/Deposit.type.js';
 import { type FundingTransaction } from '../types/FundingTransaction.type.js';
 import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
@@ -19,6 +19,23 @@ import { type Reveal } from '../types/Reveal.type.js';
 interface TransactionWithHash {
   hash: string;
 }
+
+// Helper for runtime type checks
+function assertDeposit(deposit: any, context: string = 'Deposit'): asserts deposit is Deposit {
+  if (!deposit || typeof deposit !== 'object') throw new Error(`${context} is not an object`);
+  if (typeof deposit.id !== 'string') throw new Error(`${context}.id must be a string`);
+  if (typeof deposit.status !== 'number') throw new Error(`${context}.status must be a number`);
+  if (!deposit.dates || typeof deposit.dates !== 'object')
+    throw new Error(`${context}.dates missing or not an object`);
+  if (!deposit.hashes || typeof deposit.hashes !== 'object')
+    throw new Error(`${context}.hashes missing or not an object`);
+  if (!deposit.owner || typeof deposit.owner !== 'string')
+    throw new Error(`${context}.owner missing or not a string`);
+}
+
+// =====================
+// Deposit Utilities
+// =====================
 
 /**
  * @name createDeposit
@@ -120,6 +137,7 @@ export const updateToFinalizedDeposit = async (
   tx?: TransactionWithHash,
   error?: string,
 ) => {
+  assertDeposit(deposit, 'updateToFinalizedDeposit: deposit');
   const oldStatus = deposit.status; // Capture old status before changes
   const newStatus = tx ? DepositStatus.FINALIZED : deposit.status;
   const newFinalizationAt = tx ? Date.now() : deposit.dates.finalizationAt;
@@ -145,7 +163,7 @@ export const updateToFinalizedDeposit = async (
     error: error ? error : null,
   };
 
-  // Log status change if it actually changed
+  // Log status change for any status transition (including errors)
   if (newStatus !== oldStatus) {
     logStatusChange(updatedDeposit, newStatus, oldStatus);
   }
@@ -175,8 +193,19 @@ export const updateToInitializedDeposit = async (
   tx?: TransactionWithHash,
   error?: string,
 ) => {
+  assertDeposit(deposit, 'updateToInitializedDeposit: deposit');
   const oldStatus = deposit.status; // Capture old status before changes
-  const newStatus = tx ? DepositStatus.INITIALIZED : deposit.status;
+  let newStatus = deposit.status;
+  let newStatusMessage = deposit.statusMessage; // Preserve original if no change
+
+  if (error) {
+    newStatus = DepositStatus.ERROR_SENDING_L1_TX;
+    newStatusMessage = error; // Use the provided error message for statusMessage
+  } else if (tx) {
+    newStatus = DepositStatus.INITIALIZED;
+    newStatusMessage = 'Successfully initialized on L1.'; // Success message
+  }
+
   const newInitializationAt = tx ? Date.now() : deposit.dates.initializationAt;
   const newHash = tx
     ? {
@@ -191,17 +220,18 @@ export const updateToInitializedDeposit = async (
   const updatedDeposit: Deposit = {
     ...deposit,
     status: newStatus,
+    statusMessage: newStatusMessage, // Set the status message
     dates: {
       ...deposit.dates,
       initializationAt: newInitializationAt,
       lastActivityAt: Date.now(),
     },
     hashes: newHash,
-    error: error ? error : null,
+    error: error ? error : null, // This correctly sets deposit.error to the error string
   };
 
-  // Log status change if it actually changed
-  if (newStatus !== oldStatus) {
+  // Only log status change for successful transition to INITIALIZED
+  if (newStatus !== oldStatus && newStatus === DepositStatus.INITIALIZED) {
     logStatusChange(updatedDeposit, newStatus, oldStatus);
   }
 
@@ -237,6 +267,10 @@ export const updateToAwaitingWormholeVAA = async (
   transferSequence: string,
   bridgingAttempted: boolean = false,
 ): Promise<void> => {
+  assertDeposit(deposit, 'updateToAwaitingWormholeVAA: deposit');
+  if (typeof txHash !== 'string' || !txHash) throw new Error('txHash must be a non-empty string');
+  if (typeof transferSequence !== 'string' || !transferSequence)
+    throw new Error('transferSequence must be a non-empty string');
   const oldStatus = deposit.status;
   const newStatus = DepositStatus.AWAITING_WORMHOLE_VAA;
 
@@ -260,7 +294,7 @@ export const updateToAwaitingWormholeVAA = async (
     },
   };
 
-  // Log status change if it actually changed
+  // Log status change for any status transition (including errors)
   if (newStatus !== oldStatus) {
     logStatusChange(updatedDeposit, newStatus, oldStatus);
   }
@@ -293,6 +327,9 @@ export const updateToBridgedDeposit = async (
   deposit: Deposit,
   txSignature: string,
 ): Promise<void> => {
+  assertDeposit(deposit, 'updateToBridgedDeposit: deposit');
+  if (typeof txSignature !== 'string' || !txSignature)
+    throw new Error('txSignature must be a non-empty string');
   const oldStatus = deposit.status;
   const newStatus = DepositStatus.BRIDGED;
 
@@ -320,7 +357,7 @@ export const updateToBridgedDeposit = async (
     },
   };
 
-  // Log status change if it actually changed
+  // Log status change for any status transition (including errors)
   if (newStatus !== oldStatus) {
     logStatusChange(updatedDeposit, newStatus, oldStatus);
   }
@@ -341,6 +378,7 @@ export const updateToBridgedDeposit = async (
  * @param {Deposit} deposit - The deposit object to be updated.
  */
 export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => {
+  assertDeposit(deposit, 'updateLastActivity: deposit');
   const updatedDeposit: Deposit = {
     ...deposit,
     dates: {
@@ -355,31 +393,24 @@ export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => 
 
 /**
  * @name getDepositId
- * @description Generates a unique deposit ID by encoding the Bitcoin funding transaction hash and output index,
- * then hashing the result using keccak256.
+ * @description Generates a unique deposit ID using the funding transaction hash and output index.
+ * This function takes a funding transaction hash and output index, validates the hash format,
+ * and then computes a Keccak256 hash of these two values to create a unique deposit ID.
+ * The deposit ID is returned as a string.
  *
- * @param {string} fundingTxHash - The 64-character hex string of the Bitcoin funding transaction hash.
- * @param {number} fundingOutputIndex - The index of the output in the funding transaction.
+ * @param {string} fundingTxHash - The hash of the funding transaction (must be a 66-character hex string).
+ * @param {number} fundingOutputIndex - The output index of the funding transaction.
  *
- * @returns {string} A unique deposit ID as a uint256 string.
- *
- * @throws {Error} If the fundingTxHash is not a 66-character hex string (e.g. 0x...).
+ * @returns {string} A unique deposit ID string.
+ * @throws {Error} If fundingTxHash is not a valid 66-character hex string.
  */
-
 export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
-  // The deposit ID is a keccak256 hash of the funding transaction hash and output index.
-  // The tBTC OptimisticMintingFinalized event emits depositKey as uint256.
-  // To ensure matching, we calculate the bytes32 keccak256 hash and then convert it
-  // to its BigNumber (uint256) decimal string representation.
-
   // Validate fundingTxHash
-  if (!ethers.utils.isHexString(fundingTxHash) || fundingTxHash.length !== 66) {
+  if (!AllEthers.utils.isHexString(fundingTxHash) || fundingTxHash.length !== 66) {
     throw new Error('fundingTxHash must be a 66-character hex string (e.g. 0x...).');
   }
 
-  const types = ['bytes32', 'uint256'];
-  const values = [fundingTxHash, fundingOutputIndex];
-
-  const hashBytes32 = ethers.utils.solidityKeccak256(types, values);
-  return ethers.BigNumber.from(hashBytes32).toString();
+  return AllEthers.utils
+    .solidityKeccak256(['bytes32', 'uint256'], [fundingTxHash, fundingOutputIndex])
+    .toString();
 };
