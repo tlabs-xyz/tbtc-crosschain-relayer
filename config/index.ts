@@ -87,7 +87,7 @@ function handleValidationError(
 
 function validateSingleChain(
   key: string,
-  entry: ChainSchemaRegistryEntry,
+  entry: ChainSchemaRegistryEntry<z.ZodTypeAny>,
   logger: typeof baseLogger,
 ): { config?: AnyChainConfig; error?: ChainValidationError } {
   let inputForThisChain: any = null;

@@ -36,7 +36,7 @@
     "postgres:stop": "docker stop tbtc-postgres && docker rm tbtc-postgres",
     "postgres:logs": "docker logs tbtc-postgres",
     "db:backup": "pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -F c -b -v -f backup.dump",
-    "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump"
+    "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump",
     "db:reset": "npx prisma db push --force-reset --accept-data-loss",
     "pretest": "docker-compose up -d postgres"
   },

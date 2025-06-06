@@ -19,23 +19,25 @@ import { getBaseSepoliaTestnetChainInput } from './chain/base-sepolia-testnet.ch
 // Re-exporting these types as they might be useful for consumers of the registry
 export type { EvmChainConfig, SolanaChainConfig, StarknetChainConfig, SuiChainConfig };
 
-export interface ChainSchemaRegistryEntry {
-  schema:
-    | typeof EvmChainConfigSchema
-    | typeof SolanaChainConfigSchema
-    | typeof StarknetChainConfigSchema
-    | typeof SuiChainConfigSchema;
-  getInputFunc: () => z.input<
-    | typeof EvmChainConfigSchema
-    | typeof SolanaChainConfigSchema
-    | typeof StarknetChainConfigSchema
-    | typeof SuiChainConfigSchema
-  >;
-  // Add chainType here for easier access if needed elsewhere, though not strictly necessary for current refactor
-  // chainType: CHAIN_TYPE;
+export interface ChainSchemaRegistryEntry<S extends z.ZodTypeAny> {
+  schema: S;
+  getInputFunc: () => z.input<S>;
+  // chainType?: CHAIN_TYPE;
 }
 
-export const chainSchemaRegistry: Record<string, ChainSchemaRegistryEntry> = {
+type ChainSchemaRegistry = {
+  sepoliaTestnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  solanaDevnet: ChainSchemaRegistryEntry<typeof SolanaChainConfigSchema>;
+  starknetTestnet: ChainSchemaRegistryEntry<typeof StarknetChainConfigSchema>;
+  suiTestnet: ChainSchemaRegistryEntry<typeof SuiChainConfigSchema>;
+  arbitrumMainnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  baseMainnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  baseSepoliaTestnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  solanaDevnetImported: ChainSchemaRegistryEntry<typeof SolanaChainConfigSchema>;
+  [key: string]: ChainSchemaRegistryEntry<z.ZodTypeAny>;
+};
+
+export const chainSchemaRegistry: ChainSchemaRegistry = {
   sepoliaTestnet: { schema: EvmChainConfigSchema, getInputFunc: getSepoliaTestnetChainInput },
   solanaDevnet: { schema: SolanaChainConfigSchema, getInputFunc: getSolanaDevnetChainInput },
   starknetTestnet: {
