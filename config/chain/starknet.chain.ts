@@ -67,6 +67,8 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     ),
     l2WormholeChainId: getEnvNumber('CHAIN_STARKNETTESTNET_WORMHOLE_CHAIN_ID', 19),
     starknetPrivateKey: getEnv('CHAIN_STARKNETTESTNET_STARKNET_PRIVATE_KEY'),
+    // L1 private key for endpoint mode (to pay for L1 transactions)
+    privateKey: getEnv('CHAIN_STARKNETTESTNET_PRIVATE_KEY'),
   };
   return config;
 };

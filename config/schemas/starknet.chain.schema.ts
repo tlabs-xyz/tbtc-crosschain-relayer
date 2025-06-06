@@ -17,6 +17,12 @@ const StarknetChainBaseSchema = z.object({
     .string()
     .regex(/^\d+$/, 'l1FeeAmountWei must be a string of digits')
     .default('0'),
+  // L1 private key for chains using endpoint mode (like Solana)
+  // This is the Ethereum private key used to pay for L1 transactions
+  privateKey: z
+    .string()
+    .min(1, 'privateKey is required for endpoint mode to pay L1 transactions')
+    .optional(),
 });
 
 // Omit privateKey as it's handled by starknetPrivateKey
@@ -29,6 +35,7 @@ export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetC
     chainName: StarknetChainBaseSchema.shape.chainName,
     starknetPrivateKey: StarknetChainBaseSchema.shape.starknetPrivateKey,
     l1FeeAmountWei: StarknetChainBaseSchema.shape.l1FeeAmountWei,
+    privateKey: StarknetChainBaseSchema.shape.privateKey,
 
     // Override inherited EthereumAddressSchema with a generic string for StarkNet addresses
     l2ContractAddress: z.string().min(1, 'l2ContractAddress is required for StarkNet'),

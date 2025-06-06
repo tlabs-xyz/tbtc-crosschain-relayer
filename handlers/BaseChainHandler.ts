@@ -84,14 +84,26 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         this.l1Signer, // Use l1Signer here, not nonceManagerL1 unless needed
       );
     } else {
-      // For non-EVM chains, l1Signer and related contracts might not be needed
-      // or would require a different setup.
-      // For now, we ensure they are not initialized if privateKey is not applicable.
-      logger.warn(
-        `L1 Signer and transaction-capable contracts not initialized for non-EVM chain ${this.config.chainName} in BaseChainHandler. This might be expected.`,
-      );
-      // Ensure these are undefined or handled appropriately if accessed later
-      // For instance, methods requiring l1Signer should check its existence or chainType.
+      // For non-EVM chains, check if they need L1 signer for endpoint mode
+      // StarkNet and Solana using endpoint mode need to pay L1 transactions
+      if ('privateKey' in this.config && this.config.privateKey && this.config.useEndpoint) {
+        logger.info(
+          `Setting up L1 signer for non-EVM chain ${this.config.chainName} in endpoint mode`,
+        );
+        this.l1Signer = new ethers.Wallet(this.config.privateKey as string, this.l1Provider);
+        this.nonceManagerL1 = new NonceManager(this.l1Signer);
+        
+        // L1 Contracts for transactions (require signer)
+        this.l1BitcoinDepositor = new ethers.Contract(
+          this.config.l1ContractAddress,
+          L1BitcoinDepositorABI,
+          this.nonceManagerL1,
+        );
+      } else {
+        logger.warn(
+          `L1 Signer and transaction-capable contracts not initialized for non-EVM chain ${this.config.chainName} in BaseChainHandler. This might be expected.`,
+        );
+      }
     }
 
     const ethereumNetwork =
