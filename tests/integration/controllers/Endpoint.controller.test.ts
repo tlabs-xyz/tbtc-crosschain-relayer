@@ -1,7 +1,12 @@
+// tests/integration/controllers/Endpoint.controller.test.ts - Integration tests for EndpointController
+//
+// This suite tests the EndpointController's reveal and status endpoints using a mock chain handler.
+// It covers valid/invalid requests, deposit status, and error handling.
+
 import type { Request, Response } from 'express';
 import { MockChainHandler } from '../../mocks/MockChainHandler.js';
 import { createTestDeposit } from '../../mocks/BlockchainMock.js';
-import { ethers } from 'ethers';
+import * as AllEthers from 'ethers';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import { EndpointController } from '../../../controllers/Endpoint.controller.js';
 
@@ -38,13 +43,14 @@ describe('EndpointController', () => {
     test('should successfully handle a valid reveal request', async () => {
       // Create mock request with required parameters
       const req = mockRequest();
-      const mockFundingTxHash = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+      const mockFundingTxHash = AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32));
       const mockFundingOutputIndex = 0;
 
       req.body = {
         fundingTxHash: mockFundingTxHash,
         fundingTx: {
-          value: ethers.utils.parseEther('0.1').toString(),
+          txHash: mockFundingTxHash,
+          value: AllEthers.utils.parseEther('0.1').toString(),
           version: '0x01000000',
           inputVector:
             '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
@@ -53,14 +59,14 @@ describe('EndpointController', () => {
         },
         reveal: {
           fundingOutputIndex: mockFundingOutputIndex,
-          blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundLocktime: ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-          vault: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+          blindingFactor: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+          walletPubKeyHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+          refundPubKeyHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+          refundLocktime: '1700000000',
+          vault: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
         },
-        l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+        l2DepositOwner: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+        l2Sender: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
       };
 
       // Create mock response
@@ -84,16 +90,19 @@ describe('EndpointController', () => {
       // Create mock request with missing fields
       const req = mockRequest();
       req.body = {
-        // Missing fields
+        // fundingTxHash is missing
+        // fundingTx is present but structure might not matter if top level fields are missing
         fundingTx: {
-          value: ethers.utils.parseEther('0.1').toString(),
+          value: AllEthers.utils.parseEther('0.1').toString(),
           version: '0x01000000',
           inputVector:
             '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
           outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
           locktime: '0x00000000',
         },
-        // Missing reveal, l2DepositOwner, l2Sender
+        // reveal is missing
+        // l2DepositOwner is missing
+        // l2Sender is missing
       };
 
       // Create mock response
@@ -107,7 +116,16 @@ describe('EndpointController', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: 'Missing required fields in request body',
+          error: 'Invalid request body format.',
+          details: expect.objectContaining({
+            fieldErrors: expect.objectContaining({
+              reveal: expect.arrayContaining([expect.stringMatching(/Required|Invalid input/i)]),
+              l2DepositOwner: expect.arrayContaining([
+                expect.stringMatching(/Required|Invalid input/i),
+              ]),
+              l2Sender: expect.arrayContaining([expect.stringMatching(/Required|Invalid input/i)]),
+            }),
+          }),
         }),
       );
     });

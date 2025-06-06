@@ -1,3 +1,8 @@
+// tests/e2e/api.test.ts - E2E API tests for tBTC cross-chain relayer
+//
+// This suite tests the full API surface for deposit initialization, status, and finalization across EVM and endpoint-based chains.
+// It covers handler mocking, dynamic config, and all major endpoint workflows and error cases.
+
 // Store original env vars at the very top, if they might be set by other means
 const originalSupportedChainsEnv = process.env.SUPPORTED_CHAINS;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -7,7 +12,7 @@ const originalNodeEnv = process.env.NODE_ENV;
 import request from 'supertest';
 import express from 'express';
 import type { Express } from 'express';
-import { ethers } from 'ethers';
+import * as AllEthers from 'ethers';
 import { DepositStatus } from '../../types/DepositStatus.enum.js';
 import type { SolanaChainConfig } from '../../config/schemas/solana.chain.schema.js';
 import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
@@ -18,6 +23,7 @@ import type { Deposit } from '../../types/Deposit.type.js';
 import type { Reveal } from '../../types/Reveal.type.js';
 
 // Type imports for dynamically imported modules
+import type * as UtilsConfigType from '../../utils/Config.js';
 import type * as ConfigType from '../../config/index.js';
 import type * as RoutesType from '../../routes/Routes.js';
 import type * as ChainHandlerRegistryType from '../../handlers/ChainHandlerRegistry.js';
@@ -49,13 +55,13 @@ const mockEndpointChainTestConfig: MockEndpointChainConfig = {
   l1Rpc: 'http://localhost:8545/mock',
   l2Rpc: 'http://localhost:8899/mock',
   l2WsRpc: 'ws://localhost:8090/mock',
-  l1ContractAddress: ethers.constants.AddressZero,
-  l2ContractAddress: ethers.constants.AddressZero,
-  l1BitcoinRedeemerAddress: ethers.constants.AddressZero,
-  l2WormholeGatewayAddress: ethers.constants.AddressZero,
+  l1ContractAddress: AllEthers.constants.AddressZero,
+  l2ContractAddress: AllEthers.constants.AddressZero,
+  l1BitcoinRedeemerAddress: AllEthers.constants.AddressZero,
+  l2WormholeGatewayAddress: AllEthers.constants.AddressZero,
   l2WormholeChainId: 1,
   l2StartBlock: 0,
-  vaultAddress: ethers.constants.AddressZero,
+  vaultAddress: AllEthers.constants.AddressZero,
   chainName: 'MockEndpointChain',
   chainType: CHAIN_TYPE.SOLANA,
   solanaCommitment: 'confirmed',
@@ -87,7 +93,9 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     // Mock Config utility if it's used directly by other modules after reset
     // This is a common pattern if Config.get() is used globally.
     jest.mock('../../utils/Config', () => {
-      const originalConfigModule = jest.requireActual('../../utils/Config') as any;
+      const originalConfigModule = jest.requireActual(
+        '../../utils/Config',
+      ) as typeof UtilsConfigType;
       return {
         ...originalConfigModule,
         // Example: getConfiguredChains: () => ['mockEVM1', 'mockEVM2', 'mockEndpointChain'],
@@ -101,10 +109,12 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     initializationPromiseModule = await import('../..'); // Main index.ts
     loadedChainConfigsActual = chainConfigsModule.chainConfigs;
 
-    (loadedChainConfigsActual as any)['MockEndpointChain'] = mockEndpointChainTestConfig;
-    (loadedChainConfigsActual as any)['MockEVM1'] = mockEvm1Config;
-    (loadedChainConfigsActual as any)['MockEVM2'] = mockEvm2Config;
-    (loadedChainConfigsActual as any)['FaultyMockEVM'] = faultyMockEvmConfig;
+    (loadedChainConfigsActual as Record<string, AnyChainConfig>)['MockEndpointChain'] =
+      mockEndpointChainTestConfig;
+    (loadedChainConfigsActual as Record<string, AnyChainConfig>)['MockEVM1'] = mockEvm1Config;
+    (loadedChainConfigsActual as Record<string, AnyChainConfig>)['MockEVM2'] = mockEvm2Config;
+    (loadedChainConfigsActual as Record<string, AnyChainConfig>)['FaultyMockEVM'] =
+      faultyMockEvmConfig;
 
     // Mock EVMChainHandler AFTER resetting modules and BEFORE it's used by ChainHandlerFactory via registry.initialize
     // This mock needs to be re-applied because jest.resetModules() clears it.
@@ -149,20 +159,20 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
               const newDeposit = { ...deposit, status: DepositStatus.INITIALIZED, chainName };
               depositsInThisChain.set(deposit.id, newDeposit);
               return {
-                transactionHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+                transactionHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
                 status: 1,
-                to: ethers.constants.AddressZero,
-                from: ethers.constants.AddressZero,
-                contractAddress: ethers.constants.AddressZero,
+                to: AllEthers.constants.AddressZero,
+                from: AllEthers.constants.AddressZero,
+                contractAddress: AllEthers.constants.AddressZero,
                 transactionIndex: 0,
-                gasUsed: ethers.BigNumber.from(0),
+                gasUsed: AllEthers.BigNumber.from(0),
                 logsBloom: '0x',
-                blockHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+                blockHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
                 logs: [],
                 blockNumber: 0,
                 confirmations: 1,
-                cumulativeGasUsed: ethers.BigNumber.from(0),
-                effectiveGasPrice: ethers.BigNumber.from(0),
+                cumulativeGasUsed: AllEthers.BigNumber.from(0),
+                effectiveGasPrice: AllEthers.BigNumber.from(0),
                 byzantium: true,
                 type: 0,
               } as TransactionReceipt;
@@ -177,20 +187,20 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
                 existingDeposit.status = DepositStatus.FINALIZED;
                 depositsInThisChain.set(deposit.id, existingDeposit);
                 return {
-                  transactionHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+                  transactionHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
                   status: 1,
-                  to: ethers.constants.AddressZero,
-                  from: ethers.constants.AddressZero,
-                  contractAddress: ethers.constants.AddressZero,
+                  to: AllEthers.constants.AddressZero,
+                  from: AllEthers.constants.AddressZero,
+                  contractAddress: AllEthers.constants.AddressZero,
                   transactionIndex: 0,
-                  gasUsed: ethers.BigNumber.from(0),
+                  gasUsed: AllEthers.BigNumber.from(0),
                   logsBloom: '0x',
-                  blockHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+                  blockHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
                   logs: [],
                   blockNumber: 0,
                   confirmations: 1,
-                  cumulativeGasUsed: ethers.BigNumber.from(0),
-                  effectiveGasPrice: ethers.BigNumber.from(0),
+                  cumulativeGasUsed: AllEthers.BigNumber.from(0),
+                  effectiveGasPrice: AllEthers.BigNumber.from(0),
                   byzantium: true,
                   type: 0,
                 } as TransactionReceipt;
@@ -255,7 +265,7 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
         throw new Error('MockEndpointChain is not using MockEndpointChainHandler.');
       }
       if (config.chainType === CHAIN_TYPE.EVM && handler) {
-        if (!jest.isMockFunction((handler as any).initializeDeposit)) {
+        if (!jest.isMockFunction(handler.initializeDeposit as jest.Mock)) {
           throw new Error(
             `EVMChainHandler for ${config.chainName} does not appear to be the mocked version.`,
           );
@@ -282,6 +292,22 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     }
     jest.resetModules(); // Clean up module cache for other tests
   });
+
+  // Define types for MockEndpointChainHandler's handleEndpointRequest
+  type InitializeEndpointResponse = {
+    depositId: string;
+    receipt: TransactionReceipt | undefined;
+    message: string;
+  };
+  type StatusEndpointResponse = { depositId: string; status: DepositStatus };
+  type FinalizeEndpointResponse = {
+    transactionHash: string | undefined;
+    message: string;
+  };
+  type HandleEndpointRequestResponse =
+    | InitializeEndpointResponse
+    | StatusEndpointResponse
+    | FinalizeEndpointResponse;
 
   // MockEndpointChainHandler class definition (needs to be accessible by beforeAll)
   class MockEndpointChainHandler implements ChainHandlerInterface {
@@ -331,15 +357,15 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
         contractAddress: '',
         transactionIndex: 0,
         root: '',
-        gasUsed: ethers.BigNumber.from(0),
+        gasUsed: AllEthers.BigNumber.from(0),
         logsBloom: '',
-        blockHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-        transactionHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+        blockHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+        transactionHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
         logs: [],
         blockNumber: 0,
         confirmations: 1,
-        cumulativeGasUsed: ethers.BigNumber.from(0),
-        effectiveGasPrice: ethers.BigNumber.from(0),
+        cumulativeGasUsed: AllEthers.BigNumber.from(0),
+        effectiveGasPrice: AllEthers.BigNumber.from(0),
         byzantium: true,
         type: 0,
         status: 1,
@@ -362,15 +388,15 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
           contractAddress: '',
           transactionIndex: 0,
           root: '',
-          gasUsed: ethers.BigNumber.from(0),
+          gasUsed: AllEthers.BigNumber.from(0),
           logsBloom: '',
-          blockHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          transactionHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+          blockHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+          transactionHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
           logs: [],
           blockNumber: 0,
           confirmations: 1,
-          cumulativeGasUsed: ethers.BigNumber.from(0),
-          effectiveGasPrice: ethers.BigNumber.from(0),
+          cumulativeGasUsed: AllEthers.BigNumber.from(0),
+          effectiveGasPrice: AllEthers.BigNumber.from(0),
           byzantium: true,
           type: 0,
           status: 1,
@@ -379,29 +405,35 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
       throw new Error('Deposit not found for finalization in MockEndpointChainHandler');
     }
 
-    async handleEndpointRequest(action: string, data: any): Promise<any> {
+    async handleEndpointRequest(
+      action: string,
+      data: unknown,
+    ): Promise<HandleEndpointRequestResponse> {
       switch (action) {
         case 'initialize_deposit':
-          if (!data || !data.id)
-            throw new Error('Missing deposit data for initialize_deposit via endpoint');
+          if (!(data && typeof (data as Deposit).id === 'string')) {
+            throw new Error('Missing or invalid deposit data for initialize_deposit via endpoint');
+          }
           const initReceipt = await this.initializeDeposit(data as Deposit);
           return {
-            depositId: data.id,
+            depositId: (data as Deposit).id,
             receipt: initReceipt,
             message: 'Deposit initialized via endpoint',
           };
         case 'check_deposit_status':
-          if (!data || !data.depositId)
-            throw new Error('Missing depositId for check_deposit_status via endpoint');
-          const status = await this.checkDepositStatus(data.depositId);
+          if (!(data && typeof (data as { depositId: string }).depositId === 'string')) {
+            throw new Error('Missing or invalid depositId for check_deposit_status via endpoint');
+          }
+          const status = await this.checkDepositStatus((data as { depositId: string }).depositId);
           if (status === null) {
             throw new Error('Deposit not found for check_deposit_status via endpoint');
           }
-          return { depositId: data.depositId, status };
+          return { depositId: (data as { depositId: string }).depositId, status };
         case 'finalize_deposit':
-          if (!data || !data.depositId)
-            throw new Error('Missing depositId for finalize_deposit via endpoint');
-          const depositToFinalize = this.deposits.get(data.depositId);
+          if (!(data && typeof (data as { depositId: string }).depositId === 'string')) {
+            throw new Error('Missing or invalid depositId for finalize_deposit via endpoint');
+          }
+          const depositToFinalize = this.deposits.get((data as { depositId: string }).depositId);
           if (!depositToFinalize) {
             throw new Error('Deposit not found for finalize_deposit via endpoint');
           }
@@ -423,9 +455,9 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
     const getValidRevealDataForEvmChain = () => {
       // Mock data for a successful reveal, adjust as needed for your contract
       const fundingTx = {
-        txHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+        txHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
         outputIndex: 0,
-        value: ethers.utils.parseEther('0.1').toString(),
+        value: AllEthers.utils.parseEther('0.1').toString(),
         version: '0x01000000',
         inputVector:
           '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
@@ -436,11 +468,11 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
         fundingTx,
         reveal: {
           fundingOutputIndex: 0,
-          blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundLocktime: ethers.BigNumber.from(Math.floor(Date.now() / 1000) + 3600).toString(), // e.g., 1 hour from now
-          vault: ethers.constants.AddressZero, // Example vault address
+          blindingFactor: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+          walletPubKeyHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+          refundPubKeyHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+          refundLocktime: AllEthers.BigNumber.from(Math.floor(Date.now() / 1000) + 3600).toString(), // e.g., 1 hour from now
+          vault: AllEthers.constants.AddressZero, // Example vault address
         } as Reveal,
       };
     };
@@ -454,10 +486,10 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
 
       const baseReveal: Reveal = {
         fundingOutputIndex: 0,
-        blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-        walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        refundLocktime: ethers.BigNumber.from(Math.floor(Date.now() / 1000) + 7200).toString(), // e.g., 2 hours from now
+        blindingFactor: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+        walletPubKeyHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+        refundPubKeyHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+        refundLocktime: AllEthers.BigNumber.from(Math.floor(Date.now() / 1000) + 7200).toString(), // e.g., 2 hours from now
         vault: 'mockVaultAddressForEndpoint',
       };
 
@@ -466,14 +498,14 @@ describeToRun('E2E API Tests with Dynamic Env', () => {
           version: '1',
           inputVector: JSON.stringify([
             {
-              prevout: { hash: ethers.utils.hexlify(ethers.utils.randomBytes(32)), index: 0 },
-              scriptSig: ethers.utils.hexlify(ethers.utils.randomBytes(100)),
+              prevout: { hash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)), index: 0 },
+              scriptSig: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(100)),
             },
           ]),
           outputVector: JSON.stringify([
             {
               value: '100000000',
-              scriptPubKey: ethers.utils.hexlify(ethers.utils.randomBytes(50)),
+              scriptPubKey: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(50)),
             },
           ]),
           locktime: '0',

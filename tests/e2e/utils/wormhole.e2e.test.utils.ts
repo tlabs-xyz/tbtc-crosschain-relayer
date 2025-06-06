@@ -1,3 +1,8 @@
+// tests/e2e/utils/wormhole.e2e.test.utils.ts - E2E test utilities for Wormhole integration
+//
+// This module provides mocks, helpers, and setup functions for Wormhole E2E tests in the tBTC cross-chain relayer.
+// It covers SDK mocking, provider/chain context setup, and VAA/test data generation.
+
 import { jest } from '@jest/globals';
 
 jest.unmock('../../../services/WormholeVaaService');
@@ -20,9 +25,17 @@ import * as ethers from 'ethers';
 import logger, { logErrorContext } from '../../../utils/Logger.js';
 import { type TestScenario } from '../../data/wormhole.e2e.scenarios.js';
 import { WormholeVaaService } from '../../../services/WormholeVaaService.js';
+import {
+  mockJsonRpcProviderInstance,
+  type MockProvider as EthersMockProvider,
+} from '../../mocks/ethers.helpers.js';
+
+// =====================
+// Core SDK Mocks & Constants
+// =====================
 
 // Core object that the mocked 'wormhole()' function will return
-const coreSdkMethodMocks = {
+export const coreSdkMethodMocks = {
   getChain: jest.fn<(chain: Chain | ChainId) => MockedChainContext>(),
   getVaa:
     jest.fn<
@@ -33,6 +46,7 @@ const coreSdkMethodMocks = {
       ) => Promise<VAA<T> | null>
     >(),
   getVaaBytes: jest.fn<(id: WormholeMessageId, timeout?: number) => Promise<Uint8Array | null>>(),
+  deserialize: jest.fn(),
 };
 
 type MockedChainContext = {
@@ -51,9 +65,13 @@ export const EXAMPLE_EMITTER_ADDRESS_SUI =
   '0x00000000000000000000000000000000000000000000000000000000deadbeef';
 export const EXAMPLE_SEQUENCE = BigInt(123);
 
+// =====================
+// Global Mock Variables
+// =====================
+
 // Global mock variables - assigned within setupWormholeMocksAndService
 export let mockWormholeEntry: jest.MockedFunction<typeof wormhole>;
-export let mockL2Provider: jest.Mocked<ethers.providers.JsonRpcProvider>;
+export let mockL2Provider: EthersMockProvider;
 export let mockL2ChainContext: MockedChainContext;
 export let mockL1ChainContext: MockedChainContext;
 export let mockL1TokenBridgeOperations: MockedTokenBridgeOperations;
@@ -76,7 +94,7 @@ type GenericGetVaaFn = <T extends PayloadLiteral>(
 export interface MockedWormholeInstances {
   wormholeVaaService: WormholeVaaService;
   mockWormholeEntry: jest.MockedFunction<typeof wormhole>;
-  mockL2Provider: jest.Mocked<ethers.providers.JsonRpcProvider>;
+  mockL2Provider: EthersMockProvider;
   mockL2ChainContext: MockedChainContext;
   mockL1ChainContext: MockedChainContext;
   mockL1TokenBridgeOperations: MockedTokenBridgeOperations;
@@ -86,12 +104,15 @@ export interface MockedWormholeInstances {
   mockWormholeSdkInstance: typeof coreSdkMethodMocks;
 }
 
+// =====================
+// SDK & Logger Mocks
+// =====================
+
 // SDK Mocks
 jest.mock('@wormhole-foundation/sdk', () => {
   const originalSdk = jest.requireActual('@wormhole-foundation/sdk') as Record<string, unknown>;
   return {
     __esModule: true,
-    ...originalSdk,
     Wormhole: originalSdk.Wormhole,
     UniversalAddress: originalSdk.UniversalAddress,
     chainIdToChain: originalSdk.chainIdToChain,
@@ -101,6 +122,10 @@ jest.mock('@wormhole-foundation/sdk', () => {
     toChainId: originalSdk.toChainId,
     TokenBridge: originalSdk.TokenBridge,
     ethers_contracts: originalSdk.ethers_contracts,
+    deserialize: coreSdkMethodMocks.deserialize,
+    ...Object.fromEntries(
+      Object.entries(originalSdk).filter(([key]) => !['wormhole', 'deserialize'].includes(key)),
+    ),
   };
 });
 
@@ -110,7 +135,10 @@ jest.mock('../../../utils/Logger', () => ({
   logErrorContext: jest.fn(),
 }));
 
+// =====================
 // Helper Functions
+// =====================
+
 export function createMockEthersReceipt(
   txHash: string,
   status: number = 1,
@@ -206,6 +234,10 @@ export async function setupWormholeMocksAndService(
   mockLogErrorContext = logErrorContext as jest.MockedFunction<typeof logErrorContext>;
   mockWormholeEntry = wormhole as jest.MockedFunction<typeof wormhole>;
 
+  // Assign the L2 provider mock instance from ethers.helpers
+  // This is the instance that `new ethers.providers.JsonRpcProvider()` will return due to the mock in ethers.mock.ts
+  mockL2Provider = mockJsonRpcProviderInstance;
+
   // Define ChainContext mocks for L2 and L1
   mockL2ChainContext = {
     parseTransaction: jest.fn<MockedChainContext['parseTransaction']>(),
@@ -274,13 +306,6 @@ export async function setupWormholeMocksAndService(
     () => Promise.resolve(suiPlatform as unknown),
   ] as Array<() => Promise<unknown>>);
 
-  // Capture the mocked L2 provider instance
-  mockL2Provider = (
-    wormholeVaaService as unknown as {
-      l2Provider: jest.Mocked<ethers.providers.JsonRpcProvider>;
-    }
-  ).l2Provider;
-
   // Validate L2 provider mock
   if (!mockL2Provider) {
     throw new Error('mockL2Provider is null or undefined after service creation.');
@@ -288,10 +313,7 @@ export async function setupWormholeMocksAndService(
   if (typeof mockL2Provider.getNetwork !== 'function') {
     throw new Error('mockL2Provider.getNetwork is not a function.');
   }
-  if (
-    !(mockL2Provider.getNetwork as jest.MockedFunction<() => Promise<ethers.providers.Network>>)
-      ._isMockFunction
-  ) {
+  if (!jest.isMockFunction(mockL2Provider.getNetwork)) {
     throw new Error('mockL2Provider.getNetwork is not a Jest mock function.');
   }
   if (!mockL2Provider.getNetwork.mockResolvedValue) {

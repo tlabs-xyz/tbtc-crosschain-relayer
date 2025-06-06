@@ -1,4 +1,9 @@
-import { ethers } from 'ethers';
+// tests/mocks/L2RedemptionServiceTestData.ts - Mock data factories for L2RedemptionService tests
+//
+// Provides reusable mock chain configs, events, redemptions, VAA responses, and contract/provider mocks for use in E2E, integration, and unit tests.
+
+import { BigNumber } from 'ethers';
+import type { Event as EthersEvent } from 'ethers';
 import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
 import { CHAIN_TYPE, NETWORK } from '../../config/schemas/common.schema.js';
 import {
@@ -10,11 +15,15 @@ import {
 import { jest } from '@jest/globals';
 import { toNative } from '@wormhole-foundation/sdk-connect';
 
-/**
- * Shared test data factories for L2RedemptionService tests
- * Used across E2E, Integration, and Unit tests to avoid duplication
- */
+// =====================
+// Chain Config Factory
+// =====================
 
+/**
+ * Create a mock EVM chain config for tests
+ * @param overrides Partial fields to override
+ * @returns EvmChainConfig
+ */
 export const createMockChainConfig = (overrides: Partial<EvmChainConfig> = {}): EvmChainConfig => ({
   chainType: CHAIN_TYPE.EVM,
   chainName: 'testChain',
@@ -37,6 +46,15 @@ export const createMockChainConfig = (overrides: Partial<EvmChainConfig> = {}): 
   ...overrides,
 });
 
+// =====================
+// Bitcoin UTXO Factory
+// =====================
+
+/**
+ * Create a mock Bitcoin UTXO for tests
+ * @param overrides Partial fields to override
+ * @returns BitcoinTxUtxo
+ */
 export const createMockBitcoinUtxo = (overrides: Partial<BitcoinTxUtxo> = {}): BitcoinTxUtxo => ({
   txHash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
   txOutputIndex: 0,
@@ -44,17 +62,36 @@ export const createMockBitcoinUtxo = (overrides: Partial<BitcoinTxUtxo> = {}): B
   ...overrides,
 });
 
+// =====================
+// Redemption Event Factory
+// =====================
+
+/**
+ * Create a mock RedemptionRequestedEventData for tests
+ * @param overrides Partial fields to override
+ * @returns RedemptionRequestedEventData
+ */
 export const createMockRedemptionEvent = (
   overrides: Partial<RedemptionRequestedEventData> = {},
 ): RedemptionRequestedEventData => ({
   walletPubKeyHash: '0x1234567890123456789012345678901234567890',
   mainUtxo: createMockBitcoinUtxo(),
   redeemerOutputScript: '0x76a914' + '12'.repeat(20) + '88ac', // P2PKH script
-  amount: ethers.BigNumber.from('50000000'), // 0.5 BTC
+  amount: BigNumber.from('50000000'), // 0.5 BTC
   l2TransactionHash: '0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321',
   ...overrides,
 });
 
+// =====================
+// Redemption Factory
+// =====================
+
+/**
+ * Create a mock Redemption object for tests
+ * @param status RedemptionStatus
+ * @param overrides Partial fields to override
+ * @returns Redemption
+ */
 export const createMockRedemption = (
   status: RedemptionStatus = RedemptionStatus.PENDING,
   overrides: Partial<Redemption> = {},
@@ -116,6 +153,15 @@ export const createMockRedemption = (
   };
 };
 
+// =====================
+// VAA Response Factory
+// =====================
+
+/**
+ * Create a mock VAA response for tests
+ * @param valid Whether the VAA is valid
+ * @returns Mock VAA response or null
+ */
 export const createMockVaaResponse = (valid = true) => {
   if (!valid) {
     return null;
@@ -180,7 +226,16 @@ export const createMockVaaResponse = (valid = true) => {
   };
 };
 
-export const createMockEthersEvent = (overrides: Partial<ethers.Event> = {}): ethers.Event => {
+// =====================
+// Ethers Event Factory
+// =====================
+
+/**
+ * Create a mock Ethers Event for tests
+ * @param overrides Partial fields to override
+ * @returns EthersEvent
+ */
+export const createMockEthersEvent = (overrides: Partial<EthersEvent> = {}): EthersEvent => {
   const baseEvent = {
     transactionHash: '0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321',
     blockNumber: 1000000,
@@ -195,12 +250,21 @@ export const createMockEthersEvent = (overrides: Partial<ethers.Event> = {}): et
     event: 'RedemptionRequested',
     eventSignature: 'RedemptionRequested(bytes20,tuple,bytes,uint64)',
     ...overrides,
-  } as unknown as ethers.Event;
+  } as unknown as EthersEvent;
 
   return baseEvent;
 };
 
-// Helper to create multiple test redemptions with different statuses
+// =====================
+// Redemption Batch Factory
+// =====================
+
+/**
+ * Create a batch of mock Redemptions with the same status
+ * @param count Number of redemptions
+ * @param baseStatus Status to use
+ * @returns Redemption[]
+ */
 export const createMockRedemptionBatch = (
   count: number,
   baseStatus: RedemptionStatus = RedemptionStatus.PENDING,
@@ -213,7 +277,14 @@ export const createMockRedemptionBatch = (
   );
 };
 
-// Mock providers and contracts for testing
+// =====================
+// Provider/Contract Mocks
+// =====================
+
+/**
+ * Create a mock provider for tests
+ * @returns Mock provider object
+ */
 export const createMockProvider = () => ({
   getTransactionReceipt: jest.fn(),
   on: jest.fn(),
@@ -221,6 +292,10 @@ export const createMockProvider = () => ({
   removeAllListeners: jest.fn(),
 });
 
+/**
+ * Create a mock contract for tests
+ * @returns Mock contract object
+ */
 export const createMockContract = () => ({
   address: '0x0987654321098765432109876543210987654321',
   interface: {

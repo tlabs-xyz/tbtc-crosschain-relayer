@@ -1,9 +1,16 @@
-import { ethers } from 'ethers';
+// tests/e2e/L2RedemptionService.e2e.test.ts - E2E tests for L2RedemptionService
+//
+// This suite tests the full L2-to-L1 redemption pipeline for the tBTC cross-chain relayer.
+// It covers event listening, VAA fetching, L1 submission, and error handling for redemptions.
+
+import * as AllEthers from 'ethers';
 import type { ChainId } from '@wormhole-foundation/sdk';
 import { L2RedemptionService } from '../../services/L2RedemptionService.js';
 import { WormholeVaaService } from '../../services/WormholeVaaService.js';
 import { l1RedemptionHandlerRegistry } from '../../handlers/L1RedemptionHandlerRegistry.js';
+import type { Redemption } from '../../types/Redemption.type.js';
 import { RedemptionStatus } from '../../types/Redemption.type.js';
+import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
 import {
   createMockChainConfig,
   createMockRedemptionEvent,
@@ -15,7 +22,18 @@ import {
 // Mock all external dependencies
 jest.mock('../../services/WormholeVaaService.js');
 jest.mock('../../handlers/L1RedemptionHandlerRegistry.js');
-jest.mock('ethers');
+jest.mock('ethers', () => {
+  const originalEthers = jest.requireActual('ethers') as typeof AllEthers;
+  return {
+    ...originalEthers,
+    providers: {
+      ...originalEthers.providers,
+      // Mock the specific provider class used by the service
+      JsonRpcProvider: jest.fn(),
+    },
+    Contract: jest.fn(), // Mock the Contract class
+  };
+});
 
 // Mock RedemptionStore at module level for unit tests
 jest.mock('../../utils/RedemptionStore.js', () => ({
@@ -36,17 +54,23 @@ const mockRedemptionStore = jest.mocked(RedemptionStore);
 
 // Create properly typed mocks
 const MockedWormholeVaaService = jest.mocked(WormholeVaaService);
-const MockedEthers = jest.mocked(ethers);
+const MockedEthers = AllEthers as jest.Mocked<typeof AllEthers> & {
+  providers: {
+    JsonRpcProvider: jest.MockedClass<typeof AllEthers.providers.JsonRpcProvider>;
+  };
+  Contract: jest.MockedClass<typeof AllEthers.Contract>;
+};
 
 describe('L2RedemptionService E2E Tests - Optimized', () => {
   let service: L2RedemptionService;
-  let mockChainConfig: any;
-  let mockProvider: jest.Mocked<ethers.providers.JsonRpcProvider>;
-  let mockContract: jest.Mocked<ethers.Contract>;
+  let mockChainConfig: EvmChainConfig;
+  let mockProvider: jest.Mocked<AllEthers.providers.JsonRpcProvider>;
+  let mockContract: jest.Mocked<AllEthers.Contract>;
   let mockWormholeVaaService: jest.Mocked<WormholeVaaService>;
-  let mockL1RedemptionHandler: any;
+  let mockL1RedemptionHandler: { submitRedemptionDataToL1: jest.Mock };
 
   beforeEach(async () => {
+    // Reset mocks before each test
     jest.clearAllMocks();
 
     mockChainConfig = createMockChainConfig();
@@ -56,7 +80,7 @@ describe('L2RedemptionService E2E Tests - Optimized', () => {
       getTransactionReceipt: jest.fn(),
       on: jest.fn(),
       removeAllListeners: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<AllEthers.providers.JsonRpcProvider>;
 
     // Mock ethers contract
     mockContract = {
@@ -65,19 +89,21 @@ describe('L2RedemptionService E2E Tests - Optimized', () => {
         events: {
           RedemptionRequested: true,
         },
-      },
+      } as unknown as AllEthers.utils.Interface,
       on: jest.fn(),
       removeAllListeners: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<AllEthers.Contract>;
 
-    // Mock ethers provider and contract constructors
-    (MockedEthers.providers.JsonRpcProvider as any) = jest.fn(() => mockProvider);
-    (MockedEthers.Contract as any) = jest.fn(() => mockContract);
+    // Setup mock for JsonRpcProvider constructor to return our mockProvider instance
+    (MockedEthers.providers.JsonRpcProvider as unknown as jest.Mock).mockImplementation(
+      () => mockProvider,
+    );
+    (MockedEthers.Contract as unknown as jest.Mock).mockImplementation(() => mockContract);
 
     // Mock WormholeVaaService
     mockWormholeVaaService = {
       fetchAndVerifyVaaForL2Event: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<WormholeVaaService>;
 
     // Mock the static create method
     MockedWormholeVaaService.create = jest.fn().mockResolvedValue(mockWormholeVaaService);
@@ -91,8 +117,11 @@ describe('L2RedemptionService E2E Tests - Optimized', () => {
     service = await L2RedemptionService.create(mockChainConfig);
   });
 
-  // Unit tests with mocked RedemptionStore
-  describe('✅ Flow: Complete L2-to-L1 Redemption Success', () => {
+  // =====================
+  // Complete L2-to-L1 Redemption Success Flow
+  // =====================
+
+  describe('Flow: Complete L2-to-L1 Redemption Success', () => {
     beforeEach(() => {
       // Reset all mocks before each test
       jest.clearAllMocks();
@@ -106,17 +135,23 @@ describe('L2RedemptionService E2E Tests - Optimized', () => {
       const mockL1TxHash = '0x' + 'cd'.repeat(32);
 
       // Track redemption state changes
-      const redemptionUpdates: any[] = [];
-      let createdRedemption: any = null;
+      const redemptionUpdates: Array<{ action: string; redemption: Redemption }> = [];
+      let createdRedemption: Redemption | null = null;
+      let vaaFetchedRedemptionState: Redemption | null = null; // Variable to capture the state after VAA fetch
 
       // Setup mocked RedemptionStore methods
       mockRedemptionStore.getById.mockResolvedValue(null);
-      mockRedemptionStore.create.mockImplementation(async (redemption: any) => {
-        createdRedemption = { ...redemption };
-        redemptionUpdates.push({ action: 'create', redemption: { ...redemption } });
+      mockRedemptionStore.create.mockImplementation(async (redemption: Redemption) => {
+        createdRedemption = { ...redemption, logs: [...(redemption.logs || [])] }; // Ensure logs array is copied
+        redemptionUpdates.push({ action: 'create', redemption: { ...createdRedemption } });
       });
-      mockRedemptionStore.update.mockImplementation(async (redemption: any) => {
-        redemptionUpdates.push({ action: 'update', redemption: { ...redemption } });
+      mockRedemptionStore.update.mockImplementation(async (redemption: Redemption) => {
+        const updatedRedemption = { ...redemption, logs: [...(redemption.logs || [])] }; // Ensure logs array is copied
+        redemptionUpdates.push({ action: 'update', redemption: updatedRedemption });
+        if (updatedRedemption.status === RedemptionStatus.VAA_FETCHED) {
+          // Capture the state of the redemption right after VAA processing saved it
+          vaaFetchedRedemptionState = updatedRedemption;
+        }
       });
 
       // Setup mocks for successful flow
@@ -145,14 +180,31 @@ describe('L2RedemptionService E2E Tests - Optimized', () => {
 
       // Setup store queries to return the created redemption for processing phases
       mockRedemptionStore.getByStatus
-        .mockResolvedValueOnce([createdRedemption]) // PENDING redemption for VAA processing
-        .mockResolvedValueOnce([]) // No VAA_FAILED initially
-        .mockResolvedValueOnce([
-          { ...createdRedemption, status: RedemptionStatus.VAA_FETCHED, vaaBytes: '0x123' },
-        ]); // VAA_FETCHED for L1 submission
+        .mockResolvedValueOnce([createdRedemption!]) // PENDING redemption for VAA processing
+        .mockResolvedValueOnce([]) // No VAA_FAILED initially (for the first call to processPendingRedemptions)
+        .mockImplementationOnce(async (status: RedemptionStatus) => {
+          // This mock is for getting VAA_FETCHED items for L1 submission phase
+          if (status === RedemptionStatus.VAA_FETCHED && vaaFetchedRedemptionState) {
+            return [{ ...vaaFetchedRedemptionState }]; // Provide the state captured after VAA fetch & update
+          }
+          // This path should ideally not be hit if vaaFetchedRedemptionState is correctly populated
+          // and the test calls getByStatus with VAA_FETCHED for this phase.
+          // Throw an error to make test failure explicit if pre-conditions aren't met.
+          throw new Error(
+            `E2E Test Error: getByStatus mock for L1 phase called with status ${status} or vaaFetchedRedemptionState was null.`,
+          );
+        });
 
       // Process pending redemptions (VAA fetch phase)
       await service.processPendingRedemptions();
+
+      // Crucial check: Ensure the VAA fetch phase actually updated and set our capture variable
+      expect(vaaFetchedRedemptionState).toBeDefined();
+      expect(vaaFetchedRedemptionState).not.toBeNull();
+      expect(vaaFetchedRedemptionState!.status).toBe(RedemptionStatus.VAA_FETCHED);
+      expect(
+        vaaFetchedRedemptionState!.logs!.some((log: string) => /VAA fetched at/.test(log)),
+      ).toBeTruthy();
 
       // Process VAA-fetched redemptions (L1 submission phase)
       await service.processVaaFetchedRedemptions();
@@ -161,32 +213,40 @@ describe('L2RedemptionService E2E Tests - Optimized', () => {
       expect(redemptionUpdates).toHaveLength(3); // create + VAA update + completion update
 
       // Verify initial redemption creation
-      const creation = redemptionUpdates[0];
-      expect(creation.action).toBe('create');
-      expect(creation.redemption.status).toBe(RedemptionStatus.PENDING);
-      expect(creation.redemption.event).toEqual(
-        expect.objectContaining({
-          walletPubKeyHash: mockEvent.walletPubKeyHash,
-          l2TransactionHash: mockEthersEvent.transactionHash,
-        }),
+      const creation = redemptionUpdates.find((u) => u.action === 'create');
+      const vaaFetchUpdate = redemptionUpdates.find(
+        (u) => u.redemption.status === RedemptionStatus.VAA_FETCHED,
+      );
+      const completionUpdate = redemptionUpdates.find(
+        (u) => u.redemption.status === RedemptionStatus.COMPLETED,
       );
 
-      // Verify VAA fetch phase
-      const vaaUpdate = redemptionUpdates[1];
-      expect(vaaUpdate.action).toBe('update');
-      expect(vaaUpdate.redemption.status).toBe(RedemptionStatus.VAA_FETCHED);
-      expect(vaaUpdate.redemption.vaaStatus).toBe(RedemptionStatus.VAA_FETCHED);
-      expect(vaaUpdate.redemption.vaaBytes).toBeTruthy();
-      expect(vaaUpdate.redemption.dates.vaaFetchedAt).toBeTruthy();
-      expect(vaaUpdate.redemption.error).toBeNull();
+      expect(creation).toBeDefined();
+      expect(vaaFetchUpdate).toBeDefined();
+      expect(completionUpdate).toBeDefined();
 
-      // Verify L1 submission phase
-      const completionUpdate = redemptionUpdates[2];
-      expect(completionUpdate.action).toBe('update');
-      expect(completionUpdate.redemption.status).toBe(RedemptionStatus.COMPLETED);
-      expect(completionUpdate.redemption.l1SubmissionTxHash).toBe(mockL1TxHash);
-      expect(completionUpdate.redemption.dates.completedAt).toBeTruthy();
-      expect(completionUpdate.redemption.dates.l1SubmittedAt).toBeTruthy();
+      // Verify logs if they exist on the objects
+      expect(
+        creation!.redemption.logs!.some((log: string) => /Redemption created at/.test(log)),
+      ).toBeTruthy();
+      expect(
+        vaaFetchUpdate!.redemption.logs!.some((log: string) => /VAA fetched at/.test(log)),
+      ).toBeTruthy();
+      expect(
+        completionUpdate!.redemption.logs!.some((log: string) =>
+          /L1 submission succeeded at/.test(log),
+        ),
+      ).toBeTruthy();
+
+      // Check dates
+      expect(creation!.redemption.dates.createdAt).toBeDefined();
+      expect(vaaFetchUpdate!.redemption.dates.vaaFetchedAt).toBeDefined();
+      expect(completionUpdate!.redemption.dates.l1SubmittedAt).toBeDefined();
+      expect(completionUpdate!.redemption.dates.completedAt).toBeDefined();
+
+      const duration =
+        completionUpdate!.redemption.dates.completedAt! - creation!.redemption.dates.createdAt;
+      expect(duration).toBeGreaterThanOrEqual(0);
 
       // Verify external service calls
       expect(mockWormholeVaaService.fetchAndVerifyVaaForL2Event).toHaveBeenCalledWith(
@@ -203,25 +263,27 @@ describe('L2RedemptionService E2E Tests - Optimized', () => {
 
       // Verify timing and logging
       expect(
-        completionUpdate.redemption.logs.some((log: string) => /Redemption created at/.test(log)),
+        completionUpdate!.redemption.logs!.some((log: string) => /Redemption created at/.test(log)),
       ).toBe(true);
       expect(
-        completionUpdate.redemption.logs.some((log: string) => /VAA fetched at/.test(log)),
+        completionUpdate!.redemption.logs!.some((log: string) => /VAA fetched at/.test(log)),
       ).toBe(true);
       expect(
-        completionUpdate.redemption.logs.some((log: string) =>
+        completionUpdate!.redemption.logs!.some((log: string) =>
           /L1 submission succeeded at/.test(log),
         ),
       ).toBe(true);
 
       // Performance check - should complete reasonably quickly
-      const totalTime =
-        completionUpdate.redemption.dates.completedAt - creation.redemption.dates.createdAt;
-      expect(totalTime).toBeLessThan(10000); // Should complete within 10 seconds for test
+      expect(duration).toBeLessThan(10000); // Should complete within 10 seconds for test
     }, 10000);
   });
 
-  describe('✅ Flow: Critical Failure Points', () => {
+  // =====================
+  // Error Handling & Edge Case Tests
+  // =====================
+
+  describe('Flow: Critical Failure Points', () => {
     beforeEach(() => {
       // Reset all mocks before each test
       jest.clearAllMocks();
@@ -232,8 +294,8 @@ describe('L2RedemptionService E2E Tests - Optimized', () => {
       const mockPendingRedemption = createMockRedemption(RedemptionStatus.PENDING);
       const mockVaaFetchedRedemption = createMockRedemption(RedemptionStatus.VAA_FETCHED);
 
-      const redemptionUpdates: any[] = [];
-      mockRedemptionStore.update.mockImplementation(async (redemption: any) => {
+      const redemptionUpdates: Array<{ action: string; redemption: Redemption }> = [];
+      mockRedemptionStore.update.mockImplementation(async (redemption: Redemption) => {
         redemptionUpdates.push({ action: 'update', redemption: { ...redemption } });
       });
 

@@ -1,10 +1,16 @@
+// tests/mocks/MockChainHandler.ts - Mock chain handler for testing
+//
+// Provides a mock implementation of ChainHandlerInterface for use in integration and unit tests.
+// Simulates deposit lifecycle, event system, and chain config for EVM, Solana, Sui, and Starknet chains.
+
 import type { TransactionReceipt } from '@ethersproject/providers';
 import type { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface.js';
 import { DepositStatus } from '../../types/DepositStatus.enum.js';
 import type { Deposit } from '../../types/Deposit.type.js';
 import logger from '../../utils/Logger.js';
 import { createTestDeposit } from './BlockchainMock.js';
-import { BigNumber, ethers } from 'ethers';
+import { BigNumber } from 'ethers';
+import * as AllEthers from 'ethers';
 import type { AnyChainConfig } from '../../config/index.js';
 import { CHAIN_TYPE, NETWORK } from '../../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
@@ -31,8 +37,13 @@ const mockReceipt = {
   byzantium: true,
 };
 
+// =====================
+// MockChainHandler Class Definition
+// =====================
+
 /**
  * Mock chain handler for testing
+ * Implements ChainHandlerInterface for use in tests.
  */
 export class MockChainHandler implements ChainHandlerInterface {
   public config: AnyChainConfig;
@@ -40,6 +51,14 @@ export class MockChainHandler implements ChainHandlerInterface {
   private listeners: Map<string, ((...args: any[]) => void)[]> = new Map();
   private processingDelayMs: number = 100; // Simulate processing delay
 
+  // =====================
+  // Constructor & Config
+  // =====================
+
+  /**
+   * Construct a mock chain handler with optional config overrides.
+   * @param config Partial chain config to override defaults
+   */
   constructor(config: Partial<AnyChainConfig> = {}) {
     this.addTestDeposits();
 
@@ -53,16 +72,16 @@ export class MockChainHandler implements ChainHandlerInterface {
       l1Rpc: 'http://localhost:8545',
       l2Rpc: 'http://localhost:8546',
       l2WsRpc: 'ws://localhost:8547',
-      l1ContractAddress: ethers.constants.AddressZero,
-      l2ContractAddress: ethers.constants.AddressZero,
-      l1BitcoinRedeemerAddress: ethers.constants.AddressZero,
-      l2BitcoinRedeemerAddress: ethers.constants.AddressZero,
-      l2WormholeGatewayAddress: ethers.constants.AddressZero,
+      l1ContractAddress: AllEthers.constants.AddressZero,
+      l2ContractAddress: AllEthers.constants.AddressZero,
+      l1BitcoinRedeemerAddress: AllEthers.constants.AddressZero,
+      l2BitcoinRedeemerAddress: AllEthers.constants.AddressZero,
+      l2WormholeGatewayAddress: AllEthers.constants.AddressZero,
       l2WormholeChainId: 0,
-      vaultAddress: ethers.constants.AddressZero,
+      vaultAddress: AllEthers.constants.AddressZero,
       blockExplorerUrl: '',
-      tokenBridgeAddress: ethers.constants.AddressZero,
-      wormholeRelayerAddress: ethers.constants.AddressZero,
+      tokenBridgeAddress: AllEthers.constants.AddressZero,
+      wormholeRelayerAddress: AllEthers.constants.AddressZero,
       relayerFee: 0,
       maxRetries: 5,
       retryDelay: 5000,
@@ -82,7 +101,7 @@ export class MockChainHandler implements ChainHandlerInterface {
           ...baseProperties,
           chainType: CHAIN_TYPE.EVM,
           privateKey:
-            (config as EvmChainConfig).privateKey || ethers.Wallet.createRandom().privateKey,
+            (config as EvmChainConfig).privateKey || AllEthers.Wallet.createRandom().privateKey,
           l2WsRpc: (config as EvmChainConfig).l2WsRpc || baseProperties.l2WsRpc,
           l2ContractAddress:
             (config as EvmChainConfig).l2ContractAddress || baseProperties.l2ContractAddress,
@@ -135,12 +154,16 @@ export class MockChainHandler implements ChainHandlerInterface {
         finalConfig = {
           ...baseProperties,
           chainType: CHAIN_TYPE.EVM,
-          privateKey: ethers.Wallet.createRandom().privateKey,
+          privateKey: AllEthers.Wallet.createRandom().privateKey,
         } as EvmChainConfig;
     }
 
     this.config = finalConfig;
   }
+
+  // =====================
+  // Deposit Management
+  // =====================
 
   /**
    * Add some test deposits for testing
@@ -157,10 +180,10 @@ export class MockChainHandler implements ChainHandlerInterface {
       status: 'INITIALIZED',
       hashes: {
         btc: {
-          btcTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+          btcTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
         },
         eth: {
-          initializeTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+          initializeTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
           finalizeTxHash: null,
         },
       },
@@ -178,11 +201,11 @@ export class MockChainHandler implements ChainHandlerInterface {
       status: 'FINALIZED',
       hashes: {
         btc: {
-          btcTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+          btcTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
         },
         eth: {
-          initializeTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          finalizeTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+          initializeTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+          finalizeTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
         },
       },
       dates: {
@@ -194,6 +217,10 @@ export class MockChainHandler implements ChainHandlerInterface {
     }) as Deposit;
     this.deposits.set(finalizedDeposit.id, finalizedDeposit);
   }
+
+  // =====================
+  // Chain Handler Interface Methods
+  // =====================
 
   /**
    * Initialize the chain handler
@@ -257,7 +284,7 @@ export class MockChainHandler implements ChainHandlerInterface {
           ...deposit.hashes,
           eth: {
             ...deposit.hashes.eth,
-            initializeTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+            initializeTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
           },
         },
         dates: {
@@ -297,7 +324,7 @@ export class MockChainHandler implements ChainHandlerInterface {
           ...deposit.hashes,
           eth: {
             ...deposit.hashes.eth,
-            finalizeTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+            finalizeTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
           },
         },
         dates: {
@@ -385,6 +412,10 @@ export class MockChainHandler implements ChainHandlerInterface {
     return Array.from(this.deposits.values());
   }
 
+  // =====================
+  // Event System
+  // =====================
+
   /**
    * Register event listener
    */
@@ -411,7 +442,7 @@ export class MockChainHandler implements ChainHandlerInterface {
   }
 
   /**
-   * Emit event
+   * Emit event (private)
    */
   private emitEvent(event: string, ...args: any[]): void {
     logger.info(`MockChainHandler: Emitting event ${event} with args:`, args);
@@ -426,6 +457,10 @@ export class MockChainHandler implements ChainHandlerInterface {
       });
     }
   }
+
+  // =====================
+  // Miscellaneous
+  // =====================
 
   /**
    * Set processing delay

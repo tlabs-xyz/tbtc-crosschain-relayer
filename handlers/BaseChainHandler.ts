@@ -1,10 +1,20 @@
+/**
+ * BaseChainHandler: Abstract base class for cross-chain handler implementations.
+ *
+ * This class provides common logic for L1 setup, event listening, and deposit lifecycle management
+ * for EVM and non-EVM chains. It defines abstract methods for L2-specific logic, which must be implemented
+ * by subclasses for each supported chain (e.g., StarkNet, Solana, Sui).
+ *
+ * Update this file to add, refactor, or clarify shared chain handler logic and contracts.
+ */
 import { type Network, type Wormhole, wormhole } from '@wormhole-foundation/sdk';
 
 import solana from '@wormhole-foundation/sdk/solana';
 import sui from '@wormhole-foundation/sdk/sui';
 import evm from '@wormhole-foundation/sdk/evm';
 
-import { BigNumber, ethers } from 'ethers';
+import { BigNumber } from 'ethers';
+import * as AllEthers from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
 import { NonceManager } from '@ethersproject/experimental';
 
@@ -35,13 +45,13 @@ function getErrorReason(error: unknown): string {
 }
 
 export abstract class BaseChainHandler<T extends AnyChainConfig> implements ChainHandlerInterface {
-  protected l1Provider: ethers.providers.JsonRpcProvider;
-  protected l1Signer: ethers.Wallet;
+  protected l1Provider: AllEthers.providers.JsonRpcProvider;
+  protected l1Signer: AllEthers.Wallet;
   protected nonceManagerL1: NonceManager;
-  protected l1BitcoinDepositor: ethers.Contract; // For sending L1 txs
-  protected tbtcVault: ethers.Contract; // For sending L1 txs (though not used currently)
-  protected l1BitcoinDepositorProvider: ethers.Contract; // For L1 reads/events
-  protected tbtcVaultProvider: ethers.Contract; // For L1 events
+  protected l1BitcoinDepositor: AllEthers.Contract; // For sending L1 txs
+  protected tbtcVault: AllEthers.Contract; // For sending L1 txs (though not used currently)
+  protected l1BitcoinDepositorProvider: AllEthers.Contract; // For L1 reads/events
+  protected tbtcVaultProvider: AllEthers.Contract; // For L1 events
   public config: T;
   protected wormhole: Wormhole<Network>;
 
@@ -49,6 +59,14 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     this.config = config;
   }
 
+  // =====================
+  // Initialization Logic
+  // =====================
+
+  /**
+   * Initialize the chain handler, including L1 provider, signer, contracts, and Wormhole SDK.
+   * Subclasses must implement initializeL2 for L2-specific setup.
+   */
   async initialize(): Promise<void> {
     logger.info(`Initializing chain handler for ${this.config.chainName}`);
 
@@ -66,7 +84,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
 
     // Initialize L1 provider first as it's needed by the signer
-    this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc);
+    this.l1Provider = new AllEthers.providers.JsonRpcProvider(this.config.l1Rpc);
 
     // EVM-specific L1 setup (Signer)
     if (this.config.chainType === CHAIN_TYPE.EVM) {
@@ -74,16 +92,20 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       if (!evmConfig.privateKey) {
         throw new Error(`Missing privateKey for EVM chain ${this.config.chainName}`);
       }
-      this.l1Signer = new ethers.Wallet(evmConfig.privateKey, this.l1Provider);
+      this.l1Signer = new AllEthers.Wallet(evmConfig.privateKey, this.l1Provider);
       this.nonceManagerL1 = new NonceManager(this.l1Signer);
 
       // L1 Contracts for transactions (require signer)
-      this.l1BitcoinDepositor = new ethers.Contract(
+      this.l1BitcoinDepositor = new AllEthers.Contract(
         this.config.l1ContractAddress,
         L1BitcoinDepositorABI,
         this.nonceManagerL1,
       );
-      this.tbtcVault = new ethers.Contract(this.config.vaultAddress, TBTCVaultABI, this.l1Signer);
+      this.tbtcVault = new AllEthers.Contract(
+        this.config.vaultAddress,
+        TBTCVaultABI,
+        this.l1Signer,
+      );
     } else {
       // For non-EVM chains, l1Signer and related contracts might not be needed
       // or would require a different setup.
@@ -106,12 +128,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     });
 
     // L1 Contracts for reading/listening (do not require signer)
-    this.l1BitcoinDepositorProvider = new ethers.Contract(
+    this.l1BitcoinDepositorProvider = new AllEthers.Contract(
       this.config.l1ContractAddress,
       L1BitcoinDepositorABI,
       this.l1Provider,
     );
-    this.tbtcVaultProvider = new ethers.Contract(
+    this.tbtcVaultProvider = new AllEthers.Contract(
       this.config.vaultAddress,
       TBTCVaultABI,
       this.l1Provider,
@@ -123,13 +145,20 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     logger.info(`Chain handler initialized for ${this.config.chainName}`);
   }
 
+  /**
+   * Set up all event listeners (L1 and L2).
+   * Subclasses must implement setupL2Listeners for L2-specific event handling.
+   */
   async setupListeners(): Promise<void> {
     await this.setupL1Listeners();
     await this.setupL2Listeners();
     logger.info(`Event listeners active for ${this.config.chainName}`);
   }
 
-  // --- L1 Listener Setup ---
+  /**
+   * Set up L1 event listeners for deposit lifecycle events.
+   * Handles OptimisticMintingFinalized and related events.
+   */
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
@@ -164,7 +193,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     );
   }
 
-  // --- Core Deposit Logic (L1 Interactions) ---
+  /**
+   * Initialize a deposit on L1. Returns the transaction receipt if successful.
+   * Handles error logging and updates deposit status on failure.
+   * @param deposit The deposit object to initialize
+   */
   async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     // Check if already processed locally to avoid redundant L1 calls
     if (
@@ -238,6 +271,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
   }
 
+  /**
+   * Finalize a deposit on L1. Returns the transaction receipt if successful.
+   * Handles error logging and updates deposit status on failure.
+   * @param deposit The deposit object to finalize
+   */
   async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     // Check if already finalized to avoid redundant L1 calls
     if (deposit.status === DepositStatus.FINALIZED) {
@@ -305,6 +343,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
   }
 
+  /**
+   * Check the status of a deposit by ID. Returns the DepositStatus or null if not found.
+   * @param depositId The deposit ID to check
+   */
   async checkDepositStatus(depositId: string): Promise<DepositStatus | null> {
     try {
       // Use the L1 provider contract to check status
@@ -328,7 +370,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
   }
 
-  // --- Batch Processing Logic ---
+  /**
+   * Process all deposits that need initialization. Subclasses may override for custom logic.
+   */
   async processInitializeDeposits(): Promise<void> {
     logger.info(`Processing initialize deposits for ${this.config.chainName}`);
     const operations: Deposit[] = await DepositStore.getByStatus(DepositStatus.QUEUED);
@@ -356,6 +400,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
   }
 
+  /**
+   * Process all deposits that need finalization. Subclasses may override for custom logic.
+   */
   async processFinalizeDeposits(): Promise<void> {
     logger.info(`Processing finalize deposits for ${this.config.chainName}`);
     const operations: Deposit[] = await DepositStore.getByStatus(DepositStatus.INITIALIZED);
@@ -380,41 +427,33 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
   }
 
-  // --- Abstract Methods for Subclasses ---
-
   /**
-   * Initialize L2-specific components like providers, signers, and contracts.
-   * Should be implemented by subclasses (e.g., EVMChainHandler, StarknetChainHandler).
+   * L2-specific initialization logic. Must be implemented by subclasses.
    */
   protected abstract initializeL2(): void;
 
   /**
-   * Set up L2-specific event listeners (e.g., for DepositInitialized events).
-   * Implementation should check config.useEndpoint and only setup if false and applicable.
-   * Should be implemented by subclasses.
+   * Set up L2 event listeners. Must be implemented by subclasses.
    */
   protected abstract setupL2Listeners(): Promise<void>;
 
   /**
-   * Get the latest block number (or equivalent concept like slot/sequence number) from the L2 chain.
-   * Return 0 or throw error if not applicable (e.g., useEndpoint is true or chain doesn't support).
-   * Should be implemented by subclasses.
+   * Get the latest block/slot/sequence number for the chain. Must be implemented by subclasses.
    */
   abstract getLatestBlock(): Promise<number>;
 
   /**
-   * Check for past L2 deposit events that might have been missed during downtime.
-   * Implementation should check config.useEndpoint and only run if false and applicable.
-   * Should be implemented by subclasses.
+   * Check for past deposits within a given time window. Must be implemented by subclasses.
+   * @param options Options for past deposit checking (time window, latest block, batch size)
    */
   abstract checkForPastDeposits(options: {
     pastTimeInMinutes: number;
     latestBlock: number; // Represents block/slot/sequence number
+    batchSize?: number;
   }): Promise<void>;
 
   /**
-   * Helper to determine if this handler supports checking for past L2 deposits based on its configuration.
-   * Defaults to true if L2 is configured and endpoint is not used, override in subclasses for specific logic.
+   * Whether this handler supports past deposit checking (default: true).
    */
   supportsPastDepositCheck(): boolean {
     // True only if L2 is configured (implying L2 watcher capability) AND endpoint is not used.
@@ -426,6 +465,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     return supports;
   }
 
+  /**
+   * Filter deposits by last activity time. Used for cleanup or reporting.
+   * @param deposits Array of Deposit objects
+   */
   protected filterDepositsActivityTime(deposits: Array<Deposit>): Array<Deposit> {
     const now = Date.now();
     return deposits.filter((deposit) => {

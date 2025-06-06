@@ -1,4 +1,8 @@
-import { ethers } from 'ethers';
+// tests/mocks/BlockchainMock.ts - Mock utilities for blockchain interactions in tests
+//
+// Provides mock Ethereum provider, contract, and deposit objects for use in integration/unit tests.
+
+import * as AllEthers from 'ethers';
 import { EventEmitter } from 'events';
 
 /**
@@ -26,7 +30,7 @@ export class MockProvider extends EventEmitter {
     return {
       number: blockNumber,
       timestamp: Math.floor(Date.now() / 1000) - (this.blockNumber - blockNumber) * 15, // 15 seconds per block
-      hash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+      hash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
     };
   }
 
@@ -128,24 +132,26 @@ export class MockContract extends EventEmitter {
    * Generate a mock transaction hash
    */
   generateTxHash(): string {
-    return ethers.utils.hexlify(ethers.utils.randomBytes(32));
+    return AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32));
   }
 }
 
 /**
  * Create a test deposit object
+ * @param overrides Partial fields to override in the generated deposit
+ * @returns A mock deposit object
  */
 export function createTestDeposit(overrides: Partial<any> = {}): any {
-  const depositId = overrides.id || ethers.utils.hexlify(ethers.utils.randomBytes(32));
+  const depositId = overrides.id || AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32));
   const now = Date.now();
 
   return {
     id: depositId,
-    fundingTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+    fundingTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
     outputIndex: 0,
     hashes: {
       btc: {
-        btcTxHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+        btcTxHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
       },
       eth: {
         initializeTxHash: null,
@@ -153,29 +159,29 @@ export function createTestDeposit(overrides: Partial<any> = {}): any {
       },
     },
     receipt: {
-      depositor: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-      blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-      walletPublicKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-      refundPublicKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+      depositor: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+      blindingFactor: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+      walletPublicKeyHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+      refundPublicKeyHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
       refundLocktime: '1800000000',
       extraData: '0x',
     },
-    owner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+    owner: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
     status: 'QUEUED',
     L1OutputEvent: {
       fundingTx: {
-        txHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+        txHash: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
         outputIndex: 0,
-        value: ethers.utils.parseEther('0.1').toString(),
+        value: AllEthers.utils.parseEther('0.1').toString(),
       },
       reveal: [
-        ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+        AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+        AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
+        AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+        AllEthers.utils.hexlify(AllEthers.utils.randomBytes(32)),
       ],
-      l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-      l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+      l2DepositOwner: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
+      l2Sender: AllEthers.utils.hexlify(AllEthers.utils.randomBytes(20)),
     },
     dates: {
       createdAt: now,

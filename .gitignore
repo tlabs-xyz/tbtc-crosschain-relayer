@@ -1,27 +1,74 @@
-/node_modules
+# .gitignore for tBTC cross-chain relayer project
+# This file specifies intentionally untracked files to ignore in git version control.
 
-/data
-/dist
+# =====================
+# Node & Dependency Artifacts
+# =====================
 
+# Dependencies
+/node_modules/
+
+# Build outputs
+/dist/
+/generated/
+
+# Local data - often used for databases, uploads, etc.
+/data/
+
+# Logs
+/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+# Never commit .env files directly.
+# Use .env.example or .env.template for templates and commit those.
 .env
-.env.dev
+.env.*
+!.env.example
 
-.cursor
-memory-bank
+# Prisma specific
+# If 'prisma/memory:' was intended to be a directory of local/temporary prisma data:
+prisma/memory/
+# If Prisma client is generated to a custom path outside node_modules and shouldn't be committed:
+# prisma/client/ # Example, adjust if needed
 
-/coverage
-.eslintcache
+# OS-generated files
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+*~ # Common backup file pattern (e.g., for gedit, Kate)
 
-/logs
+# IDE / Editor specific
+# Consider if project-specific settings (e.g., .vscode/settings.json) should be shared with the team.
+# If so, remove the general directory ignore and ignore specific files/subdirectories instead.
+.vscode/
+.idea/
+.eslintcache # ESLint cache file
 
-redemptions/
+# TypeScript specific
+*.tsbuildinfo # TypeScript incremental build information
 
-/generated
+# Coverage reports
+/coverage/
 
-tasks
-
-prisma/memory:
-
+# Tooling specific (e.g., Cursor AI, task runners)
+# Assuming these are directories. If any are files, remove the trailing slash.
+.cursor/
+memory-bank/
+tasks/
 *.diff
 
-*.log
+# Markdown files - CAUTION: This ignores ALL Markdown files.
+# If your project uses Markdown for documentation (e.g., README.md, docs/),
+# this rule might be too broad and prevent them from being committed.
+# Consider more specific patterns if needed, for example:
+# tasks/**/*.md (if only generated markdown in 'tasks' directory should be ignored)
+# Or, list specific .md files that should be ignored.
+# *.md  # <-- Removed to avoid ignoring all documentation files. Use specific patterns above if needed.

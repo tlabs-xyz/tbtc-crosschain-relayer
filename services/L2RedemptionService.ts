@@ -1,4 +1,9 @@
-import { ethers } from 'ethers';
+// services/L2RedemptionService.ts - L2 Redemption Service for tBTC cross-chain relayer
+//
+// This service handles L2 redemption event listening, VAA fetching, and L1 submission for Bitcoin redemptions.
+// It coordinates between L2 contracts, Wormhole VAA service, and L1 redemption handlers.
+
+import * as AllEthers from 'ethers';
 import type { ChainId } from '@wormhole-foundation/sdk';
 import { WormholeVaaService } from './WormholeVaaService.js';
 import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
@@ -19,8 +24,8 @@ import { toSerializableError } from '../types/Error.types.js';
 const DEFAULT_TARGET_L1_CHAIN_ID: ChainId = 2; // Ethereum Mainnet
 
 export class L2RedemptionService {
-  private l2Provider: ethers.providers.JsonRpcProvider;
-  private l2BitcoinRedeemerContract?: ethers.Contract;
+  private l2Provider: AllEthers.providers.JsonRpcProvider;
+  private l2BitcoinRedeemerContract?: AllEthers.Contract;
   private wormholeVaaService!: WormholeVaaService;
   private l1RedemptionHandler: L1RedemptionHandler;
 
@@ -28,12 +33,20 @@ export class L2RedemptionService {
   private l2WormholeGatewayAddress: string; // Emitter address on L2 for VAA fetching
   private chainConfig: EvmChainConfig;
 
+  // =====================
+  // Initialization & Construction
+  // =====================
+
+  /**
+   * Private constructor. Use L2RedemptionService.create() to instantiate.
+   * @param chainConfig The EVM chain configuration
+   */
   private constructor(chainConfig: EvmChainConfig) {
     this.chainConfig = chainConfig; // Store the chainConfig
-    this.l2Provider = new ethers.providers.JsonRpcProvider(chainConfig.l2Rpc);
+    this.l2Provider = new AllEthers.providers.JsonRpcProvider(chainConfig.l2Rpc);
 
     if (chainConfig.l2BitcoinRedeemerAddress) {
-      this.l2BitcoinRedeemerContract = new ethers.Contract(
+      this.l2BitcoinRedeemerContract = new AllEthers.Contract(
         chainConfig.l2BitcoinRedeemerAddress,
         L2BitcoinRedeemerABI,
         this.l2Provider,
@@ -59,17 +72,32 @@ export class L2RedemptionService {
     );
   }
 
-  // Async operations cannot be performed in the constructor, so we put them here
+  /**
+   * Async initialization for services that require await (e.g., WormholeVaaService).
+   * @param chainConfig The EVM chain configuration
+   */
   private async initialize(chainConfig: EvmChainConfig): Promise<void> {
     this.wormholeVaaService = await WormholeVaaService.create(chainConfig.l2Rpc);
   }
 
+  /**
+   * Factory method to create and initialize an L2RedemptionService instance.
+   * @param chainConfig The EVM chain configuration
+   * @returns A fully initialized L2RedemptionService
+   */
   public static async create(chainConfig: EvmChainConfig): Promise<L2RedemptionService> {
     const instance = new L2RedemptionService(chainConfig);
     await instance.initialize(chainConfig);
     return instance;
   }
 
+  // =====================
+  // Event Listening
+  // =====================
+
+  /**
+   * Start listening for 'RedemptionRequested' events on the L2 contract.
+   */
   public startListening(): void {
     if (!this.l2BitcoinRedeemerContract) {
       logger.info(
@@ -94,8 +122,8 @@ export class L2RedemptionService {
         walletPubKeyHash: string, // event.args[0] - bytes20
         mainUtxo: BitcoinTxUtxo, // event.args[1] - struct BitcoinTx.UTXO
         redeemerOutputScript: string, // event.args[2] - bytes
-        amount: ethers.BigNumber, // event.args[3] - uint64
-        rawEvent: ethers.Event, // The full event object from ethers.js
+        amount: AllEthers.BigNumber, // event.args[3] - uint64
+        rawEvent: AllEthers.Event, // The full event object from ethers.js
       ) => {
         try {
           const eventData: RedemptionRequestedEventData = {
@@ -148,6 +176,9 @@ export class L2RedemptionService {
     });
   }
 
+  /**
+   * Stop listening for 'RedemptionRequested' events on the L2 contract.
+   */
   public stopListening(): void {
     if (!this.l2BitcoinRedeemerContract) {
       logger.info(
@@ -161,6 +192,13 @@ export class L2RedemptionService {
     this.l2BitcoinRedeemerContract.removeAllListeners('RedemptionRequested');
   }
 
+  // =====================
+  // Redemption Processing
+  // =====================
+
+  /**
+   * Process all pending and VAA_FAILED redemptions by fetching and verifying VAAs.
+   */
   public async processPendingRedemptions(): Promise<void> {
     const pending = await RedemptionStore.getByStatus(
       RedemptionStatus.PENDING,
@@ -230,6 +268,9 @@ export class L2RedemptionService {
     }
   }
 
+  /**
+   * Process all VAA_FETCHED redemptions by submitting them to L1.
+   */
   public async processVaaFetchedRedemptions(): Promise<void> {
     const vaaFetched = await RedemptionStore.getByStatus(
       RedemptionStatus.VAA_FETCHED,
@@ -314,13 +355,18 @@ export class L2RedemptionService {
   }
 
   /**
-   * Public method to handle redemption requested events directly (used by tests)
+   * Handle a RedemptionRequested event directly (used by tests).
+   * @param walletPubKeyHash The wallet public key hash
+   * @param mainUtxo The main Bitcoin UTXO
+   * @param redeemerOutputScript The redeemer output script
+   * @param amount The redemption amount
+   * @param rawEvent The raw event object containing the transaction hash
    */
   public async handleRedemptionRequested(
     walletPubKeyHash: string,
     mainUtxo: BitcoinTxUtxo,
     redeemerOutputScript: string,
-    amount: ethers.BigNumber,
+    amount: AllEthers.BigNumber,
     rawEvent: { transactionHash: string },
   ): Promise<void> {
     try {
@@ -369,14 +415,14 @@ export class L2RedemptionService {
   }
 
   /**
-   * Public method to process VAA fetching for pending redemptions (used by tests)
+   * Process VAA fetching for pending redemptions (used by tests).
    */
   public async processVaaFetching(): Promise<void> {
     await this.processPendingRedemptions();
   }
 
   /**
-   * Public method to process L1 submission for VAA-ready redemptions (used by tests)
+   * Process L1 submission for VAA-ready redemptions (used by tests).
    */
   public async processL1Submission(): Promise<void> {
     await this.processVaaFetchedRedemptions();

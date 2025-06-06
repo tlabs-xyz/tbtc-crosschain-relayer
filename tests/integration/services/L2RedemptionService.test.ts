@@ -1,7 +1,11 @@
-import { ethers } from 'ethers';
+// tests/integration/services/L2RedemptionService.test.ts - Integration tests for L2RedemptionService
+//
+// This suite tests the L2RedemptionService's lifecycle, event processing, and batch/phase logic with mocked dependencies.
+// It covers creation, event handling, store interactions, and error handling.
+
+import * as AllEthers from 'ethers';
 import { L2RedemptionService } from '../../../services/L2RedemptionService.js';
 import { WormholeVaaService } from '../../../services/WormholeVaaService.js';
-import { l1RedemptionHandlerRegistry } from '../../../handlers/L1RedemptionHandlerRegistry.js';
 import { RedemptionStore } from '../../../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../../../types/Redemption.type.js';
 import {
@@ -14,20 +18,31 @@ import {
 
 // Mock all external dependencies
 jest.mock('../../../services/WormholeVaaService.js');
-jest.mock('../../../handlers/L1RedemptionHandlerRegistry.js');
+// Corrected and enhanced mock for L1RedemptionHandlerRegistry
+jest.mock('../../../handlers/L1RedemptionHandlerRegistry.ts', () => ({
+  l1RedemptionHandlerRegistry: {
+    get: jest.fn(),
+    list: jest.fn(() => []), // Add mocks for other methods if they exist and might be called
+    clear: jest.fn(),
+  },
+}));
 jest.mock('../../../utils/RedemptionStore.js');
 jest.mock('ethers');
 
 // Create properly typed mocks
 const MockedWormholeVaaService = jest.mocked(WormholeVaaService);
 const MockedRedemptionStore = jest.mocked(RedemptionStore);
-const MockedEthers = jest.mocked(ethers);
+const MockedEthers = jest.mocked(AllEthers, { shallow: false });
+
+// Import the mocked version of the registry for use in beforeEach
+// This import MUST come AFTER jest.mock
+import { l1RedemptionHandlerRegistry } from '../../../handlers/L1RedemptionHandlerRegistry.js';
 
 describe('L2RedemptionService Integration Tests - Optimized', () => {
   let service: L2RedemptionService;
   let mockChainConfig: any;
-  let mockProvider: jest.Mocked<ethers.providers.JsonRpcProvider>;
-  let mockContract: jest.Mocked<ethers.Contract>;
+  let mockProvider: jest.Mocked<AllEthers.providers.JsonRpcProvider>;
+  let mockContract: jest.Mocked<AllEthers.Contract>;
   let mockWormholeVaaService: jest.Mocked<WormholeVaaService>;
   let mockL1RedemptionHandler: any;
 
@@ -67,10 +82,15 @@ describe('L2RedemptionService Integration Tests - Optimized', () => {
     // Mock the static create method
     MockedWormholeVaaService.create = jest.fn().mockResolvedValue(mockWormholeVaaService);
 
-    // Mock L1RedemptionHandler
+    // Mock L1RedemptionHandler (this is the object our mocked registry.get will return)
     mockL1RedemptionHandler = {
       submitRedemptionDataToL1: jest.fn(),
+      // Ensure all methods that L2RedemptionService might call on L1Handler instances are mocked here
+      // For example, if it also called l1Handler.someOtherMethod(), it should be:
+      // someOtherMethod: jest.fn(),
     };
+    // Configure the mocked registry's get method
+    // l1RedemptionHandlerRegistry is now the mocked object from the factory
     (l1RedemptionHandlerRegistry.get as jest.Mock).mockReturnValue(mockL1RedemptionHandler);
 
     // Mock RedemptionStore methods
@@ -233,6 +253,11 @@ describe('L2RedemptionService Integration Tests - Optimized', () => {
     });
 
     it('should handle dependency failures (WormholeVaaService, L1RedemptionHandler)', async () => {
+      // Reset store update mock to default for this test, isolating from batch test
+      MockedRedemptionStore.update = jest.fn().mockResolvedValue(undefined);
+
+      // Part 1: WormholeVaaService failure (Logic for this part seems to be removed or commented out)
+      // const redemption1 = createMockRedemption(RedemptionStatus.PENDING); // This was unused
       const vaaFetchedRedemptions = [createMockRedemption(RedemptionStatus.VAA_FETCHED)];
 
       const redemptionUpdates: any[] = [];

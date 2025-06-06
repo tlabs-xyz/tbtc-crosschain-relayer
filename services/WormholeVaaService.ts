@@ -1,4 +1,9 @@
-import { ethers } from 'ethers';
+// services/WormholeVaaService.ts - Wormhole VAA Service for tBTC cross-chain relayer
+//
+// This service fetches, verifies, and parses Wormhole VAAs for L2 to L1 cross-chain operations.
+// It provides utilities for VAA retrieval, protocol/payload validation, and L1 completion checks.
+
+import * as ethers from 'ethers';
 import {
   wormhole,
   type Wormhole,
@@ -49,10 +54,25 @@ export class WormholeVaaService {
   private readonly l2Provider: ethers.providers.JsonRpcProvider;
   private wh!: Wormhole<Network>;
 
+  // =====================
+  // Initialization & Construction
+  // =====================
+
+  /**
+   * Private constructor. Use WormholeVaaService.create() to instantiate.
+   * @param l2Rpc The L2 RPC endpoint
+   */
   private constructor(l2Rpc: string) {
     this.l2Provider = new ethers.providers.JsonRpcProvider(l2Rpc);
   }
 
+  /**
+   * Factory method to create and initialize a WormholeVaaService instance.
+   * @param l2Rpc The L2 RPC endpoint
+   * @param network The Wormhole network (default: Testnet)
+   * @param platformModules Platform modules for Wormhole SDK
+   * @returns A fully initialized WormholeVaaService
+   */
   public static async create(
     l2Rpc: string,
     network: Network = DEFAULT_WORMHOLE_NETWORK,
@@ -71,14 +91,17 @@ export class WormholeVaaService {
     return service;
   }
 
+  // =====================
+  // VAA Fetching & Verification
+  // =====================
+
   /**
    * Fetches and verifies a VAA for a given L2 transaction hash.
-   *
-   * @param l2TransactionHash - The hash of the L2 transaction to fetch the VAA for.
-   * @param emitterChainId - The ID of the L2 chain where the RedemptionRequested event occurred.
-   * @param emitterAddress - The address of the emitter on the L2 chain.
-   * @param targetL1ChainId - The ID of the target L1 chain for completion verification.
-   * @returns A tuple containing the VAA bytes and the parsed VAA object, or null if failed.
+   * @param l2TransactionHash The hash of the L2 transaction
+   * @param emitterChainId The ID of the L2 chain where the event occurred
+   * @param emitterAddress The address of the emitter on the L2 chain
+   * @param targetL1ChainId The ID of the target L1 chain for completion verification
+   * @returns A tuple containing the VAA bytes and the parsed VAA object, or null if failed
    */
   public async fetchAndVerifyVaaForL2Event(
     l2TransactionHash: string,
@@ -144,6 +167,16 @@ export class WormholeVaaService {
     };
   }
 
+  // =====================
+  // Internal Utilities
+  // =====================
+
+  /**
+   * Get and validate the transaction receipt for a given L2 transaction hash.
+   * @param l2TransactionHash The L2 transaction hash
+   * @param emitterChainName The name of the emitter chain
+   * @returns The transaction receipt or null if not found/invalid
+   */
   private async getValidatedTransactionReceipt(
     l2TransactionHash: string,
     emitterChainName: string,
@@ -170,7 +203,7 @@ export class WormholeVaaService {
 
     if (receipt.status === 0) {
       logErrorContext(
-        `L2 transaction ${l2TransactionHash} failed (reverted), cannot fetch VAA. Receipt: ${JSON.stringify(receipt)}`,
+        `L2 transaction ${l2TransactionHash} failed (reverted), cannot fetch VAA. Receipt: ${stringifyWithBigInt(receipt)}`,
         new Error('L2 transaction failed'),
       );
       return null;
@@ -179,6 +212,14 @@ export class WormholeVaaService {
     return receipt;
   }
 
+  /**
+   * Find the matching Wormhole message in a transaction receipt.
+   * @param receipt The transaction receipt
+   * @param emitterChainName The name of the emitter chain
+   * @param emitterAddress The emitter address
+   * @param l2TransactionHash The L2 transaction hash
+   * @returns The matching WormholeMessageId or null
+   */
   private async findMatchingWormholeMessage(
     receipt: ethers.providers.TransactionReceipt,
     emitterChainName: string,
@@ -219,6 +260,13 @@ export class WormholeVaaService {
     return matchingMessage;
   }
 
+  /**
+   * Fetch the VAA with retries for all supported discriminators.
+   * @param matchingMessage The Wormhole message ID
+   * @param l2TransactionHash The L2 transaction hash
+   * @param emitterAddress The emitter address
+   * @returns The parsed VAA or null
+   */
   private async fetchVaaWithRetries(
     matchingMessage: WormholeMessageId,
     l2TransactionHash: string,
@@ -263,6 +311,11 @@ export class WormholeVaaService {
     return fetchedParsedVaa;
   }
 
+  /**
+   * Validate the protocol and payload of a parsed VAA.
+   * @param fetchedParsedVaa The parsed VAA
+   * @returns True if valid, false otherwise
+   */
   private validateVaaProtocolAndPayload(fetchedParsedVaa: ParsedVaaWithPayload): boolean {
     const vaaData = fetchedParsedVaa as unknown as VaaData;
 
@@ -289,6 +342,13 @@ export class WormholeVaaService {
     return true;
   }
 
+  /**
+   * Check if the VAA transfer is completed on L1.
+   * @param fetchedParsedVaa The parsed VAA
+   * @param targetL1ChainName The target L1 chain name
+   * @param l2TransactionHash The L2 transaction hash
+   * @returns True if completed, false otherwise
+   */
   private async checkL1Completion(
     fetchedParsedVaa: ParsedVaaWithPayload,
     targetL1ChainName: string,
@@ -330,6 +390,11 @@ export class WormholeVaaService {
     }
   }
 
+  /**
+   * Extract the VAA bytes from a parsed VAA.
+   * @param fetchedParsedVaa The parsed VAA
+   * @returns The VAA bytes as a Uint8Array
+   */
   private extractVaaBytes(fetchedParsedVaa: ParsedVaaWithPayload): Uint8Array {
     const vaaData = fetchedParsedVaa as unknown as VaaData;
 
@@ -340,10 +405,17 @@ export class WormholeVaaService {
     }
   }
 
+  /**
+   * Verify the parsed VAA's emitter chain and address.
+   * @param vaa The parsed VAA
+   * @param expectedEmitterChainId The expected emitter chain ID
+   * @param expectedNativeEmitterAddress The expected native emitter address
+   * @returns True if verified, false otherwise
+   */
   private verifyParsedVaa(
     vaa: ParsedVaaWithPayload,
     expectedEmitterChainId: ChainId,
-    expectedNativeEmitterAddress: string, // Native address as a string
+    expectedNativeEmitterAddress: string,
   ): boolean {
     const expectedEmitterChainName = chainIdToChain(expectedEmitterChainId);
     const expectedEmitterUA = toNative(
@@ -385,7 +457,9 @@ export class WormholeVaaService {
   }
 
   /**
-   * Type guard to check if a string is a supported payload name
+   * Type guard to check if a string is a supported payload name.
+   * @param payloadName The payload name string
+   * @returns True if supported, false otherwise
    */
   private isSupportedPayloadName(payloadName: string): payloadName is SupportedPayloadName {
     return PROTOCOL_CONFIG.SUPPORTED_PAYLOAD_NAMES.includes(payloadName as SupportedPayloadName);
