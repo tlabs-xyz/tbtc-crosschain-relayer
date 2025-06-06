@@ -17,7 +17,6 @@ import * as actualChainRegistry from '../../../config/chainRegistry.js';
 // --- Mock process.exit ---
 const mockProcessExit = jest.spyOn(process, 'exit').mockImplementation((() => {
   // Do nothing
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 }) as any);
 
 // --- Mock Logger ---
@@ -465,13 +464,13 @@ describe('chainConfigs Main Export and Initial Load', () => {
 
   it('should not call process.exit if SUPPORTED_CHAINS is valid and leads to no chains to load (e.g. " ") but no errors', () => {
     mockAppConfig.SUPPORTED_CHAINS = '   '; // Whitespace only, parsed to empty array
-    // No chain mocks needed as none should be processed from the list
-
+    getAvailableChainsSpy = jest.spyOn(actualChainRegistry, 'getAvailableChainKeys');
+    getAvailableChainsSpy.mockReturnValue([]);
     loadIsolatedConfigIndex();
     expect(mockProcessExit).not.toHaveBeenCalled();
     expect(loggerMock.info).toHaveBeenCalledWith(
       expect.stringContaining(
-        'SUPPORTED_CHAINS is not set. Attempting to load all registered chain configurations.',
+        'No chains specified to load via SUPPORTED_CHAINS, and not defaulting to all chains. chainConfigs will be empty.',
       ),
     );
   });

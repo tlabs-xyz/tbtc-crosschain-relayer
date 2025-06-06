@@ -9,7 +9,9 @@ export enum NodeEnv {
 
 // Helper to properly parse boolean environment variables
 const envBoolean = z.union([z.string(), z.boolean()]).transform((val) => {
+  if (typeof val === 'string' && val.trim() === '') return false;
   if (typeof val === 'boolean') return val;
+  val = val.toLowerCase().trim();
   if (val === 'true' || val === '1') return true;
   if (val === 'false' || val === '0' || val === '') return false;
   throw new Error(`Invalid boolean value: ${val}`);
