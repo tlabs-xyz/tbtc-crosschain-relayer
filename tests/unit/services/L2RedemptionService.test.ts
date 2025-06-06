@@ -1,4 +1,9 @@
-import { ethers } from 'ethers';
+// tests/unit/services/L2RedemptionService.test.ts - Unit tests for L2RedemptionService
+//
+// This suite tests the data transformation and redemption object construction logic for L2RedemptionService.
+// Focuses on hex/Buffer conversions, BigNumber handling, and event-to-redemption mapping.
+
+import { BigNumber } from 'ethers';
 import { RedemptionStatus } from '../../../types/Redemption.type.js';
 import {
   createMockChainConfig,
@@ -7,10 +12,14 @@ import {
   createMockBitcoinUtxo,
 } from '../../mocks/L2RedemptionServiceTestData.js';
 
-// We only test the specific functions that contain unique logic
-// Most of L2RedemptionService is covered by E2E and Integration tests
+// =====================
+// L2RedemptionService Unit Tests
+// =====================
 
 describe('L2RedemptionService Unit Tests - Optimized', () => {
+  // =====================
+  // Data Transformation Logic
+  // =====================
   describe('✅ Data Transformation Logic', () => {
     describe('VAA bytes hex ↔ Buffer conversion', () => {
       it('should handle valid hex string conversion with/without 0x prefix and round-trip conversions', () => {
@@ -80,7 +89,10 @@ describe('L2RedemptionService Unit Tests - Optimized', () => {
     });
   });
 
-  describe('✅ Redemption Object Construction', () => {
+  // =====================
+  // Redemption Object Construction
+  // =====================
+  describe('Redemption Object Construction', () => {
     describe('Event data → Redemption object mapping with type handling', () => {
       it('should handle complete event data mapping with proper types and timestamp consistency', () => {
         const mockEvent = createMockRedemptionEvent();
@@ -147,13 +159,13 @@ describe('L2RedemptionService Unit Tests - Optimized', () => {
       });
 
       it('should handle BigNumber serialization/deserialization and complex UTXO construction', () => {
-        const originalAmount = ethers.BigNumber.from('50000000'); // 0.5 BTC
+        const originalAmount = BigNumber.from('50000000'); // 0.5 BTC
         const mockEvent = createMockRedemptionEvent({
           amount: originalAmount,
         });
 
         // Verify BigNumber properties are preserved
-        expect(ethers.BigNumber.isBigNumber(mockEvent.amount)).toBe(true);
+        expect(BigNumber.isBigNumber(mockEvent.amount)).toBe(true);
         expect(mockEvent.amount.toString()).toBe('50000000');
         expect(mockEvent.amount.toNumber()).toBe(50000000);
 
@@ -163,17 +175,17 @@ describe('L2RedemptionService Unit Tests - Optimized', () => {
         });
 
         const parsed = JSON.parse(serialized);
-        const deserializedAmount = ethers.BigNumber.from(parsed.amount);
+        const deserializedAmount = BigNumber.from(parsed.amount);
 
         expect(deserializedAmount.toString()).toBe(originalAmount.toString());
         expect(deserializedAmount.eq(originalAmount)).toBe(true);
 
         // Test edge cases for BigNumber
-        const zeroBigNumber = ethers.BigNumber.from('0');
+        const zeroBigNumber = BigNumber.from('0');
         expect(zeroBigNumber.toString()).toBe('0');
         expect(zeroBigNumber.isZero()).toBe(true);
 
-        const maxUint64 = ethers.BigNumber.from('18446744073709551615');
+        const maxUint64 = BigNumber.from('18446744073709551615');
         expect(maxUint64.toString()).toBe('18446744073709551615');
 
         // Test complex UTXO object construction with proper nesting
@@ -185,7 +197,7 @@ describe('L2RedemptionService Unit Tests - Optimized', () => {
 
         const complexEvent = createMockRedemptionEvent({
           mainUtxo: mockUtxo,
-          amount: ethers.BigNumber.from('99900000'),
+          amount: BigNumber.from('99900000'),
         });
 
         // Verify UTXO structure and nesting
@@ -211,7 +223,7 @@ describe('L2RedemptionService Unit Tests - Optimized', () => {
         expect(complexParsed.mainUtxo.txOutputIndex).toBe(mockUtxo.txOutputIndex);
         expect(complexParsed.mainUtxo.txOutputValue).toBe(mockUtxo.txOutputValue);
 
-        const complexDeserializedAmount = ethers.BigNumber.from(complexParsed.amount);
+        const complexDeserializedAmount = BigNumber.from(complexParsed.amount);
         expect(complexDeserializedAmount.toString()).toBe('99900000');
       });
     });
