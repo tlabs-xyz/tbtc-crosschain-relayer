@@ -1,18 +1,13 @@
 import { z } from 'zod';
-import { EvmChainConfigSchema, type EvmChainConfig } from './schemas/evm.chain.schema.js';
-import { SolanaChainConfigSchema, type SolanaChainConfig } from './schemas/solana.chain.schema.js';
 import {
-  StarknetChainConfigSchema,
+  chainSchemaRegistry,
+  getAvailableChainKeys,
+  type ChainSchemaRegistryEntry,
+  type EvmChainConfig,
+  type SolanaChainConfig,
   type StarknetChainConfig,
-} from './schemas/starknet.chain.schema.js';
-import { SuiChainConfigSchema, type SuiChainConfig } from './schemas/sui.chain.schema.js';
-import { getSepoliaTestnetChainInput } from './chain/sepolia.chain.js';
-import { getSolanaDevnetChainInput } from './chain/solana.chain.js';
-import { getStarknetTestnetChainInput } from './chain/starknet.chain.js';
-import { getSuiTestnetChainInput } from './chain/sui.chain.js';
-import { getArbitrumMainnetChainInput } from './chain/arbitrumMainnet.chain.js';
-import { getBaseMainnetChainInput } from './chain/baseMainnet.chain.js';
-import { getSolanaDevnetImportedChainInput } from './chain/solanaDevnetImported.chain.js';
+  type SuiChainConfig,
+} from './chainRegistry.js';
 import baseLogger from '../utils/Logger.js';
 import { writeFileSync } from 'fs';
 import { appConfig } from './app.config.js';
@@ -30,47 +25,16 @@ export interface AllChainConfigs {
   suiTestnet?: SuiChainConfig;
   arbitrumMainnet?: EvmChainConfig;
   baseMainnet?: EvmChainConfig;
+  baseSepoliaTestnet?: EvmChainConfig;
   solanaDevnetImported?: SolanaChainConfig;
   [key: string]: AnyChainConfig | undefined;
 }
 
-interface ChainSchemaRegistryEntry {
-  schema:
-    | typeof EvmChainConfigSchema
-    | typeof SolanaChainConfigSchema
-    | typeof StarknetChainConfigSchema
-    | typeof SuiChainConfigSchema;
-  getInputFunc: () => z.input<
-    | typeof EvmChainConfigSchema
-    | typeof SolanaChainConfigSchema
-    | typeof StarknetChainConfigSchema
-    | typeof SuiChainConfigSchema
-  >;
-}
-
-// Registry for chain configurations
-// Each entry provides the Zod schema and the corresponding getInput function.
-const chainSchemaRegistry: Record<string, ChainSchemaRegistryEntry> = {
-  sepoliaTestnet: { schema: EvmChainConfigSchema, getInputFunc: getSepoliaTestnetChainInput },
-  solanaDevnet: { schema: SolanaChainConfigSchema, getInputFunc: getSolanaDevnetChainInput },
-  starknetTestnet: {
-    schema: StarknetChainConfigSchema,
-    getInputFunc: getStarknetTestnetChainInput,
-  },
-  suiTestnet: { schema: SuiChainConfigSchema, getInputFunc: getSuiTestnetChainInput },
-  arbitrumMainnet: { schema: EvmChainConfigSchema, getInputFunc: getArbitrumMainnetChainInput },
-  baseMainnet: { schema: EvmChainConfigSchema, getInputFunc: getBaseMainnetChainInput },
-  solanaDevnetImported: {
-    schema: SolanaChainConfigSchema,
-    getInputFunc: getSolanaDevnetImportedChainInput,
-  },
-};
-
 export interface ChainValidationError {
   chainKey: string;
-  error: any; // Can be ZodError.flatten(), Error object, or other
-  input?: any; // The input that failed validation, or a string explaining why it's not available
-  isZodError?: boolean; // Flag to distinguish Zod errors for logging
+  error: any;
+  input?: any;
+  isZodError?: boolean;
 }
 
 function handleValidationError(
@@ -183,10 +147,6 @@ export function loadAndValidateChainConfigs(
   return { configs: loadedConfigs, validationErrors };
 }
 
-// --- Application's main chainConfigs export ---
-// This section ensures the application still gets its chainConfigs
-// and exits on error during normal startup.
-
 let mainChainConfigs: AllChainConfigs = {};
 let mainChainConfigErrors: ChainValidationError[] = [];
 
@@ -209,13 +169,10 @@ try {
       );
     }
   } else {
-    // If SUPPORTED_CHAINS is not set or empty, default to loading all registered chains.
-    // This maintains previous behavior where all chains defined were attempted.
-    // For CI or validation scripts, this behavior might be overridden by explicitly passing an empty array.
     baseLogger.info(
       'SUPPORTED_CHAINS is not set. Attempting to load all registered chain configurations.',
     );
-    chainsToLoad = Object.keys(chainSchemaRegistry);
+    chainsToLoad = getAvailableChainKeys();
   }
 
   if (chainsToLoad.length > 0) {
@@ -239,7 +196,6 @@ try {
         if (err.isZodError) {
           baseLogger.error(`Zod Error details: ${JSON.stringify(err.error, null, 2)}`);
         } else {
-          // For raw Error objects or other non-Zod errors, use Object.getOwnPropertyNames for better serialization
           baseLogger.error(
             `Error details: ${JSON.stringify(err.error, Object.getOwnPropertyNames(err.error), 2)}`,
           );
@@ -247,9 +203,8 @@ try {
       } catch {
         baseLogger.error('Failed to stringify error details. Logging raw objects:');
         baseLogger.error('Raw Input:', err.input);
-        baseLogger.error('Raw Error:', err.error); // err.error is the raw error object here or flattened Zod error
+        baseLogger.error('Raw Error:', err.error);
       }
-      baseLogger.error('---');
     });
     writeFileSync(
       '/tmp/all-chain-config-errors.json',
@@ -268,43 +223,39 @@ try {
 
   if (Object.keys(mainChainConfigs).length === 0 && chainsToLoad.length > 0) {
     baseLogger.warn(
-      'Chain configuration loading attempted for specified chains, but resulted in an empty chainConfigs object. This might indicate issues with all specified chain configurations.',
+      'Exiting due to chain configuration errors. Please check the logs above for details.',
     );
-    // Decide if this is a critical failure. If chains were specified but none loaded, it's usually an error.
-    if (process.env.NODE_ENV !== 'test' && process.env.API_ONLY_MODE !== 'true') {
-      // Behave like original check in validate-config
-      baseLogger.error(
-        'No chain configurations successfully loaded, and not in test or API_ONLY_MODE. Server would likely fail. Exiting.',
-      );
-      process.exit(1);
-    }
+    process.exit(1);
   }
-
-  baseLogger.info(
-    `Application startup: Successfully loaded ${Object.keys(mainChainConfigs).length} chain configuration(s).`,
+} catch (error: any) {
+  baseLogger.fatal(
+    {
+      err: error,
+      context: 'Critical error during initial chain configuration loading process',
+    },
+    'A critical error occurred that prevented chain configurations from being determined. This is likely an issue with parsing SUPPORTED_CHAINS or accessing appConfig itself.',
   );
-} catch (e: any) {
-  baseLogger.error('--------------------------------------------------------------------');
-  baseLogger.error('--- FATAL ERROR DURING CHAIN CONFIGURATION INITIALIZATION ---');
-  baseLogger.error('--------------------------------------------------------------------');
-  baseLogger.error(`Error Message: ${e.message || 'No message property'}`);
-  baseLogger.error(`Error Type: ${e.constructor ? e.constructor.name : typeof e}`);
-  try {
-    baseLogger.error(
-      `Full Error Object (stringified): ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
-    );
-  } catch {
-    baseLogger.error('Full Error Object (could not stringify, logging raw): ', e);
-  }
-  if (e.stack) {
-    baseLogger.error('Stack Trace:', e.stack);
-  }
-  baseLogger.error('--------------------------------------------------------------------');
   process.exit(1);
 }
 
-export const chainConfigs: AllChainConfigs = mainChainConfigs;
-// Expose the registry for scenarios where it might be useful to know all possible chains
-export const getAvailableChainKeys = (): string[] => Object.keys(chainSchemaRegistry);
+export const chainConfigs = mainChainConfigs;
+export const chainConfigErrors = mainChainConfigErrors;
+
+export { getAvailableChainKeys };
+
+if (process.env.DUMP_CONFIG_TO_FILE) {
+  try {
+    const dumpPath = process.env.DUMP_CONFIG_TO_FILE;
+    const dumpData = {
+      appConfig,
+      chainConfigs,
+      chainConfigErrors,
+    };
+    writeFileSync(dumpPath, JSON.stringify(dumpData, null, 2));
+    baseLogger.info(`Successfully dumped config to ${dumpPath}`);
+  } catch (e) {
+    baseLogger.error({ err: e }, 'Failed to dump config to file');
+  }
+}
 
 baseLogger.info('Chain configuration module initialized.');

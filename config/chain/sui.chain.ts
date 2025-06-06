@@ -4,9 +4,6 @@ import type { SuiChainConfigSchema } from '../schemas/sui.chain.schema.js';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
 import { getSuiCommonInput } from './sui-common.js';
 
-// Use the correct type for input validation
-import type { SuiChainConfig } from '../schemas/sui.chain.schema.js';
-
 type SuiChainInput = z.input<typeof SuiChainConfigSchema>;
 
 // Generic Sui Testnet Configuration
@@ -23,9 +20,6 @@ export const getSuiTestnetChainInput = (): SuiChainInput => {
     'l1Confirmations',
     'enableL2Redemption',
     'useEndpoint',
-    // 'suiPrivateKey', // This field is populated later from env; getEnv handles missing variable.
-    // 'l2ContractAddress', // This field is populated later from env or default; getEnv handles this.
-    // 'l2WormholeGatewayAddress', // This field is populated later from env or default; getEnv handles this.
   ];
   for (const field of requiredFields) {
     if (commonTestnetSuiInput[field] === undefined || commonTestnetSuiInput[field] === null) {

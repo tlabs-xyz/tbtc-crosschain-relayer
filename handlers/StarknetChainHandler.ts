@@ -1,6 +1,6 @@
 import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
 import { StarknetChainConfigSchema } from '../config/schemas/starknet.chain.schema.js';
-import logger from '../utils/Logger.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 import {
   ethers,
@@ -24,7 +24,6 @@ import {
   updateToFinalizedDeposit,
 } from '../utils/Deposits.js';
 import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
-import { logErrorContext } from '../utils/Logger.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 
 export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {

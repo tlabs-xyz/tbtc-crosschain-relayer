@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { getAvailableChainKeys } from '../chainRegistry.js'; // Import from the new registry file
 
 export enum NodeEnv {
   DEVELOPMENT = 'development',
@@ -38,21 +39,21 @@ export const AppConfigSchema = z.object({
     .string()
     .refine(
       (value) => {
-        const validChains = [
-          'sepoliaTestnet',
-          'solanaDevnet',
-          'starknetTestnet',
-          'suiTestnet',
-          'arbitrumMainnet',
-          'baseMainnet',
-          'baseSepoliaTestnet',
-          'solanaDevnetImported',
-        ];
-        const chains = value.split(',').map((chain) => chain.trim());
+        const validChains = getAvailableChainKeys();
+        const chains = value
+          .split(',')
+          .map((chain) => chain.trim())
+          .filter((c) => c.length > 0);
+        if (chains.length === 0) return true;
+        // If the input string was empty or only commas/whitespace, chains array will be empty.
+        // An empty SUPPORTED_CHAINS env var means no specific chains are selected, which is valid.
         return chains.every((chain) => validChains.includes(chain));
       },
       {
-        message: 'SUPPORTED_CHAINS must contain only valid chain names',
+        message: (() => {
+          const validChains = getAvailableChainKeys();
+          return `SUPPORTED_CHAINS must be a comma-separated list of valid chain names. Valid names are: ${validChains.join(', ')}`;
+        })(),
       },
     )
     .optional(),

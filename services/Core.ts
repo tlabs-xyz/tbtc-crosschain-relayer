@@ -1,8 +1,7 @@
-import { logErrorContext } from '../utils/Logger.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import cron from 'node-cron';
 import pLimit from 'p-limit';
 
-import logger from '../utils/Logger.js';
 import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
 import { chainConfigs, type AnyChainConfig } from '../config/index.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';

@@ -14,14 +14,31 @@ module.exports = async () => {
     testDatabaseUrl.replace(/\/\/[^@]+@/, '//***:***@'),
   );
 
-  // Set the test database URL for Prisma commands
-  const testEnv = {
+  // Set the test database URL and NODE_ENV for Prisma commands
+  const prismaEnv = {
     ...process.env,
     DATABASE_URL: testDatabaseUrl,
+    NODE_ENV: 'test', // Ensure Prisma CLI operates in test mode if it has conditional logic
   };
 
-  execSync('npx prisma db push --force-reset --accept-data-loss', {
-    stdio: 'inherit',
-    env: testEnv,
-  });
+  try {
+    console.log('Jest Global Setup: Forcing database schema push...');
+    execSync('yarn prisma db push --force-reset --accept-data-loss', {
+      env: prismaEnv,
+      stdio: 'inherit',
+    });
+    console.log('Jest Global Setup: Database schema pushed successfully.');
+
+    console.log('Jest Global Setup: Generating Prisma clients...');
+    execSync('yarn prisma generate', {
+      env: prismaEnv,
+      stdio: 'inherit',
+    });
+    console.log('Jest Global Setup: Prisma clients generated successfully.');
+  } catch (error) {
+    console.error('Jest Global Setup: Error during Prisma setup:', error);
+    throw error; // Rethrow to fail the setup if Prisma commands fail
+  }
+
+  console.log('Jest Global Setup: Completed successfully.');
 };

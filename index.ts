@@ -8,6 +8,7 @@ import type { Express, RequestHandler } from 'express';
 // Security
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 // Compression
 import compression from 'compression';
@@ -28,6 +29,7 @@ import 'dotenv/config';
 
 import { chainConfigs } from './config/index.js';
 import { appConfig } from './config/app.config.js';
+import { NodeEnv } from './config/schemas/app.schema.js';
 
 // -------------------------------------------------------------------------
 // |                            APP INSTANCE                               |
@@ -47,7 +49,11 @@ const main = async () => {
     app.set('port', appConfig.APP_PORT);
 
     const numLoadedChains = Object.keys(chainConfigs).length;
-    if (numLoadedChains === 0 && appConfig.NODE_ENV !== 'test' && !appConfig.API_ONLY_MODE) {
+    if (
+      numLoadedChains === 0 &&
+      (appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST &&
+      !appConfig.API_ONLY_MODE
+    ) {
       logger.error('No chain configurations detected');
       process.exit(1);
     }
@@ -62,7 +68,7 @@ const main = async () => {
     }
   } catch (error) {
     logErrorContext('FATAL: Failed during initial setup after config loading:', error);
-    if (appConfig.NODE_ENV !== 'test') {
+    if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
       process.exit(1);
     }
     // If in test mode, rethrow the error so test frameworks can catch it
@@ -87,6 +93,17 @@ const main = async () => {
   app.use(express.json({ limit: '8mb' }));
   app.use(express.urlencoded({ limit: '8mb', extended: true }));
 
+  // Apply rate limiting
+  const limiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 1000, // Limit each IP to 1000 requests per `window` (here, per 5 minutes)
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    message: 'Too many requests from this IP, please try again after 5 minutes',
+  });
+  app.use(limiter);
+  logger.info('Rate limiting middleware applied globally.');
+
   // -------------------------------------------------------------------------
   // |                                 ROUTES                                |
   // -------------------------------------------------------------------------
@@ -95,9 +112,9 @@ const main = async () => {
   // -------------------------------------------------------------------------
   // |                        BACKGROUND SERVICES                          |
   // -------------------------------------------------------------------------
-  if (appConfig.API_ONLY_MODE) {
+  if (appConfig.API_ONLY_MODE || appConfig.NODE_ENV === 'test') {
     logger.warn(
-      'Application running in API_ONLY_MODE. Background services (chain handlers, cron jobs) will not be initialized.',
+      'Application running in API_ONLY_MODE or test environment. Background services (chain handlers, cron jobs) will not be initialized.',
     );
 
     // However, if USE_ENDPOINT is true, we still need to initialize chain handlers for the API endpoints
@@ -129,17 +146,18 @@ const main = async () => {
       logger.info('Cron jobs started.');
     } catch (error: any) {
       logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);
-      if (appConfig.NODE_ENV !== 'test') {
+      if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
         process.exit(1);
+      } else {
+        throw new Error(`Initialization failed in test mode: ${error.message}`);
       }
-      throw new Error(`Initialization failed in test mode: ${error.message}`);
     }
   }
 
   // -------------------------------------------------------------------------
   // |                              SERVER START                             |
   // -------------------------------------------------------------------------
-  if (appConfig.NODE_ENV !== 'test') {
+  if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
     app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
       logger.info(`Server listening on port ${appConfig.APP_PORT}`);
     });
