@@ -13,8 +13,8 @@ const SolanaChainBaseSchema = z.object({
     })
     .min(1, 'SOLANA_PRIVATE_KEY must not be empty.')
     .regex(
-      /^[1-9A-HJ-NP-Za-km-z]{32,}$/,
-      'Solana private key must be a base58 string of at least 32 characters.',
+      /^[1-9A-HJ-NP-Za-km-z]{88,89}$/,
+      'Solana private key must be a base58-encoded 64-byte secret key (88 or 89 base58 characters).',
     ),
   solanaCommitment: z.enum(['processed', 'confirmed', 'finalized']).default('confirmed'),
   solanaSignerKeyBase: z
