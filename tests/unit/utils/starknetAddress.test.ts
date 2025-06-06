@@ -1,13 +1,7 @@
-import {
-  validateStarkNetAddress,
-  formatStarkNetAddressForContract,
-  extractAddressFromBitcoinScript,
-} from '../../../utils/starknetAddress.js';
-import * as bitcoin from 'bitcoinjs-lib';
+// tests/unit/utils/starknetAddress.test.ts - Unit tests for StarkNet address utilities
+//
+// This suite tests validation, formatting, and extraction logic for StarkNet addresses, including edge cases and error handling.
 
-// Mock starknet.js CallData.compile to avoid actual compilation during tests
-// We only care that it's called and doesn't throw for valid inputs.
-const mockCompile = jest.fn();
 jest.mock('starknet', () => ({
   ...jest.requireActual('starknet'), // Import and retain default exports
   CallData: {
@@ -17,12 +11,31 @@ jest.mock('starknet', () => ({
   CairoOptionVariant: jest.requireActual('starknet').CairoOptionVariant,
 }));
 
+import {
+  validateStarkNetAddress,
+  formatStarkNetAddressForContract,
+  extractAddressFromBitcoinScript,
+} from '../../../utils/starknetAddress.js';
+import * as bitcoin from 'bitcoinjs-lib';
+// import { ethers } from 'ethers'; // No longer needed for debug
+
+// Mock starknet.js CallData.compile to avoid actual compilation during tests
+// We only care that it's called and doesn't throw for valid inputs.
+const mockCompile = jest.fn();
+
+// =====================
+// StarkNet Address Utilities Unit Tests
+// =====================
+
 describe('StarkNet Address Utilities', () => {
   beforeEach(() => {
     // Clear mock history before each test
     mockCompile.mockClear();
   });
 
+  // =====================
+  // validateStarkNetAddress
+  // =====================
   describe('validateStarkNetAddress', () => {
     it('should return true for a valid StarkNet address', () => {
       const validAddress = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -69,6 +82,9 @@ describe('StarkNet Address Utilities', () => {
     });
   });
 
+  // =====================
+  // formatStarkNetAddressForContract
+  // =====================
   describe('formatStarkNetAddressForContract', () => {
     it('should format a valid StarkNet address to bytes32', () => {
       const validAddress = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -96,6 +112,9 @@ describe('StarkNet Address Utilities', () => {
     });
   });
 
+  // =====================
+  // extractAddressFromBitcoinScript
+  // =====================
   describe('extractAddressFromBitcoinScript', () => {
     // Helper to create a script that pushes data
     const createPushDataScript = (dataHex: string): Buffer => {
