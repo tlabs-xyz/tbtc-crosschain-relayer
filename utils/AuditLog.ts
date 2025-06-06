@@ -1,10 +1,20 @@
+// utils/AuditLog.ts - Audit log utility for deposit lifecycle and API events
+//
+// Provides functions and types for logging deposit events, status changes, errors, and API requests to the database audit log.
+
 import { prisma } from './prisma.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import { logErrorContext } from './Logger.js';
 import type { InputJsonValue } from '@prisma/client/runtime/library';
 
-// Event types
+// =====================
+// Event Types
+// =====================
+
+/**
+ * Enum of all possible audit event types for deposit and API activity
+ */
 export enum AuditEventType {
   DEPOSIT_CREATED = 'DEPOSIT_CREATED',
   DEPOSIT_UPDATED = 'DEPOSIT_UPDATED',
@@ -18,7 +28,13 @@ export enum AuditEventType {
   API_REQUEST = 'API_REQUEST',
 }
 
-// Type definitions for audit log data
+// =====================
+// Type Definitions
+// =====================
+
+/**
+ * Data for a deposit status change event
+ */
 export interface AuditLogStatusChangeData {
   from: string;
   to: string;
@@ -30,6 +46,9 @@ export interface AuditLogStatusChangeData {
   };
 }
 
+/**
+ * Data for deposit-related audit log events
+ */
 export interface AuditLogDepositData {
   deposit: {
     id: string;
@@ -47,6 +66,9 @@ export interface AuditLogDepositData {
   reason?: string;
 }
 
+/**
+ * Data for API request audit log events
+ */
 export interface AuditLogApiRequestData {
   endpoint: string;
   method: string;
@@ -54,17 +76,27 @@ export interface AuditLogApiRequestData {
   responseStatus: number;
 }
 
+/**
+ * Data for error audit log events
+ */
 export interface AuditLogErrorData {
   message: string;
   [key: string]: unknown;
 }
 
+/**
+ * Union type for all audit log data payloads
+ */
 export type AuditLogData =
   | AuditLogStatusChangeData
   | AuditLogDepositData
   | AuditLogApiRequestData
   | AuditLogErrorData
   | Record<string, unknown>;
+
+// =====================
+// Core Audit Logging Functions
+// =====================
 
 /**
  * Append an event to the audit log (DB)
@@ -108,6 +140,7 @@ export const appendToAuditLog = async (
 
 /**
  * Get all audit logs
+ * @returns Array of audit log entries
  */
 export const getAuditLogs = async () => {
   try {
@@ -120,6 +153,8 @@ export const getAuditLogs = async () => {
 
 /**
  * Get audit logs by depositId
+ * @param depositId Deposit ID to filter logs
+ * @returns Array of audit log entries for the deposit
  */
 export const getAuditLogsByDepositId = async (depositId: string) => {
   try {
@@ -134,26 +169,48 @@ export const getAuditLogsByDepositId = async (depositId: string) => {
 };
 
 /**
+ * Map DepositStatus to string for audit logging
+ * @param status DepositStatus enum value
+ * @returns String representation of the status
+ */
+function mapDepositStatusToString(status: DepositStatus | undefined): string {
+  switch (status) {
+    case DepositStatus.QUEUED:
+      return 'QUEUED';
+    case DepositStatus.INITIALIZED:
+      return 'INITIALIZED';
+    case DepositStatus.FINALIZED:
+      return 'FINALIZED';
+    case DepositStatus.AWAITING_WORMHOLE_VAA:
+      return 'AWAITING_WORMHOLE_VAA';
+    case DepositStatus.BRIDGED:
+      return 'BRIDGED';
+    case DepositStatus.ERROR_SENDING_L1_TX:
+      return 'ERROR_SENDING_L1_TX';
+    case DepositStatus.ERROR:
+      return 'ERROR';
+    default:
+      return 'UNKNOWN';
+  }
+}
+
+/**
  * Log status changes for a deposit
+ * @param deposit The deposit object
+ * @param newStatus The new status
+ * @param oldStatus The previous status
  */
 export const logStatusChange = async (
   deposit: Deposit,
   newStatus: DepositStatus,
   oldStatus?: DepositStatus,
 ): Promise<void> => {
-  const statusMap = {
-    [DepositStatus.QUEUED]: 'QUEUED',
-    [DepositStatus.INITIALIZED]: 'INITIALIZED',
-    [DepositStatus.FINALIZED]: 'FINALIZED',
-    [DepositStatus.AWAITING_WORMHOLE_VAA]: 'AWAITING_WORMHOLE_VAA',
-    [DepositStatus.BRIDGED]: 'BRIDGED',
-  };
   await appendToAuditLog(
     AuditEventType.STATUS_CHANGED,
     deposit.id,
     {
-      from: oldStatus !== undefined ? statusMap[oldStatus] : 'UNKNOWN',
-      to: statusMap[newStatus],
+      from: mapDepositStatusToString(oldStatus),
+      to: mapDepositStatusToString(newStatus),
       deposit: {
         id: deposit.id,
         fundingTxHash: deposit.fundingTxHash,
@@ -167,6 +224,7 @@ export const logStatusChange = async (
 
 /**
  * Log deposit creation
+ * @param deposit The deposit object
  */
 export const logDepositCreated = async (deposit: Deposit): Promise<void> => {
   const data: AuditLogDepositData = {
@@ -185,6 +243,7 @@ export const logDepositCreated = async (deposit: Deposit): Promise<void> => {
 
 /**
  * Log deposit initialization
+ * @param deposit The deposit object
  */
 export const logDepositInitialized = async (deposit: Deposit): Promise<void> => {
   const data: AuditLogDepositData = {
@@ -206,6 +265,7 @@ export const logDepositInitialized = async (deposit: Deposit): Promise<void> => 
 
 /**
  * Log deposit finalization
+ * @param deposit The deposit object
  */
 export const logDepositFinalized = async (deposit: Deposit): Promise<void> => {
   const data: AuditLogDepositData = {
@@ -227,6 +287,8 @@ export const logDepositFinalized = async (deposit: Deposit): Promise<void> => {
 
 /**
  * Log deposit deletion
+ * @param deposit The deposit object
+ * @param reason Reason for deletion
  */
 export const logDepositDeleted = async (deposit: Deposit, reason: string): Promise<void> => {
   const data: AuditLogDepositData = {
@@ -252,6 +314,12 @@ export const logDepositDeleted = async (deposit: Deposit, reason: string): Promi
 
 /**
  * Log API requests related to deposits
+ * @param endpoint API endpoint
+ * @param method HTTP method
+ * @param depositId Deposit ID (nullable)
+ * @param requestData Request payload
+ * @param responseStatus HTTP response status
+ * @param chainName Optional chain name
  */
 export const logApiRequest = async (
   endpoint: string,
@@ -273,6 +341,10 @@ export const logApiRequest = async (
 
 /**
  * Log errors related to deposits
+ * @param depositId Deposit ID
+ * @param message Error message
+ * @param extra Additional error data
+ * @param chainName Optional chain name
  */
 export const logDepositError = async (
   depositId: string,
@@ -330,3 +402,13 @@ export const logDepositBridged = async (deposit: Deposit): Promise<void> => {
 
   await appendToAuditLog(AuditEventType.DEPOSIT_BRIDGED, deposit.id, data, deposit.chainName);
 };
+
+// =====================
+// Audit Log Utilities
+// =====================
+
+/**
+ * Write an audit log entry to the specified log file.
+ * @param message The log message
+ * @param level The log level (e.g., 'info', 'error')
+ */
