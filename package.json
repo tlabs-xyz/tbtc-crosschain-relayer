@@ -29,7 +29,6 @@
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "db:migrate": "npx prisma migrate deploy",
     "db:migrate:auditlog": "tsx scripts/migrate-auditlog-to-db.ts",
-    "db:reset": "npx prisma migrate reset --force",
     "db:push": "npx prisma db push",
     "db:seed": "npx prisma db seed",
     "db:status": "npx prisma migrate status",
@@ -38,6 +37,8 @@
     "postgres:logs": "docker logs tbtc-postgres",
     "db:backup": "pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -F c -b -v -f backup.dump",
     "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump"
+    "db:reset": "npx prisma db push --force-reset --accept-data-loss",
+    "pretest": "docker-compose up -d postgres"
   },
   "keywords": [],
   "author": "T-Labs",
