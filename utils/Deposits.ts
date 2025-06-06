@@ -354,32 +354,41 @@ export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => 
 };
 
 /**
+ * Utility to reverse a hex string (excluding the 0x prefix).
+ * E.g., 0xabcdef -> 0xefcdab
+ */
+function reverseHexString(hex: string): string {
+  if (!hex.startsWith('0x') || hex.length % 2 !== 0) {
+    throw new Error('Hex string must be 0x-prefixed and even length');
+  }
+  const hexBody = hex.slice(2);
+  return '0x' + hexBody.match(/.{2}/g)!.reverse().join('');
+}
+
+/**
  * @name getDepositId
- * @description Generates a unique deposit ID by encoding the Bitcoin funding transaction hash and output index,
- * then hashing the result using keccak256.
+ * @description Generates a unique deposit ID by encoding the Bitcoin funding transaction hash (reversed, as per Bitcoin little-endian format) and output index,
+ * then hashing the result using keccak256. This matches the tBTC v2 on-chain contract and test vectors:
+ * https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/integration/FullFlow.test.ts
+ * https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/data/deposit-sweep.ts
  *
- * @param {string} fundingTxHash - The 64-character hex string of the Bitcoin funding transaction hash.
+ * @param {string} fundingTxHash - The 64-character hex string of the Bitcoin funding transaction hash (little-endian, 0x-prefixed).
  * @param {number} fundingOutputIndex - The index of the output in the funding transaction.
  *
  * @returns {string} A unique deposit ID as a uint256 string.
  *
  * @throws {Error} If the fundingTxHash is not a 66-character hex string (e.g. 0x...).
  */
-
 export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
-  // The deposit ID is a keccak256 hash of the funding transaction hash and output index.
-  // The tBTC OptimisticMintingFinalized event emits depositKey as uint256.
-  // To ensure matching, we calculate the bytes32 keccak256 hash and then convert it
-  // to its BigNumber (uint256) decimal string representation.
-
   // Validate fundingTxHash
   if (!ethers.utils.isHexString(fundingTxHash) || fundingTxHash.length !== 66) {
     throw new Error('fundingTxHash must be a 66-character hex string (e.g. 0x...).');
   }
-
-  const types = ['bytes32', 'uint256'];
-  const values = [fundingTxHash, fundingOutputIndex];
-
+  // Reverse the hash to match Bitcoin little-endian format
+  const reversedHash = reverseHexString(fundingTxHash);
+  // Use uint32 for output index to match on-chain contract
+  const types = ['bytes32', 'uint32'];
+  const values = [reversedHash, fundingOutputIndex];
   const hashBytes32 = ethers.utils.solidityKeccak256(types, values);
   return ethers.BigNumber.from(hashBytes32).toString();
 };

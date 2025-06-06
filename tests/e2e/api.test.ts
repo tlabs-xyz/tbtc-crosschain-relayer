@@ -54,23 +54,20 @@ describe('API Endpoints - Multi-Chain', () => {
     // Basic EVM-like reveal data, can be customized if MockSolana1 needs different structure
     return {
       fundingTx: {
-        txHash: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-        outputIndex: 0,
-        value: ethers.utils.parseEther('0.1').toString(),
         version: '0x01000000',
         inputVector:
           '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
         outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
         locktime: '0x00000000',
       },
-      reveal: [
-        0,
-        ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-        '0x',
-      ],
+      reveal: {
+        fundingOutputIndex: 0,
+        blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
+        walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+        refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+        refundLocktime: ethers.utils.hexlify(ethers.utils.randomBytes(4)),
+        vault: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+      },
       l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
       l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
     };
