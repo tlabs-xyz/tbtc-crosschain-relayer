@@ -8,47 +8,44 @@ generator clientTest {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// TODO: Consider renaming chainId to chainName
-
 model Deposit {
-  id        String   @id
-  chainId   String
+  id            String  @id
+  chainId       String
   fundingTxHash String
-  outputIndex Int
-  hashes    Json
-  receipt   Json
-  owner     String
-  status    Int
+  outputIndex   Int
+  hashes        Json
+  receipt       Json
+  owner         String
+  status        Int
   L1OutputEvent Json?
-  dates     Json
-  wormholeInfo Json?
-  error     String?
+  dates         Json
+  wormholeInfo  Json?
+  error         String?
 
   @@index([chainId])
 }
 
 model AuditLog {
-  id         Int      @id @default(autoincrement())
-  timestamp  DateTime @default(now())
-  eventType  String
-  depositId  String?
-  data       Json
-  errorCode  Int?
-  // TODO: Consider making chainId non-nullable for consistent querying.
-  chainId    String?
+  id        Int      @id @default(autoincrement())
+  timestamp DateTime @default(now())
+  eventType String
+  depositId String?
+  data      Json
+  errorCode Int?
+  chainId   String?
 
   @@index([chainId])
 }
 
 model Redemption {
-  id        String   @id
-  chainId   String
-  status    String
-  data      Json
+  id      String @id
+  chainId String
+  status  String
+  data    Json
 
   @@index([chainId])
 }

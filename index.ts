@@ -99,11 +99,13 @@ const main = async () => {
     logger.warn(
       'Application running in API_ONLY_MODE. Background services (chain handlers, cron jobs) will not be initialized.',
     );
-    
+
     // However, if USE_ENDPOINT is true, we still need to initialize chain handlers for the API endpoints
     if (process.env.USE_ENDPOINT === 'true') {
       try {
-        logger.info('USE_ENDPOINT is true - initializing chain handlers for endpoint API support...');
+        logger.info(
+          'USE_ENDPOINT is true - initializing chain handlers for endpoint API support...',
+        );
         await initializeAllChains();
         logger.info('Chain handlers initialized for endpoint mode.');
       } catch (error: any) {

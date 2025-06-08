@@ -7,14 +7,12 @@ export enum NodeEnv {
 }
 
 // Helper to properly parse boolean environment variables
-const envBoolean = z
-  .union([z.string(), z.boolean()])
-  .transform((val) => {
-    if (typeof val === 'boolean') return val;
-    if (val === 'true' || val === '1') return true;
-    if (val === 'false' || val === '0' || val === '') return false;
-    throw new Error(`Invalid boolean value: ${val}`);
-  });
+const envBoolean = z.union([z.string(), z.boolean()]).transform((val) => {
+  if (typeof val === 'boolean') return val;
+  if (val === 'true' || val === '1') return true;
+  if (val === 'false' || val === '0' || val === '') return false;
+  throw new Error(`Invalid boolean value: ${val}`);
+});
 
 // Using UPPERCASE for environment variables for easier parsing from dotenv
 export const AppConfigSchema = z.object({
