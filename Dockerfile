@@ -7,7 +7,7 @@ RUN echo "Development stage cache buster: ${CACHE_BUSTER}"
 WORKDIR /usr/app
 
 # Combine RUN commands
-RUN apk add --no-cache git curl && \
+RUN apk add --no-cache git curl postgresql-client && \
     git config --global url."https://".insteadOf git://
 
 COPY package.json yarn.lock ./
@@ -50,8 +50,8 @@ RUN yarn install --frozen-lockfile --production=true
 
 COPY --from=development /usr/app/dist ./dist
 
-# curl is used for HEALTHCHECK. This is generally fine on Alpine as curl is small.
-RUN apk add --no-cache curl
+# curl is used for HEALTHCHECK. postgresql-client for db connectivity testing.
+RUN apk add --no-cache curl postgresql-client
 
 ARG APP_PORT=3000
 ENV APP_PORT=${APP_PORT}

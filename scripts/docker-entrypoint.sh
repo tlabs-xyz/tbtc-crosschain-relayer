@@ -13,24 +13,42 @@ fi
 
 echo "🗄️  Database URL configured (first 20 chars): ${DATABASE_URL:0:20}..."
 
-# Check database connectivity
-echo "🔍 Checking database connectivity..."
-if ! npx prisma db pull --force --print 2>/dev/null; then
-    echo "❌ ERROR: Cannot connect to database"
-    echo "🔧 Troubleshooting tips:"
-    echo "   - Check if DATABASE_URL is correct"
-    echo "   - Verify database server is running"
-    echo "   - Check network connectivity"
-    exit 1
-fi
+# Wait for database to be ready with retries
+echo "🔍 Waiting for database to be ready..."
+max_attempts=30
+attempt=1
 
-echo "✅ Database connection successful"
-
-# Check migration status
-echo "📋 Checking migration status..."
-npx prisma migrate status || {
-    echo "⚠️  Migration status check failed, but continuing..."
-}
+while [ $attempt -le $max_attempts ]; do
+    echo "🔄 Database connection attempt $attempt/$max_attempts..."
+    
+    # Try a simple connection test using psql if available, otherwise use prisma
+    if command -v psql >/dev/null 2>&1; then
+        if echo "SELECT 1;" | psql "$DATABASE_URL" >/dev/null 2>&1; then
+            echo "✅ Database connection successful"
+            break
+        fi
+    else
+        # Fallback to prisma with a simple command
+        if npx prisma migrate status >/dev/null 2>&1; then
+            echo "✅ Database connection successful"
+            break
+        fi
+    fi
+    
+    if [ $attempt -eq $max_attempts ]; then
+        echo "❌ ERROR: Cannot connect to database after $max_attempts attempts"
+        echo "🔧 Troubleshooting tips:"
+        echo "   - Check if DATABASE_URL is correct"
+        echo "   - Verify database server is running and accessible"
+        echo "   - Check network connectivity"
+        echo "   - Ensure database credentials are valid"
+        exit 1
+    fi
+    
+    echo "⏳ Waiting 2 seconds before next attempt..."
+    sleep 2
+    attempt=$((attempt + 1))
+done
 
 # Run database migrations
 echo "🔄 Running database migrations..."
@@ -39,19 +57,20 @@ if npx prisma migrate deploy; then
 else
     echo "❌ ERROR: Database migrations failed"
     echo "🔧 Troubleshooting tips:"
-    echo "   - Check if migration files exist in /usr/app/prisma/migrations/"
-    echo "   - Verify database permissions"
+    echo "   - Check if migration files exist:"
+    ls -la /usr/app/prisma/migrations/ 2>/dev/null || echo "   - Migration directory not found at /usr/app/prisma/migrations/"
+    echo "   - Verify database permissions for schema changes"
     echo "   - Check migration file integrity"
-    ls -la /usr/app/prisma/migrations/ || echo "❌ Migration directory not found"
+    echo "   - Ensure database user has CREATE/ALTER privileges"
     exit 1
 fi
 
-# Verify tables exist
-echo "🔍 Verifying database tables..."
-if npx prisma db pull --force --print | grep -q "model"; then
-    echo "✅ Database tables verified"
+# Optional: Verify tables exist (non-blocking)
+echo "🔍 Verifying database schema..."
+if npx prisma migrate status | grep -q "up to date"; then
+    echo "✅ Database schema is up to date"
 else
-    echo "⚠️  Warning: Could not verify database tables"
+    echo "⚠️  Warning: Database schema status unclear, but continuing..."
 fi
 
 echo "🎯 Starting application..."
