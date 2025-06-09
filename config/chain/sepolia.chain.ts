@@ -23,10 +23,7 @@ export const getSepoliaTestnetChainInput = (): EvmChainInput => {
     'useEndpoint',
   ];
   for (const field of requiredFields) {
-    if (
-      typeof field === 'string' &&
-      (commonTestnetInput[field] === undefined || commonTestnetInput[field] === null)
-    ) {
+    if (commonTestnetInput[field] === undefined || commonTestnetInput[field] === null) {
       throw new Error(
         `getSepoliaTestnetChainInput: Missing required field '${String(field)}' in commonTestnetInput.`,
       );
@@ -58,7 +55,7 @@ export const getSepoliaTestnetChainInput = (): EvmChainInput => {
     l2StartBlock: getEnvNumber('CHAIN_SEPOLIATESTNET_L2_START_BLOCK', 0),
     l2ContractAddress: getEnv('CHAIN_SEPOLIATESTNET_L2_CONTRACT_ADDRESS'),
     l2WormholeGatewayAddress: getEnv('CHAIN_SEPOLIATESTNET_WORMHOLE_GATEWAY'),
-    l2WormholeChainId: getEnvNumber('CHAIN_SEPOLIATESTNET_WORMHOLE_CHAIN_ID'),
+    l2WormholeChainId: getEnvNumber('CHAIN_SEPOLIATESTNET_WORMHOLE_CHAIN_ID', 10002),
   };
   return config;
 };

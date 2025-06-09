@@ -59,10 +59,10 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
         wsEndpoint: this.config.l2WsRpc,
       });
 
-      const secretKeyBase64 = this.config.solanaSignerKeyBase;
-      if (!secretKeyBase64) throw new Error('Missing solanaSignerKeyBase');
+      const base58PrivateKey = this.config.solanaPrivateKey;
+      if (!base58PrivateKey) throw new Error('Missing solanaPrivateKey in config');
 
-      const secretKeyBytes = new Uint8Array((secretKeyBase64 as string).split(',').map(Number));
+      const secretKeyBytes = bs58.decode(base58PrivateKey as string);
       const keypair = Keypair.fromSecretKey(secretKeyBytes);
       const wallet = new Wallet(keypair);
       this.wallet = wallet;
@@ -187,12 +187,10 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
 
     if (deposit.status !== DepositStatus.AWAITING_WORMHOLE_VAA) return;
 
-    const secretKeyBase64 = this.config.solanaSignerKeyBase;
-    if (!secretKeyBase64) throw new Error('Missing solanaSignerKeyBase');
+    const signerSecretKeyBase58 = this.config.solanaPrivateKey;
+    if (!signerSecretKeyBase58)
+      throw new Error('Missing solanaPrivateKey in config for Wormhole signer');
 
-    const signerSecretKeyBytes = new Uint8Array((secretKeyBase64 as string).split(',').map(Number));
-    const signerKeypair = Keypair.fromSecretKey(signerSecretKeyBytes);
-    const signerSecretKeyBase58 = bs58.encode(signerKeypair.secretKey);
     const wormholeSolanaSigner = await getSolanaSignAndSendSigner(
       this.connection,
       signerSecretKeyBase58,

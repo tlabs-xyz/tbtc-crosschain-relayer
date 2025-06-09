@@ -9,7 +9,7 @@ import type { TransactionReceipt } from '@ethersproject/providers';
 import { NonceManager } from '@ethersproject/experimental';
 
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { NETWORK } from '../config/schemas/common.schema.js';
+import { NETWORK, CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { DepositStore } from '../utils/DepositStore.js';
@@ -23,7 +23,6 @@ import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
 import type { AnyChainConfig } from '../config/index.js';
-import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
@@ -154,7 +153,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      async (minter, depositKey, _depositor, _optimisticMintingDebt) => {
+      async (_minter, depositKey, _depositor, _optimisticMintingDebt) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
@@ -344,26 +343,25 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
   }
 
-  async checkDepositStatus(depositId: string): Promise<DepositStatus | null> {
+  async checkDepositStatus(depositOrId: string | Deposit): Promise<DepositStatus | null> {
     try {
       // Use the L1 provider contract to check status
-      const status: number = await this.l1BitcoinDepositorProvider.deposits(depositId);
+      // For EVM chains, depositOrId is a string depositId
+      // For Starknet, this method is overridden in the subclass
+      const status: number = await this.l1BitcoinDepositorProvider.deposits(depositOrId);
       // Ensure the status is a valid enum value before returning
       if (Object.values(DepositStatus).includes(status as DepositStatus)) {
-        // logger.info(`Checked L1 Status for ID ${depositId}: ${DepositStatus[status]}`); // Verbose
         return status as DepositStatus;
       } else {
         logger.warn(
-          `L1BitcoinDepositor returned invalid status (${status}) for deposit ID: ${depositId}`,
+          `L1BitcoinDepositor returned invalid status (${status}) for deposit key: ${depositOrId}`,
         );
         return null; // Indicate invalid status received
       }
     } catch (error: any) {
-      // Check if the error indicates the deposit doesn't exist (e.g., contract reverts)
-      // This depends heavily on the specific contract behavior for invalid IDs.
-      // For now, assume any error means status is uncertain.
+      // Handle errors such as contract revert, possibly deposit not found
       const reason = error.reason ?? error.message ?? 'Unknown error fetching status';
-      logErrorContext(`Error fetching L1 deposit status for ID ${depositId}: ${reason}`, error);
+      logErrorContext(`Error fetching L1 deposit status for key ${depositOrId}: ${reason}`, error);
       return null; // Indicate status couldn't be reliably fetched
     }
   }

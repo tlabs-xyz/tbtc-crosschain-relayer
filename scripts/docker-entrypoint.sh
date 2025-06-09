@@ -74,5 +74,5 @@ else
 fi
 
 echo "🎯 Starting application..."
-# Start the app (forward all arguments)
-exec "$@"
+# Start the app (forward all arguments from Dockerfile CMD)
+exec "$@" 

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { createDeposit, getDepositKey } from '../utils/Deposits.js';
+import { createDeposit, getDepositId } from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -69,7 +69,7 @@ export class EndpointController {
       const revealData: Reveal = reveal as Reveal;
 
       const fundingTxHash = getFundingTxHash(fundingTx);
-      const depositId = getDepositKey(fundingTxHash, revealData.fundingOutputIndex);
+      const depositId = getDepositId(fundingTxHash, revealData.fundingOutputIndex);
       logger.info(
         `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );

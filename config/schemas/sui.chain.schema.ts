@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { CHAIN_TYPE } from './common.schema.js';
-import { CommonChainConfigSchema } from './common.schema.js';
+import { CHAIN_TYPE, CommonChainConfigSchema } from './common.schema.js';
 
 // Base schema for fields that are specific to Sui chains.
 const SuiChainBaseSchema = z.object({
@@ -12,7 +11,15 @@ const SuiChainBaseSchema = z.object({
       required_error:
         'SUI_PRIVATE_KEY is required. Set it in the environment or provide it in the config data.',
     })
-    .min(1, 'SUI_PRIVATE_KEY must not be empty.'),
+    .min(1, 'SUI_PRIVATE_KEY must not be empty.')
+    .regex(
+      /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/,
+      'Sui private key must be a valid base64 string.',
+    )
+    .refine((key) => key.length >= 32, {
+      // Check for a reasonable minimum length for a base64 key
+      message: 'Sui private key base64 string is too short.',
+    }),
   suiGasObjectId: z.string().optional(), // Optional: Can be provided by ENV or defaults to on-chain query
 });
 
@@ -34,10 +41,6 @@ export const SuiChainConfigSchema = CommonConfigForSui.merge(SuiChainBaseSchema)
   .refine((data) => data.chainType === CHAIN_TYPE.SUI, {
     message: 'Chain type must be Sui for SuiChainConfigSchema.',
     path: ['chainType'],
-  })
-  .refine((data) => !!data.suiPrivateKey, {
-    message: 'suiPrivateKey is required for Sui chains.',
-    path: ['suiPrivateKey'],
   });
 
 export type SuiChainConfig = z.infer<typeof SuiChainConfigSchema>;

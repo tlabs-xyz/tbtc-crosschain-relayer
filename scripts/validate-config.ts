@@ -70,16 +70,25 @@ async function importConfigModules() {
   };
 }
 
+// --- Structured error collector ---
+interface ValidationError {
+  type: string;
+  scope: string;
+  message: string;
+  details?: any;
+  timestamp: string;
+  fatal: boolean;
+  [key: string]: any;
+}
+
 /**
  * Validates application configuration using the same schema as startup
  */
-async function validateAppConfig(): Promise<boolean> {
+async function validateAppConfig(errors: ValidationError[]): Promise<void> {
   const { z, logger, AppConfigSchema, writeFileSync } = await importConfigModules();
-
   try {
     logger.info(`[${SCRIPT_NAME}] Validating application configuration...`);
     const config = AppConfigSchema.parse(process.env);
-
     logger.info(`[${SCRIPT_NAME}] App configuration valid:`, {
       APP_NAME: config.APP_NAME,
       APP_VERSION: config.APP_VERSION,
@@ -87,59 +96,58 @@ async function validateAppConfig(): Promise<boolean> {
       API_ONLY_MODE: config.API_ONLY_MODE,
       numConfigsPresent: Object.keys(config).length,
     });
-
-    return true;
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      logger.error(
-        `[${SCRIPT_NAME}] Application configuration validation failed:`,
-        error.flatten(),
-      );
-
-      const errorDetails = {
+      const errObj: ValidationError = {
+        type: 'config_validation_error',
+        scope: 'app',
+        message: 'Application configuration validation failed',
+        details: { zod: error.flatten() },
         timestamp: new Date().toISOString(),
-        type: 'app_config_validation_error',
-        flattened: error.flatten(),
-        errors: error.errors,
-        processEnvRelevantKeys: Object.keys(process.env).filter(
-          (key) =>
-            key.startsWith('APP_') ||
-            key.startsWith('NODE_') ||
-            key.startsWith('DATABASE_') ||
-            key.startsWith('CORS_') ||
-            key.startsWith('HOST_') ||
-            key.startsWith('CLEAN_'),
-        ),
+        fatal: true,
       };
-
+      errors.push(errObj);
+      logger.error(errObj);
       try {
-        writeFileSync(
-          '/tmp/app-config-validation-error.json',
-          JSON.stringify(errorDetails, null, 2),
-        );
-        logger.error(
-          `[${SCRIPT_NAME}] Detailed app config error written to /tmp/app-config-validation-error.json`,
-        );
+        writeFileSync('/tmp/app-config-validation-error.json', JSON.stringify(errObj, null, 2));
+        logger.error({
+          type: 'config_validation_error',
+          scope: 'app',
+          message: 'Detailed app config error written to /tmp/app-config-validation-error.json',
+          timestamp: new Date().toISOString(),
+          fatal: false,
+        });
       } catch (writeError) {
-        logger.error(`[${SCRIPT_NAME}] Failed to write app config error details:`, writeError);
+        logger.error({
+          type: 'config_validation_error',
+          scope: 'app',
+          message: 'Failed to write app config error details',
+          details: writeError,
+          timestamp: new Date().toISOString(),
+          fatal: false,
+        });
       }
     } else {
-      logger.error(
-        `[${SCRIPT_NAME}] Unexpected error during application configuration validation:`,
-        error,
-      );
+      const errObj: ValidationError = {
+        type: 'config_validation_error',
+        scope: 'app',
+        message: 'Unexpected error during application configuration validation',
+        details: error,
+        timestamp: new Date().toISOString(),
+        fatal: true,
+      };
+      errors.push(errObj);
+      logger.error(errObj);
     }
-    return false;
   }
 }
 
 /**
  * Validates chain configurations using the new dynamic loading process
  */
-async function validateChainConfigs(): Promise<boolean> {
+async function validateChainConfigs(errors: ValidationError[]): Promise<void> {
   const { logger, loadAndValidateChainConfigs, getAvailableChainKeys, writeFileSync } =
     await importConfigModules();
-
   try {
     let chainsToAttemptValidation: string[];
     if (supportedChainsToValidate.length > 0) {
@@ -160,69 +168,69 @@ async function validateChainConfigs(): Promise<boolean> {
         const nodeEnv = process.env.NODE_ENV || 'development';
         const apiOnlyMode = process.env.API_ONLY_MODE === 'true';
         if (nodeEnv !== 'test' && !apiOnlyMode) {
-          logger.error(
-            `[${SCRIPT_NAME}] No chain configurations to validate and not in test/API_ONLY_MODE. Server would fail to start.`,
-          );
-          return false;
+          const errObj: ValidationError = {
+            type: 'config_validation_error',
+            scope: 'chain',
+            message:
+              'No chain configurations to validate and not in test/API_ONLY_MODE. Server would fail to start.',
+            timestamp: new Date().toISOString(),
+            fatal: true,
+          };
+          errors.push(errObj);
+          logger.error(errObj);
         }
         logger.info(
-          '[${SCRIPT_NAME}] Proceeding without chain config validation as no chains are defined or specified, and in test/API_ONLY_MODE.',
+          `[${SCRIPT_NAME}] Proceeding without chain config validation as no chains are defined or specified, and in test/API_ONLY_MODE.`,
         );
-        return true; // Nothing to validate
+        return;
       }
     }
-
     const { configs: loadedChainConfigs, validationErrors } = await loadAndValidateChainConfigs(
       chainsToAttemptValidation,
       logger,
     );
-
     if (validationErrors.length > 0) {
-      logger.error(
-        `[${SCRIPT_NAME}] Chain configuration validation failed for ${validationErrors.length} chain(s):`,
-      );
-      logger.error('--------------------------------------------------------------------');
       validationErrors.forEach((err) => {
-        logger.error(`Chain Key: '${err.chainKey}'`);
-        try {
-          logger.error(
-            `Input provided for '${err.chainKey}':\n${JSON.stringify(err.input, null, 2)}`,
-          );
-          logger.error(
-            `Error details for '${err.chainKey}':\n${JSON.stringify(err.error, null, 2)}`,
-          );
-        } catch {
-          logger.error(
-            `Failed to stringify details for chain '${err.chainKey}'. Logging raw objects:`,
-          );
-          logger.error('Raw Input:', err.input);
-          logger.error('Raw Error:', err.error);
-        }
-        logger.error('--------------------------------------------------------------------');
+        const errObj: ValidationError = {
+          type: 'config_validation_error',
+          scope: 'chain',
+          chainKey: err.chainKey,
+          message: `Chain configuration validation failed for '${err.chainKey}'`,
+          details: {
+            input: err.input,
+            error: err.error,
+          },
+          timestamp: new Date().toISOString(),
+          fatal: true,
+        };
+        errors.push(errObj);
+        logger.error(errObj);
       });
       try {
         writeFileSync(
           '/tmp/chain-configs-validation-errors.json',
           JSON.stringify(validationErrors, null, 2),
         );
-        logger.error(
-          `[${SCRIPT_NAME}] Detailed chain config errors written to /tmp/chain-configs-validation-errors.json`,
-        );
+        logger.error({
+          type: 'config_validation_error',
+          scope: 'chain',
+          message:
+            'Detailed chain config errors written to /tmp/chain-configs-validation-errors.json',
+          timestamp: new Date().toISOString(),
+          fatal: false,
+        });
       } catch (writeError) {
-        logger.error(`[${SCRIPT_NAME}] Failed to write chain config error details:`, writeError);
+        logger.error({
+          type: 'config_validation_error',
+          scope: 'chain',
+          message: 'Failed to write chain config error details',
+          details: writeError,
+          timestamp: new Date().toISOString(),
+          fatal: false,
+        });
       }
-      return false;
     }
-
-    const numLoadedChains = Object.keys(loadedChainConfigs).length;
-    logger.info(`[${SCRIPT_NAME}] Chain configuration validation complete:`, {
-      numSuccessfullyLoadedChains: numLoadedChains,
-      requestedChains: chainsToAttemptValidation,
-      loadedChainKeys: Object.keys(loadedChainConfigs),
-      validationResult: 'success',
-    });
-
-    // Critical environment variable checks (can remain as they are general)
+    // Critical environment variable checks
     const missingEnvVars: string[] = [];
     const criticalEnvVars = ['DATABASE_URL', 'APP_NAME', 'APP_VERSION'];
     criticalEnvVars.forEach((envVar) => {
@@ -230,26 +238,38 @@ async function validateChainConfigs(): Promise<boolean> {
         missingEnvVars.push(envVar);
       }
     });
-
     if (missingEnvVars.length > 0) {
-      logger.error(`[${SCRIPT_NAME}] Critical environment variables missing:`, missingEnvVars);
-      return false;
+      const errObj: ValidationError = {
+        type: 'config_validation_error',
+        scope: 'environment',
+        message: 'Critical environment variables missing',
+        details: { missing: missingEnvVars },
+        timestamp: new Date().toISOString(),
+        fatal: true,
+      };
+      errors.push(errObj);
+      logger.error(errObj);
     }
-
-    // Check if chains were expected but none loaded (e.g. SUPPORTED_CHAINS was set but all failed)
+    // Check if chains were expected but none loaded
+    const numLoadedChains = Object.keys(loadedChainConfigs).length;
     const nodeEnv = process.env.NODE_ENV || 'development';
     const apiOnlyMode = process.env.API_ONLY_MODE === 'true';
-
     if (
       chainsToAttemptValidation.length > 0 &&
       numLoadedChains === 0 &&
       nodeEnv !== 'test' &&
       !apiOnlyMode
     ) {
-      logger.error(
-        `[${SCRIPT_NAME}] No chain configurations were successfully loaded out of the ${chainsToAttemptValidation.length} attempted, and not in test/API_ONLY_MODE. Server would fail to start.`,
-      );
-      return false;
+      const errObj: ValidationError = {
+        type: 'config_validation_error',
+        scope: 'chain',
+        message: `No chain configurations were successfully loaded out of the ${chainsToAttemptValidation.length} attempted, and not in test/API_ONLY_MODE. Server would fail to start.`,
+        details: { requestedChains: chainsToAttemptValidation },
+        timestamp: new Date().toISOString(),
+        fatal: true,
+      };
+      errors.push(errObj);
+      logger.error(errObj);
     }
     if (
       numLoadedChains === 0 &&
@@ -257,70 +277,89 @@ async function validateChainConfigs(): Promise<boolean> {
       nodeEnv !== 'test' &&
       !apiOnlyMode
     ) {
-      // This case is for when SUPPORTED_CHAINS is empty AND no chains are in registry, which was handled earlier.
-      // Adding a redundant check here for safety, but primary logic is above.
-      logger.error(
-        `[${SCRIPT_NAME}] No chain configurations detected (none specified, none in registry) - server would fail to start as not in test/API_ONLY_MODE.`,
-      );
-      return false;
+      const errObj: ValidationError = {
+        type: 'config_validation_error',
+        scope: 'chain',
+        message:
+          'No chain configurations detected (none specified, none in registry) - server would fail to start as not in test/API_ONLY_MODE.',
+        timestamp: new Date().toISOString(),
+        fatal: true,
+      };
+      errors.push(errObj);
+      logger.error(errObj);
     }
-
-    return true;
   } catch (error: any) {
-    logger.error(
-      `[${SCRIPT_NAME}] Unexpected error during chain configuration validation process:`,
-      error,
-    );
-    return false;
+    const errObj: ValidationError = {
+      type: 'config_validation_error',
+      scope: 'chain',
+      message: 'Unexpected error during chain configuration validation process',
+      details: error,
+      timestamp: new Date().toISOString(),
+      fatal: true,
+    };
+    errors.push(errObj);
+    logger.error(errObj);
   }
 }
 
 /**
  * Validates configuration environment readiness
  */
-async function validateEnvironmentReadiness(): Promise<boolean> {
+async function validateEnvironmentReadiness(errors: ValidationError[]): Promise<void> {
   const { logger } = await importConfigModules();
-
   try {
     logger.info(`[${SCRIPT_NAME}] Validating environment readiness...`);
-
     const nodeEnv = process.env.NODE_ENV || 'development';
     const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
     const apiOnlyMode = process.env.API_ONLY_MODE === 'true';
-
     logger.info(`[${SCRIPT_NAME}] Environment status:`, {
       NODE_ENV: nodeEnv,
       CI: isCI,
       API_ONLY_MODE: apiOnlyMode,
       ENABLE_CLEANUP_CRON: process.env.ENABLE_CLEANUP_CRON || 'false',
       DATABASE_URL_SET: !!process.env.DATABASE_URL,
-      SUPPORTED_CHAINS_SET: !!process.env.SUPPORTED_CHAINS, // Log if the var itself is set
-      NUM_SUPPORTED_CHAINS_TO_VALIDATE: supportedChainsToValidate.length, // Log how many we derived
+      SUPPORTED_CHAINS_SET: !!process.env.SUPPORTED_CHAINS,
+      NUM_SUPPORTED_CHAINS_TO_VALIDATE: supportedChainsToValidate.length,
     });
-
     if (isCI && !process.env.DATABASE_URL) {
-      logger.error(`[${SCRIPT_NAME}] DATABASE_URL must be set in CI environment`);
-      return false;
+      const errObj: ValidationError = {
+        type: 'config_validation_error',
+        scope: 'environment',
+        message: 'DATABASE_URL must be set in CI environment',
+        timestamp: new Date().toISOString(),
+        fatal: true,
+      };
+      errors.push(errObj);
+      logger.error(errObj);
     }
-
     const requiredForStartup = ['APP_NAME', 'APP_VERSION'];
     const missingRequired = requiredForStartup.filter(
       (key) => !process.env[key] || process.env[key]?.trim() === '',
     );
-
     if (missingRequired.length > 0) {
-      logger.error(
-        `[${SCRIPT_NAME}] Required startup environment variables missing or empty:`,
-        missingRequired,
-      );
-      return false;
+      const errObj: ValidationError = {
+        type: 'config_validation_error',
+        scope: 'environment',
+        message: 'Required startup environment variables missing or empty',
+        details: { missing: missingRequired },
+        timestamp: new Date().toISOString(),
+        fatal: true,
+      };
+      errors.push(errObj);
+      logger.error(errObj);
     }
-
     logger.info(`[${SCRIPT_NAME}] Environment readiness validation complete - ready for startup`);
-    return true;
   } catch (error: any) {
-    logger.error(`[${SCRIPT_NAME}] Environment readiness validation failed:`, error);
-    return false;
+    const errObj: ValidationError = {
+      type: 'config_validation_error',
+      scope: 'environment',
+      message: 'Environment readiness validation failed',
+      details: error,
+      timestamp: new Date().toISOString(),
+      fatal: true,
+    };
+    errors.push(errObj);
+    logger.error(errObj);
   }
 }
 
@@ -353,43 +392,31 @@ async function gracefulShutdown(exitCode: number): Promise<void> {
  */
 async function main(): Promise<void> {
   console.log(`[${SCRIPT_NAME}] Starting configuration validation...`);
-
-  await loadEnvironment(); // Loads .env and parses SUPPORTED_CHAINS
-
-  // Now that environment is loaded, we can safely import modules that might depend on it.
+  await loadEnvironment();
   const { logger } = await importConfigModules();
   logger.info(`[${SCRIPT_NAME}] Environment setup complete, beginning validation...`);
   logger.info(
     `[${SCRIPT_NAME}] Chains to validate based on SUPPORTED_CHAINS (or all if empty): ${supportedChainsToValidate.length > 0 ? supportedChainsToValidate.join(', ') : 'ALL_AVAILABLE'}`,
   );
-
   const startTime = Date.now();
-  let allValid = true;
-
-  if (!(await validateAppConfig())) {
-    allValid = false;
-  }
-
-  // validateChainConfigs now uses supportedChainsToValidate populated by loadEnvironment
-  if (allValid && !(await validateChainConfigs())) {
-    // Only run if app config is valid
-    allValid = false;
-  }
-
-  if (allValid && !(await validateEnvironmentReadiness())) {
-    // Only run if previous are valid
-    allValid = false;
-  }
-
+  const errors: ValidationError[] = [];
+  await validateAppConfig(errors);
+  await validateChainConfigs(errors);
+  await validateEnvironmentReadiness(errors);
   const duration = Date.now() - startTime;
-
-  if (allValid) {
+  if (errors.length === 0) {
     logger.info(`[${SCRIPT_NAME}] ✅ All configuration validation passed (${duration}ms)`);
     logger.info(`[${SCRIPT_NAME}] Server startup configuration is ready`);
     await gracefulShutdown(0);
   } else {
-    logger.error(`[${SCRIPT_NAME}] ❌ Configuration validation failed (${duration}ms)`);
-    logger.error(`[${SCRIPT_NAME}] Server would fail to start with current configuration`);
+    logger.error({
+      type: 'config_validation_summary',
+      errorCount: errors.length,
+      errors,
+      timestamp: new Date().toISOString(),
+      fatal: true,
+      message: `[${SCRIPT_NAME}] ❌ Configuration validation failed (${duration}ms). Server would fail to start with current configuration.`,
+    });
     await gracefulShutdown(1);
   }
 }

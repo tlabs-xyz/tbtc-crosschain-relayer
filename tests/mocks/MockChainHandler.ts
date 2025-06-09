@@ -345,10 +345,23 @@ export class MockChainHandler implements ChainHandlerInterface {
   }
 
   /**
-   * Check deposit status
+   * Check deposit status (mock).
+   * Accepts a depositId (string) or a Deposit object for compatibility with the main interface.
+   * @param depositOrId - The deposit ID (string) or Deposit object.
+   * @returns The deposit status or null if not found.
    */
-  async checkDepositStatus(depositId: string): Promise<DepositStatus | null> {
-    logger.info(`MockChainHandler: Checking status for deposit ${depositId}`);
+  async checkDepositStatus(depositOrId: string | Deposit): Promise<DepositStatus | null> {
+    let depositId: string;
+    if (typeof depositOrId === 'string') {
+      depositId = depositOrId;
+      logger.info(`MockChainHandler: Checking status for depositId string: ${depositId}`);
+    } else if (depositOrId && typeof depositOrId === 'object' && 'id' in depositOrId) {
+      depositId = depositOrId.id;
+      logger.info(`MockChainHandler: Checking status for Deposit object with id: ${depositId}`);
+    } else {
+      logger.warn('MockChainHandler: Received invalid argument to checkDepositStatus');
+      return null;
+    }
     const deposit = this.deposits.get(depositId);
     return deposit ? deposit.status : null;
   }

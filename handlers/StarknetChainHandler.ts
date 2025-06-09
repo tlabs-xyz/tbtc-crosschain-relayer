@@ -1,14 +1,8 @@
 import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
 import { StarknetChainConfigSchema } from '../config/schemas/starknet.chain.schema.js';
-import logger from '../utils/Logger.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
-import {
-  ethers,
-  type Overrides,
-  type PayableOverrides,
-  type BigNumberish,
-  type BytesLike,
-} from 'ethers';
+import { ethers, type PayableOverrides, type BigNumberish, type BytesLike } from 'ethers';
 import { StarkNetBitcoinDepositorABI } from '../interfaces/StarkNetBitcoinDepositor.js';
 import type { StarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor.js';
 
@@ -19,15 +13,26 @@ import type { Deposit } from '../types/Deposit.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import {
-  getDepositKey,
+  getDepositId,
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
+  getDepositKey,
 } from '../utils/Deposits.js';
 import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
-import { logErrorContext } from '../utils/Logger.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 
 export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {
+  /**
+   * Computes the depositKey (bytes32) for contract calls from a deposit object.
+   * Always uses the canonical (non-reversed) hash for StarkNet.
+   * @param deposit The deposit object
+   * @returns The deposit key as a bytes32 hex string
+   */
+  private toDepositKey(deposit: Deposit): string {
+    const fundingTxHash = getFundingTxHash(deposit.L1OutputEvent.fundingTx);
+    // Explicitly do not reverse for StarkNet
+    return getDepositKey(fundingTxHash, deposit.L1OutputEvent.reveal.fundingOutputIndex, false);
+  }
   // --- L1 StarkGate Contract Instances ---
   /** L1 StarkGate contract instance for sending transactions (uses L1 signer with nonce manager) */
   protected l1DepositorContract: StarkNetBitcoinDepositor | undefined;
@@ -368,6 +373,41 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     //     keys: ['DEPOSIT_EVENT_SELECTOR']
     //   });
     //   // Process events...
+    return; // Placeholder - indicates L2 past deposit scanning not available
+  }
+
+  /**
+   * Checks the deposit status on L1 using the correct depositKey (bytes32).
+   * Accepts either a deposit object or a depositId string (decimal). For Starknet, if a string is passed,
+   * attempts to look up the Deposit object. If not found, returns null. This ensures a symmetric API for all chains.
+   * @param depositOrId The deposit ID (string) or Deposit object.
+   * @returns The current status as a numeric enum value, or null if not found.
+   */
+  async checkDepositStatus(depositOrId: string | Deposit): Promise<number | null> {
+    try {
+      let deposit: Deposit | null;
+      if (typeof depositOrId === 'string') {
+        // For Starknet, depositKey is not derivable from just the ID, so we must look up the Deposit object.
+        // This ensures a symmetric API for all chains and allows status checks by ID.
+        deposit = await DepositStore.getById(depositOrId);
+        if (!deposit) {
+          logger.warn(`Deposit not found for ID: ${depositOrId} in checkDepositStatus.`);
+          return null;
+        }
+      } else {
+        deposit = depositOrId;
+      }
+      const depositKey = this.toDepositKey(deposit);
+      if (!this.l1DepositorContractProvider) {
+        logger.error('L1 Depositor contract provider not available for status check.');
+        return null;
+      }
+      const status: number = await this.l1DepositorContractProvider.deposits(depositKey);
+      return status;
+    } catch (err) {
+      logger.error('Error in checkDepositStatus:', err);
+      return null;
+    }
   }
 
   /**
@@ -380,10 +420,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   public async finalizeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
-    const depositId = getDepositKey(
-      getFundingTxHash(deposit.L1OutputEvent.fundingTx),
-      deposit.L1OutputEvent.reveal.fundingOutputIndex,
-    );
+    const fundingTxHash = getFundingTxHash(deposit.L1OutputEvent.fundingTx);
+    const depositId = getDepositId(fundingTxHash, deposit.L1OutputEvent.reveal.fundingOutputIndex);
+    const depositKey = this.toDepositKey(deposit);
     const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${depositId} |`;
 
     logger.info(`${logPrefix} Attempting to finalize deposit on L1 Depositor contract.`);
@@ -420,13 +459,15 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     try {
       logger.info(
-        `${logPrefix} Calling L1 Depositor contract finalizeDeposit for depositKey: ${depositId} with fee: ${ethers.utils.formatEther(txOverrides.value as BigNumberish)} ETH.`,
+        `${logPrefix} Calling L1 Depositor contract finalizeDeposit for depositKey: ${depositKey} with fee: ${ethers.utils.formatEther(
+          txOverrides.value as BigNumberish,
+        )} ETH.`,
       );
 
-      const txResponse = await this.l1DepositorContract.finalizeDeposit(depositId, txOverrides);
+      const txResponse = await this.l1DepositorContract.finalizeDeposit(depositKey, txOverrides);
 
       logger.info(
-        `${logPrefix} L1 finalizeDeposit transaction sent. TxHash: ${txResponse.hash}. Waiting for confirmations...`,
+        `${logPrefix} L1 finalizeDeposit transaction sent. | Hash: ${txResponse.hash} | Waiting for receipt...`,
       );
 
       const txReceipt = await txResponse.wait(this.config.l1Confirmations);
@@ -470,12 +511,10 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
     const fundingTxHash = getFundingTxHash(deposit.L1OutputEvent.fundingTx);
-    const depositKey = getDepositKey(
-      fundingTxHash,
-      deposit.L1OutputEvent.reveal.fundingOutputIndex,
-    );
+    const depositId = getDepositId(fundingTxHash, deposit.L1OutputEvent.reveal.fundingOutputIndex);
+    const depositKey = this.toDepositKey(deposit);
 
-    const logId = deposit.id || depositKey;
+    const logId = deposit.id || depositId;
     const logPrefix = `INITIALIZE_DEPOSIT ${this.config.chainName} ${logId} |`;
 
     logger.info(`${logPrefix} Attempting to initialize deposit on L1 Depositor contract.`);
@@ -500,17 +539,39 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     const reveal: Reveal = deposit.L1OutputEvent.reveal;
     let l2DepositOwner = deposit.L1OutputEvent.l2DepositOwner;
 
-    const depositState = await this.l1DepositorContract.deposits(depositKey);
-    logger.info(`${logPrefix} Deposit state: ${depositState}`);
+    // Query on-chain directly via provider using depositKey (bytes32)
+    const depositState = await this.l1DepositorContractProvider!.deposits(depositKey);
+    logger.info(`${logPrefix} Deposit state for deposit key ${depositKey}: ${depositState}`);
 
     if (depositState !== 0) {
-      logger.warn(`${logPrefix} Deposit already initialized. ID: ${depositKey}. Skipping update.`);
-      // TODO: We need to return tx receipt here for to prevent the endpoint from returning error 500
-      // Find the tx hash from previous deposit and return it
-      return undefined;
+      logger.warn(
+        `${logPrefix} Deposit already initialized. ID: ${depositId}. Returning existing initialization receipt.`,
+      );
+      const previousTxHash = deposit.hashes.eth.initializeTxHash;
+
+      // Attempt to fetch the real receipt from the L1 provider
+      if (previousTxHash) {
+        try {
+          const existingReceipt = await this.l1Provider.getTransactionReceipt(previousTxHash);
+          if (existingReceipt) {
+            return existingReceipt as ethers.providers.TransactionReceipt;
+          }
+        } catch (err: any) {
+          logger.warn(
+            `${logPrefix} Failed to fetch existing receipt for hash ${previousTxHash}: ${err.message}`,
+          );
+        }
+      }
+
+      // Fallback: synthetic receipt so endpoint responds with success
+      return {
+        status: depositState,
+        transactionHash: previousTxHash || '',
+        blockNumber: 0,
+      } as ethers.providers.TransactionReceipt;
     }
 
-    logger.info(`${logPrefix} Deposit not initialized. ID: ${depositKey}`);
+    logger.info(`${logPrefix} Deposit not initialized. ID: ${depositId}`);
 
     try {
       l2DepositOwner = toUint256StarknetAddress(l2DepositOwner);

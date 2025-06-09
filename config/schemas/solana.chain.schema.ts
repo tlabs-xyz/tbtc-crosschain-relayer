@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { CHAIN_TYPE } from './common.schema.js';
-import { CommonChainConfigSchema } from './common.schema.js';
+import { CHAIN_TYPE, CommonChainConfigSchema } from './common.schema.js';
 
 // Base schema for fields that are specific to Solana chains.
 const SolanaChainBaseSchema = z.object({
@@ -12,7 +11,11 @@ const SolanaChainBaseSchema = z.object({
       required_error:
         'SOLANA_PRIVATE_KEY is required. Set it in the environment or provide it in the config data.',
     })
-    .min(1, 'SOLANA_PRIVATE_KEY must not be empty.'),
+    .min(1, 'SOLANA_PRIVATE_KEY must not be empty.')
+    .regex(
+      /^[1-9A-HJ-NP-Za-km-z]{88,89}$/,
+      'Solana private key must be a base58-encoded 64-byte secret key (88 or 89 base58 characters).',
+    ),
   solanaCommitment: z.enum(['processed', 'confirmed', 'finalized']).default('confirmed'),
   solanaSignerKeyBase: z
     .string({

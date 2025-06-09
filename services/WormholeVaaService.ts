@@ -10,15 +10,15 @@ import {
   type Chain,
   type VAA,
 } from '@wormhole-foundation/sdk';
-import evmPlatform from '@wormhole-foundation/sdk/platforms/evm';
-import solanaPlatform from '@wormhole-foundation/sdk/platforms/solana';
+import evm from '@wormhole-foundation/sdk/evm';
+import solana from '@wormhole-foundation/sdk/solana';
 import logger, { logErrorContext } from '../utils/Logger.js';
 
 type SignedVaa = Uint8Array;
 type ParsedVaaWithPayload = VAA<'TokenBridge:Transfer'> | VAA<'TokenBridge:TransferWithPayload'>;
 
 const DEFAULT_WORMHOLE_NETWORK: Network = 'Testnet';
-const DEFAULT_SDK_PLATFORMS_MODULES = [evmPlatform, solanaPlatform];
+const DEFAULT_SDK_PLATFORMS_MODULES = [evm, solana];
 const MIN_VAA_CONSISTENCY_LEVEL = 1; // How long does the Guardian network need to wait before signing off on a VAA?
 const VAA_FETCH_RETRY_DELAY_MS = parseInt(process.env.VAA_FETCH_RETRY_DELAY_MS || '60000');
 const VAA_FETCH_MAX_RETRIES = parseInt(process.env.VAA_FETCH_MAX_RETRIES || '5');

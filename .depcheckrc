@@ -4,6 +4,7 @@ ignores: [
     "rimraf", 
     "depcheck", 
     "improved-yarn-audit",
+    "eslint-import-resolver-typescript",
 
     # Used in tests
     "ts-jest", 

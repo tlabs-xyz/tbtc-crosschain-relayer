@@ -20,6 +20,7 @@ ingress:
           prefix: /
 name: tbtc-crosschain-relayer
 region: nyc
+
 services:
   - dockerfile_path: /Dockerfile
     envs:
@@ -62,10 +63,14 @@ services:
         scope: RUN_TIME
         type: GENERAL
         value: "true"
+      - key: USE_ENDPOINT
+        scope: RUN_TIME
+        type: GENERAL
+        value: "true"
       - key: CORS_URL
         scope: RUN_TIME
         type: GENERAL
-        value: "http://localhost:8080"
+        value: "https://tbtc-crosschain-relayer-swmku.ondigitalocean.app"
       - key: CLEAN_QUEUED_TIME
         scope: RUN_TIME
         type: GENERAL
