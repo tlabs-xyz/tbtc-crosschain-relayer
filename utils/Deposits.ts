@@ -388,15 +388,15 @@ function reverseHexString(hex: string): string {
 }
 
 /**
- * Generates a unique deposit key by encoding the Bitcoin funding transaction hash and output index,
- * then hashing the result using keccak256. This matches the tBTC v2 on-chain contract and test vectors:
- * https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/integration/FullFlow.test.ts
- * https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/data/deposit-sweep.ts
+ * Converts a deposit's keccak256 hash (deposit key) into a uint256 string representation,
+ * which serves as the unique deposit ID in the system. It calls `getDepositKey`
+ * to generate the underlying `bytes32` hash.
+ * This ID is used for tracking and storage.
  *
  * @param {string} fundingTxHash - The 66-character hex string of the Bitcoin funding transaction hash (0x-prefixed, 32 bytes).
  *                                 Must be in big-endian; will be reversed for little-endian.
  * @param {number} fundingOutputIndex - The index of the output in the funding transaction (must be >= 0 and <= 0xffffffff).
- * @returns {string} A unique deposit key as a uint256 string.
+ * @returns {string} A unique deposit ID as a uint256 string.
  * @throws {Error} If the fundingTxHash is not a valid 66-character hex string or fundingOutputIndex is invalid.
  *
  * @example
@@ -405,6 +405,26 @@ function reverseHexString(hex: string): string {
  * ```
  */
 export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
+  const hashBytes32 = getDepositKey(fundingTxHash, fundingOutputIndex);
+  return ethers.BigNumber.from(hashBytes32).toString();
+};
+
+/**
+ * Generates a deposit key by hashing the Bitcoin funding transaction hash and output index
+ * using keccak256. This key is a `bytes32` value used for on-chain interactions.
+ * For EVM chains, pass reverse=true to match contract expectations.
+ * For StarkNet, always use reverse=false.
+ *
+ * @param {string} fundingTxHash - The 66-character hex string of the Bitcoin funding transaction hash (0x-prefixed, 32 bytes).
+ * @param {number} fundingOutputIndex - The index of the output in the funding transaction (must be >= 0 and <= 0xffffffff).
+ * @param {boolean} reverse - Whether to reverse the hash (EVM: true, StarkNet: false)
+ * @returns {string} The deposit key as a `bytes32` hex string.
+ */
+export const getDepositKey = (
+  fundingTxHash: string,
+  fundingOutputIndex: number,
+  reverse: boolean = true,
+): string => {
   // Validate fundingTxHash
   if (typeof fundingTxHash !== 'string') {
     throw new Error('fundingTxHash must be a string');
@@ -420,25 +440,12 @@ export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number):
     throw new Error('fundingOutputIndex must fit in uint32 range');
   }
 
-  try {
-    // Reverse the hash to match Bitcoin little-endian format
-    const reversedHash = reverseHexString(fundingTxHash);
-    // Use uint32 for output index to match on-chain contract
-    const types = ['bytes32', 'uint32'];
-    const values = [reversedHash, fundingOutputIndex];
-    const hashBytes32 = ethers.utils.solidityKeccak256(types, values);
-    return ethers.BigNumber.from(hashBytes32).toString();
-  } catch (error) {
-    throw new Error(
-      `Failed to generate deposit key: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    );
+  let hashToUse = fundingTxHash;
+  if (reverse) {
+    hashToUse = reverseHexString(fundingTxHash);
   }
-};
-
-// Converts a deposit key from a uint256 string to a bytes32 string for Starknet compatibility
-export const formatDepositIdForStarknet = (depositId: string): string => {
-  if (!/^\d+$/.test(depositId)) {
-    throw new Error('Invalid depositId: must be a valid numeric string');
-  }
-  return ethers.BigNumber.from(depositId).toHexString();
+  // Use uint32 for output index to match on-chain contract
+  const types = ['bytes32', 'uint32'];
+  const values = [hashToUse, fundingOutputIndex];
+  return ethers.utils.solidityKeccak256(types, values);
 };

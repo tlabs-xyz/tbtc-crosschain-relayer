@@ -34,10 +34,12 @@ export interface ChainHandlerInterface {
 
   /**
    * Check the status of a deposit on the chain.
-   * @param depositId The unique identifier of the deposit.
+   * For most handlers, this accepts a depositId (string).
+   * For StarknetChainHandler, this accepts a Deposit object (for correct depositKey computation).
+   * @param depositOrId The deposit ID (string) or Deposit object (Starknet).
    * @returns The current status as a numeric enum value, or null if not found.
    */
-  checkDepositStatus(depositId: string): Promise<DepositStatus | null>;
+  checkDepositStatus(depositOrId: string | Deposit): Promise<DepositStatus | null>;
 
   /**
    * Get the latest block number from the chain

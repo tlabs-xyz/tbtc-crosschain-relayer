@@ -21,7 +21,7 @@
     "build": "tsc",
     "clean:build": "rimraf ./dist ./generated",
     "clean:all": "rimraf ./dist ./generated ./coverage ./node_modules/@prisma/client ./node_modules/@prisma/client-test",
-    "fix": "bun run lint:fix && bun run format:fix",
+    "fix": "yarn run lint:fix && yarn run format:fix",
     "lint": "eslint . --ext .ts --cache",
     "lint:fix": "eslint . --ext .ts --cache --fix",
     "format": "prettier --check .",
@@ -38,7 +38,7 @@
     "db:backup": "pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -F c -b -v -f backup.dump",
     "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump",
     "db:reset": "npx prisma db push --force-reset --accept-data-loss",
-    "pretest": "docker-compose up -d postgres"
+    "pretest": "docker-compose down -v && docker-compose up -d postgres"
   },
   "keywords": [],
   "author": "T-Labs",

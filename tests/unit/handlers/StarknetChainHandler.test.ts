@@ -49,7 +49,7 @@ const mockContractInstance = {
     l1ToL2MessageFee: jest.fn(),
   },
   address: '0xMockContractAddress',
-  deposits: jest.fn().mockResolvedValue(0),
+  deposits: jest.fn().mockResolvedValue(ethers.BigNumber.from(0)),
 };
 
 const mockGetTransactionReceiptImplementation = jest.fn();
@@ -85,6 +85,7 @@ describe('StarknetChainHandler', () => {
   let mockDepositsUtil: jest.Mocked<typeof depositUtils>;
   let mockGetTransactionHashUtil: jest.Mocked<typeof getTransactionHashUtils>;
   let mockAuditLogUtil: jest.Mocked<typeof auditLog>;
+  let mockDepositForFinalize: Deposit | undefined;
 
   // Define mock implementations here so they are in scope for beforeEach
   const mockWalletImpl = (privateKey: string, provider: any) => {
@@ -124,6 +125,7 @@ describe('StarknetChainHandler', () => {
   };
 
   beforeEach(() => {
+    mockDepositForFinalize = undefined; // Reset before each test
     jest.clearAllMocks(); // Clear all mocks, including spies
 
     // Setup spies BEFORE they are used by new StarknetChainHandler() or its setup
@@ -293,6 +295,31 @@ describe('StarknetChainHandler', () => {
       // If we wanted to test initializeL2 specifically for a case where constructor passes but initializeL2 fails,
       // we would need a config that passes Zod but makes initializeL2 fail for other reasons.
     });
+
+    it('should return a synthetic receipt if deposit is already initialized and no tx hash is available', async () => {
+      // Arrange: depositState !== 0, no initializeTxHash
+      jest
+        .spyOn((handler as any).l1DepositorContractProvider, 'deposits')
+        .mockResolvedValue(ethers.BigNumber.from(1));
+      mockDepositForFinalize = {
+        hashes: {
+          eth: { initializeTxHash: null },
+          starknet: { l2TxHash: '0xL2FinalizeTxHash' },
+        },
+        id: 'mockDepositId',
+        status: DepositStatus.INITIALIZED,
+      } as unknown as Deposit;
+
+      // Act
+      const result = await handler.initializeDeposit(mockDepositForFinalize!);
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result?.status).toBe(1);
+      expect(result?.transactionHash).toBe('');
+      expect(result?.blockNumber).toBeNull();
+      // Optionally: expect logger.warn to have been called
+    });
   });
 
   // TODO: Add test suites for:
@@ -458,7 +485,7 @@ describe('StarknetChainHandler', () => {
   });
 
   describe('finalizeDeposit', () => {
-    let mockDepositForFinalize: Deposit;
+    let mockDepositForFinalize: Deposit | undefined;
     const mockL2TxHash = '0xL2FinalizeTxHash';
     let revealForFinalize: Reveal;
 
@@ -517,19 +544,21 @@ describe('StarknetChainHandler', () => {
     });
 
     it('should successfully finalize a deposit and return the transaction receipt', async () => {
-      const expectedDepositId = mockDepositsUtil.getDepositId(
-        mockGetTransactionHashUtil.getFundingTxHash(mockDepositForFinalize.L1OutputEvent.fundingTx),
-        mockDepositForFinalize.L1OutputEvent.reveal.fundingOutputIndex,
+      const expectedDepositKey = mockDepositsUtil.getDepositKey(
+        mockGetTransactionHashUtil.getFundingTxHash(
+          mockDepositForFinalize!.L1OutputEvent.fundingTx,
+        ),
+        mockDepositForFinalize!.L1OutputEvent.reveal.fundingOutputIndex,
       );
 
-      const result = await handler.finalizeDeposit(mockDepositForFinalize);
+      const result = await handler.finalizeDeposit(mockDepositForFinalize!);
 
       expect(result).toBeDefined();
       expect(result?.transactionHash).toBe('0xFinalizeTxHashSuccess');
       expect(result?.status).toBe(1);
 
       expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledTimes(1);
-      expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledWith(expectedDepositId, {
+      expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledWith(expectedDepositKey, {
         value: ethers.BigNumber.from('120000'),
       });
 
@@ -543,11 +572,11 @@ describe('StarknetChainHandler', () => {
     it('should return undefined and log error if L1 Depositor contract is not available', async () => {
       (handler as any).l1DepositorContract = undefined;
 
-      const result = await handler.finalizeDeposit(mockDepositForFinalize);
+      const result = await handler.finalizeDeposit(mockDepositForFinalize!);
 
       expect(result).toBeUndefined();
       expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
-        mockDepositForFinalize.id,
+        mockDepositForFinalize!.id,
         'L1 Depositor contract (signer) instance not available for finalization.',
         { internalError: 'L1 Depositor contract (signer) not available' },
       );
@@ -555,16 +584,23 @@ describe('StarknetChainHandler', () => {
     });
 
     it('should successfully finalize deposit even without L2 transaction hash (StarkNet flow)', async () => {
-      mockDepositForFinalize.hashes.starknet!.l2TxHash = null; // Remove L2 tx hash - not required for StarkNet
+      mockDepositForFinalize!.hashes.starknet!.l2TxHash = null; // Remove L2 tx hash - not required for StarkNet
 
-      const result = await handler.finalizeDeposit(mockDepositForFinalize);
+      const expectedDepositKey = mockDepositsUtil.getDepositKey(
+        mockGetTransactionHashUtil.getFundingTxHash(
+          mockDepositForFinalize!.L1OutputEvent.fundingTx,
+        ),
+        mockDepositForFinalize!.L1OutputEvent.reveal.fundingOutputIndex,
+      );
+
+      const result = await handler.finalizeDeposit(mockDepositForFinalize!);
 
       expect(result).toEqual({
         status: 1,
         transactionHash: '0xFinalizeTxHashSuccess',
         blockNumber: 456,
       });
-      expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledWith(mockDepositForFinalize.id, {
+      expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledWith(expectedDepositKey, {
         value: ethers.BigNumber.from('120000'),
       });
     });
@@ -579,11 +615,11 @@ describe('StarknetChainHandler', () => {
         }),
       });
 
-      const result = await handler.finalizeDeposit(mockDepositForFinalize);
+      const result = await handler.finalizeDeposit(mockDepositForFinalize!);
 
       expect(result).toBeUndefined();
       expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
-        mockDepositForFinalize.id,
+        mockDepositForFinalize!.id,
         'L1 finalizeDeposit tx reverted: 0xRevertedFinalizeTxHash',
         expect.objectContaining({
           receipt: expect.objectContaining({
@@ -601,11 +637,11 @@ describe('StarknetChainHandler', () => {
       const errorMessage = 'L1 Finalize Network Error';
       mockContractInstance.finalizeDeposit.mockRejectedValue(new Error(errorMessage));
 
-      const result = await handler.finalizeDeposit(mockDepositForFinalize);
+      const result = await handler.finalizeDeposit(mockDepositForFinalize!);
 
       expect(result).toBeUndefined();
       expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
-        mockDepositForFinalize.id,
+        mockDepositForFinalize!.id,
         `Error during L1 finalizeDeposit: ${errorMessage}`,
         expect.any(Error),
       );
