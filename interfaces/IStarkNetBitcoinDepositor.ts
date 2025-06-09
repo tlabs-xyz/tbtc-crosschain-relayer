@@ -442,7 +442,7 @@ export interface StarkNetBitcoinDepositor extends BaseContract {
   initializeDeposit(
     fundingTx: BitcoinTxInfoStruct,
     reveal: DepositRevealInfoStruct,
-    destinationChainDepositOwner: BytesLike,
+    l2DepositOwner: BigNumberish,
     overrides?: Overrides & { from?: string | Promise<string> },
   ): Promise<ContractTransaction>;
 

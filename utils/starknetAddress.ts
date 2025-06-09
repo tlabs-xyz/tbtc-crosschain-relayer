@@ -32,23 +32,6 @@ export function validateStarkNetAddress(address: string): boolean {
 }
 
 /**
- * Formats a StarkNet address (felt252) into a bytes32 hex string for L1 contract calls.
- *
- * @param address The StarkNet address to format.
- * @returns The address formatted as a bytes32 hex string.
- * @throws If the address is invalid or cannot be formatted.
- */
-export function formatStarkNetAddressForContract(address: string): string {
-  if (!validateStarkNetAddress(address)) {
-    throw new Error(`Invalid StarkNet address: ${address}`);
-  }
-  // StarkNet addresses (felt252) are already less than or equal to 32 bytes.
-  // We need to pad them to ensure they are exactly 32 bytes.
-  // ethers.utils.hexZeroPad expects a hex string.
-  return ethers.utils.hexZeroPad(address, 32);
-}
-
-/**
  * Extracts a StarkNet address embedded in a Bitcoin P2SH or P2WSH script.
  * This function assumes a specific, simple embedding scheme where the address
  * is pushed as data in the script.
@@ -102,5 +85,45 @@ export function extractAddressFromBitcoinScript(script: Buffer | string): string
   } catch (error) {
     console.error('Error extracting address from Bitcoin script:', error);
     return null;
+  }
+}
+
+/**
+ * Converts an EVM or StarkNet address to a 32-byte (uint256) hex string for contract calls.
+ *
+ * This function normalizes addresses by padding them to exactly 32 bytes (256 bits)
+ * as required by many smart contract interfaces.
+ *
+ * @param address The EVM or StarkNet address (with or without 0x prefix)
+ * @returns 0x-prefixed, 64 hex character string (32 bytes)
+ *
+ * @throws {Error} If the address is invalid or cannot be converted
+ *
+ * @example
+ * ```typescript
+ * const addr = "0x123";
+ * const padded = toUint256StarknetAddress(addr);
+ * // Result: "0x0000000000000000000000000000000000000000000000000000000000000123"
+ * ```
+ */
+export function toUint256StarknetAddress(address: string): string {
+  if (!address || typeof address !== 'string') {
+    throw new Error('Address must be a non-empty string');
+  }
+
+  // Normalize to 0x-prefixed hex string
+  const hex = address.startsWith('0x') ? address : '0x' + address;
+
+  // Validate the hex string
+  if (!ethers.utils.isHexString(hex)) {
+    throw new Error(`Invalid hex string: ${address}`);
+  }
+
+  try {
+    return ethers.utils.hexZeroPad(hex, 32);
+  } catch (error) {
+    throw new Error(
+      `Failed to pad address to 32 bytes: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
   }
 }
