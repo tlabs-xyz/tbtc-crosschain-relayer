@@ -21,10 +21,11 @@ export const VAULT_ADDRESSES = {
 } as const;
 
 // StarkNetBitcoinDepositor contract addresses for L1 operations
+// TODO: Other networks use different contracts, we need to update this
 export const L1_CONTRACT_ADDRESSES = {
   [NETWORK.MAINNET]: '0x0b41A67de304964f25D43d8f564c0FF3d42fa843', // Mainnet deployer contract - update with actual production address
-  [NETWORK.TESTNET]: '0x154555b621D4e9D98beed40B719834e4946Ad3d2', // Sepolia testnet address
-  [NETWORK.DEVNET]: '0x154555b621D4e9D98beed40B719834e4946Ad3d2', // Development environment address
+  [NETWORK.TESTNET]: '0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA', // Sepolia testnet address
+  [NETWORK.DEVNET]: '0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA', // Development environment address
 } as const;
 
 // =============================================================================
