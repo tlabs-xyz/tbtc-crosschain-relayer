@@ -378,31 +378,34 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
   /**
    * Checks the deposit status on L1 using the correct depositKey (bytes32).
-   * Accepts either a deposit object or a depositId string (decimal), but always queries using depositKey.
+   * Accepts either a deposit object or a depositId string (decimal). For Starknet, if a string is passed,
+   * attempts to look up the Deposit object. If not found, returns null. This ensures a symmetric API for all chains.
+   * @param depositOrId The deposit ID (string) or Deposit object.
+   * @returns The current status as a numeric enum value, or null if not found.
    */
   async checkDepositStatus(depositOrId: string | Deposit): Promise<number | null> {
     try {
-      let depositKey: string;
+      let deposit: Deposit | null;
       if (typeof depositOrId === 'string') {
-        // If a string is passed, assume it's a decimal depositId and cannot convert back to key, so return null.
-        // This branch is for safety; in practice, always pass the deposit object for Starknet.
-        return null;
+        // For Starknet, depositKey is not derivable from just the ID, so we must look up the Deposit object.
+        // This ensures a symmetric API for all chains and allows status checks by ID.
+        deposit = await DepositStore.getById(depositOrId);
+        if (!deposit) {
+          logger.warn(`Deposit not found for ID: ${depositOrId} in checkDepositStatus.`);
+          return null;
+        }
       } else {
-        const fundingTxHash = getFundingTxHash(depositOrId.L1OutputEvent.fundingTx);
-        depositKey = getDepositKey(
-          fundingTxHash,
-          depositOrId.L1OutputEvent.reveal.fundingOutputIndex,
-        );
+        deposit = depositOrId;
       }
+      const depositKey = this.toDepositKey(deposit);
       if (!this.l1DepositorContractProvider) {
         logger.error('L1 Depositor contract provider not available for status check.');
         return null;
       }
       const status: number = await this.l1DepositorContractProvider.deposits(depositKey);
       return status;
-    } catch (error: any) {
-      const reason = error.reason ?? error.message ?? 'Unknown error fetching status';
-      logErrorContext(`Error fetching L1 deposit status for Starknet: ${reason}`, error);
+    } catch (err) {
+      logger.error('Error in checkDepositStatus:', err);
       return null;
     }
   }
