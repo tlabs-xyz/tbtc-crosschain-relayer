@@ -11,7 +11,7 @@ RUN apk add --no-cache git curl && \
     git config --global url."https://".insteadOf git://
 
 COPY package.json yarn.lock ./
-COPY prisma/schema.prisma ./prisma/schema.prisma
+COPY prisma/ ./prisma/
 
 RUN yarn install --frozen-lockfile --production=false
 
@@ -44,7 +44,7 @@ ENV NODE_ENV=${NODE_ENV}
 WORKDIR /usr/app
 
 COPY package.json yarn.lock ./
-COPY prisma/schema.prisma ./prisma/schema.prisma
+COPY prisma/ ./prisma/
 
 RUN yarn install --frozen-lockfile --production=true
 
