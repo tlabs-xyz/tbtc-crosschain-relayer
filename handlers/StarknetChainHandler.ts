@@ -426,18 +426,40 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     logger.info(`${logPrefix} Attempting to finalize deposit on L1 Depositor contract.`);
 
-    if (!this.l1DepositorContract) {
-      logger.error(
-        `${logPrefix} L1 Depositor contract (signer) instance not available. Cannot finalize deposit.`,
-      );
+    if (!this.l1DepositorContract || !this.l1Signer) {
+      const errorMessage =
+        'L1 Depositor contract (signer) instance not available. Cannot finalize deposit.';
+      logger.error(`${logPrefix} ${errorMessage}`);
       logErrorContext(
         `${logPrefix} L1 Depositor contract (signer) not available`,
-        new Error('L1 Depositor contract (signer) not available'),
+        new Error(errorMessage),
       );
-      await logDepositError(
-        deposit.id,
-        'L1 Depositor contract (signer) instance not available for finalization.',
-        { internalError: 'L1 Depositor contract (signer) not available' },
+      await logDepositError(deposit.id, errorMessage, {
+        internalError: 'L1 Depositor contract (signer) not available',
+      });
+      return undefined;
+    }
+
+    // 1. Pre-flight check: Verify deposit status on-chain
+    const onChainStatus = await this.checkDepositStatus(deposit);
+    logger.info(`${logPrefix} On-chain deposit status: ${onChainStatus}`);
+
+    if (onChainStatus === null) {
+      logger.error(
+        `${logPrefix} Could not retrieve on-chain deposit status. Aborting finalization.`,
+      );
+      return undefined;
+    }
+    if (onChainStatus === 2) {
+      // Finalized
+      logger.warn(`${logPrefix} Deposit is already finalized on-chain. Skipping.`);
+      // Consider returning a synthetic receipt if needed for endpoint consistency
+      return undefined;
+    }
+    if (onChainStatus !== 1) {
+      // Not Initialized
+      logger.error(
+        `${logPrefix} Deposit is not in Initialized state (state=${onChainStatus}). Cannot finalize. Aborting.`,
       );
       return undefined;
     }
@@ -446,21 +468,58 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     // The flow is: Initialize → Bridge mints tBTC → Finalize → Send to L2
     // L2 transaction happens AFTER finalization, not before
 
-    const dynamicFee: ethers.BigNumber =
-      await this.l1DepositorContract.quoteFinalizeDepositDynamic();
-    logger.info(
-      `${logPrefix} Dynamically quoted L1->L2 message fee: ${ethers.utils.formatEther(dynamicFee)} ETH (includes 10% buffer)`,
-    );
-
-    const txOverrides: PayableOverrides = {
-      value: dynamicFee,
-    };
-
     try {
+      // 2. Fee Calculation
+      const dynamicFee: ethers.BigNumber =
+        await this.l1DepositorContract.quoteFinalizeDepositDynamic();
+      logger.info(
+        `${logPrefix} Dynamically quoted L1->L2 message fee: ${ethers.utils.formatEther(dynamicFee)} ETH`,
+      );
+
+      // 3. Explicit Gas Management
+      logger.info(`${logPrefix} Estimating gas for finalizeDeposit...`);
+      const gasEstimate = await this.l1DepositorContract.estimateGas.finalizeDeposit(depositKey, {
+        value: dynamicFee,
+      });
+      logger.info(`${logPrefix} Gas estimate: ${gasEstimate.toString()}`);
+
+      const gasPrice = await this.l1Provider.getGasPrice();
+      logger.info(
+        `${logPrefix} Current gas price: ${ethers.utils.formatUnits(gasPrice, 'gwei')} gwei`,
+      );
+
+      const totalGasCost = gasEstimate.mul(gasPrice);
+      const requiredBalance = dynamicFee.add(totalGasCost);
+
+      // 4. Balance Check
+      const relayerBalance = await this.l1Signer.getBalance();
+      logger.info(
+        `${logPrefix} Relayer L1 balance: ${ethers.utils.formatEther(relayerBalance)} ETH`,
+      );
+      logger.info(
+        `${logPrefix} Required balance for finalization (fee + gas): ${ethers.utils.formatEther(requiredBalance)} ETH`,
+      );
+
+      if (relayerBalance.lt(requiredBalance)) {
+        const errorMessage = `Insufficient ETH balance for finalization. Required: ${ethers.utils.formatEther(requiredBalance)}, Have: ${ethers.utils.formatEther(relayerBalance)}`;
+        logger.error(`${logPrefix} ${errorMessage}`);
+        await logDepositError(deposit.id, errorMessage, {
+          requiredBalance: requiredBalance.toString(),
+          relayerBalance: relayerBalance.toString(),
+        });
+        return undefined;
+      }
+
+      const txOverrides: PayableOverrides = {
+        value: dynamicFee,
+        gasLimit: gasEstimate.mul(120).div(100), // 20% buffer
+        gasPrice: gasPrice.mul(110).div(100), // 10% buffer
+      };
+
       logger.info(
         `${logPrefix} Calling L1 Depositor contract finalizeDeposit for depositKey: ${depositKey} with fee: ${ethers.utils.formatEther(
           txOverrides.value as BigNumberish,
-        )} ETH.`,
+        )} ETH, gasLimit: ${txOverrides.gasLimit?.toString()}, gasPrice: ${ethers.utils.formatUnits(txOverrides.gasPrice as BigNumberish, 'gwei')} gwei.`,
       );
 
       const txResponse = await this.l1DepositorContract.finalizeDeposit(depositKey, txOverrides);
