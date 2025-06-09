@@ -24,6 +24,12 @@ jest.mock('../../../utils/Deposits');
 jest.mock('../../../utils/GetTransactionHash.js');
 jest.mock('../../../utils/AuditLog');
 
+// Mock the config module to prevent loading all chain configurations during unit tests
+jest.mock('../../../config/index.js', () => ({
+  chainConfigs: {},
+  getAvailableChainKeys: () => ['starknetTestnet'],
+}));
+
 // Mock ethers.Contract instances and provider methods that are globally used
 const mockContractInstance = {
   initializeDeposit: jest.fn(),
@@ -558,10 +564,9 @@ describe('StarknetChainHandler', () => {
         transactionHash: '0xFinalizeTxHashSuccess',
         blockNumber: 456,
       });
-      expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledWith(
-        mockDepositForFinalize.id,
-        { value: ethers.BigNumber.from('120000') },
-      );
+      expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledWith(mockDepositForFinalize.id, {
+        value: ethers.BigNumber.from('120000'),
+      });
     });
 
     it('should return undefined and log error if L1 finalizeDeposit transaction reverts', async () => {
