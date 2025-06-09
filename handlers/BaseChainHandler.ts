@@ -522,18 +522,22 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
    * Helper to determine if this handler supports checking for past L2 deposits based on its configuration.
    * Defaults to true if L2 is configured and endpoint is not used, override in subclasses for specific logic.
    */
-  // FUTURE: Consider removing this and always run full-configuration with support of all features
-  // This method exists to allow gradual feature rollout and backward compatibility.
-  // In the future, all chain handlers should support past deposit checking when L2 is configured.
+  /**
+   * Determines if this chain handler supports checking for past deposits.
+   *
+   * This method exists to allow gradual feature rollout and backward compatibility.
+   * Currently, past deposit checking is supported when not using endpoint mode,
+   * as endpoint mode relies on external API calls rather than direct L2 monitoring.
+   *
+   * @returns true if past deposit checking is supported, false otherwise
+   *
+   * @future Consider removing this and always run full-configuration with support of all features.
+   * In the future, all chain handlers should support past deposit checking when L2 is configured.
+   */
   supportsPastDepositCheck(): boolean {
-    // True only if L2 is configured (implying L2 watcher capability) AND endpoint is not used.
-    const supports = !!(
-      this.config.l2Rpc &&
-      this.config.l2ContractAddress &&
-      !this.config.useEndpoint
-    );
-    // logger.info(`Base supportsPastDepositCheck: ${supports} (L2Rpc: ${!!this.config.l2Rpc}, L2Contract: ${!!this.config.l2ContractAddress}, UseEndpoint: ${this.config.useEndpoint})`); // Verbose
-    return supports;
+    // Past deposit checking is supported when not in endpoint mode
+    // Endpoint mode relies on external API calls and doesn't maintain internal deposit state
+    return !this.config.useEndpoint;
   }
 
   protected filterDepositsActivityTime(deposits: Array<Deposit>): Array<Deposit> {
