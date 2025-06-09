@@ -548,18 +548,20 @@ describe('StarknetChainHandler', () => {
       expect(mockContractInstance.finalizeDeposit).not.toHaveBeenCalled();
     });
 
-    it('should return undefined and log error if deposit is missing L2 transaction hash', async () => {
-      mockDepositForFinalize.hashes.starknet!.l2TxHash = null; // Remove L2 tx hash
+    it('should successfully finalize deposit even without L2 transaction hash (StarkNet flow)', async () => {
+      mockDepositForFinalize.hashes.starknet!.l2TxHash = null; // Remove L2 tx hash - not required for StarkNet
 
       const result = await handler.finalizeDeposit(mockDepositForFinalize);
 
-      expect(result).toBeUndefined();
-      expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
+      expect(result).toEqual({
+        status: 1,
+        transactionHash: '0xFinalizeTxHashSuccess',
+        blockNumber: 456,
+      });
+      expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledWith(
         mockDepositForFinalize.id,
-        'Deposit missing L2 transaction hash. L2 minting not confirmed before L1 finalization attempt.',
-        { currentStatus: mockDepositForFinalize.status },
+        { value: ethers.BigNumber.from('120000') },
       );
-      expect(mockContractInstance.finalizeDeposit).not.toHaveBeenCalled();
     });
 
     it('should return undefined and log error if L1 finalizeDeposit transaction reverts', async () => {
