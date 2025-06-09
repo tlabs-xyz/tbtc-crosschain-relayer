@@ -355,51 +355,82 @@ export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => 
 
 /**
  * Utility to reverse a hex string (excluding the 0x prefix).
- * E.g., 0xabcdef -> 0xefcdab
- */
-function reverseHexString(hex: string): string {
-  if (!hex.startsWith('0x') || hex.length % 2 !== 0) {
-    throw new Error('Hex string must be 0x-prefixed and even length');
-  }
-  const hexBody = hex.slice(2);
-  return '0x' + hexBody.match(/.{2}/g)!.reverse().join('');
-}
-
-/**
- * @name getDepositKey
- * @description Generates a unique deposit ID by encoding the Bitcoin funding transaction hash (reversed, as per Bitcoin little-endian format) and output index,
- * then hashing the result using keccak256. This matches the tBTC v2 on-chain contract and test vectors:
- * https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/integration/FullFlow.test.ts
- * https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/data/deposit-sweep.ts
+ * Used to convert Bitcoin transaction hashes from big-endian to little-endian format.
  *
- * @param {string} fundingTxHash - The 64-character hex string of the Bitcoin funding transaction hash (little-endian, 0x-prefixed).
- * @param {number} fundingOutputIndex - The index of the output in the funding transaction.
- *
- * @param hex The hex string to reverse (must be 0x-prefixed and even length)
+ * @param hex The hex string to reverse (must be 0x-prefixed and even length, minimum 2 bytes)
  * @returns The reversed hex string
  * @throws {Error} If the hex string is invalid
  *
  * @example
  * ```typescript
- * reverseHexString('0xabcdef') // Returns '0xefcdab'
+ * reverseHexString('0xabcdef12') // Returns '0x12efcdab'
+ * ```
+ */
+function reverseHexString(hex: string): string {
+  if (typeof hex !== 'string') {
+    throw new Error('Input must be a string');
+  }
+  if (!hex.startsWith('0x')) {
+    throw new Error('Hex string must be 0x-prefixed');
+  }
+  if (hex.length < 4) {
+    throw new Error('Hex string must contain at least one byte after 0x');
+  }
+  if (hex.length % 2 !== 0) {
+    throw new Error('Hex string must have even length');
+  }
+  const hexBody = hex.slice(2);
+  const pairs = hexBody.match(/.{2}/g);
+  if (!pairs) {
+    throw new Error('Failed to parse hex string into byte pairs');
+  }
+  return '0x' + pairs.reverse().join('');
+}
+
+/**
+ * Generates a unique deposit key by encoding the Bitcoin funding transaction hash and output index,
+ * then hashing the result using keccak256. This matches the tBTC v2 on-chain contract and test vectors:
+ * https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/integration/FullFlow.test.ts
+ * https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/data/deposit-sweep.ts
+ *
+ * @param {string} fundingTxHash - The 66-character hex string of the Bitcoin funding transaction hash (0x-prefixed, 32 bytes).
+ *                                 Must be in big-endian; will be reversed for little-endian.
+ * @param {number} fundingOutputIndex - The index of the output in the funding transaction (must be >= 0 and <= 0xffffffff).
+ * @returns {string} A unique deposit key as a uint256 string.
+ * @throws {Error} If the fundingTxHash is not a valid 66-character hex string or fundingOutputIndex is invalid.
+ *
+ * @example
+ * ```typescript
+ * getDepositKey('0xabcdef...123456', 0)
  * ```
  */
 export const getDepositKey = (fundingTxHash: string, fundingOutputIndex: number): string => {
   // Validate fundingTxHash
+  if (typeof fundingTxHash !== 'string') {
+    throw new Error('fundingTxHash must be a string');
+  }
   if (!ethers.utils.isHexString(fundingTxHash) || fundingTxHash.length !== 66) {
     throw new Error('fundingTxHash must be a 66-character hex string (e.g. 0x...)');
   }
+  // Validate fundingOutputIndex
   if (!Number.isInteger(fundingOutputIndex) || fundingOutputIndex < 0) {
     throw new Error('fundingOutputIndex must be a non-negative integer');
   }
   if (fundingOutputIndex > 0xffffffff) {
     throw new Error('fundingOutputIndex must fit in uint32 range');
   }
-  // Reverse the hash to match Bitcoin little-endian format
-  const reversedHash = reverseHexString(fundingTxHash);
-  // Use uint32 for output index to match on-chain contract
-  const types = ['bytes32', 'uint32'];
-  const values = [reversedHash, fundingOutputIndex];
-  const hashBytes32 = ethers.utils.solidityKeccak256(types, values);
-  return ethers.BigNumber.from(hashBytes32).toString();
+
+  try {
+    // Reverse the hash to match Bitcoin little-endian format
+    const reversedHash = reverseHexString(fundingTxHash);
+    // Use uint32 for output index to match on-chain contract
+    const types = ['bytes32', 'uint32'];
+    const values = [reversedHash, fundingOutputIndex];
+    const hashBytes32 = ethers.utils.solidityKeccak256(types, values);
+    return ethers.BigNumber.from(hashBytes32).toString();
+  } catch (error) {
+    throw new Error(
+      `Failed to generate deposit key: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
+  }
 };
