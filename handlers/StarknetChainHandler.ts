@@ -126,7 +126,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       );
     }
 
-    if (this.config.l2Rpc && this.config.starknetPrivateKey) {
+    if (this.config.l2Rpc) {
       logger.info(
         `StarkNet L2 RPC (${this.config.l2Rpc}) and private key are configured for ${this.config.chainName}. StarkNet L2 provider/account initialization will be implemented in a future iteration.`,
       );
@@ -142,12 +142,11 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       //   this.starknetL2Account = new Account(
       //     this.starknetL2Provider,
       //     this.config.starknetDeployerAddress,
-      //     this.config.starknetPrivateKey
       //   );
       //   logger.info(`StarkNet L2 provider and account initialized for ${this.config.chainName}`);
     } else {
       logger.warn(
-        `StarkNet L2 RPC or starknetPrivateKey not configured for ${this.config.chainName}. Full StarkNet L2 features (direct L2 interaction) will be disabled.`,
+        `StarkNet L2 RPC not configured for ${this.config.chainName}. Full StarkNet L2 features (direct L2 interaction) will be disabled.`,
       );
     }
     logger.info(`StarkNet L1 components initialization finished for ${this.config.chainName}.`);

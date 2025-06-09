@@ -123,8 +123,6 @@ export class MockChainHandler implements ChainHandlerInterface {
         const starknetConfig = {
           ...baseProperties,
           chainType: CHAIN_TYPE.STARKNET,
-          starknetPrivateKey:
-            (config as StarknetChainConfig).starknetPrivateKey || 'mockStarknetPrivKey',
         };
         finalConfig = starknetConfig as unknown as StarknetChainConfig;
         break;

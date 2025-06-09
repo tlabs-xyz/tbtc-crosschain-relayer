@@ -6,19 +6,6 @@ const StarknetChainBaseSchema = z.object({
   chainName: z.string().default('Starknet'),
   chainType: z.literal(CHAIN_TYPE.STARKNET).default(CHAIN_TYPE.STARKNET),
   // Starknet-specific fields
-  starknetPrivateKey: z
-    .string({
-      required_error:
-        'STARKNET_PRIVATE_KEY is required. Set it in the environment or provide it in the config data.',
-    })
-    .min(1, 'STARKNET_PRIVATE_KEY must not be empty.')
-    .regex(
-      /^0x[0-9a-fA-F]{1,63}$/,
-      'StarkNet private key must be a 0x-prefixed hex string, 1-63 chars after 0x',
-    )
-    .refine((key) => key !== '0x' && !/^0x0+$/.test(key), {
-      message: 'StarkNet private key cannot be zero.',
-    }),
   l1FeeAmountWei: z
     .string()
     .regex(/^\d+$/, 'l1FeeAmountWei must be a string of digits')
@@ -31,9 +18,7 @@ const StarknetChainBaseSchema = z.object({
     .optional(),
 });
 
-// Omit privateKey as it's handled by starknetPrivateKey
 const CommonConfigForStarknet = CommonChainConfigSchema.omit({
-  privateKey: true,
   l2ContractAddress: true,
   l2WormholeGatewayAddress: true,
   l2WormholeChainId: true,
@@ -44,9 +29,7 @@ export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetC
     // Ensure these specific StarkNet fields are part of the final schema shape
     chainType: StarknetChainBaseSchema.shape.chainType,
     chainName: StarknetChainBaseSchema.shape.chainName,
-    starknetPrivateKey: StarknetChainBaseSchema.shape.starknetPrivateKey,
     l1FeeAmountWei: StarknetChainBaseSchema.shape.l1FeeAmountWei,
-    privateKey: StarknetChainBaseSchema.shape.privateKey,
 
     /**
      * L2 WebSocket RPC endpoint for the StarkNet chain.
