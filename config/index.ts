@@ -243,19 +243,4 @@ export const chainConfigErrors = mainChainConfigErrors;
 
 export { getAvailableChainKeys };
 
-if (process.env.DUMP_CONFIG_TO_FILE) {
-  try {
-    const dumpPath = process.env.DUMP_CONFIG_TO_FILE;
-    const dumpData = {
-      appConfig,
-      chainConfigs,
-      chainConfigErrors,
-    };
-    writeFileSync(dumpPath, JSON.stringify(dumpData, null, 2));
-    baseLogger.info(`Successfully dumped config to ${dumpPath}`);
-  } catch (e) {
-    baseLogger.error({ err: e }, 'Failed to dump config to file');
-  }
-}
-
 baseLogger.info('Chain configuration module initialized.');

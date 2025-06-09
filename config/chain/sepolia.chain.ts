@@ -53,14 +53,8 @@ export const getSepoliaTestnetChainInput = (): EvmChainInput => {
     l2Rpc: getEnv('ETHEREUM_SEPOLIA_RPC', PUBLIC_RPCS['ethereum-sepolia']),
     l2WsRpc: getEnv('ETHEREUM_SEPOLIA_WS_RPC', PUBLIC_WS_RPCS['ethereum-sepolia']),
     l2StartBlock: getEnvNumber('CHAIN_SEPOLIATESTNET_L2_START_BLOCK', 0),
-    l2ContractAddress: getEnv(
-      'CHAIN_SEPOLIATESTNET_L2_CONTRACT_ADDRESS',
-      '0x1111111111111111111111111111111111111111',
-    ),
-    l2WormholeGatewayAddress: getEnv(
-      'CHAIN_SEPOLIATESTNET_WORMHOLE_GATEWAY',
-      '0x706abc4e45d419950511e474c7b9ed348a4a716c',
-    ),
+    l2ContractAddress: getEnv('CHAIN_SEPOLIATESTNET_L2_CONTRACT_ADDRESS'),
+    l2WormholeGatewayAddress: getEnv('CHAIN_SEPOLIATESTNET_WORMHOLE_GATEWAY'),
     l2WormholeChainId: getEnvNumber('CHAIN_SEPOLIATESTNET_WORMHOLE_CHAIN_ID', 10002),
   };
   return config;
