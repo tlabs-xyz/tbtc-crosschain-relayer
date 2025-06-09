@@ -153,7 +153,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   protected async setupL1Listeners(): Promise<void> {
     this.tbtcVaultProvider.on(
       'OptimisticMintingFinalized',
-      async (minter, depositKey, _depositor, _optimisticMintingDebt) => {
+      async (_minter, depositKey, _depositor, _optimisticMintingDebt) => {
         try {
           const BigDepositKey = BigNumber.from(depositKey);
           const depositId = BigDepositKey.toString();
