@@ -193,10 +193,10 @@ export interface StarkNetBitcoinDepositorInterface extends utils.Interface {
 }
 
 export type DepositFinalizedEvent = TypedEvent<
-  [BigNumber, string, string, BigNumber, BigNumber],
+  [BigNumber, BigNumberish, string, BigNumber, BigNumber],
   {
     depositKey: BigNumber;
-    destinationChainDepositOwner: string;
+    l2DepositOwner: BigNumberish;
     l1Sender: string;
     initialAmount: BigNumber;
     tbtcAmount: BigNumber;
@@ -206,10 +206,10 @@ export type DepositFinalizedEvent = TypedEvent<
 export type DepositFinalizedEventFilter = TypedEventFilter<DepositFinalizedEvent>;
 
 export type DepositInitializedEvent = TypedEvent<
-  [BigNumber, string, string],
+  [BigNumber, BigNumberish, string],
   {
     depositKey: BigNumber;
-    destinationChainDepositOwner: string;
+    l2DepositOwner: BigNumberish;
     l1Sender: string;
   }
 >;
@@ -338,7 +338,7 @@ export interface StarkNetBitcoinDepositor extends BaseContract {
     initializeDeposit(
       fundingTx: BitcoinTxInfoStruct,
       reveal: DepositRevealInfoStruct,
-      destinationChainDepositOwner: BytesLike,
+      l2DepositOwner: BigNumberish,
       overrides?: Overrides & { from?: string | Promise<string> },
     ): Promise<ContractTransaction>;
 
@@ -442,7 +442,7 @@ export interface StarkNetBitcoinDepositor extends BaseContract {
   initializeDeposit(
     fundingTx: BitcoinTxInfoStruct,
     reveal: DepositRevealInfoStruct,
-    destinationChainDepositOwner: BytesLike,
+    l2DepositOwner: BigNumberish,
     overrides?: Overrides & { from?: string | Promise<string> },
   ): Promise<ContractTransaction>;
 
@@ -543,7 +543,7 @@ export interface StarkNetBitcoinDepositor extends BaseContract {
     initializeDeposit(
       fundingTx: BitcoinTxInfoStruct,
       reveal: DepositRevealInfoStruct,
-      destinationChainDepositOwner: BytesLike,
+      l2DepositOwner: BigNumberish,
       overrides?: CallOverrides,
     ): Promise<void>;
 
@@ -599,14 +599,14 @@ export interface StarkNetBitcoinDepositor extends BaseContract {
   filters: {
     'DepositFinalized(uint256,bytes32,address,uint256,uint256)'(
       depositKey?: BigNumberish | null,
-      destinationChainDepositOwner?: BytesLike | null,
+      l2DepositOwner?: BigNumberish | null,
       l1Sender?: string | null,
       initialAmount?: null,
       tbtcAmount?: null,
     ): DepositFinalizedEventFilter;
     DepositFinalized(
       depositKey?: BigNumberish | null,
-      destinationChainDepositOwner?: BytesLike | null,
+      l2DepositOwner?: BigNumberish | null,
       l1Sender?: string | null,
       initialAmount?: null,
       tbtcAmount?: null,
@@ -614,12 +614,12 @@ export interface StarkNetBitcoinDepositor extends BaseContract {
 
     'DepositInitialized(uint256,bytes32,address)'(
       depositKey?: BigNumberish | null,
-      destinationChainDepositOwner?: BytesLike | null,
+      l2DepositOwner?: BigNumberish | null,
       l1Sender?: string | null,
     ): DepositInitializedEventFilter;
     DepositInitialized(
       depositKey?: BigNumberish | null,
-      destinationChainDepositOwner?: BytesLike | null,
+      l2DepositOwner?: BigNumberish | null,
       l1Sender?: string | null,
     ): DepositInitializedEventFilter;
 
@@ -722,7 +722,7 @@ export interface StarkNetBitcoinDepositor extends BaseContract {
     initializeDeposit(
       fundingTx: BitcoinTxInfoStruct,
       reveal: DepositRevealInfoStruct,
-      destinationChainDepositOwner: BytesLike,
+      l2DepositOwner: BigNumberish,
       overrides?: Overrides & { from?: string | Promise<string> },
     ): Promise<BigNumber>;
 
@@ -824,7 +824,7 @@ export interface StarkNetBitcoinDepositor extends BaseContract {
     initializeDeposit(
       fundingTx: BitcoinTxInfoStruct,
       reveal: DepositRevealInfoStruct,
-      destinationChainDepositOwner: BytesLike,
+      l2DepositOwner: BigNumberish,
       overrides?: Overrides & { from?: string | Promise<string> },
     ): Promise<PopulatedTransaction>;
 

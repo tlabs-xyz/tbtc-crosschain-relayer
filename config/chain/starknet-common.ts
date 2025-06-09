@@ -16,6 +16,8 @@ export const getStarknetCommonInput = (
   return {
     ...commonInput,
     chainType: CHAIN_TYPE.STARKNET,
+    // Enable reveal deposit API for StarkNet
+    supportsRevealDepositAPI: true,
     // Default L1 fee amount for StarkNet transactions, can be overridden by specific ENV or config.
     l1FeeAmountWei: getEnv('STARKNET_DEFAULT_L1_FEE_AMOUNT_WEI', '0'),
     // Other StarkNet-specific common defaults can be added here

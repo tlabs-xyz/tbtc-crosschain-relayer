@@ -61,6 +61,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
 
     // Initialize L1 provider first as it's needed by the signer
+    logger.info(
+      `Initializing L1 provider for ${this.config.chainName} with RPC: ${this.config.l1Rpc}`,
+    );
     this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc);
 
     // EVM-specific L1 setup (Signer)
@@ -84,14 +87,26 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         this.l1Signer, // Use l1Signer here, not nonceManagerL1 unless needed
       );
     } else {
-      // For non-EVM chains, l1Signer and related contracts might not be needed
-      // or would require a different setup.
-      // For now, we ensure they are not initialized if privateKey is not applicable.
-      logger.warn(
-        `L1 Signer and transaction-capable contracts not initialized for non-EVM chain ${this.config.chainName} in BaseChainHandler. This might be expected.`,
-      );
-      // Ensure these are undefined or handled appropriately if accessed later
-      // For instance, methods requiring l1Signer should check its existence or chainType.
+      // For non-EVM chains, check if they need L1 signer for endpoint mode
+      // StarkNet and Solana using endpoint mode need to pay L1 transactions
+      if ('privateKey' in this.config && this.config.privateKey && this.config.useEndpoint) {
+        logger.info(
+          `Setting up L1 signer for non-EVM chain ${this.config.chainName} in endpoint mode`,
+        );
+        this.l1Signer = new ethers.Wallet(this.config.privateKey as string, this.l1Provider);
+        this.nonceManagerL1 = new NonceManager(this.l1Signer);
+
+        // L1 Contracts for transactions (require signer)
+        this.l1BitcoinDepositor = new ethers.Contract(
+          this.config.l1ContractAddress,
+          L1BitcoinDepositorABI,
+          this.nonceManagerL1,
+        );
+      } else {
+        logger.warn(
+          `L1 Signer and transaction-capable contracts not initialized for non-EVM chain ${this.config.chainName} in BaseChainHandler. This might be expected.`,
+        );
+      }
     }
 
     const ethereumNetwork =
@@ -507,18 +522,22 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
    * Helper to determine if this handler supports checking for past L2 deposits based on its configuration.
    * Defaults to true if L2 is configured and endpoint is not used, override in subclasses for specific logic.
    */
-  // FUTURE: Consider removing this and always run full-configuration with support of all features
-  // This method exists to allow gradual feature rollout and backward compatibility.
-  // In the future, all chain handlers should support past deposit checking when L2 is configured.
+  /**
+   * Determines if this chain handler supports checking for past deposits.
+   *
+   * This method exists to allow gradual feature rollout and backward compatibility.
+   * Currently, past deposit checking is supported when not using endpoint mode,
+   * as endpoint mode relies on external API calls rather than direct L2 monitoring.
+   *
+   * @returns true if past deposit checking is supported, false otherwise
+   *
+   * @future Consider removing this and always run full-configuration with support of all features.
+   * In the future, all chain handlers should support past deposit checking when L2 is configured.
+   */
   supportsPastDepositCheck(): boolean {
-    // True only if L2 is configured (implying L2 watcher capability) AND endpoint is not used.
-    const supports = !!(
-      this.config.l2Rpc &&
-      this.config.l2ContractAddress &&
-      !this.config.useEndpoint
-    );
-    // logger.info(`Base supportsPastDepositCheck: ${supports} (L2Rpc: ${!!this.config.l2Rpc}, L2Contract: ${!!this.config.l2ContractAddress}, UseEndpoint: ${this.config.useEndpoint})`); // Verbose
-    return supports;
+    // Past deposit checking is supported when not in endpoint mode
+    // Endpoint mode relies on external API calls and doesn't maintain internal deposit state
+    return !this.config.useEndpoint;
   }
 
   protected filterDepositsActivityTime(deposits: Array<Deposit>): Array<Deposit> {

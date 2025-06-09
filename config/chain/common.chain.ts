@@ -15,15 +15,16 @@ type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 
 // Vault Addresses by network type
 export const VAULT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD',
-  [NETWORK.TESTNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD',
-  [NETWORK.DEVNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD',
+  [NETWORK.MAINNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5', // Mainnet vault address - verify before production deployment
+  [NETWORK.TESTNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5',
+  [NETWORK.DEVNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5',
 } as const;
 
+// StarkNetBitcoinDepositor contract addresses for L1 operations
 export const L1_CONTRACT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0xF462413315Ee37AEBD0f5cA4296D9F3F3D9C4A59',
-  [NETWORK.TESTNET]: '0xF462413315Ee37AEBD0f5cA4296D9F3F3D9C4A59',
-  [NETWORK.DEVNET]: '0xF462413315Ee37AEBD0f5cA4296D9F3F3D9C4A59',
+  [NETWORK.MAINNET]: '0x0b41A67de304964f25D43d8f564c0FF3d42fa843', // Mainnet deployer contract - update with actual production address
+  [NETWORK.TESTNET]: '0x154555b621D4e9D98beed40B719834e4946Ad3d2', // Sepolia testnet address
+  [NETWORK.DEVNET]: '0x154555b621D4e9D98beed40B719834e4946Ad3d2', // Development environment address
 } as const;
 
 // =============================================================================
@@ -89,7 +90,7 @@ export const L1_CONFIRMATIONS = {
 
 // Common feature flags
 export const FEATURE_FLAGS = {
-  USE_ENDPOINT: false,
+  USE_ENDPOINT: true, // Enable endpoint mode for testing
   ENABLE_L2_REDEMPTION_MAINNET: true,
   ENABLE_L2_REDEMPTION_TESTNET: true,
   ENABLE_L2_REDEMPTION_DEVNET: true,

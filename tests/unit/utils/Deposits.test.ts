@@ -1,5 +1,5 @@
 import {
-  getDepositId,
+  getDepositKey,
   createDeposit,
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
@@ -18,15 +18,41 @@ import * as DepositStore from '../../../utils/DepositStore.js';
 import logger from '../../../utils/Logger.js';
 
 describe('Deposits Util', () => {
-  describe('getDepositId', () => {
+  describe('getDepositKey', () => {
     it('should generate a unique deposit ID correctly', () => {
       const fundingTxHash = '0x' + 'a'.repeat(64); // 64 char hex string
       const fundingOutputIndex = 0;
+      // Reverse the hash for expected value
+      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
       const expectedDepositId = ethers.BigNumber.from(
-        ethers.utils.solidityKeccak256(['bytes32', 'uint256'], [fundingTxHash, fundingOutputIndex]),
+        ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
       ).toString();
 
-      const depositId = getDepositId(fundingTxHash, fundingOutputIndex);
+      const depositId = getDepositKey(fundingTxHash, fundingOutputIndex);
+      expect(depositId).toBe(expectedDepositId);
+    });
+
+    it('should match tBTC v2 test vector', () => {
+      // Example from https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/integration/FullFlow.test.ts
+      const fundingTxHash = '0x6fc25b8ebd5fcfdf6de60c39dbaa46cfb0d0e792c671edac4112cabb11fb72c8';
+      const fundingOutputIndex = 0;
+      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
+      const expectedDepositId = ethers.BigNumber.from(
+        ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
+      ).toString();
+      const depositId = getDepositKey(fundingTxHash, fundingOutputIndex);
+      expect(depositId).toBe(expectedDepositId);
+    });
+
+    it('should match tBTC v2 test vector', () => {
+      // Example from https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/data/deposit-sweep.ts
+      const fundingTxHash = '0xd32586237f6a832c3aa324bb83151e43e6cca2e4312d676f14dbbd6b1f04f468';
+      const fundingOutputIndex = 0;
+      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
+      const expectedDepositId = ethers.BigNumber.from(
+        ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
+      ).toString();
+      const depositId = getDepositKey(fundingTxHash, fundingOutputIndex);
       expect(depositId).toBe(expectedDepositId);
     });
 
@@ -34,10 +60,8 @@ describe('Deposits Util', () => {
       const fundingTxHash = '0x' + 'a'.repeat(64);
       const fundingOutputIndex1 = 0;
       const fundingOutputIndex2 = 1;
-
-      const depositId1 = getDepositId(fundingTxHash, fundingOutputIndex1);
-      const depositId2 = getDepositId(fundingTxHash, fundingOutputIndex2);
-
+      const depositId1 = getDepositKey(fundingTxHash, fundingOutputIndex1);
+      const depositId2 = getDepositKey(fundingTxHash, fundingOutputIndex2);
       expect(depositId1).not.toBe(depositId2);
     });
 
@@ -45,25 +69,23 @@ describe('Deposits Util', () => {
       const fundingTxHash1 = '0x' + 'a'.repeat(64);
       const fundingTxHash2 = '0x' + 'b'.repeat(64);
       const fundingOutputIndex = 0;
-
-      const depositId1 = getDepositId(fundingTxHash1, fundingOutputIndex);
-      const depositId2 = getDepositId(fundingTxHash2, fundingOutputIndex);
-
+      const depositId1 = getDepositKey(fundingTxHash1, fundingOutputIndex);
+      const depositId2 = getDepositKey(fundingTxHash2, fundingOutputIndex);
       expect(depositId1).not.toBe(depositId2);
     });
 
     it('should throw an error if fundingTxHash is not a 66-character hex string', () => {
-      expect(() => getDepositId('invalid-hash', 0)).toThrow(
-        'fundingTxHash must be a 66-character hex string (e.g. 0x...).',
+      expect(() => getDepositKey('invalid-hash', 0)).toThrow(
+        'fundingTxHash must be a 66-character hex string (e.g. 0x...)',
       );
-      expect(() => getDepositId('0x' + 'a'.repeat(63), 0)).toThrow(
-        'fundingTxHash must be a 66-character hex string (e.g. 0x...).',
+      expect(() => getDepositKey('0x' + 'a'.repeat(63), 0)).toThrow(
+        'fundingTxHash must be a 66-character hex string (e.g. 0x...)',
       );
-      expect(() => getDepositId('0x' + 'a'.repeat(65), 0)).toThrow(
-        'fundingTxHash must be a 66-character hex string (e.g. 0x...).',
+      expect(() => getDepositKey('0x' + 'a'.repeat(65), 0)).toThrow(
+        'fundingTxHash must be a 66-character hex string (e.g. 0x...)',
       );
-      expect(() => getDepositId('ax' + 'a'.repeat(64), 0)).toThrow(
-        'fundingTxHash must be a 66-character hex string (e.g. 0x...).',
+      expect(() => getDepositKey('ax' + 'a'.repeat(64), 0)).toThrow(
+        'fundingTxHash must be a 66-character hex string (e.g. 0x...)',
       );
     });
   });
@@ -128,7 +150,7 @@ describe('Deposits Util', () => {
       );
 
       const expectedFundingTxHash = '0x' + 'a'.repeat(64);
-      const expectedDepositId = getDepositId(expectedFundingTxHash, mockReveal.fundingOutputIndex);
+      const expectedDepositId = getDepositKey(expectedFundingTxHash, mockReveal.fundingOutputIndex);
 
       expect(deposit.id).toBe(expectedDepositId);
       expect(deposit.chainId).toBe(mockChainId);

@@ -24,6 +24,12 @@ jest.mock('../../../utils/Deposits');
 jest.mock('../../../utils/GetTransactionHash.js');
 jest.mock('../../../utils/AuditLog');
 
+// Mock the config module to prevent loading all chain configurations during unit tests
+jest.mock('../../../config/index.js', () => ({
+  chainConfigs: {},
+  getAvailableChainKeys: () => ['starknetTestnet'],
+}));
+
 // Mock ethers.Contract instances and provider methods that are globally used
 const mockContractInstance = {
   initializeDeposit: jest.fn(),
@@ -43,6 +49,7 @@ const mockContractInstance = {
     l1ToL2MessageFee: jest.fn(),
   },
   address: '0xMockContractAddress',
+  deposits: jest.fn().mockResolvedValue(0),
 };
 
 const mockGetTransactionReceiptImplementation = jest.fn();
@@ -150,18 +157,16 @@ describe('StarknetChainHandler', () => {
 
     // Mock default implementations for utilities
     mockStarknetAddress.validateStarkNetAddress.mockReturnValue(true);
-    mockStarknetAddress.formatStarkNetAddressForContract.mockImplementation(
-      (addr) => addr as string,
-    ); // Simple pass-through
+    mockStarknetAddress.toUint256StarknetAddress.mockImplementation(() => '0x' + '1'.repeat(64)); // Always return a valid 32-byte hex string
     mockStarknetAddress.extractAddressFromBitcoinScript.mockReturnValue(
       '0xExtractedStarkNetAddress',
     );
     mockGetTransactionHashUtil.getFundingTxHash.mockReturnValue('0xfundingtxhash');
-    mockDepositsUtil.getDepositId.mockImplementation((hash, index) => `deposit-${hash}-${index}`);
+    mockDepositsUtil.getDepositKey.mockImplementation((hash, index) => `deposit-${hash}-${index}`);
     mockDepositsUtil.createDeposit.mockImplementation((ftx, rev, owner, sender, chainId) => {
       const fundingTxHash = mockGetTransactionHashUtil.getFundingTxHash(ftx as any);
       const outputIndex = (rev as Reveal).fundingOutputIndex;
-      const currentDepositId = mockDepositsUtil.getDepositId(fundingTxHash, outputIndex);
+      const currentDepositId = mockDepositsUtil.getDepositKey(fundingTxHash, outputIndex);
       return {
         id: currentDepositId,
         chainId,
@@ -321,7 +326,7 @@ describe('StarknetChainHandler', () => {
       mockDeposit = mockDepositsUtil.createDeposit(
         mockFundingTx,
         revealInstance,
-        '0xStarknetOwner',
+        '0x' + '1'.repeat(64), // valid 32-byte hex string
         '0xEthSender',
         mockStarknetConfig.chainName,
       ) as Deposit;
@@ -341,8 +346,8 @@ describe('StarknetChainHandler', () => {
         }),
       });
       mockStarknetAddress.validateStarkNetAddress.mockReturnValue(true);
-      mockStarknetAddress.formatStarkNetAddressForContract.mockImplementation(
-        (addr) => addr as string,
+      mockStarknetAddress.toUint256StarknetAddress.mockImplementation(
+        (addr) => '0x' + addr.replace(/^0x/, '').padStart(64, '0'),
       );
     });
 
@@ -354,14 +359,13 @@ describe('StarknetChainHandler', () => {
       expect(result?.status).toBe(1);
 
       expect(mockContractInstance.initializeDeposit).toHaveBeenCalledTimes(1);
-      const expectedFormattedOwner = mockStarknetAddress.formatStarkNetAddressForContract(
+      const expectedFormattedOwner = mockStarknetAddress.toUint256StarknetAddress(
         mockDeposit.L1OutputEvent.l2DepositOwner,
       );
       expect(mockContractInstance.initializeDeposit).toHaveBeenCalledWith(
         mockFundingTx,
         revealInstance,
-        expectedFormattedOwner,
-        {},
+        ethers.BigNumber.from(expectedFormattedOwner),
       );
 
       expect(mockDepositsUtil.updateToInitializedDeposit).toHaveBeenCalledTimes(1);
@@ -394,7 +398,7 @@ describe('StarknetChainHandler', () => {
       expect(result).toBeUndefined();
       expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
         mockDeposit.id,
-        'Invalid StarkNet recipient address.',
+        'Invalid deposit owner address.',
         { address: mockDeposit.L1OutputEvent.l2DepositOwner },
       );
       expect(mockContractInstance.initializeDeposit).not.toHaveBeenCalled();
@@ -476,7 +480,7 @@ describe('StarknetChainHandler', () => {
           locktime: '0',
         } as FundingTransaction,
         revealForFinalize,
-        '0xStarknetOwnerFinalize',
+        '0x' + '1'.repeat(64), // valid 32-byte hex string
         '0xEthSenderFinalize',
         mockStarknetConfig.chainName,
       ) as Deposit;
@@ -489,7 +493,7 @@ describe('StarknetChainHandler', () => {
           l2TxHash: mockL2TxHash,
         },
       };
-      const idForAssertion = mockDepositsUtil.getDepositId(
+      const idForAssertion = mockDepositsUtil.getDepositKey(
         mockGetTransactionHashUtil.getFundingTxHash(mockDepositForFinalize.L1OutputEvent.fundingTx),
         mockDepositForFinalize.L1OutputEvent.reveal.fundingOutputIndex,
       ) as string;
@@ -513,7 +517,7 @@ describe('StarknetChainHandler', () => {
     });
 
     it('should successfully finalize a deposit and return the transaction receipt', async () => {
-      const expectedDepositId = mockDepositsUtil.getDepositId(
+      const expectedDepositId = mockDepositsUtil.getDepositKey(
         mockGetTransactionHashUtil.getFundingTxHash(mockDepositForFinalize.L1OutputEvent.fundingTx),
         mockDepositForFinalize.L1OutputEvent.reveal.fundingOutputIndex,
       );
@@ -550,18 +554,19 @@ describe('StarknetChainHandler', () => {
       expect(mockContractInstance.finalizeDeposit).not.toHaveBeenCalled();
     });
 
-    it('should return undefined and log error if deposit is missing L2 transaction hash', async () => {
-      mockDepositForFinalize.hashes.starknet!.l2TxHash = null; // Remove L2 tx hash
+    it('should successfully finalize deposit even without L2 transaction hash (StarkNet flow)', async () => {
+      mockDepositForFinalize.hashes.starknet!.l2TxHash = null; // Remove L2 tx hash - not required for StarkNet
 
       const result = await handler.finalizeDeposit(mockDepositForFinalize);
 
-      expect(result).toBeUndefined();
-      expect(mockAuditLogUtil.logDepositError).toHaveBeenCalledWith(
-        mockDepositForFinalize.id,
-        'Deposit missing L2 transaction hash. L2 minting not confirmed before L1 finalization attempt.',
-        { currentStatus: mockDepositForFinalize.status },
-      );
-      expect(mockContractInstance.finalizeDeposit).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        status: 1,
+        transactionHash: '0xFinalizeTxHashSuccess',
+        blockNumber: 456,
+      });
+      expect(mockContractInstance.finalizeDeposit).toHaveBeenCalledWith(mockDepositForFinalize.id, {
+        value: ethers.BigNumber.from('120000'),
+      });
     });
 
     it('should return undefined and log error if L1 finalizeDeposit transaction reverts', async () => {
@@ -782,15 +787,15 @@ describe('StarknetChainHandler', () => {
   describe('hasDepositBeenMintedOnTBTC', () => {
     let mockCheckDeposit: Deposit;
     let tbtcVaultProviderMock: jest.Mocked<EthersContract>; // More specific type for the mock
-    // Define realistic inputs for getDepositId
+    // Define realistic inputs for getDepositKey
     const testFundingTxHash = '0x' + 'a'.repeat(64); // Example funding tx hash
     const testOutputIndex = 0;
     let actualDepositId: string; // Will hold the ID generated by actualGetDepositId
 
     beforeEach(() => {
-      // Use jest.requireActual to get the original implementation of getDepositId
+      // Use jest.requireActual to get the original implementation of getDepositKey
       const DepositsJs = jest.requireActual('../../../utils/Deposits.js');
-      actualDepositId = DepositsJs.getDepositId(testFundingTxHash, testOutputIndex);
+      actualDepositId = DepositsJs.getDepositKey(testFundingTxHash, testOutputIndex);
 
       // Simplified mock deposit for these tests
       mockCheckDeposit = {

@@ -42,6 +42,7 @@ export class WormholeVaaService {
     platformModules: any[] = DEFAULT_SDK_PLATFORMS_MODULES,
   ): Promise<WormholeVaaService> {
     const service = new WormholeVaaService(l2Rpc);
+    logger.info('Platform Modules:', platformModules);
     service.wh = await wormhole(network, platformModules);
     logger.info(`WormholeVaaService created. L2 RPC: ${l2Rpc}, Wormhole Network: ${network}`);
     return service;

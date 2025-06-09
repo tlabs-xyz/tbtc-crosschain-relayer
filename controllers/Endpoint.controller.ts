@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { createDeposit, getDepositId } from '../utils/Deposits.js';
+import { createDeposit, getDepositKey } from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -11,15 +11,29 @@ import { DepositStore } from '../utils/DepositStore.js';
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
  */
+/**
+ * Controller for handling deposit-related API endpoints.
+ * Provides functionality to initialize deposits through REST API calls.
+ */
 export class EndpointController {
   private chainHandler: ChainHandlerInterface;
 
+  /**
+   * Creates a new EndpointController instance.
+   * @param chainHandler The chain handler implementation to use for deposit processing
+   */
   constructor(chainHandler: ChainHandlerInterface) {
     this.chainHandler = chainHandler;
   }
 
   /**
-   * Handle the reveal data for initializing a deposit
+   * Handle the reveal data for initializing a deposit.
+   *
+   * This endpoint accepts Bitcoin funding transaction data and reveal parameters
+   * to initiate a deposit on the configured L2 chain.
+   *
+   * @param req Express request object containing fundingTx, reveal, l2DepositOwner, and l2Sender
+   * @param res Express response object
    */
   async handleReveal(req: Request, res: Response): Promise<void> {
     try {
@@ -55,7 +69,7 @@ export class EndpointController {
       const revealData: Reveal = reveal as Reveal;
 
       const fundingTxHash = getFundingTxHash(fundingTx);
-      const depositId = getDepositId(fundingTxHash, revealData.fundingOutputIndex);
+      const depositId = getDepositKey(fundingTxHash, revealData.fundingOutputIndex);
       logger.info(
         `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
@@ -65,6 +79,11 @@ export class EndpointController {
         logger.warn(
           `L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
         );
+        res.status(409).json({
+          success: false,
+          error: 'Deposit already exists',
+          depositId: depositId,
+        });
         return;
       }
 
@@ -78,16 +97,44 @@ export class EndpointController {
       );
       logger.debug(`Created deposit with ID: ${deposit.id}`);
 
+      // Save deposit to database before initializing
+      try {
+        await DepositStore.create(deposit);
+        logger.info(`Deposit saved to database with ID: ${deposit.id}`);
+      } catch (error: any) {
+        logger.error(`Failed to save deposit to database: ${error.message}`);
+        logDepositError(depositId, 'Failed to save deposit to database', error);
+
+        res.status(500).json({
+          success: false,
+          error: 'Failed to save deposit to database',
+          depositId: deposit.id,
+        });
+        return;
+      }
+
       // Initialize the deposit
       const transactionReceipt = await this.chainHandler.initializeDeposit(deposit);
 
-      // Return success
-      res.status(200).json({
-        success: true,
-        depositId: deposit.id,
-        message: 'Deposit initialized successfully',
-        receipt: transactionReceipt,
-      });
+      // Check if initialization was successful
+      if (transactionReceipt) {
+        // Return success only if initialization succeeded
+        res.status(200).json({
+          success: true,
+          depositId: deposit.id,
+          message: 'Deposit initialized successfully',
+          receipt: transactionReceipt,
+        });
+      } else {
+        // Initialization failed
+        logger.error(`Deposit initialization failed for ID: ${deposit.id}`);
+        res.status(500).json({
+          success: false,
+          error: 'Deposit initialization failed',
+          depositId: deposit.id,
+          message: 'Deposit was saved but initialization on L1 failed',
+        });
+      }
     } catch (error: any) {
       logErrorContext('Error handling reveal endpoint:', error);
 

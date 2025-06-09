@@ -6,17 +6,25 @@ export enum NodeEnv {
   PRODUCTION = 'production',
 }
 
+// Helper to properly parse boolean environment variables
+const envBoolean = z.union([z.string(), z.boolean()]).transform((val) => {
+  if (typeof val === 'boolean') return val;
+  if (val === 'true' || val === '1') return true;
+  if (val === 'false' || val === '0' || val === '') return false;
+  throw new Error(`Invalid boolean value: ${val}`);
+});
+
 // Using UPPERCASE for environment variables for easier parsing from dotenv
 export const AppConfigSchema = z.object({
   NODE_ENV: z.nativeEnum(NodeEnv).default(NodeEnv.DEVELOPMENT),
   APP_NAME: z.string().min(1, 'APP_NAME is required'),
   APP_VERSION: z.string().min(1, 'APP_VERSION is required'),
-  VERBOSE_APP: z.coerce.boolean().default(false),
-  API_ONLY_MODE: z.coerce.boolean().default(false),
-  ENABLE_CLEANUP_CRON: z.coerce.boolean().default(false),
+  VERBOSE_APP: envBoolean.default(false),
+  API_ONLY_MODE: envBoolean.default(false),
+  ENABLE_CLEANUP_CRON: envBoolean.default(false),
   HOST_PORT: z.coerce.number().int().positive().default(4000),
   APP_PORT: z.coerce.number().int().positive().default(3000),
-  CORS_ENABLED: z.coerce.boolean().default(true),
+  CORS_ENABLED: envBoolean.default(true),
   CORS_URL: z
     .string()
     .url('CORS_URL must be a valid URL')

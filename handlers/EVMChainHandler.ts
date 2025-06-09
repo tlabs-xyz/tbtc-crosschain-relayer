@@ -7,7 +7,7 @@ import type { Deposit } from '../types/Deposit.type.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import { createDeposit, getDepositId } from '../utils/Deposits.js';
+import { createDeposit, getDepositKey } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
@@ -88,7 +88,7 @@ export class EVMChainHandler
           l2Sender: string,
         ) => {
           const fundingTxHash = getFundingTxHash(fundingTx);
-          const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
+          const depositId = getDepositKey(fundingTxHash, reveal.fundingOutputIndex);
           logger.debug(
             `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
           );
@@ -202,7 +202,7 @@ export class EVMChainHandler
 
           const { fundingTx, reveal, l2DepositOwner, l2Sender } = event.args;
           const fundingTxHash = getFundingTxHash(fundingTx as FundingTransaction);
-          const depositId = getDepositId(fundingTxHash, reveal[0]);
+          const depositId = getDepositKey(fundingTxHash, reveal[0]);
 
           const existingDeposit = await DepositStore.getById(depositId);
 

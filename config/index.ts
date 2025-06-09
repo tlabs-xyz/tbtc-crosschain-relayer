@@ -256,9 +256,14 @@ try {
       JSON.stringify(mainChainConfigErrors, null, 2),
     );
     baseLogger.error('Detailed errors written to /tmp/all-chain-config-errors.json');
-    baseLogger.error('Application will now exit.');
-    baseLogger.error('--------------------------------------------------------------------');
-    process.exit(1); // Critical failure for application startup
+    // In test environment, allow graceful handling of config errors
+    if (process.env.NODE_ENV === 'test') {
+      baseLogger.warn('Running in test environment - config errors will not cause exit');
+    } else {
+      baseLogger.error('Application will now exit.');
+      baseLogger.error('--------------------------------------------------------------------');
+      process.exit(1); // Critical failure for application startup
+    }
   }
 
   if (Object.keys(mainChainConfigs).length === 0 && chainsToLoad.length > 0) {

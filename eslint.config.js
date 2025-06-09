@@ -11,14 +11,14 @@ export default [
   {
     ignores: [
       'node_modules/',
-      'dist/', // Ignore all compiled output
+      'dist/',
       'build/',
       'coverage/',
       'logs/',
       '*.log',
       'jest.config.cjs',
       'jest.setup.js',
-      'test/', // Added to ignore Hardhat contract tests
+      'test/',
     ],
   },
   // Config for Jest global setup/teardown files
@@ -36,7 +36,6 @@ export default [
     },
     rules: {
       'no-undef': 'error', // These files should have well-defined globals
-      // Add any other specific rules if needed
     },
   },
   js.configs.recommended,
@@ -51,7 +50,7 @@ export default [
         require: 'readonly',
         process: 'readonly',
       },
-      sourceType: 'commonjs', // Assume CommonJS for .js files unless specified otherwise in package.json
+      sourceType: 'commonjs',
     },
     rules: {
       'no-undef': 'warn',
@@ -64,36 +63,35 @@ export default [
   {
     files: ['**/*.ts'],
     languageOptions: {
-      parser: tsParser, // Specifies the ESLint parser for TypeScript (from .eslintrc.js)
+      parser: tsParser,
       parserOptions: {
-        ecmaVersion: 'latest', // Allows for the parsing of modern ECMAScript features (from .eslintrc.js)
-        sourceType: 'module', // Allows for the use of imports (from .eslintrc.js)
-        project: './tsconfig.json', // Important for rules requiring type information (from .eslintrc.js)
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        project: './tsconfig.json',
       },
       globals: {
-        ...globals.node, // Enables Node.js global variables and Node.js scoping (from .eslintrc.js env.node)
-        ...globals.jest, // Adds Jest global variables (from .eslintrc.js env.jest)
+        ...globals.node,
+        ...globals.jest, // Adds Jest global variables
       },
     },
     plugins: {
-      '@typescript-eslint': tsPlugin, // Loads the plugin "@typescript-eslint/eslint-plugin" (from .eslintrc.js)
-      prettier: prettierPlugin, // Loads the plugin "eslint-plugin-prettier" (from .eslintrc.js)
-      import: importPlugin, // Use the imported plugin object
+      '@typescript-eslint': tsPlugin,
+      prettier: prettierPlugin,
+      import: importPlugin,
     },
     rules: {
       // Start with recommended rules and override as needed
-      ...tsPlugin.configs.recommended.rules, // Uses the recommended rules from @typescript-eslint/eslint-plugin (from .eslintrc.js extends)
-      ...tsPlugin.configs['eslint-recommended'].overrides[0].rules, // Uses the recommended rules from ESLint (from .eslintrc.js extends)
-      ...prettierConfig.rules, // Enables eslint-plugin-prettier and displays prettier errors as ESLint errors (from .eslintrc.js extends plugin:prettier/recommended)
+      ...tsPlugin.configs.recommended.rules,
+      ...tsPlugin.configs['eslint-recommended'].overrides[0].rules,
+      ...prettierConfig.rules,
 
       // Custom rules / Overrides from .eslintrc.js
       '@typescript-eslint/no-unused-vars': [
         'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }, // Rule to find unused variables/imports (from .eslintrc.js)
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn', // Warn about using 'any' type (from .eslintrc.js)
+      '@typescript-eslint/no-explicit-any': 'warn',
 
-      // Additional rules from existing eslint.config.js, kept for consistency
       'prettier/prettier': 'error',
       'no-case-declarations': 'off',
       '@typescript-eslint/no-require-imports': 'warn',
@@ -111,6 +109,13 @@ export default [
           ts: 'never',
         },
       ],
+    },
+  },
+  // Add a separate config object for test files to override no-explicit-any
+  {
+    files: ['**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
 ];

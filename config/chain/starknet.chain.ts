@@ -39,7 +39,10 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
       commonTestnetStarknetInput.chainType as import('../schemas/common.schema.js').CHAIN_TYPE.STARKNET,
     l1Rpc: commonTestnetStarknetInput.l1Rpc as string,
     vaultAddress: commonTestnetStarknetInput.vaultAddress as string,
-    l1ContractAddress: commonTestnetStarknetInput.l1ContractAddress as string,
+    l1ContractAddress: getEnv(
+      'CHAIN_STARKNETTESTNET_L1_CONTRACT_ADDRESS',
+      commonTestnetStarknetInput.l1ContractAddress as string,
+    ),
     l1Confirmations: commonTestnetStarknetInput.l1Confirmations as number,
     enableL2Redemption: commonTestnetStarknetInput.enableL2Redemption as boolean,
     useEndpoint: commonTestnetStarknetInput.useEndpoint as boolean,
@@ -57,16 +60,9 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     l2Rpc: getEnv('CHAIN_STARKNETTESTNET_L2_RPC', 'https://starknet-sepolia.public.blastapi.io'),
     l2WsRpc: getEnv('CHAIN_STARKNETTESTNET_L2_WS_RPC', ''),
     l2StartBlock: getEnvNumber('CHAIN_STARKNETTESTNET_L2_START_BLOCK', 0),
-    l2ContractAddress: getEnv(
-      'CHAIN_STARKNETTESTNET_L2_CONTRACT_ADDRESS',
-      '0xc2fe2522A5673E56da0D6b754b2d5cA3E9e3e64B',
-    ),
-    l2WormholeGatewayAddress: getEnv(
-      'CHAIN_STARKNETTESTNET_WORMHOLE_GATEWAY',
-      '0x98B5e2e6a481508c24B8b6A0b3A5b6A0b3A5b6A0',
-    ),
-    l2WormholeChainId: getEnvNumber('CHAIN_STARKNETTESTNET_WORMHOLE_CHAIN_ID', 19),
     starknetPrivateKey: getEnv('CHAIN_STARKNETTESTNET_STARKNET_PRIVATE_KEY'),
+    // L1 private key for endpoint mode (to pay for L1 transactions)
+    privateKey: getEnv('CHAIN_STARKNETTESTNET_PRIVATE_KEY'),
   };
   return config;
 };
