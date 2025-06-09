@@ -6,9 +6,6 @@ import type { StarknetChainConfig } from '../schemas/starknet.chain.schema.js';
 
 // This function provides common defaults specifically for StarkNet chains,
 // building upon the universal getCommonChainInput.
-// It is not meant to be a fully valid StarknetChainInput on its own, as it lacks
-// instance-specific details like starknetPrivateKey, which must be provided by
-// concrete StarkNet chain configurations.
 export const getStarknetCommonInput = (
   targetNetwork: NETWORK,
 ): PartialDeep<StarknetChainConfig> => {

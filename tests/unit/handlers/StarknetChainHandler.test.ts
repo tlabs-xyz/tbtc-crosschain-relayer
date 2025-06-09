@@ -65,7 +65,6 @@ const mockStarknetConfig: StarknetChainConfig = StarknetChainConfigSchema.parse(
   l1ContractAddress: '0x1234567890123456789012345678901234567890', // Validated by EthereumAddressSchema
   vaultAddress: '0xabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde',
   l1PrivateKey: '0x123456789012345678901234567890123456789012345678901234567890abcd', // Corrected from privateKey
-  starknetPrivateKey: '0x0123456789abcdef0123456789abcdef01234567',
   l2Rpc: 'http://l2-rpc.test',
   l1FeeAmountWei: '100000000000000', // This is now part of StarknetChainConfigSchema
   l1Confirmations: 1,
