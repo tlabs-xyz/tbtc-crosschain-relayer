@@ -60,13 +60,6 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     l2Rpc: getEnv('CHAIN_STARKNETTESTNET_L2_RPC', 'https://starknet-sepolia.public.blastapi.io'),
     l2WsRpc: getEnv('CHAIN_STARKNETTESTNET_L2_WS_RPC', ''),
     l2StartBlock: getEnvNumber('CHAIN_STARKNETTESTNET_L2_START_BLOCK', 0),
-    l2ContractAddress: getEnv('CHAIN_STARKNETTESTNET_L2_CONTRACT_ADDRESS'),
-    // TODO: Not needed, uses StarkGate
-    l2WormholeGatewayAddress: getEnv(
-      'CHAIN_STARKNETTESTNET_WORMHOLE_GATEWAY',
-      '0x98B5e2e6a481508c24B8b6A0b3A5b6A0b3A5b6A0',
-    ),
-    l2WormholeChainId: getEnvNumber('CHAIN_STARKNETTESTNET_WORMHOLE_CHAIN_ID', 19),
     starknetPrivateKey: getEnv('CHAIN_STARKNETTESTNET_STARKNET_PRIVATE_KEY'),
     // L1 private key for endpoint mode (to pay for L1 transactions)
     privateKey: getEnv('CHAIN_STARKNETTESTNET_PRIVATE_KEY'),

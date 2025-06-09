@@ -26,7 +26,12 @@ const StarknetChainBaseSchema = z.object({
 });
 
 // Omit privateKey as it's handled by starknetPrivateKey
-const CommonConfigForStarknet = CommonChainConfigSchema.omit({ privateKey: true });
+const CommonConfigForStarknet = CommonChainConfigSchema.omit({
+  privateKey: true,
+  l2ContractAddress: true,
+  l2WormholeGatewayAddress: true,
+  l2WormholeChainId: true,
+});
 
 export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetChainBaseSchema)
   .extend({
@@ -36,12 +41,6 @@ export const StarknetChainConfigSchema = CommonConfigForStarknet.merge(StarknetC
     starknetPrivateKey: StarknetChainBaseSchema.shape.starknetPrivateKey,
     l1FeeAmountWei: StarknetChainBaseSchema.shape.l1FeeAmountWei,
     privateKey: StarknetChainBaseSchema.shape.privateKey,
-
-    // Override inherited EthereumAddressSchema with a generic string for StarkNet addresses
-    l2ContractAddress: z.string().min(1, 'l2ContractAddress is required for StarkNet'),
-    l2WormholeGatewayAddress: z
-      .string()
-      .min(1, 'l2WormholeGatewayAddress is required for StarkNet'),
 
     /**
      * L2 WebSocket RPC endpoint for the StarkNet chain.

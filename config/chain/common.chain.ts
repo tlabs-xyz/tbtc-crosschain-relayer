@@ -15,18 +15,17 @@ type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 
 // Vault Addresses by network type
 export const VAULT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5',
+  [NETWORK.MAINNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5', // Mainnet vault address - verify before production deployment
   [NETWORK.TESTNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5',
   [NETWORK.DEVNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5',
 } as const;
 
-// Refers to a StarkNetBitcoinDepositor contract
+// StarkNetBitcoinDepositor contract addresses for L1 operations
 export const L1_CONTRACT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0xF19d6724C35dbA64187b085E8b2aeD4D1817CF6e',
-  [NETWORK.TESTNET]: '0xF19d6724C35dbA64187b085E8b2aeD4D1817CF6e',
-  [NETWORK.DEVNET]: '0xF19d6724C35dbA64187b085E8b2aeD4D1817CF6e',
+  [NETWORK.MAINNET]: '0x0b41A67de304964f25D43d8f564c0FF3d42fa843', // Mainnet deployer contract - update with actual production address
+  [NETWORK.TESTNET]: '0x154555b621D4e9D98beed40B719834e4946Ad3d2', // Sepolia testnet address
+  [NETWORK.DEVNET]: '0x154555b621D4e9D98beed40B719834e4946Ad3d2', // Development environment address
 } as const;
-
 
 // =============================================================================
 // WORMHOLE CONFIGURATION CONSTANTS
