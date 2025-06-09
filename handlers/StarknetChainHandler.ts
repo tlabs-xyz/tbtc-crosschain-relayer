@@ -14,15 +14,12 @@ import type { StarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDep
 
 import { DepositStore } from '../utils/DepositStore.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import {
-  validateStarkNetAddress,
-  formatStarkNetAddressForContract,
-} from '../utils/starknetAddress.js';
+import { toUint256StarknetAddress, validateStarkNetAddress } from '../utils/starknetAddress.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import {
-  getDepositId,
+  getDepositKey,
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
 } from '../utils/Deposits.js';
@@ -383,9 +380,10 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   public async finalizeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
-    // Use the actual deposit ID from the database, not a recalculated one
-    // The Bridge contract may use a different calculation method
-    const depositId = deposit.id;
+    const depositId = getDepositKey(
+      getFundingTxHash(deposit.L1OutputEvent.fundingTx),
+      deposit.L1OutputEvent.reveal.fundingOutputIndex,
+    );
     const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${depositId} |`;
 
     logger.info(`${logPrefix} Attempting to finalize deposit on L1 Depositor contract.`);
@@ -472,11 +470,12 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
     const fundingTxHash = getFundingTxHash(deposit.L1OutputEvent.fundingTx);
-    const depositKeyBytes32 = getDepositId(
+    const depositKey = getDepositKey(
       fundingTxHash,
       deposit.L1OutputEvent.reveal.fundingOutputIndex,
     );
-    const logId = deposit.id || depositKeyBytes32;
+
+    const logId = deposit.id || depositKey;
     const logPrefix = `INITIALIZE_DEPOSIT ${this.config.chainName} ${logId} |`;
 
     logger.info(`${logPrefix} Attempting to initialize deposit on L1 Depositor contract.`);
@@ -499,46 +498,47 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     const fundingTx: FundingTransaction = deposit.L1OutputEvent.fundingTx;
     const reveal: Reveal = deposit.L1OutputEvent.reveal;
-    const l2DepositOwner: string = deposit.L1OutputEvent.l2DepositOwner;
+    let l2DepositOwner = deposit.L1OutputEvent.l2DepositOwner;
 
-    if (!validateStarkNetAddress(l2DepositOwner)) {
-      logger.error(`${logPrefix} Invalid StarkNet recipient address: ${l2DepositOwner}`);
-      await logDepositError(logId, 'Invalid StarkNet recipient address.', {
-        address: l2DepositOwner,
+    const depositState = await this.l1DepositorContract.deposits(depositKey);
+    logger.info(`${logPrefix} Deposit state: ${depositState}`);
+
+    if (depositState !== 0) {
+      logger.warn(`${logPrefix} Deposit already initialized. ID: ${depositKey}. Skipping update.`);
+      // TODO: We need to return tx receipt here for to prevent the endpoint from returning error 500
+      // Find the tx hash from previous deposit and return it
+      return undefined;
+    }
+
+    logger.info(`${logPrefix} Deposit not initialized. ID: ${depositKey}`);
+
+    try {
+      l2DepositOwner = toUint256StarknetAddress(l2DepositOwner);
+      if (!validateStarkNetAddress(l2DepositOwner)) {
+        throw new Error('Invalid StarkNet address after conversion.');
+      }
+    } catch (err) {
+      logger.error(
+        `${logPrefix} Invalid deposit owner address: ${deposit.L1OutputEvent.l2DepositOwner}`,
+      );
+      await logDepositError(logId, 'Invalid deposit owner address.', {
+        address: deposit.L1OutputEvent.l2DepositOwner,
       });
       return undefined;
     }
-    const formattedL2DepositOwnerAsBytes32 = formatStarkNetAddressForContract(l2DepositOwner);
-
-    const txOverrides: Overrides = {}; // No value needed for non-payable function
 
     try {
       logger.info(
-        `${logPrefix} Calling L1 Depositor contract initializeDeposit for StarkNet recipient (as _depositOwner/extraData): ${formattedL2DepositOwnerAsBytes32} (original: ${l2DepositOwner})`,
+        `${logPrefix} Calling L1 Depositor contract initializeDeposit for StarkNet recipient: ${l2DepositOwner})`,
       );
       logger.debug(`${logPrefix} L1 Contract Funding Tx Arg:`, fundingTx);
       logger.debug(`${logPrefix} L1 Contract Reveal Arg:`, reveal);
 
-      // Estimate gas first
-      try {
-        const gasEstimate = await this.l1DepositorContract.estimateGas.initializeDeposit(
-          fundingTx,
-          reveal,
-          formattedL2DepositOwnerAsBytes32,
-          txOverrides,
-        );
-        logger.info(`${logPrefix} Estimated gas: ${gasEstimate.toString()}`);
-        txOverrides.gasLimit = gasEstimate.mul(120).div(100); // Add 20% buffer
-      } catch (gasError: any) {
-        logger.error(`${logPrefix} Gas estimation failed: ${gasError.message}`, gasError);
-        // Continue without gas limit override
-      }
-
+      const l2DepositOwnerBN = ethers.BigNumber.from(l2DepositOwner);
       const txResponse = await this.l1DepositorContract.initializeDeposit(
         fundingTx,
         reveal,
-        formattedL2DepositOwnerAsBytes32,
-        txOverrides,
+        l2DepositOwnerBN,
       );
 
       logger.info(

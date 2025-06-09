@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { createDeposit, getDepositId } from '../utils/Deposits.js';
+import { createDeposit, getDepositKey } from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -11,23 +11,36 @@ import { DepositStore } from '../utils/DepositStore.js';
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
  */
+/**
+ * Controller for handling deposit-related API endpoints.
+ * Provides functionality to initialize deposits through REST API calls.
+ */
 export class EndpointController {
   private chainHandler: ChainHandlerInterface;
 
+  /**
+   * Creates a new EndpointController instance.
+   * @param chainHandler The chain handler implementation to use for deposit processing
+   */
   constructor(chainHandler: ChainHandlerInterface) {
     this.chainHandler = chainHandler;
   }
 
   /**
-   * Handle the reveal data for initializing a deposit
+   * Handle the reveal data for initializing a deposit.
+   *
+   * This endpoint accepts Bitcoin funding transaction data and reveal parameters
+   * to initiate a deposit on the configured L2 chain.
+   *
+   * @param req Express request object containing fundingTx, reveal, l2DepositOwner, and l2Sender
+   * @param res Express response object
    */
   async handleReveal(req: Request, res: Response): Promise<void> {
     try {
       logger.debug('Received reveal data via endpoint');
 
       // Extract data from request body
-      const { fundingTx, reveal, l2DepositOwner, l2Sender, destinationChainDepositOwner } =
-        req.body;
+      const { fundingTx, reveal, l2DepositOwner, l2Sender } = req.body;
 
       // Log API request
       logApiRequest('/api/reveal', 'POST', null, {
@@ -56,7 +69,7 @@ export class EndpointController {
       const revealData: Reveal = reveal as Reveal;
 
       const fundingTxHash = getFundingTxHash(fundingTx);
-      const depositId = getDepositId(fundingTxHash, revealData.fundingOutputIndex);
+      const depositId = getDepositKey(fundingTxHash, revealData.fundingOutputIndex);
       logger.info(
         `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
@@ -75,12 +88,10 @@ export class EndpointController {
       }
 
       // Create deposit object
-      // For StarkNet, use destinationChainDepositOwner if provided, otherwise fall back to l2DepositOwner
-      const depositOwner = destinationChainDepositOwner || l2DepositOwner;
       const deposit = createDeposit(
         fundingTx,
         revealData,
-        depositOwner,
+        l2DepositOwner,
         l2Sender,
         this.chainHandler.config.chainName,
       );

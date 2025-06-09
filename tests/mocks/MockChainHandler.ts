@@ -88,7 +88,6 @@ export class MockChainHandler implements ChainHandlerInterface {
           l2WsRpc: (config as EvmChainConfig).l2WsRpc || baseProperties.l2WsRpc,
           l2ContractAddress:
             (config as EvmChainConfig).l2ContractAddress || baseProperties.l2ContractAddress,
-          // Bitcoin Redeemer address removed - these contracts don't exist in tBTC v2
           l2WormholeGatewayAddress:
             (config as EvmChainConfig).l2WormholeGatewayAddress ||
             baseProperties.l2WormholeGatewayAddress,
