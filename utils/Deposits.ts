@@ -44,7 +44,7 @@ export const createDeposit = (
   chainId: string,
 ): Deposit => {
   const fundingTxHash = getFundingTxHash(fundingTx);
-  const depositId = getDepositKey(fundingTxHash, reveal.fundingOutputIndex);
+  const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
   const deposit: Deposit = {
     id: depositId,
     chainId: chainId,
@@ -401,10 +401,10 @@ function reverseHexString(hex: string): string {
  *
  * @example
  * ```typescript
- * getDepositKey('0xabcdef...123456', 0)
+ * getDepositId('0xabcdef...123456', 0)
  * ```
  */
-export const getDepositKey = (fundingTxHash: string, fundingOutputIndex: number): string => {
+export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
   // Validate fundingTxHash
   if (typeof fundingTxHash !== 'string') {
     throw new Error('fundingTxHash must be a string');
@@ -433,4 +433,12 @@ export const getDepositKey = (fundingTxHash: string, fundingOutputIndex: number)
       `Failed to generate deposit key: ${error instanceof Error ? error.message : 'Unknown error'}`,
     );
   }
+};
+
+// Converts a deposit key from a uint256 string to a bytes32 string for Starknet compatibility
+export const formatDepositIdForStarknet = (depositId: string): string => {
+  if (!/^\d+$/.test(depositId)) {
+    throw new Error('Invalid depositId: must be a valid numeric string');
+  }
+  return ethers.BigNumber.from(depositId).toHexString();
 };

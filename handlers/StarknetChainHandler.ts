@@ -19,9 +19,10 @@ import type { Deposit } from '../types/Deposit.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import {
-  getDepositKey,
+  getDepositId,
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
+  formatDepositIdForStarknet,
 } from '../utils/Deposits.js';
 import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
@@ -379,7 +380,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   public async finalizeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
-    const depositId = getDepositKey(
+    const depositId = getDepositId(
       getFundingTxHash(deposit.L1OutputEvent.fundingTx),
       deposit.L1OutputEvent.reveal.fundingOutputIndex,
     );
@@ -469,12 +470,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
     const fundingTxHash = getFundingTxHash(deposit.L1OutputEvent.fundingTx);
-    const depositKey = getDepositKey(
-      fundingTxHash,
-      deposit.L1OutputEvent.reveal.fundingOutputIndex,
-    );
+    const depositId = getDepositId(fundingTxHash, deposit.L1OutputEvent.reveal.fundingOutputIndex);
 
-    const logId = deposit.id || depositKey;
+    const logId = deposit.id || depositId;
     const logPrefix = `INITIALIZE_DEPOSIT ${this.config.chainName} ${logId} |`;
 
     logger.info(`${logPrefix} Attempting to initialize deposit on L1 Depositor contract.`);
@@ -499,17 +497,19 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     const reveal: Reveal = deposit.L1OutputEvent.reveal;
     let l2DepositOwner = deposit.L1OutputEvent.l2DepositOwner;
 
-    const depositState = await this.l1DepositorContract.deposits(depositKey);
+    const depositKeyForStarknet = formatDepositIdForStarknet(depositId);
+
+    const depositState = await this.l1DepositorContract.deposits(depositKeyForStarknet);
     logger.info(`${logPrefix} Deposit state: ${depositState}`);
 
     if (depositState !== 0) {
-      logger.warn(`${logPrefix} Deposit already initialized. ID: ${depositKey}. Skipping update.`);
+      logger.warn(`${logPrefix} Deposit already initialized. ID: ${depositId}. Skipping update.`);
       // TODO: We need to return tx receipt here for to prevent the endpoint from returning error 500
       // Find the tx hash from previous deposit and return it
       return undefined;
     }
 
-    logger.info(`${logPrefix} Deposit not initialized. ID: ${depositKey}`);
+    logger.info(`${logPrefix} Deposit not initialized. ID: ${depositId}`);
 
     try {
       l2DepositOwner = toUint256StarknetAddress(l2DepositOwner);
