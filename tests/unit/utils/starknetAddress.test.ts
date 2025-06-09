@@ -1,7 +1,7 @@
 import {
   validateStarkNetAddress,
-  formatStarkNetAddressForContract,
   extractAddressFromBitcoinScript,
+  toUint256StarknetAddress,
 } from '../../../utils/starknetAddress.js';
 import * as bitcoin from 'bitcoinjs-lib';
 
@@ -66,33 +66,6 @@ describe('StarkNet Address Utilities', () => {
 
     it('should return false for just "0x"', () => {
       expect(validateStarkNetAddress('0x')).toBe(false);
-    });
-  });
-
-  describe('formatStarkNetAddressForContract', () => {
-    it('should format a valid StarkNet address to bytes32', () => {
-      const validAddress = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-      mockCompile.mockImplementation(() => ({}));
-      const expectedFormatted =
-        '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; // Already 32 bytes
-      expect(formatStarkNetAddressForContract(validAddress)).toBe(expectedFormatted);
-    });
-
-    it('should pad a short valid StarkNet address to bytes32', () => {
-      const shortAddress = '0x1';
-      mockCompile.mockImplementation(() => ({}));
-      const expectedPadded = '0x0000000000000000000000000000000000000000000000000000000000000001';
-      expect(formatStarkNetAddressForContract(shortAddress)).toBe(expectedPadded);
-    });
-
-    it('should throw an error for an invalid address', () => {
-      const invalidAddress = 'not-a-valid-address';
-      mockCompile.mockImplementation(() => {
-        throw new Error('Cairo compilation error');
-      });
-      expect(() => formatStarkNetAddressForContract(invalidAddress)).toThrow(
-        'Invalid StarkNet address: not-a-valid-address',
-      );
     });
   });
 
@@ -186,6 +159,52 @@ describe('StarkNet Address Utilities', () => {
       const script = createPushDataScript(''); // empty data push
       mockCompile.mockImplementation(() => ({}));
       expect(extractAddressFromBitcoinScript(script)).toBe(null);
+    });
+  });
+
+  describe('toUint256StarknetAddress', () => {
+    it('should left-pad a valid EVM address to 32 bytes', () => {
+      const evmAddress = '0x1234567890abcdef1234567890abcdef12345678';
+      const expected = '0x0000000000000000000000001234567890abcdef1234567890abcdef12345678';
+      expect(toUint256StarknetAddress(evmAddress)).toBe(expected);
+    });
+
+    it('should left-pad a valid EVM address without 0x to 32 bytes', () => {
+      const evmAddress = '1234567890abcdef1234567890abcdef12345678';
+      const expected = '0x0000000000000000000000001234567890abcdef1234567890abcdef12345678';
+      expect(toUint256StarknetAddress(evmAddress)).toBe(expected);
+    });
+
+    it('should left-pad a short StarkNet address to 32 bytes', () => {
+      const shortAddress = '0x1';
+      const expected = '0x0000000000000000000000000000000000000000000000000000000000000001';
+      expect(toUint256StarknetAddress(shortAddress)).toBe(expected);
+    });
+
+    it('should not change a 32-byte StarkNet address', () => {
+      const address = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      const expected = address;
+      expect(toUint256StarknetAddress(address)).toBe(expected);
+    });
+
+    it('should throw for non-hex input', () => {
+      expect(() => toUint256StarknetAddress('not-a-hex')).toThrow();
+    });
+
+    it('should throw for too long input', () => {
+      const tooLong = '0x' + 'a'.repeat(65); // 65 hex chars
+      expect(() => toUint256StarknetAddress(tooLong)).toThrow();
+    });
+
+    it('should throw error for empty string', () => {
+      expect(() => toUint256StarknetAddress('')).toThrow('Address must be a non-empty string');
+    });
+
+    it('should always return 0x-prefixed, 64 hex chars', () => {
+      const address = '0x1234';
+      const result = toUint256StarknetAddress(address);
+      expect(result.startsWith('0x')).toBe(true);
+      expect(result.length).toBe(66);
     });
   });
 });
