@@ -34,18 +34,16 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     super(config);
     try {
       StarknetChainConfigSchema.parse(config);
-      logger.info(`StarknetChainHandler constructed and validated for ${this.config.chainName}`);
+      logger.info(`[${this.config.chainName}] StarknetChainHandler constructed and validated`);
     } catch (error: any) {
-      logger.error(`Invalid StarkNet configuration for ${config.chainName}: ${error.message}`, {
+      logger.error(`[${this.config.chainName}] Invalid StarkNet configuration: ${error.message}`, {
         zodErrors: error.errors,
       });
       // Throw a new error to halt initialization if config is invalid
-      throw new Error(
-        `Invalid StarkNet configuration for ${config.chainName}. Please check logs for details.`,
-      );
+      throw new Error(`Invalid StarkNet configuration. Please check logs for details.`);
     }
 
-    logger.debug(`StarknetChainHandler setup complete for ${this.config.chainName}`);
+    logger.debug(`[${this.config.chainName}] StarknetChainHandler setup complete`);
 
     try {
       const starkGateBridgeAbi = ['function estimateDepositFeeWei() view returns (uint256)'];
@@ -55,18 +53,19 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         this.l1Provider,
       );
       logger.info(
-        `StarkGate Bridge contract provider instance created for ${this.config.chainName} at ${this.config.starkGateBridgeAddress}`,
+        `[${this.config.chainName}] StarkGate Bridge contract provider instance created at ${this.config.starkGateBridgeAddress}`,
       );
     } catch (error: any) {
       logger.error(
-        `Failed to instantiate StarkGate Bridge contract for ${this.config.chainName}: ${error.message}`,
+        `[${this.config.chainName}] Failed to instantiate StarkGate Bridge contract: ${error.message}`,
         error,
+        { chainName: this.config.chainName },
       );
     }
   }
 
   protected async initializeL2(): Promise<void> {
-    logger.info(`Initializing StarkNet L1 components for ${this.config.chainName}`);
+    logger.info(`[${this.config.chainName}] Initializing StarkNet L1 components`);
 
     try {
       // For read-only operations and event listening:
@@ -76,7 +75,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         this.l1Provider,
       ) as StarkNetBitcoinDepositor;
       logger.info(
-        `L1 Depositor contract provider instance created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
+        `[${this.config.chainName}] L1 Depositor contract provider instance created at ${this.config.l1ContractAddress}`,
       );
 
       // For sending transactions (if signer is available via BaseChainHandler's init)
@@ -87,11 +86,11 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
           this.nonceManagerL1,
         ) as StarkNetBitcoinDepositor;
         logger.info(
-          `L1 Depositor contract signer instance (with NonceManager) created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
+          `[${this.config.chainName}] L1 Depositor contract signer instance (with NonceManager) created at ${this.config.l1ContractAddress}`,
         );
       } else if (this.l1Signer) {
         logger.warn(
-          `L1 NonceManager not available for ${this.config.chainName}, but L1 Signer is. L1 Depositor contract will use signer directly. This might lead to nonce issues if not handled carefully.`,
+          `[${this.config.chainName}] L1 NonceManager not available, but L1 Signer is. L1 Depositor contract will use signer directly. This might lead to nonce issues if not handled carefully.`,
         );
         this.l1DepositorContract = new ethers.Contract(
           this.config.l1ContractAddress,
@@ -99,31 +98,30 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
           this.l1Signer,
         ) as StarkNetBitcoinDepositor;
         logger.info(
-          `L1 Depositor contract signer instance (without NonceManager) created for ${this.config.chainName} at ${this.config.l1ContractAddress}`,
+          `[${this.config.chainName}] L1 Depositor contract signer instance (without NonceManager) created at ${this.config.l1ContractAddress}`,
         );
       } else {
         logger.warn(
-          `L1 signer not available for ${this.config.chainName} (privateKey not configured or failed to init in Base). L1 Depositor contract transactions disabled. Read-only mode.`,
+          `[${this.config.chainName}] L1 signer not available (privateKey not configured or failed to init in Base). L1 Depositor contract transactions disabled. Read-only mode.`,
         );
       }
     } catch (error: any) {
       logger.error(
-        `Failed to instantiate StarkGate L1 contract instances for ${this.config.chainName}: ${error.message}`,
+        `[${this.config.chainName}] Failed to instantiate StarkGate L1 contract instances: ${error.message}`,
         error,
+        { chainName: this.config.chainName },
       );
       throw new Error(
-        `Failed to instantiate StarkGate L1 contract instances for ${this.config.chainName}. Error: ${error.message}`,
+        `Failed to instantiate StarkGate L1 contract instances. Error: ${error.message}`,
       );
     }
-    logger.info(
-      `StarkNet L1 RPC (${this.config.l1Rpc}) is configured for ${this.config.chainName}.`,
-    );
-    logger.info(`StarkNet L1 components initialization finished for ${this.config.chainName}.`);
+    logger.info(`[${this.config.chainName}] StarkNet L1 RPC (${this.config.l1Rpc}) is configured.`);
+    logger.info(`[${this.config.chainName}] StarkNet L1 components initialization finished.`);
   }
 
   protected async setupL2Listeners(): Promise<void> {
     logger.info(
-      `Setting up L1 TBTCBridgedToStarkNet event listener for ${this.config.chainName} on contract ${this.l1DepositorContractProvider.address}`,
+      `[${this.config.chainName}] Setting up L1 TBTCBridgedToStarkNet event listener on contract ${this.l1DepositorContractProvider.address}`,
     );
 
     this.l1DepositorContractProvider.on(
@@ -146,14 +144,15 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       },
     );
 
-    logger.info(`L1 event listener is active for ${this.config.chainName}`);
+    logger.info(`[${this.config.chainName}] L1 event listener is active`);
 
     this.checkForPastL1DepositInitializedEvents({
       fromBlock: this.config.l1StartBlock,
     }).catch((error) => {
       logger.error(
-        `Error during initial scan for past L1 DepositInitialized events for ${this.config.chainName}: ${error.message}`,
+        `[${this.config.chainName}] Error during initial scan for past L1 DepositInitialized events: ${error.message}`,
         error,
+        { chainName: this.config.chainName },
       );
     });
 
@@ -175,7 +174,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   ): Promise<void> {
     if (events.length > 0) {
       logger.info(
-        `Found ${events.length} past TBTCBridgedToStarkNet L1 events for ${this.config.chainName} in range [${fromBlock} - ${toBlock}]`,
+        `[${this.config.chainName}] Found ${events.length} past TBTCBridgedToStarkNet L1 events in range [${fromBlock} - ${toBlock}]`,
       );
       for (const event of events) {
         if (event.args) {
@@ -193,13 +192,13 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
           );
         } else {
           logger.warn(
-            `checkForPastL1DepositorEvents | Event args undefined for past event. Tx: ${event.transactionHash}`,
+            `[${this.config.chainName}] checkForPastL1DepositorEvents | Event args undefined for past event. Tx: ${event.transactionHash}`,
           );
         }
       }
     } else {
       logger.info(
-        `No past TBTCBridgedToStarkNet L1 events found for ${this.config.chainName} in block range ${fromBlock}-${toBlock}.`,
+        `[${this.config.chainName}] No past TBTCBridgedToStarkNet L1 events found in block range ${fromBlock}-${toBlock}.`,
       );
     }
   }
@@ -213,7 +212,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     const toBlock = options.toBlock || latestBlock;
 
     logger.info(
-      `Checking for past TBTCBridgedToStarkNet L1 events for ${this.config.chainName} from block ${options.fromBlock} to ${toBlock}`,
+      `[${this.config.chainName}] Checking for past TBTCBridgedToStarkNet L1 events from block ${options.fromBlock} to ${toBlock}`,
     );
 
     try {
@@ -228,8 +227,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       }
     } catch (error: any) {
       logger.error(
-        `Error querying past TBTCBridgedToStarkNet L1 events for ${this.config.chainName}: ${error.message}`,
+        `[${this.config.chainName}] Error querying past TBTCBridgedToStarkNet L1 events: ${error.message}`,
         error,
+        { chainName: this.config.chainName },
       );
     }
   }
@@ -243,29 +243,33 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     isPastEvent: boolean = false,
   ): Promise<void> {
     const logPrefix = isPastEvent
-      ? `PastEvent | TBTCBridgedToStarkNet for ${this.config.chainName}:`
-      : `LiveEvent | TBTCBridgedToStarkNet for ${this.config.chainName}:`;
+      ? `PastEvent | TBTCBridgedToStarkNet:`
+      : `LiveEvent | TBTCBridgedToStarkNet:`;
 
     const depositId =
       typeof depositKeyOrId === 'string' ? depositKeyOrId : ethers.utils.hexlify(depositKeyOrId);
 
     logger.info(
-      `${logPrefix} Processing | DepositId: ${depositId} | Amount: ${amount.toString()} | StarkNet Recipient: ${starkNetRecipient.toString()} | L1 Tx: ${transactionHash} | Nonce: ${messageNonce.toString()}`,
+      `[${this.config.chainName}] ${logPrefix} Processing | DepositId: ${depositId} | Amount: ${amount.toString()} | StarkNet Recipient: ${starkNetRecipient.toString()} | L1 Tx: ${transactionHash} | Nonce: ${messageNonce.toString()}`,
     );
 
     try {
       const deposit = await DepositStore.getById(depositId);
       if (!deposit) {
-        logger.warn(`${logPrefix} Unknown deposit. ID: ${depositId}. Ignoring.`);
+        logger.warn(
+          `[${this.config.chainName}] ${logPrefix} Unknown deposit. ID: ${depositId}. Ignoring.`,
+        );
         return;
       }
 
       if (deposit.status === DepositStatus.BRIDGED) {
         if (isPastEvent) {
-          logger.debug(`${logPrefix} Deposit already BRIDGED. ID: ${depositId}. Skipping update.`);
+          logger.debug(
+            `[${this.config.chainName}] ${logPrefix} Deposit already BRIDGED. ID: ${depositId}. Skipping update.`,
+          );
         } else {
           logger.warn(
-            `${logPrefix} Deposit already BRIDGED. ID: ${depositId}. Potential replay of live event. Skipping update.`,
+            `[${this.config.chainName}] ${logPrefix} Deposit already BRIDGED. ID: ${depositId}. Live event may be a replay. Skipping update.`,
           );
         }
         return;
@@ -273,12 +277,14 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
       if (deposit.chainId !== this.config.chainName) {
         logger.error(
-          `${logPrefix} Mismatched chain for DepositKey ${depositId} (Deposit Chain: ${deposit.chainId}) processed by handler for Chain: ${this.config.chainName}. This indicates an issue with event routing or deposit ID uniqueness. Skipping update.`,
+          `[${this.config.chainName}] ${logPrefix} Mismatched chain for depositKey ${depositId} (actual: ${deposit.chainId}). Skipping update.`,
         );
         return;
       }
 
-      logger.info(`${logPrefix} Updating deposit to BRIDGED | ID: ${depositId}`);
+      logger.info(
+        `[${this.config.chainName}] ${logPrefix} Updating deposit to BRIDGED | ID: ${depositId}`,
+      );
 
       deposit.status = DepositStatus.BRIDGED;
       deposit.dates.bridgedAt = Math.floor(Date.now() / 1000);
@@ -290,12 +296,13 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
       await DepositStore.update(deposit);
       logger.info(
-        `${logPrefix} Deposit updated to BRIDGED. ID: ${depositId}. L1 Tx: ${transactionHash}`,
+        `[${this.config.chainName}] ${logPrefix} Deposit updated to BRIDGED. ID: ${deposit.id}. L1 Tx: ${transactionHash}`,
       );
     } catch (error: any) {
       logger.error(
-        `${logPrefix} Error processing event data for DepositKey ${depositId}: ${error.message}`,
+        `[${this.config.chainName}] ${logPrefix} Error processing event data for depositKey ${depositId}: ${error.message}`,
         error,
+        { chainName: this.config.chainName },
       );
     }
   }
@@ -304,7 +311,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     if (this.config.useEndpoint) return 0;
 
     logger.warn(
-      `StarkNet getLatestBlock NOT YET IMPLEMENTED for ${this.config.chainName}. Returning 0.`,
+      `[${this.config.chainName}] StarkNet getLatestBlock NOT YET IMPLEMENTED. Returning 0.`,
     );
 
     // FUTURE: Implement StarkNet L2 block number retrieval
@@ -323,7 +330,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   }): Promise<void> {
     if (this.config.useEndpoint) return;
 
-    logger.warn(`StarkNet checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
+    logger.warn(`[${this.config.chainName}] StarkNet checkForPastDeposits NOT YET IMPLEMENTED.`);
 
     // FUTURE: Implement StarkNet L2 past event scanning
     // When StarkNet L2 provider is available, this should:
@@ -387,7 +394,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         // This ensures a symmetric API for all chains and allows status checks by ID.
         deposit = await DepositStore.getById(depositOrId);
         if (!deposit) {
-          logger.warn(`Deposit not found for ID: ${depositOrId} in checkDepositStatus.`);
+          logger.warn(
+            `[${this.config.chainName}] Deposit not found for ID: ${depositOrId} in checkDepositStatus.`,
+          );
           return null;
         }
       } else {
@@ -397,13 +406,17 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       const depositKey = this._getOnChainDepositKey(deposit);
 
       if (!this.l1DepositorContractProvider) {
-        logger.error('L1 Depositor contract provider not available for status check.');
+        logger.error(
+          `[${this.config.chainName}] L1 Depositor contract provider not available for status check.`,
+        );
         return null;
       }
       const status: number = await this.l1DepositorContractProvider.deposits(depositKey);
       return status;
     } catch (err) {
-      logger.error('Error in checkDepositStatus:', err);
+      logger.error(`[${this.config.chainName}] Error in checkDepositStatus:`, err, {
+        chainName: this.config.chainName,
+      });
       return null;
     }
   }
@@ -422,13 +435,13 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${deposit.id} |`;
 
     logger.info(
-      `${logPrefix} Attempting to finalize deposit on L1 Depositor contract (key: ${depositKey}).`,
+      `[${this.config.chainName}] ${logPrefix} Attempting to finalize deposit on L1 Depositor contract (key: ${depositKey}).`,
     );
 
     if (!this.l1DepositorContract || !this.l1Signer) {
       const errorMessage =
         'L1 Depositor contract (signer) instance not available. Cannot finalize deposit.';
-      logger.error(`${logPrefix} ${errorMessage}`);
+      logger.error(`[${this.config.chainName}] ${logPrefix} ${errorMessage}`);
       await logDepositError(deposit.id, errorMessage, {
         internalError: 'L1 Depositor contract (signer) not available',
       });
@@ -437,23 +450,27 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     // 1. Pre-flight check: Verify deposit status on-chain
     const onChainStatus = await this.checkDepositStatus(deposit);
-    logger.info(`${logPrefix} On-chain deposit status: ${onChainStatus}`);
+    logger.info(
+      `[${this.config.chainName}] ${logPrefix} On-chain deposit status: ${onChainStatus}`,
+    );
 
     switch (onChainStatus) {
       case null:
       case undefined:
         logger.error(
-          `${logPrefix} Could not retrieve on-chain deposit status. Aborting finalization.`,
+          `[${this.config.chainName}] ${logPrefix} Could not retrieve on-chain deposit status. Aborting finalization.`,
         );
         return undefined;
       case DepositStatus.FINALIZED:
-        logger.warn(`${logPrefix} Deposit is already finalized on-chain. Skipping.`);
+        logger.warn(
+          `[${this.config.chainName}] ${logPrefix} Deposit is already finalized on-chain. Skipping.`,
+        );
         return undefined;
       case DepositStatus.INITIALIZED:
         break; // Proceed with finalization
       default:
         logger.error(
-          `${logPrefix} Deposit is not in Initialized state (state=${onChainStatus}). Cannot finalize. Aborting.`,
+          `[${this.config.chainName}] ${logPrefix} Deposit is not in Initialized state (state=${onChainStatus}). Cannot finalize. Aborting.`,
         );
         return undefined;
     }
@@ -463,32 +480,36 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       let fee: ethers.BigNumber;
       try {
         fee = await this.starkGateBridgeContract.estimateDepositFeeWei();
-        logger.info(`${logPrefix} Fee from StarkGate bridge: ${ethers.utils.formatEther(fee)} ETH`);
+        logger.info(
+          `[${this.config.chainName}] ${logPrefix} Fee from StarkGate bridge: ${ethers.utils.formatEther(fee)} ETH`,
+        );
       } catch (error: any) {
         logger.warn(
-          `${logPrefix} Failed to get fee from StarkGate bridge, falling back to hardcoded value. Error: ${error.message}`,
+          `[${this.config.chainName}] ${logPrefix} Failed to get fee from StarkGate bridge, falling back to hardcoded value. Error: ${error.message}`,
         );
         fee = ethers.utils.parseEther('0.0001'); // Fallback fee from example
       }
 
       // 3. Explicit Gas Management
-      logger.info(`${logPrefix} Estimating gas for finalizeDeposit...`);
+      logger.info(`[${this.config.chainName}] ${logPrefix} Estimating gas for finalizeDeposit...`);
       let gasEstimate: ethers.BigNumber;
       try {
         gasEstimate = await this.l1DepositorContract.estimateGas.finalizeDeposit(depositKey, {
           value: fee,
         });
-        logger.info(`${logPrefix} Gas estimate: ${gasEstimate.toString()}`);
+        logger.info(
+          `[${this.config.chainName}] ${logPrefix} Gas estimate: ${gasEstimate.toString()}`,
+        );
       } catch (error: any) {
         logger.warn(
-          `${logPrefix} Gas estimation failed, using manual gas limit as fallback. Error: ${error.message}`,
+          `[${this.config.chainName}] ${logPrefix} Gas estimation failed, using manual gas limit as fallback.`,
         );
         gasEstimate = ethers.BigNumber.from(500000);
       }
 
       const gasPrice = await this.l1Provider.getGasPrice();
       logger.info(
-        `${logPrefix} Current gas price: ${ethers.utils.formatUnits(gasPrice, 'gwei')} gwei`,
+        `[${this.config.chainName}] ${logPrefix} Current gas price: ${ethers.utils.formatUnits(gasPrice, 'gwei')} gwei`,
       );
 
       const totalGasCost = gasEstimate.mul(gasPrice);
@@ -497,15 +518,15 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       // 4. Balance Check
       const relayerBalance = await this.l1Signer.getBalance();
       logger.info(
-        `${logPrefix} Relayer L1 balance: ${ethers.utils.formatEther(relayerBalance)} ETH`,
+        `[${this.config.chainName}] ${logPrefix} Relayer L1 balance: ${ethers.utils.formatEther(relayerBalance)} ETH`,
       );
       logger.info(
-        `${logPrefix} Required balance for finalization (fee + gas): ${ethers.utils.formatEther(requiredBalance)} ETH`,
+        `[${this.config.chainName}] ${logPrefix} Required balance for finalization (fee + gas): ${ethers.utils.formatEther(requiredBalance)} ETH`,
       );
 
       if (relayerBalance.lt(requiredBalance)) {
         const errorMessage = `Insufficient ETH balance for finalization. Required: ${ethers.utils.formatEther(requiredBalance)}, Have: ${ethers.utils.formatEther(relayerBalance)}`;
-        logger.error(`${logPrefix} ${errorMessage}`);
+        logger.error(`[${this.config.chainName}] ${logPrefix} ${errorMessage}`);
         await logDepositError(deposit.id, errorMessage, {
           requiredBalance: requiredBalance.toString(),
           relayerBalance: relayerBalance.toString(),
@@ -521,19 +542,25 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
       // 5. Simulate Transaction
       try {
-        logger.info(`${logPrefix} Simulating finalizeDeposit call...`);
+        logger.info(`[${this.config.chainName}] ${logPrefix} Simulating finalizeDeposit call...`);
         await this.l1DepositorContract.callStatic.finalizeDeposit(depositKey, txOverrides);
-        logger.info(`${logPrefix} Simulation successful. Proceeding with actual transaction.`);
+        logger.info(
+          `[${this.config.chainName}] ${logPrefix} Simulation successful. Proceeding with actual transaction.`,
+        );
       } catch (error: any) {
         if (error.message?.includes('Deposit not finalized by the bridge')) {
           logger.warn(
-            `${logPrefix} Simulation reverted with expected reason: 'Deposit not finalized by the bridge'. This is likely a transient state. Will retry later.`,
+            `[${this.config.chainName}] ${logPrefix} Simulation reverted with expected reason: 'Deposit not finalized by the bridge'. This is likely a transient state. Will retry later.`,
           );
           return undefined;
         } else {
           const errorMessage = `Simulation failed with unexpected error: ${error.message}`;
-          logger.error(`${logPrefix} ${errorMessage}. Aborting finalization.`);
-          logErrorContext(`${logPrefix} ${errorMessage}`, error);
+          logger.error(
+            `[${this.config.chainName}] ${logPrefix} ${errorMessage}. Aborting finalization.`,
+          );
+          logErrorContext(`${logPrefix} ${errorMessage}`, error, {
+            chainName: this.config.chainName,
+          });
           await logDepositError(
             deposit.id,
             `L1 finalizeDeposit simulation failed: ${error.message}`,
@@ -544,7 +571,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       }
 
       logger.info(
-        `${logPrefix} Calling L1 Depositor contract finalizeDeposit for depositKey: ${depositKey} with fee: ${ethers.utils.formatEther(
+        `[${this.config.chainName}] ${logPrefix} Calling L1 Depositor contract finalizeDeposit for depositKey: ${depositKey} with fee: ${ethers.utils.formatEther(
           txOverrides.value as BigNumberish,
         )} ETH, gasLimit: ${txOverrides.gasLimit?.toString()}, gasPrice: ${ethers.utils.formatUnits(txOverrides.gasPrice as BigNumberish, 'gwei')} gwei.`,
       );
@@ -552,21 +579,21 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       const txResponse = await this.l1DepositorContract.finalizeDeposit(depositKey, txOverrides);
 
       logger.info(
-        `${logPrefix} L1 finalizeDeposit transaction sent. | Hash: ${txResponse.hash} | Waiting for receipt...`,
+        `[${this.config.chainName}] ${logPrefix} L1 finalizeDeposit transaction sent. | Hash: ${txResponse.hash} | Waiting for receipt...`,
       );
 
       const txReceipt = await txResponse.wait(this.config.l1Confirmations);
 
       if (txReceipt.status === 1) {
         logger.info(
-          `${logPrefix} L1 finalizeDeposit transaction successful. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`,
+          `[${this.config.chainName}] ${logPrefix} L1 finalizeDeposit transaction successful. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`,
         );
         await updateToFinalizedDeposit(deposit, { hash: txReceipt.transactionHash });
         return txReceipt;
       } else {
         const revertMsg = `${logPrefix} L1 finalizeDeposit transaction reverted. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`;
-        logger.error(revertMsg);
-        logErrorContext(revertMsg, { receipt: txReceipt });
+        logger.error(`[${this.config.chainName}] ${revertMsg}`);
+        logErrorContext(revertMsg, { receipt: txReceipt }, { chainName: this.config.chainName });
         await logDepositError(
           deposit.id,
           `L1 finalizeDeposit tx reverted: ${txReceipt.transactionHash}`,
@@ -577,8 +604,12 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         return undefined;
       }
     } catch (error: any) {
-      logger.error(`${logPrefix} Error during L1 finalizeDeposit: ${error.message}`);
-      logErrorContext(`${logPrefix} Error during L1 finalizeDeposit: ${error.message}`, error);
+      logger.error(
+        `[${this.config.chainName}] ${logPrefix} Error during L1 finalizeDeposit: ${error.message}`,
+      );
+      logErrorContext(`${logPrefix} Error during L1 finalizeDeposit: ${error.message}`, error, {
+        chainName: this.config.chainName,
+      });
       await logDepositError(deposit.id, `Error during L1 finalizeDeposit: ${error.message}`, error);
       return undefined;
     }
@@ -602,15 +633,18 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     const logId = deposit.id || depositId;
     const logPrefix = `INITIALIZE_DEPOSIT ${this.config.chainName} ${logId} |`;
 
-    logger.info(`${logPrefix} Attempting to initialize deposit on L1 Depositor contract.`);
+    logger.info(
+      `[${this.config.chainName}] ${logPrefix} Attempting to initialize deposit on L1 Depositor contract.`,
+    );
 
     if (!this.l1DepositorContract) {
       logger.error(
-        `${logPrefix} L1 Depositor contract (signer) instance not available. Cannot initialize deposit.`,
+        `[${this.config.chainName}] ${logPrefix} L1 Depositor contract (signer) instance not available. Cannot initialize deposit.`,
       );
       logErrorContext(
         `${logPrefix} L1 Depositor contract (signer) not available`,
         new Error('L1 Depositor contract (signer) not available'),
+        { chainName: this.config.chainName },
       );
       await logDepositError(
         logId,
@@ -626,11 +660,13 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     // Query on-chain directly via provider using depositKey (bytes32)
     const depositState = await this.l1DepositorContractProvider!.deposits(depositKey);
-    logger.info(`${logPrefix} Deposit state for deposit key ${depositKey}: ${depositState}`);
+    logger.info(
+      `[${this.config.chainName}] ${logPrefix} Deposit state for deposit key ${depositKey}: ${depositState}`,
+    );
 
     if (depositState !== 0) {
       logger.warn(
-        `${logPrefix} Deposit already initialized. ID: ${depositId}. Returning existing initialization receipt.`,
+        `[${this.config.chainName}] ${logPrefix} Deposit already initialized. ID: ${depositId}. Returning existing initialization receipt.`,
       );
       const previousTxHash = deposit.hashes.eth.initializeTxHash;
 
@@ -643,7 +679,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
           }
         } catch (err: any) {
           logger.warn(
-            `${logPrefix} Failed to fetch existing receipt for hash ${previousTxHash}: ${err.message}`,
+            `[${this.config.chainName}] ${logPrefix} Failed to fetch existing receipt for hash ${previousTxHash}: ${err.message}`,
           );
         }
       }
@@ -656,7 +692,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       } as ethers.providers.TransactionReceipt;
     }
 
-    logger.info(`${logPrefix} Deposit not initialized. ID: ${depositId}`);
+    logger.info(
+      `[${this.config.chainName}] ${logPrefix} Deposit not initialized. ID: ${depositId}`,
+    );
 
     try {
       l2DepositOwner = toUint256StarknetAddress(l2DepositOwner);
@@ -665,7 +703,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       }
     } catch (err) {
       logger.error(
-        `${logPrefix} Invalid deposit owner address: ${deposit.L1OutputEvent.l2DepositOwner}`,
+        `[${this.config.chainName}] ${logPrefix} Invalid deposit owner address: ${deposit.L1OutputEvent.l2DepositOwner}`,
       );
       await logDepositError(logId, 'Invalid deposit owner address.', {
         address: deposit.L1OutputEvent.l2DepositOwner,
@@ -675,10 +713,13 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     try {
       logger.info(
-        `${logPrefix} Calling L1 Depositor contract initializeDeposit for StarkNet recipient: ${l2DepositOwner})`,
+        `[${this.config.chainName}] ${logPrefix} Calling L1 Depositor contract initializeDeposit for StarkNet recipient: ${l2DepositOwner})`,
       );
-      logger.debug(`${logPrefix} L1 Contract Funding Tx Arg:`, fundingTx);
-      logger.debug(`${logPrefix} L1 Contract Reveal Arg:`, reveal);
+      logger.debug(
+        `[${this.config.chainName}] ${logPrefix} L1 Contract Funding Tx Arg:`,
+        fundingTx,
+      );
+      logger.debug(`[${this.config.chainName}] ${logPrefix} L1 Contract Reveal Arg:`, reveal);
 
       const l2DepositOwnerBN = ethers.BigNumber.from(l2DepositOwner);
       const txResponse = await this.l1DepositorContract.initializeDeposit(
@@ -688,7 +729,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       );
 
       logger.info(
-        `${logPrefix} L1 initializeDeposit transaction sent. TxHash: ${txResponse.hash}. Waiting for confirmations...`,
+        `[${this.config.chainName}] ${logPrefix} L1 initializeDeposit transaction sent. TxHash: ${txResponse.hash}. Waiting for confirmations...`,
       );
       deposit.hashes.eth.initializeTxHash = txResponse.hash;
 
@@ -696,14 +737,14 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
       if (txReceipt.status === 1) {
         logger.info(
-          `${logPrefix} L1 initializeDeposit transaction successful. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`,
+          `[${this.config.chainName}] ${logPrefix} L1 initializeDeposit transaction successful. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`,
         );
         await updateToInitializedDeposit(deposit, { hash: txReceipt.transactionHash });
         return txReceipt;
       } else {
         const revertMsg = `${logPrefix} L1 initializeDeposit transaction reverted. TxHash: ${txReceipt.transactionHash}, Block: ${txReceipt.blockNumber}.`;
-        logger.error(revertMsg);
-        logErrorContext(revertMsg, { receipt: txReceipt });
+        logger.error(`[${this.config.chainName}] ${revertMsg}`);
+        logErrorContext(revertMsg, { receipt: txReceipt }, { chainName: this.config.chainName });
         await logDepositError(
           logId,
           `L1 initializeDeposit tx reverted: ${txReceipt.transactionHash}`,
@@ -715,8 +756,12 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         return undefined;
       }
     } catch (error: any) {
-      logger.error(`${logPrefix} Error during L1 initializeDeposit: ${error.message}`);
-      logErrorContext(`${logPrefix} Error during L1 initializeDeposit: ${error.message}`, error);
+      logger.error(
+        `[${this.config.chainName}] ${logPrefix} Error during L1 initializeDeposit: ${error.message}`,
+      );
+      logErrorContext(`${logPrefix} Error during L1 initializeDeposit: ${error.message}`, error, {
+        chainName: this.config.chainName,
+      });
 
       await logDepositError(logId, `Error during L1 initializeDeposit: ${error.message}`, error);
       return undefined;
@@ -732,7 +777,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   protected async hasDepositBeenMintedOnTBTC(deposit: Deposit): Promise<boolean> {
     if (!this.tbtcVaultProvider) {
       logger.warn(
-        `hasDepositBeenMintedOnTBTC | TBTCVault provider not available for ${this.config.chainName}. Cannot check minting status for deposit ${deposit.id}.`,
+        `[${this.config.chainName}] hasDepositBeenMintedOnTBTC | TBTCVault provider not available. Cannot check minting status for deposit ${deposit.id}.`,
       );
       return false;
     }
@@ -741,7 +786,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     try {
       logger.debug(
-        `hasDepositBeenMintedOnTBTC | Checking for OptimisticMintingFinalized event for depositKey ${deposit.id} (uint256: ${depositKeyUint256.toString()}) on chain ${this.config.chainName}`,
+        `[${this.config.chainName}] hasDepositBeenMintedOnTBTC | Checking for OptimisticMintingFinalized event for depositKey ${deposit.id} (uint256: ${depositKeyUint256.toString()})`,
       );
 
       let fromBlock: number | undefined = undefined;
@@ -755,7 +800,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
           }
         } catch (receiptError: any) {
           logger.warn(
-            `hasDepositBeenMintedOnTBTC | Error fetching receipt for l1InitializeTxHash ${deposit.hashes.eth.initializeTxHash} to determine fromBlock: ${receiptError.message}`,
+            `[${this.config.chainName}] hasDepositBeenMintedOnTBTC | Error fetching receipt for l1InitializeTxHash ${deposit.hashes.eth.initializeTxHash} to determine fromBlock: ${receiptError.message}`,
           );
         }
       }
@@ -766,7 +811,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
       if (fromBlock) {
         logger.info(
-          `hasDepositBeenMintedOnTBTC | Checking for OptimisticMintingFinalized event for depositKey ${deposit.id} (uint256: ${depositKeyUint256.toString()}) on chain ${this.config.chainName} from block ${fromBlock}`,
+          `[${this.config.chainName}] hasDepositBeenMintedOnTBTC | Checking for OptimisticMintingFinalized event for depositKey ${deposit.id} (uint256: ${depositKeyUint256.toString()}) from block ${fromBlock}`,
         );
 
         const events = await this.tbtcVaultProvider.queryFilter(
@@ -776,24 +821,26 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
         if (events.length > 0) {
           logger.info(
-            `hasDepositBeenMintedOnTBTC | Found ${events.length} OptimisticMintingFinalized event for depositKey ${deposit.id} on chain ${this.config.chainName}`,
+            `[${this.config.chainName}] hasDepositBeenMintedOnTBTC | Found ${events.length} OptimisticMintingFinalized event for depositKey ${deposit.id}`,
           );
           return true;
         } else {
           logger.info(
-            `hasDepositBeenMintedOnTBTC | No OptimisticMintingFinalized event found for depositKey ${deposit.id} on chain ${this.config.chainName} in the queried range.`,
+            `[${this.config.chainName}] hasDepositBeenMintedOnTBTC | No OptimisticMintingFinalized event found for depositKey ${deposit.id} in the queried range.`,
           );
           return false;
         }
       } else {
         logger.warn(
-          `hasDepositBeenMintedOnTBTC | No valid fromBlock determined for depositKey ${deposit.id} on chain ${this.config.chainName}. Cannot check minting status.`,
+          `[${this.config.chainName}] hasDepositBeenMintedOnTBTC | No valid fromBlock determined for depositKey ${deposit.id}. Cannot check minting status.`,
         );
         return false;
       }
     } catch (error: any) {
       const errorMsg = `Error checking deposit ${deposit.id} minting status on chain ${this.config.chainName}: ${error.message}`;
-      logger.error(errorMsg, { error: logErrorContext(errorMsg, error) });
+      logger.error(`[${this.config.chainName}] ${errorMsg}`, error, {
+        chainName: this.config.chainName,
+      });
       logDepositError(deposit.id, errorMsg, error);
       return false;
     }
@@ -808,7 +855,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     const toBlock = options.toBlock || latestBlock;
 
     logger.info(
-      `Checking for past DepositInitialized L1 events for ${this.config.chainName} from block ${options.fromBlock} to ${toBlock}`,
+      `[${this.config.chainName}] Checking for past DepositInitialized L1 events from block ${options.fromBlock} to ${toBlock}`,
     );
 
     try {
@@ -825,6 +872,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       logger.error(
         `Error querying past DepositInitialized L1 events for ${this.config.chainName}: ${error.message}`,
         error,
+        { chainName: this.config.chainName },
       );
     }
   }
@@ -836,12 +884,12 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   ): Promise<void> {
     if (events.length > 0) {
       logger.info(
-        `Found ${events.length} past DepositInitialized L1 events for ${this.config.chainName} in range [${fromBlock} - ${toBlock}]`,
+        `[${this.config.chainName}] Found ${events.length} past DepositInitialized L1 events in range [${fromBlock} - ${toBlock}]`,
       );
       for (const event of events) {
         if (!event.args) {
           logger.warn(
-            `processPastL1DepositInitializedEvents | Event args undefined for past event. Tx: ${event.transactionHash}`,
+            `[${this.config.chainName}] processPastL1DepositInitializedEvents | Event args undefined for past event. Tx: ${event.transactionHash}`,
           );
           continue;
         }
@@ -851,12 +899,12 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
         const existingDeposit = await DepositStore.getById(depositId);
         if (existingDeposit) {
-          logger.debug(`Deposit ${depositId} already exists. Skipping.`);
+          logger.debug(`[${this.config.chainName}] Deposit ${depositId} already exists. Skipping.`);
           continue;
         }
 
         logger.info(
-          `Found an untracked 'DepositInitialized' event for deposit ${depositId}. Attempting to back-fill.`,
+          `[${this.config.chainName}] Found an untracked 'DepositInitialized' event for deposit ${depositId}. Attempting to back-fill.`,
         );
 
         // The DepositInitialized event does not contain the fundingTxHash or fundingOutputIndex.
@@ -869,7 +917,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         );
 
         await DepositStore.create(newDeposit);
-        logger.info(`Successfully back-filled missing deposit: ${depositId}`);
+        logger.info(
+          `[${this.config.chainName}] Successfully back-filled missing deposit: ${depositId}`,
+        );
       }
     }
   }

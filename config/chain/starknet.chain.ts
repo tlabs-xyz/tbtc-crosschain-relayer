@@ -46,6 +46,7 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     ),
     l1Confirmations: commonTestnetStarknetInput.l1Confirmations,
     useEndpoint: commonTestnetStarknetInput.useEndpoint,
+    enableL2Redemption: false, // Starknet does not support L2 redemption
     supportsRevealDepositAPI: commonTestnetStarknetInput.supportsRevealDepositAPI,
     endpointUrl: commonTestnetStarknetInput.endpointUrl,
     l1FeeAmountWei: getEnv(
