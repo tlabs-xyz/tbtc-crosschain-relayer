@@ -16,7 +16,6 @@ import {
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
   getDepositKey,
-  createInitializedDepositFromOnChainData,
   createPartialDepositFromOnChainData,
 } from '../utils/Deposits.js';
 import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
@@ -155,16 +154,6 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     );
 
     logger.info(`L1 event listener is active for ${this.config.chainName}`);
-
-    // TODO: Unused, remove dead code
-    // this.checkForPastL1DepositorEvents({
-    //   fromBlock: this.config.l1StartBlock,
-    // }).catch((error) => {
-    //   logger.error(
-    //     `Error during initial scan for past L1 Depositor bridge events for ${this.config.chainName}: ${error.message}`,
-    //     error,
-    //   );
-    // });
 
     this.checkForPastL1DepositInitializedEvents({
       fromBlock: this.config.l1StartBlock,
@@ -363,6 +352,24 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   }
 
   /**
+   * Computes the depositKey (bytes32) for contract calls from a deposit object.
+   * This handles both "full" deposits created via API and "partial" deposits
+   * created by back-filling from on-chain events.
+   * @param deposit The deposit object
+   * @returns The deposit key as a bytes32 hex string
+   */
+  private _getOnChainDepositKey(deposit: Deposit): string {
+    // A "partial" deposit (from back-filling) won't have a fundingTxHash or L1OutputEvent.
+    // In this case, its ID *is* the depositKey (stored as a decimal string), which needs to be formatted as bytes32.
+    if (!deposit.fundingTxHash || !deposit.L1OutputEvent) {
+      const depositKeyAsBN = ethers.BigNumber.from(deposit.id);
+      return ethers.utils.hexZeroPad(depositKeyAsBN.toHexString(), 32);
+    }
+    // A "full" deposit has all funding info, so we can recalculate the key.
+    return this.toDepositKey(deposit);
+  }
+
+  /**
    * Checks the deposit status on L1 using the correct depositKey (bytes32).
    * Accepts either a deposit object or a depositId string (decimal). For Starknet, if a string is passed,
    * attempts to look up the Deposit object. If not found, returns null. This ensures a symmetric API for all chains.
@@ -383,7 +390,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       } else {
         deposit = depositOrId;
       }
-      const depositKey = this.toDepositKey(deposit);
+
+      const depositKey = this._getOnChainDepositKey(deposit);
+
       if (!this.l1DepositorContractProvider) {
         logger.error('L1 Depositor contract provider not available for status check.');
         return null;
@@ -406,19 +415,17 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   public async finalizeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
-    const depositKey = deposit.id; // Use the ID directly as it's the depositKey
-    const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${depositKey} |`;
+    const depositKey = this._getOnChainDepositKey(deposit);
+    const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${deposit.id} |`;
 
-    logger.info(`${logPrefix} Attempting to finalize deposit on L1 Depositor contract.`);
+    logger.info(
+      `${logPrefix} Attempting to finalize deposit on L1 Depositor contract (key: ${depositKey}).`,
+    );
 
     if (!this.l1DepositorContract || !this.l1Signer) {
       const errorMessage =
         'L1 Depositor contract (signer) instance not available. Cannot finalize deposit.';
       logger.error(`${logPrefix} ${errorMessage}`);
-      logErrorContext(
-        `${logPrefix} L1 Depositor contract (signer) not available`,
-        new Error(errorMessage),
-      );
       await logDepositError(deposit.id, errorMessage, {
         internalError: 'L1 Depositor contract (signer) not available',
       });
@@ -429,43 +436,35 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     const onChainStatus = await this.checkDepositStatus(deposit);
     logger.info(`${logPrefix} On-chain deposit status: ${onChainStatus}`);
 
-    if (onChainStatus === null) {
-      logger.error(
-        `${logPrefix} Could not retrieve on-chain deposit status. Aborting finalization.`,
-      );
-      return undefined;
-    }
-    if (onChainStatus === 2) {
-      // Finalized
-      logger.warn(`${logPrefix} Deposit is already finalized on-chain. Skipping.`);
-      // Consider returning a synthetic receipt if needed for endpoint consistency
-      return undefined;
-    }
-    if (onChainStatus !== 1) {
-      // Not Initialized
-      logger.error(
-        `${logPrefix} Deposit is not in Initialized state (state=${onChainStatus}). Cannot finalize. Aborting.`,
-      );
-      return undefined;
+    switch (onChainStatus) {
+      case null:
+      case undefined:
+        logger.error(
+          `${logPrefix} Could not retrieve on-chain deposit status. Aborting finalization.`,
+        );
+        return undefined;
+      case DepositStatus.FINALIZED:
+        logger.warn(`${logPrefix} Deposit is already finalized on-chain. Skipping.`);
+        return undefined;
+      case DepositStatus.INITIALIZED:
+        break; // Proceed with finalization
+      default:
+        logger.error(
+          `${logPrefix} Deposit is not in Initialized state (state=${onChainStatus}). Cannot finalize. Aborting.`,
+        );
+        return undefined;
     }
 
     try {
       // 2. Fee Calculation - Get fee from StarkGate bridge
       let fee: ethers.BigNumber;
-      if (this.starkGateBridgeContract) {
-        try {
-          fee = await this.starkGateBridgeContract.estimateDepositFeeWei();
-          logger.info(
-            `${logPrefix} Fee from StarkGate bridge: ${ethers.utils.formatEther(fee)} ETH`,
-          );
-        } catch (error: any) {
-          logger.warn(
-            `${logPrefix} Failed to get fee from StarkGate bridge, falling back to hardcoded value. Error: ${error.message}`,
-          );
-          fee = ethers.utils.parseEther('0.0001'); // Fallback fee from example
-        }
-      } else {
-        logger.warn(`${logPrefix} StarkGate bridge contract not available, using hardcoded fee.`);
+      try {
+        fee = await this.starkGateBridgeContract.estimateDepositFeeWei();
+        logger.info(`${logPrefix} Fee from StarkGate bridge: ${ethers.utils.formatEther(fee)} ETH`);
+      } catch (error: any) {
+        logger.warn(
+          `${logPrefix} Failed to get fee from StarkGate bridge, falling back to hardcoded value. Error: ${error.message}`,
+        );
         fee = ethers.utils.parseEther('0.0001'); // Fallback fee from example
       }
 
@@ -481,7 +480,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         logger.warn(
           `${logPrefix} Gas estimation failed, using manual gas limit as fallback. Error: ${error.message}`,
         );
-        gasEstimate = ethers.BigNumber.from(500000); // Fallback gas limit from example
+        gasEstimate = ethers.BigNumber.from(500000);
       }
 
       const gasPrice = await this.l1Provider.getGasPrice();

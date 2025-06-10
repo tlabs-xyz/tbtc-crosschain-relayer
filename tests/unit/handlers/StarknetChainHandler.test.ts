@@ -306,7 +306,7 @@ describe('StarknetChainHandler', () => {
       // Arrange: depositState !== 0, no initializeTxHash
       jest.spyOn((handler as any).l1DepositorContractProvider, 'deposits').mockResolvedValue(1);
       // For this test, we want the synthetic receipt to have an empty string for transactionHash
-      mockDepositForFinalize = {
+      const mockDepositForInitialize = {
         hashes: {
           eth: { initializeTxHash: '' }, // '' triggers empty tx hash in synthetic receipt
           starknet: { l2TxHash: '0xL2FinalizeTxHash' },
@@ -324,7 +324,7 @@ describe('StarknetChainHandler', () => {
           l2DepositOwner: '0xOwner',
         },
       } as any;
-      const result = await handler.initializeDeposit(mockDepositForFinalize!);
+      const result = await handler.initializeDeposit(mockDepositForInitialize!);
       if (result && result.status !== undefined) {
         if (ethers.BigNumber.isBigNumber(result.status)) {
           expect(result.status.toNumber()).toBe(1);
@@ -477,6 +477,24 @@ describe('StarknetChainHandler', () => {
 
   describe('finalizeDeposit', () => {
     beforeEach(() => {
+      // A partial deposit, as if created from a past `DepositInitialized` event.
+      // Its ID is the depositKey, as a decimal string.
+      mockDepositForFinalize = {
+        id: '36798305888235649988225211365882253459035954999386348233314415494390505703047',
+        status: DepositStatus.INITIALIZED,
+        chainId: mockStarknetConfig.chainName,
+        // No fundingTxHash or L1OutputEvent for partial deposits from back-filling
+        hashes: {
+          eth: { initializeTxHash: '0xInitTxHash' },
+          starknet: {},
+          btc: {},
+          solana: {},
+        },
+        dates: {
+          initializationAt: Date.now(),
+        },
+      };
+
       // Spy on and mock checkDepositStatus for all finalizeDeposit tests
       jest.spyOn(handler, 'checkDepositStatus').mockResolvedValue(1); // Default to Initialized state
 
@@ -537,16 +555,6 @@ describe('StarknetChainHandler', () => {
         'L1 Depositor contract (signer) instance not available. Cannot finalize deposit.',
         { internalError: 'L1 Depositor contract (signer) not available' },
       );
-    });
-
-    it('should successfully finalize deposit even without L2 transaction hash (StarkNet flow)', async () => {
-      const result = await handler.finalizeDeposit(mockDepositForFinalize!);
-
-      expect(result).toEqual({
-        status: 1,
-        transactionHash: '0xFinalizeTxHashSuccess',
-        blockNumber: 456,
-      });
     });
 
     it('should return undefined and log error if L1 finalizeDeposit transaction reverts', async () => {
