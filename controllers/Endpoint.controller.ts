@@ -5,8 +5,8 @@ import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
-import type { Reveal } from '../types/Reveal.type.js';
 import { DepositStore } from '../utils/DepositStore.js';
+import { RevealRequestSchema } from '../config/schemas/endpoint.request.schema.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -36,40 +36,32 @@ export class EndpointController {
    * @param res Express response object
    */
   async handleReveal(req: Request, res: Response): Promise<void> {
+    const logApiData = {
+      fundingTxHash: req.body.fundingTx ? getFundingTxHash(req.body.fundingTx) : 'unknown',
+    };
+    logApiRequest('/api/reveal', 'POST', null, logApiData);
+
     try {
-      logger.debug('Received reveal data via endpoint');
-
-      // Extract data from request body
-      const { fundingTx, reveal, l2DepositOwner, l2Sender } = req.body;
-
-      // Log API request
-      logApiRequest('/api/reveal', 'POST', null, {
-        fundingTxHash: fundingTx ? fundingTx.txHash : null,
-      });
-
-      // Validate required fields
-      if (!fundingTx || !reveal || !l2DepositOwner || !l2Sender) {
-        const error = 'Missing required fields in request body';
-        logApiRequest(
-          '/api/reveal',
-          'POST',
-          null,
-          {
-            fundingTxHash: fundingTx ? fundingTx.txHash : null,
-          },
-          400,
-        );
+      // Validate request body against the schema
+      const validationResult = RevealRequestSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        const error = 'Invalid request body';
+        logger.error(`${error}: ${validationResult.error.flatten()}`);
+        logApiRequest('/api/reveal', 'POST', null, logApiData, 400);
 
         res.status(400).json({
           success: false,
           error,
+          details: validationResult.error.flatten(),
         });
         return;
       }
-      const revealData: Reveal = reveal as Reveal;
+
+      // Use the validated data from now on
+      const { fundingTx, reveal, l2DepositOwner, l2Sender } = validationResult.data;
 
       const fundingTxHash = getFundingTxHash(fundingTx);
-      const depositId = getDepositId(fundingTxHash, revealData.fundingOutputIndex);
+      const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
       logger.info(
         `Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
@@ -90,7 +82,7 @@ export class EndpointController {
       // Create deposit object
       const deposit = createDeposit(
         fundingTx,
-        revealData,
+        reveal,
         l2DepositOwner,
         l2Sender,
         this.chainHandler.config.chainName,
@@ -139,7 +131,7 @@ export class EndpointController {
       logErrorContext('Error handling reveal endpoint:', error);
 
       // Log error to audit log
-      const depositId = req.body.fundingTx?.txHash || 'unknown';
+      const depositId = req.body.fundingTx ? getFundingTxHash(req.body.fundingTx) : 'unknown';
       logDepositError(depositId, 'Error handling reveal endpoint', error);
       logApiRequest('/api/reveal', 'POST', depositId, {}, 500);
 
