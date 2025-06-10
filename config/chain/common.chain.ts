@@ -1,7 +1,7 @@
 import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
 import { NETWORK } from '../schemas/common.schema.js';
 import { z } from 'zod';
-import { getEnv } from '../../utils/Env.js';
+import { getEnv, getEnvBoolean } from '../../utils/Env.js';
 // Re-export for convenience
 export type { CommonChainInput } from '../schemas/common.schema.js';
 
@@ -91,7 +91,7 @@ export const L1_CONFIRMATIONS = {
 
 // Common feature flags
 export const FEATURE_FLAGS = {
-  USE_ENDPOINT: true, // Enable endpoint mode for testing
+  USE_ENDPOINT: getEnvBoolean('USE_ENDPOINT'),
   ENABLE_L2_REDEMPTION_MAINNET: true,
   ENABLE_L2_REDEMPTION_TESTNET: true,
   ENABLE_L2_REDEMPTION_DEVNET: true,

@@ -95,6 +95,11 @@ export const startCronJobs = () => {
         try {
           const l2Service = l2RedemptionServices.get(chainName);
           if (!l2Service) {
+            // TODO: Handle more gracefully
+            if (chainName === 'StarknetTestnet') {
+              logger.info(`L2 redemption cron job for ${chainName} is disabled.`);
+              return;
+            }
             logger.error(
               `Config not found for chain ${chainName} in L2 redemption cron. Skipping.`,
             );

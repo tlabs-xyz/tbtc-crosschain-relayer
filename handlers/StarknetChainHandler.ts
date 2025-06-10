@@ -156,6 +156,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     logger.info(`L1 event listener is active for ${this.config.chainName}`);
 
+    // TODO: Unused, remove dead code
     // this.checkForPastL1DepositorEvents({
     //   fromBlock: this.config.l1StartBlock,
     // }).catch((error) => {
@@ -405,10 +406,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   public async finalizeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
-    const fundingTxHash = getFundingTxHash(deposit.L1OutputEvent.fundingTx);
-    const depositId = getDepositId(fundingTxHash, deposit.L1OutputEvent.reveal.fundingOutputIndex);
-    const depositKey = this.toDepositKey(deposit);
-    const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${depositId} |`;
+    const depositKey = deposit.id; // Use the ID directly as it's the depositKey
+    const logPrefix = `FINALIZE_DEPOSIT ${this.config.chainName} ${depositKey} |`;
 
     logger.info(`${logPrefix} Attempting to finalize deposit on L1 Depositor contract.`);
 
