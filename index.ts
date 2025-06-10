@@ -80,10 +80,6 @@ async function initializeBackgroundServices() {
   await initializeAllL2RedemptionServices();
   logger.info('All L2 redemption listeners initialized successfully.');
 
-  logger.info('Running startup tasks...');
-  await runStartupTasks();
-  logger.info('Startup tasks complete.');
-
   logger.info('Starting cron jobs...');
   startCronJobs();
   logger.info('Cron jobs started.');
@@ -182,6 +178,13 @@ const main = async () => {
     app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
       logger.info(`Server listening on port ${appConfig.APP_PORT}`);
     });
+
+    logger.info('Server is ready.');
+
+    // Run startup tasks after server is ready
+    logger.info('Running startup tasks...');
+    await runStartupTasks();
+    logger.info('Startup tasks complete. Server is ready.');
   } else {
     logger.info(
       'Server not started in test environment (tests will manage their own server instances if needed).',
