@@ -182,20 +182,23 @@ const main = async () => {
     logger.info('Server is ready.');
 
     // Run startup tasks after server is ready
-    try {
-      await runStartupTasks();
-    } catch (error) {
-      logErrorContext('Error during startup tasks:', error);
-      if (appConfig.NODE_ENV !== 'test') {
-        process.exit(1);
+    if(!process.env.CI) {
+      try {
+        await runStartupTasks();
+      } catch (error) {
+        logErrorContext('Error during startup tasks:', error);
+        if (appConfig.NODE_ENV !== 'test') {
+          process.exit(1);
+        }
+        throw error;
       }
-      throw error;
+    } else {
+      logger.info(
+        'Server not started in test environment (tests will manage their own server instances if needed).',
+      );
     }
-  } else {
-    logger.info(
-      'Server not started in test environment (tests will manage their own server instances if needed).',
-    );
-  }
+    }
+
   logger.info('Application initialization sequence complete.');
 };
 
