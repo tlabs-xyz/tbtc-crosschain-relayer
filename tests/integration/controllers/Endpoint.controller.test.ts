@@ -10,6 +10,26 @@ import { prisma } from '../../../utils/prisma.js';
 // Mock DepositStore
 jest.mock('../../../utils/DepositStore.js');
 
+const createValidRevealRequestBody = () => ({
+  fundingTx: {
+    version: '0x01000000',
+    inputVector:
+      '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
+    outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
+    locktime: '0x00000000',
+  },
+  reveal: {
+    fundingOutputIndex: 0,
+    blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(8)), // 16 hex chars
+    walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)), // 40 hex chars
+    refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)), // 40 hex chars
+    refundLocktime: ethers.utils.hexlify(ethers.utils.randomBytes(4)), // 8 hex chars
+    vault: ethers.utils.hexlify(ethers.utils.randomBytes(20)), // 40 hex chars
+  },
+  l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+  l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
+});
+
 // Mock Express request and response
 const mockRequest = () => {
   const req: Partial<Request> = {
@@ -39,9 +59,6 @@ describe('EndpointController', () => {
     // Create a new MockChainHandler for each test
     mockChainHandler = new MockChainHandler();
 
-    // Set processing delay to 0 for faster tests
-    mockChainHandler.setProcessingDelay(0);
-
     // Create a new EndpointController with the MockChainHandler
     endpointController = new EndpointController(mockChainHandler);
 
@@ -67,32 +84,18 @@ describe('EndpointController', () => {
 
   describe('handleReveal', () => {
     test('should successfully handle a valid reveal request', async () => {
-      // Create mock request with required parameters
-      const req = mockRequest();
-      const mockFundingTxHash = ethers.utils.hexlify(ethers.utils.randomBytes(32));
-      const mockFundingOutputIndex = 0;
+      // Mock initializeDeposit to be successful
+      const mockReceipt = {
+        transactionHash: '0x123',
+        status: 1,
+      } as ethers.providers.TransactionReceipt;
+      const initializeDepositSpy = jest
+        .spyOn(mockChainHandler, 'initializeDeposit')
+        .mockResolvedValue(mockReceipt);
 
-      req.body = {
-        fundingTxHash: mockFundingTxHash,
-        fundingTx: {
-          value: ethers.utils.parseEther('0.1').toString(),
-          version: '0x01000000',
-          inputVector:
-            '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
-          locktime: '0x00000000',
-        },
-        reveal: {
-          fundingOutputIndex: mockFundingOutputIndex,
-          blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundLocktime: ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-          vault: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        },
-        l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-      };
+      // Create mock request with valid data
+      const req = mockRequest();
+      req.body = createValidRevealRequestBody();
 
       // Create mock response
       const res = mockResponse();
@@ -108,6 +111,7 @@ describe('EndpointController', () => {
           status: DepositStatus.QUEUED,
         }),
       );
+      expect(initializeDepositSpy).toHaveBeenCalled();
 
       // Verify response
       expect(res.status).toHaveBeenCalledWith(200);
@@ -124,9 +128,7 @@ describe('EndpointController', () => {
       // Create mock request with missing fields
       const req = mockRequest();
       req.body = {
-        // Missing fields
         fundingTx: {
-          value: ethers.utils.parseEther('0.1').toString(),
           version: '0x01000000',
           inputVector:
             '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
@@ -147,7 +149,14 @@ describe('EndpointController', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: 'Missing required fields in request body',
+          error: 'Invalid request body',
+          details: expect.objectContaining({
+            fieldErrors: expect.objectContaining({
+              reveal: expect.any(Array),
+              l2DepositOwner: expect.any(Array),
+              l2Sender: expect.any(Array),
+            }),
+          }),
         }),
       );
     });
@@ -159,25 +168,7 @@ describe('EndpointController', () => {
 
       // Create mock request with valid data
       const req = mockRequest();
-      req.body = {
-        fundingTx: {
-          version: '0x01000000',
-          inputVector:
-            '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
-          locktime: '0x00000000',
-        },
-        reveal: {
-          fundingOutputIndex: 0,
-          blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundLocktime: ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-          vault: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        },
-        l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-      };
+      req.body = createValidRevealRequestBody();
 
       const res = mockResponse();
 
@@ -204,25 +195,7 @@ describe('EndpointController', () => {
 
       // Create mock request with valid data
       const req = mockRequest();
-      req.body = {
-        fundingTx: {
-          version: '0x01000000',
-          inputVector:
-            '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
-          locktime: '0x00000000',
-        },
-        reveal: {
-          fundingOutputIndex: 0,
-          blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundLocktime: ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-          vault: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        },
-        l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-      };
+      req.body = createValidRevealRequestBody();
 
       const res = mockResponse();
 
@@ -252,25 +225,7 @@ describe('EndpointController', () => {
 
       // Create mock request with valid data
       const req = mockRequest();
-      req.body = {
-        fundingTx: {
-          version: '0x01000000',
-          inputVector:
-            '0x010000000000000000000000000000000000000000000000000000000000000000ffffffff0000ffffffff',
-          outputVector: '0x0100000000000000001976a914000000000000000000000000000000000000000088ac',
-          locktime: '0x00000000',
-        },
-        reveal: {
-          fundingOutputIndex: 0,
-          blindingFactor: ethers.utils.hexlify(ethers.utils.randomBytes(32)),
-          walletPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundPubKeyHash: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-          refundLocktime: ethers.utils.hexlify(ethers.utils.randomBytes(4)),
-          vault: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        },
-        l2DepositOwner: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-        l2Sender: ethers.utils.hexlify(ethers.utils.randomBytes(20)),
-      };
+      req.body = createValidRevealRequestBody();
 
       const res = mockResponse();
 
@@ -295,57 +250,60 @@ describe('EndpointController', () => {
   });
 
   describe('getDepositStatus', () => {
-    test('should return status for a valid deposit ID', async () => {
-      // Create test deposit and add it to the chain handler
-      const testDeposit = createTestDeposit({
+    test('should return the status of an existing deposit', async () => {
+      const depositId = 'some-deposit-id';
+      const req = mockRequest();
+      req.params = { depositId };
+      const res = mockResponse();
+
+      // Mock the chain handler to return a status
+      mockChainHandler.checkDepositStatus = jest.fn().mockResolvedValue(DepositStatus.INITIALIZED);
+
+      await endpointController.getDepositStatus(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        depositId,
         status: DepositStatus.INITIALIZED,
       });
-      mockChainHandler.addDeposit(testDeposit);
-
-      // Create mock request with deposit ID
-      const req = mockRequest();
-      req.params = {
-        depositId: testDeposit.id,
-      };
-
-      // Create mock response
-      const res = mockResponse();
-
-      // Call getDepositStatus
-      await endpointController.getDepositStatus(req, res);
-
-      // Verify response
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: true,
-          depositId: testDeposit.id,
-          status: DepositStatus.INITIALIZED,
-        }),
-      );
     });
 
-    test('should return 400 for missing deposit ID', async () => {
-      // Create mock request with missing deposit ID
+    test('should return 404 for a non-existent deposit', async () => {
+      const depositId = 'non-existent-id';
       const req = mockRequest();
-      req.params = {
-        // Missing depositId
-      };
-
-      // Create mock response
+      req.params = { depositId };
       const res = mockResponse();
 
-      // Call getDepositStatus
+      // Mock the chain handler to return null (not found)
+      mockChainHandler.checkDepositStatus = jest.fn().mockResolvedValue(null);
+
       await endpointController.getDepositStatus(req, res);
 
-      // Verify response
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: false,
-          error: 'Missing depositId parameter',
-        }),
-      );
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Deposit not found',
+      });
+    });
+
+    test('should return 500 if the handler throws an error', async () => {
+      const depositId = 'any-id';
+      const req = mockRequest();
+      req.params = { depositId };
+      const res = mockResponse();
+      const errorMessage = 'Handler crashed';
+
+      // Mock the chain handler to throw an error
+      mockChainHandler.checkDepositStatus = jest.fn().mockRejectedValue(new Error(errorMessage));
+
+      await endpointController.getDepositStatus(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(500);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: errorMessage,
+      });
     });
   });
 });
