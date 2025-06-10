@@ -35,6 +35,7 @@ export const getStarknetMainnetChainInput = (): StarknetChainInput => {
       'STARKNET_MAINNET_L1_CONTRACT_ADDRESS',
       common.l1ContractAddress as string,
     ),
+    l1StartBlock: 22670140,
   };
   return config;
 };
