@@ -27,6 +27,7 @@ const MINIMAL_VALID_ENV = {
   APP_NAME: 'TestApp',
   APP_VERSION: '1.0.0',
   DATABASE_URL: 'postgresql://user:pass@host:port/db',
+  USE_ENDPOINT: 'false',
 };
 
 beforeAll(() => {
