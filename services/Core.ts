@@ -88,21 +88,25 @@ export async function processRedemptions(): Promise<void> {
   logger.info('Processing redemptions...');
   await Promise.all(
     chainHandlerRegistry.list().map(async (handler) => {
-      const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
+      const config = (handler as BaseChainHandler<AnyChainConfig>).config;
+      const chainName = config.chainName;
       try {
         const l2Service = l2RedemptionServices.get(chainName);
-        if (!l2Service) {
-          if (chainName === 'StarknetTestnet') {
-            logger.info(`L2 redemption processing for ${chainName} is disabled.`);
-            return;
+
+        if (l2Service) {
+          await l2Service.processPendingRedemptions();
+          await l2Service.processVaaFetchedRedemptions();
+        } else {
+          // No L2 service, check if it was expected
+          if (config.enableL2Redemption) {
+            logger.error(
+              `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized. This could be a misconfiguration or an unsupported chain type for L2 redemption.`,
+            );
+          } else {
+            // This is the expected path for chains without L2 redemption enabled (like Starknet by default)
+            logger.info(`L2 redemption processing is disabled by configuration for ${chainName}.`);
           }
-          logger.error(
-            `Config not found for chain ${chainName} in L2 redemption processing. Skipping.`,
-          );
-          return;
         }
-        await l2Service.processPendingRedemptions();
-        await l2Service.processVaaFetchedRedemptions();
       } catch (error) {
         logErrorContext(`Error in redemption processing for ${chainName}:`, error);
       }

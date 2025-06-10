@@ -6,7 +6,6 @@ const CommonConfigForStarknet = CommonChainConfigSchema.omit({
   l2ContractAddress: true,
   l2WormholeGatewayAddress: true,
   l2WormholeChainId: true,
-  enableL2Redemption: true,
   l2WsRpc: true,
   l2StartBlock: true,
 });
