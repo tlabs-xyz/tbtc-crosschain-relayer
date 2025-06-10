@@ -67,7 +67,7 @@ const mockStarknetConfig: StarknetChainConfig = StarknetChainConfigSchema.parse(
   l1ContractAddress: '0x1234567890123456789012345678901234567890',
   vaultAddress: '0xabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde',
   l1BitcoinRedeemerAddress: '0x11223344556677889900aabbccddeeff11223344',
-  l2StartBlock: 0,
+  l1StartBlock: 1,
 
   // StarknetChainBaseSchema fields
   chainType: CHAIN_TYPE.STARKNET,
@@ -338,13 +338,6 @@ describe('StarknetChainHandler', () => {
       expect(result?.blockNumber).toBe(0);
     });
   });
-
-  // TODO: Add test suites for:
-  // - initializeDeposit
-  // - finalizeDeposit
-  // - processTBTCBridgedToStarkNetEvent
-  // - hasDepositBeenMintedOnTBTC
-  // - setupL2Listeners (event registration, past event check trigger)
 
   describe('initializeDeposit', () => {
     let mockDeposit: Deposit;
@@ -1002,24 +995,29 @@ describe('StarknetChainHandler', () => {
       );
     });
 
-    it('should use l2StartBlock as fallback for fromBlock if l1InitializeTxHash is missing or receipt fails', async () => {
-      mockCheckDeposit.hashes.eth.initializeTxHash = null; // No init hash
-      (handler as any).config.l2StartBlock = 50; // Set a specific l2StartBlock for the handler config
+    it('should use l1StartBlock as fallback for fromBlock if l1InitializeTxHash is missing or receipt fails', async () => {
+      const mockCheckDeposit: any = {
+        id: '58391992188997210050777144563280414293789373994467324568422999219237109838331',
+        hashes: { eth: { initializeTxHash: null } },
+      };
+
+      (handler as any).l1Provider.getTransactionReceipt.mockResolvedValue(null);
+      (handler as any).config.l1StartBlock = 50;
       tbtcVaultProviderMock.queryFilter.mockResolvedValue([]);
       (tbtcVaultProviderMock.filters.OptimisticMintingFinalized as jest.Mock).mockReturnValue(
-        'filter_l2StartBlock_test',
+        'filter_l1StartBlock_test',
       );
 
       await (handler as any).hasDepositBeenMintedOnTBTC(mockCheckDeposit);
       expect(tbtcVaultProviderMock.queryFilter).toHaveBeenCalledWith(
-        'filter_l2StartBlock_test',
+        'filter_l1StartBlock_test',
         40, // 50 - 10
       );
     });
 
     it('should log a warning if fromBlock cannot be determined', async () => {
       mockCheckDeposit.hashes.eth.initializeTxHash = null;
-      (handler as any).config.l2StartBlock = 0; // l2StartBlock is not useful
+      (handler as any).config.l1StartBlock = 0;
       tbtcVaultProviderMock.queryFilter.mockResolvedValue([]);
 
       const result = await (handler as any).hasDepositBeenMintedOnTBTC(mockCheckDeposit);
