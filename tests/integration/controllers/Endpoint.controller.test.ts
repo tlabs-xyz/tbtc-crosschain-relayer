@@ -303,6 +303,7 @@ describe('EndpointController', () => {
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: errorMessage,
+        depositId,
       });
     });
   });

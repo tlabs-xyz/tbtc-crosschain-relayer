@@ -281,7 +281,7 @@ describe('StarknetChainHandler', () => {
       } as Partial<StarknetChainConfig>;
       // Expect the constructor to throw due to Zod validation failure
       expect(() => new StarknetChainHandler(invalidConfig as StarknetChainConfig)).toThrowError(
-        'Invalid StarkNet configuration for StarkNetTestnet. Please check logs for details.',
+        'Invalid StarkNet configuration. Please check logs for details.',
       );
     });
 
@@ -294,9 +294,7 @@ describe('StarknetChainHandler', () => {
       // Expect the constructor to throw due to Zod validation failure
       expect(
         () => new StarknetChainHandler(configWithoutContract as StarknetChainConfig),
-      ).toThrowError(
-        'Invalid StarkNet configuration for StarkNetTestnet. Please check logs for details.',
-      );
+      ).toThrowError('Invalid StarkNet configuration. Please check logs for details.');
       // The original test was trying to check initializeL2, but constructor throws first.
       // If we wanted to test initializeL2 specifically for a case where constructor passes but initializeL2 fails,
       // we would need a config that passes Zod but makes initializeL2 fail for other reasons.
@@ -724,12 +722,12 @@ describe('StarknetChainHandler', () => {
       ); // Check it's a recent timestamp
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining(
-          `LiveEvent | TBTCBridgedToStarkNet for ${mockStarknetConfig.chainName}: Processing | DepositId: ${mockDepositKey}`,
+          `[${mockStarknetConfig.chainName}] LiveEvent | TBTCBridgedToStarkNet: Processing | DepositId: ${mockDepositKey}`,
         ),
       );
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining(
-          `Deposit updated to BRIDGED. ID: ${mockDepositKey}. L1 Tx: ${mockL1TxHash}`,
+          `[${mockStarknetConfig.chainName}] LiveEvent | TBTCBridgedToStarkNet: Deposit updated to BRIDGED. ID: ${mockDepositKey}. L1 Tx: ${mockL1TxHash}`,
         ),
       );
     });
@@ -768,7 +766,7 @@ describe('StarknetChainHandler', () => {
       expect(mockDepositStore.update).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining(
-          `Deposit already BRIDGED. ID: ${mockDepositKey}. Potential replay of live event. Skipping update.`,
+          `[${mockStarknetConfig.chainName}] LiveEvent | TBTCBridgedToStarkNet: Deposit already BRIDGED. ID: ${mockDepositKey}. Live event may be a replay. Skipping update.`,
         ),
       );
     });
@@ -794,7 +792,7 @@ describe('StarknetChainHandler', () => {
       expect(mockDepositStore.update).not.toHaveBeenCalled();
       expect(logger.debug).toHaveBeenCalledWith(
         expect.stringContaining(
-          `PastEvent | TBTCBridgedToStarkNet for ${mockStarknetConfig.chainName}: Deposit already BRIDGED. ID: ${mockDepositKey}. Skipping update.`,
+          `[${mockStarknetConfig.chainName}] PastEvent | TBTCBridgedToStarkNet: Deposit already BRIDGED. ID: ${mockDepositKey}. Skipping update.`,
         ),
       );
     });
@@ -814,7 +812,9 @@ describe('StarknetChainHandler', () => {
 
       expect(mockDepositStore.update).not.toHaveBeenCalled();
       expect(logger.error).toHaveBeenCalledWith(
-        expect.stringContaining(`Mismatched chain for DepositKey ${mockDepositKey}`),
+        expect.stringContaining(
+          `[${mockStarknetConfig.chainName}] LiveEvent | TBTCBridgedToStarkNet: Mismatched chain for depositKey ${mockDepositKey}`,
+        ),
       );
     });
   });

@@ -14,7 +14,7 @@ export const getStarknetMainnetChainInput = (): StarknetChainInput => {
     network: common.network,
     l1Rpc: common.l1Rpc!,
     l1Confirmations: common.l1Confirmations!,
-    enableL2Redemption: common.enableL2Redemption as boolean,
+    enableL2Redemption: false, // Starknet does not support L2 redemption
     useEndpoint: common.useEndpoint as boolean,
 
     // endpointUrl is optional

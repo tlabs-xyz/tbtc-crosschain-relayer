@@ -29,12 +29,19 @@ export default logger;
  * @param message The primary log message.
  * @param error The error object or data.
  */
-export const logErrorContext = (message: string, error: Error | unknown) => {
-  const logDetails: { err?: Error; errorData?: unknown } = {};
+export const logErrorContext = (
+  message: string,
+  error: Error | unknown,
+  context?: { chainName?: string },
+) => {
+  const logDetails: { err?: Error; errorData?: unknown; chainName?: string } = {};
   if (error instanceof Error) {
     logDetails.err = error;
   } else {
     logDetails.errorData = error;
+  }
+  if (context?.chainName) {
+    logDetails.chainName = context.chainName;
   }
   logger.error(logDetails, message);
 };
@@ -50,7 +57,7 @@ export function logChainCronError(
   cronJobName: string,
   error: Error | unknown,
 ): void {
-  logErrorContext(`Error in ${cronJobName} cron job for chain ${chainName}:`, error);
+  logErrorContext(`Error in ${cronJobName} cron job for chain ${chainName}:`, error, { chainName });
 }
 
 /**
