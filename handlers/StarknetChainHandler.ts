@@ -5,7 +5,6 @@ import { BaseChainHandler } from './BaseChainHandler.js';
 import { ethers, type PayableOverrides, type BigNumberish, type BytesLike } from 'ethers';
 import { StarkNetBitcoinDepositorABI } from '../interfaces/StarkNetBitcoinDepositor.js';
 import type { StarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor.js';
-
 import { DepositStore } from '../utils/DepositStore.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { toUint256StarknetAddress, validateStarkNetAddress } from '../utils/starknetAddress.js';
@@ -17,6 +16,8 @@ import {
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
   getDepositKey,
+  createInitializedDepositFromOnChainData,
+  createPartialDepositFromOnChainData,
 } from '../utils/Deposits.js';
 import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
@@ -153,63 +154,84 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       },
     );
 
-    logger.info(`L1 TBTCBridgedToStarkNet event listener is active for ${this.config.chainName}`);
+    logger.info(`L1 event listener is active for ${this.config.chainName}`);
 
-    this.checkForPastL1DepositorEvents({
+    // this.checkForPastL1DepositorEvents({
+    //   fromBlock: this.config.l1StartBlock,
+    // }).catch((error) => {
+    //   logger.error(
+    //     `Error during initial scan for past L1 Depositor bridge events for ${this.config.chainName}: ${error.message}`,
+    //     error,
+    //   );
+    // });
+
+    this.checkForPastL1DepositInitializedEvents({
       fromBlock: this.config.l1StartBlock,
     }).catch((error) => {
       logger.error(
-        `Error during initial scan for past L1 Depositor bridge events for ${this.config.chainName}: ${error.message}`,
+        `Error during initial scan for past L1 DepositInitialized events for ${this.config.chainName}: ${error.message}`,
         error,
       );
     });
   }
 
+  protected async processPastL1DepositorEvents(
+    events: ethers.Event[],
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<void> {
+    if (events.length > 0) {
+      logger.info(
+        `Found ${events.length} past TBTCBridgedToStarkNet L1 events for ${this.config.chainName} in range [${fromBlock} - ${toBlock}]`,
+      );
+      for (const event of events) {
+        if (event.args) {
+          const depositKey = event.args.depositKey as string;
+          const starkNetRecipient = event.args.starkNetRecipient as ethers.BigNumber;
+          const amount = event.args.amount as ethers.BigNumber;
+          const messageNonce = event.args.messageNonce as ethers.BigNumber;
+          await this.processTBTCBridgedToStarkNetEvent(
+            depositKey,
+            starkNetRecipient,
+            amount,
+            messageNonce,
+            event.transactionHash,
+            true, // isPastEvent
+          );
+        } else {
+          logger.warn(
+            `checkForPastL1DepositorEvents | Event args undefined for past event. Tx: ${event.transactionHash}`,
+          );
+        }
+      }
+    } else {
+      logger.info(
+        `No past TBTCBridgedToStarkNet L1 events found for ${this.config.chainName} in block range ${fromBlock}-${toBlock}.`,
+      );
+    }
+  }
+
   protected async checkForPastL1DepositorEvents(options: {
     fromBlock: number;
-    toBlock?: number | 'latest';
+    toBlock?: number;
   }): Promise<void> {
-    const toBlockWithDefault = options.toBlock || 'latest';
+    const blockChunkSize = 500;
+    const latestBlock = await this.l1Provider.getBlockNumber();
+    const toBlock = options.toBlock || latestBlock;
 
     logger.info(
-      `Checking for past TBTCBridgedToStarkNet L1 events for ${this.config.chainName} from block ${options.fromBlock} to ${options.toBlock}`,
+      `Checking for past TBTCBridgedToStarkNet L1 events for ${this.config.chainName} from block ${options.fromBlock} to ${toBlock}`,
     );
 
     try {
-      const events = await this.l1DepositorContractProvider.queryFilter(
-        this.l1DepositorContractProvider.filters.TBTCBridgedToStarkNet(),
-        options.fromBlock,
-        toBlockWithDefault,
-      );
-
-      if (events.length > 0) {
-        logger.info(
-          `Found ${events.length} past TBTCBridgedToStarkNet L1 events for ${this.config.chainName}`,
+      for (let fromBlock = options.fromBlock; fromBlock <= toBlock; fromBlock += blockChunkSize) {
+        const currentToBlock = Math.min(fromBlock + blockChunkSize - 1, toBlock);
+        const events = await this.l1DepositorContractProvider.queryFilter(
+          this.l1DepositorContractProvider.filters.TBTCBridgedToStarkNet(),
+          fromBlock,
+          currentToBlock,
         );
-        for (const event of events) {
-          if (event.args) {
-            const depositKey = event.args.depositKey as string;
-            const starkNetRecipient = event.args.starkNetRecipient as ethers.BigNumber;
-            const amount = event.args.amount as ethers.BigNumber;
-            const messageNonce = event.args.messageNonce as ethers.BigNumber;
-            await this.processTBTCBridgedToStarkNetEvent(
-              depositKey,
-              starkNetRecipient,
-              amount,
-              messageNonce,
-              event.transactionHash,
-              true,
-            );
-          } else {
-            logger.warn(
-              `checkForPastL1DepositorEvents | Event args undefined for past event. Tx: ${event.transactionHash}`,
-            );
-          }
-        }
-      } else {
-        logger.info(
-          `No past TBTCBridgedToStarkNet L1 events found for ${this.config.chainName} in the queried range.`,
-        );
+        await this.processPastL1DepositorEvents(events, fromBlock, currentToBlock);
       }
     } catch (error: any) {
       logger.error(
@@ -749,6 +771,81 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       logger.error(errorMsg, { error: logErrorContext(errorMsg, error) });
       logDepositError(deposit.id, errorMsg, error);
       return false;
+    }
+  }
+
+  protected async checkForPastL1DepositInitializedEvents(options: {
+    fromBlock: number;
+    toBlock?: number;
+  }): Promise<void> {
+    const blockChunkSize = 500;
+    const latestBlock = await this.l1Provider.getBlockNumber();
+    const toBlock = options.toBlock || latestBlock;
+
+    logger.info(
+      `Checking for past DepositInitialized L1 events for ${this.config.chainName} from block ${options.fromBlock} to ${toBlock}`,
+    );
+
+    try {
+      for (let fromBlock = options.fromBlock; fromBlock <= toBlock; fromBlock += blockChunkSize) {
+        const currentToBlock = Math.min(fromBlock + blockChunkSize - 1, toBlock);
+        const events = await this.l1DepositorContractProvider.queryFilter(
+          this.l1DepositorContractProvider.filters.DepositInitialized(),
+          fromBlock,
+          currentToBlock,
+        );
+        await this.processPastL1DepositInitializedEvents(events, fromBlock, currentToBlock);
+      }
+    } catch (error: any) {
+      logger.error(
+        `Error querying past DepositInitialized L1 events for ${this.config.chainName}: ${error.message}`,
+        error,
+      );
+    }
+  }
+
+  protected async processPastL1DepositInitializedEvents(
+    events: ethers.Event[],
+    fromBlock: number,
+    toBlock: number,
+  ): Promise<void> {
+    if (events.length > 0) {
+      logger.info(
+        `Found ${events.length} past DepositInitialized L1 events for ${this.config.chainName} in range [${fromBlock} - ${toBlock}]`,
+      );
+      for (const event of events) {
+        if (!event.args) {
+          logger.warn(
+            `processPastL1DepositInitializedEvents | Event args undefined for past event. Tx: ${event.transactionHash}`,
+          );
+          continue;
+        }
+
+        const depositId = event.args.depositKey.toString();
+        const l1Sender = event.args.l1Sender;
+
+        const existingDeposit = await DepositStore.getById(depositId);
+        if (existingDeposit) {
+          logger.debug(`Deposit ${depositId} already exists. Skipping.`);
+          continue;
+        }
+
+        logger.info(
+          `Found an untracked 'DepositInitialized' event for deposit ${depositId}. Attempting to back-fill.`,
+        );
+
+        // The DepositInitialized event does not contain the fundingTxHash or fundingOutputIndex.
+        // We create a partial deposit record and let the normal finalization process handle it.
+        const newDeposit = createPartialDepositFromOnChainData(
+          depositId,
+          l1Sender,
+          this.config.chainName,
+          event.transactionHash,
+        );
+
+        await DepositStore.create(newDeposit);
+        logger.info(`Successfully back-filled missing deposit: ${depositId}`);
+      }
     }
   }
 }

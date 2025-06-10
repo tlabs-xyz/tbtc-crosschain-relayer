@@ -15,8 +15,8 @@ datasource db {
 model Deposit {
   id            String  @id
   chainId       String
-  fundingTxHash String
-  outputIndex   Int
+  fundingTxHash String?
+  outputIndex   Int?
   hashes        Json
   receipt       Json
   owner         String
