@@ -178,26 +178,9 @@ const main = async () => {
     app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
       logger.info(`Server listening on port ${appConfig.APP_PORT}`);
     });
-
-    logger.info('Server is ready.');
-
-    // Run startup tasks after server is ready
-    if(!process.env.CI) {
-      try {
-        await runStartupTasks();
-      } catch (error) {
-        logErrorContext('Error during startup tasks:', error);
-        if (appConfig.NODE_ENV !== 'test') {
-          process.exit(1);
-        }
-        throw error;
-      }
-    } else {
-      logger.info(
-        'Server startup tasks are skipped in the CI environment. Server has already started successfully.'
-      );
-    }
-    }
+  } else {
+    logger.info('Server startup tasks are skipped in the test environment. Server has already started successfully.');
+  }
 
   logger.info('Application initialization sequence complete.');
 };
