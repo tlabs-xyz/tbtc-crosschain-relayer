@@ -182,9 +182,15 @@ const main = async () => {
     logger.info('Server is ready.');
 
     // Run startup tasks after server is ready
-    logger.info('Running startup tasks...');
-    await runStartupTasks();
-    logger.info('Startup tasks complete. Server is ready.');
+    try {
+      await runStartupTasks();
+    } catch (error) {
+      logErrorContext('Error during startup tasks:', error);
+      if (appConfig.NODE_ENV !== 'test') {
+        process.exit(1);
+      }
+      throw error;
+    }
   } else {
     logger.info(
       'Server not started in test environment (tests will manage their own server instances if needed).',
