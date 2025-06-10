@@ -194,7 +194,7 @@ const main = async () => {
       }
     } else {
       logger.info(
-        'Server not started in test environment (tests will manage their own server instances if needed).',
+        'Server startup tasks are skipped in the CI environment. Server has already started successfully.'
       );
     }
     }
