@@ -5,11 +5,11 @@ import { DepositStatus } from './DepositStatus.enum.js';
 export type Deposit = {
   id: string;
   chainId: string;
-  fundingTxHash: string;
-  outputIndex: number;
+  fundingTxHash: string | null;
+  outputIndex: number | null;
   hashes: {
     btc: {
-      btcTxHash: string;
+      btcTxHash: string | null;
     };
     eth: {
       initializeTxHash: string | null;
