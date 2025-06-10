@@ -661,7 +661,7 @@ export const createPartialDepositFromOnChainData = (
         btcTxHash: null,
       },
       eth: {
-        initializeTxHash: initializeTxHash,
+        initializeTxHash: null,
         finalizeTxHash: null,
       },
       solana: {
