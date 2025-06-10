@@ -22,6 +22,7 @@ export interface AllChainConfigs {
   sepoliaTestnet?: EvmChainConfig;
   solanaDevnet?: SolanaChainConfig;
   starknetTestnet?: StarknetChainConfig;
+  starknetMainnet?: StarknetChainConfig;
   suiTestnet?: SuiChainConfig;
   arbitrumMainnet?: EvmChainConfig;
   baseMainnet?: EvmChainConfig;
