@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { NETWORK } from '../schemas/common.schema.js';
 import type { StarknetChainConfigSchema } from '../schemas/starknet.chain.schema.js';
-import { getEnv, getEnvNumber } from '../../utils/Env.js';
+import { getEnv } from '../../utils/Env.js';
 import { getStarknetCommonInput } from './starknet-common.js';
 
 type StarknetChainInput = z.input<typeof StarknetChainConfigSchema>;
@@ -18,7 +18,6 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     'vaultAddress',
     'l1ContractAddress',
     'l1Confirmations',
-    'enableL2Redemption',
     'useEndpoint',
   ];
   for (const field of requiredFields) {
@@ -34,10 +33,9 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
   }
 
   const config: StarknetChainInput = {
-    network: commonTestnetStarknetInput.network as import('../schemas/common.schema.js').NETWORK,
-    chainType:
-      commonTestnetStarknetInput.chainType as import('../schemas/common.schema.js').CHAIN_TYPE.STARKNET,
-    l1Rpc: commonTestnetStarknetInput.l1Rpc as string,
+    network: commonTestnetStarknetInput.network,
+    chainType: commonTestnetStarknetInput.chainType,
+    l1Rpc: commonTestnetStarknetInput.l1Rpc!,
     vaultAddress: getEnv(
       'STARKNET_TESTNET_VAULT_ADDRESS',
       commonTestnetStarknetInput.vaultAddress as string,
@@ -46,9 +44,8 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
       'STARKNET_TESTNET_L1_CONTRACT_ADDRESS',
       commonTestnetStarknetInput.l1ContractAddress as string,
     ),
-    l1Confirmations: commonTestnetStarknetInput.l1Confirmations as number,
-    enableL2Redemption: commonTestnetStarknetInput.enableL2Redemption as boolean,
-    useEndpoint: commonTestnetStarknetInput.useEndpoint as boolean,
+    l1Confirmations: commonTestnetStarknetInput.l1Confirmations,
+    useEndpoint: commonTestnetStarknetInput.useEndpoint,
     supportsRevealDepositAPI:
       commonTestnetStarknetInput.supportsRevealDepositAPI === undefined
         ? false
@@ -64,9 +61,6 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     ),
 
     chainName: 'StarknetTestnet',
-    l2Rpc: getEnv('CHAIN_STARKNETTESTNET_L2_RPC', 'https://starknet-sepolia.public.blastapi.io'),
-    l2WsRpc: getEnv('CHAIN_STARKNETTESTNET_L2_WS_RPC', ''),
-    l2StartBlock: getEnvNumber('CHAIN_STARKNETTESTNET_L2_START_BLOCK', 0),
     // L1 private key for endpoint mode (to pay for L1 transactions)
     privateKey: getEnv('CHAIN_STARKNETTESTNET_PRIVATE_KEY'),
   };
