@@ -80,10 +80,6 @@ async function initializeBackgroundServices() {
   await initializeAllL2RedemptionServices();
   logger.info('All L2 redemption listeners initialized successfully.');
 
-  logger.info('Running startup tasks...');
-  await runStartupTasks();
-  logger.info('Startup tasks complete.');
-
   logger.info('Starting cron jobs...');
   startCronJobs();
   logger.info('Cron jobs started.');
@@ -182,11 +178,27 @@ const main = async () => {
     app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
       logger.info(`Server listening on port ${appConfig.APP_PORT}`);
     });
-  } else {
-    logger.info(
-      'Server not started in test environment (tests will manage their own server instances if needed).',
-    );
-  }
+
+    logger.info('Server is ready.');
+
+    // Run startup tasks after server is ready
+    if(!process.env.CI) {
+      try {
+        await runStartupTasks();
+      } catch (error) {
+        logErrorContext('Error during startup tasks:', error);
+        if (appConfig.NODE_ENV !== 'test') {
+          process.exit(1);
+        }
+        throw error;
+      }
+    } else {
+      logger.info(
+        'Server startup tasks are skipped in the CI environment. Server has already started successfully.'
+      );
+    }
+    }
+
   logger.info('Application initialization sequence complete.');
 };
 
