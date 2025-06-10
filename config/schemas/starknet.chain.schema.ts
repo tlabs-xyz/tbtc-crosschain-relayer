@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CHAIN_TYPE, CommonChainConfigSchema } from './common.schema.js';
+import { EthereumAddressSchema } from './shared.js';
 
 // Base schema for fields that are specific to Starknet chains.
 const StarknetChainBaseSchema = z.object({
@@ -16,6 +17,7 @@ const StarknetChainBaseSchema = z.object({
     .string()
     .min(1, 'privateKey is required for endpoint mode to pay L1 transactions')
     .optional(),
+  starkGateBridgeAddress: EthereumAddressSchema,
 });
 
 const CommonConfigForStarknet = CommonChainConfigSchema.omit({

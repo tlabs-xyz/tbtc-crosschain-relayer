@@ -38,6 +38,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   protected l1DepositorContract: StarkNetBitcoinDepositor | undefined;
   /** L1 StarkGate contract instance for read-only operations and event listening (uses L1 provider) */
   protected l1DepositorContractProvider: StarkNetBitcoinDepositor | undefined;
+  /** L1 StarkGate bridge contract instance for read-only fee estimation */
+  protected starkGateBridgeContract: ethers.Contract | undefined;
 
   constructor(config: StarknetChainConfig) {
     super(config);
@@ -55,6 +57,23 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     }
 
     logger.debug(`StarknetChainHandler setup complete for ${this.config.chainName}`);
+
+    try {
+      const starkGateBridgeAbi = ['function estimateDepositFeeWei() view returns (uint256)'];
+      this.starkGateBridgeContract = new ethers.Contract(
+        this.config.starkGateBridgeAddress,
+        starkGateBridgeAbi,
+        this.l1Provider,
+      );
+      logger.info(
+        `StarkGate Bridge contract provider instance created for ${this.config.chainName} at ${this.config.starkGateBridgeAddress}`,
+      );
+    } catch (error: any) {
+      logger.error(
+        `Failed to instantiate StarkGate Bridge contract for ${this.config.chainName}: ${error.message}`,
+        error,
+      );
+    }
   }
 
   protected async initializeL2(): Promise<void> {
@@ -464,24 +483,40 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       return undefined;
     }
 
-    // NOTE: StarkNet flow does NOT require L2 transaction hash before finalization
-    // The flow is: Initialize → Bridge mints tBTC → Finalize → Send to L2
-    // L2 transaction happens AFTER finalization, not before
-
     try {
-      // 2. Fee Calculation
-      const dynamicFee: ethers.BigNumber =
-        await this.l1DepositorContract.quoteFinalizeDepositDynamic();
-      logger.info(
-        `${logPrefix} Dynamically quoted L1->L2 message fee: ${ethers.utils.formatEther(dynamicFee)} ETH`,
-      );
+      // 2. Fee Calculation - Get fee from StarkGate bridge
+      let fee: ethers.BigNumber;
+      if (this.starkGateBridgeContract) {
+        try {
+          fee = await this.starkGateBridgeContract.estimateDepositFeeWei();
+          logger.info(
+            `${logPrefix} Fee from StarkGate bridge: ${ethers.utils.formatEther(fee)} ETH`,
+          );
+        } catch (error: any) {
+          logger.warn(
+            `${logPrefix} Failed to get fee from StarkGate bridge, falling back to hardcoded value. Error: ${error.message}`,
+          );
+          fee = ethers.utils.parseEther('0.0001'); // Fallback fee from example
+        }
+      } else {
+        logger.warn(`${logPrefix} StarkGate bridge contract not available, using hardcoded fee.`);
+        fee = ethers.utils.parseEther('0.0001'); // Fallback fee from example
+      }
 
       // 3. Explicit Gas Management
       logger.info(`${logPrefix} Estimating gas for finalizeDeposit...`);
-      const gasEstimate = await this.l1DepositorContract.estimateGas.finalizeDeposit(depositKey, {
-        value: dynamicFee,
-      });
-      logger.info(`${logPrefix} Gas estimate: ${gasEstimate.toString()}`);
+      let gasEstimate: ethers.BigNumber;
+      try {
+        gasEstimate = await this.l1DepositorContract.estimateGas.finalizeDeposit(depositKey, {
+          value: fee,
+        });
+        logger.info(`${logPrefix} Gas estimate: ${gasEstimate.toString()}`);
+      } catch (error: any) {
+        logger.warn(
+          `${logPrefix} Gas estimation failed, using manual gas limit as fallback. Error: ${error.message}`,
+        );
+        gasEstimate = ethers.BigNumber.from(500000); // Fallback gas limit from example
+      }
 
       const gasPrice = await this.l1Provider.getGasPrice();
       logger.info(
@@ -489,7 +524,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       );
 
       const totalGasCost = gasEstimate.mul(gasPrice);
-      const requiredBalance = dynamicFee.add(totalGasCost);
+      const requiredBalance = fee.add(totalGasCost);
 
       // 4. Balance Check
       const relayerBalance = await this.l1Signer.getBalance();
@@ -511,7 +546,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       }
 
       const txOverrides: PayableOverrides = {
-        value: dynamicFee,
+        value: fee,
         gasLimit: gasEstimate.mul(120).div(100), // 20% buffer
         gasPrice: gasPrice.mul(110).div(100), // 10% buffer
       };
@@ -595,7 +630,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     const fundingTx: FundingTransaction = deposit.L1OutputEvent.fundingTx;
     const reveal: Reveal = deposit.L1OutputEvent.reveal;
-    let l2DepositOwner = deposit.L1OutputEvent.l2DepositOwner;
+    let l2DepositOwner: string = deposit.L1OutputEvent.l2DepositOwner;
 
     // Query on-chain directly via provider using depositKey (bytes32)
     const depositState = await this.l1DepositorContractProvider!.deposits(depositKey);
