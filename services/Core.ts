@@ -152,19 +152,16 @@ export const startCronJobs = () => {
 
   // Every minute - process deposits
   cron.schedule('* * * * *', async () => {
-    logger.info('Cron job: Processing deposits...');
     await processDeposits();
   });
 
   // Every 2 minutes - process redemptions
   cron.schedule('*/2 * * * *', async () => {
-    logger.info('Cron job: Processing redemptions...');
     await processRedemptions();
   });
 
   // Every 60 minutes - check for past deposits
   cron.schedule('*/60 * * * *', async () => {
-    logger.info('Cron job: Checking for past deposits...');
     await checkForPastDepositsForAllChains();
   });
 

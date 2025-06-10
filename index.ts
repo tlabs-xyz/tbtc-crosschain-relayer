@@ -179,7 +179,9 @@ const main = async () => {
       logger.info(`Server listening on port ${appConfig.APP_PORT}`);
     });
   } else {
-    logger.info('Server startup tasks are skipped in the test environment. Server has already started successfully.');
+    logger.info(
+      'Server startup tasks are skipped in the test environment. Server has already started successfully.',
+    );
   }
 
   logger.info('Application initialization sequence complete.');

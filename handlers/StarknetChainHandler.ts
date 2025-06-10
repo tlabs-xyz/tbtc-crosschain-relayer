@@ -122,13 +122,6 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   }
 
   protected async setupL2Listeners(): Promise<void> {
-    if (this.config.useEndpoint) {
-      logger.info(
-        `L1 event listeners for L1 Depositor (e.g., TBTCBridgedToStarkNet) skipped for ${this.config.chainName} (using Endpoint mode).`,
-      );
-      return;
-    }
-
     logger.info(
       `Setting up L1 TBTCBridgedToStarkNet event listener for ${this.config.chainName} on contract ${this.l1DepositorContractProvider.address}`,
     );
@@ -155,11 +148,21 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     logger.info(`L1 event listener is active for ${this.config.chainName}`);
 
-    this.checkForPastL1DepositInitializedEvents({
+    // TODO: Disable for now, investigate later
+    // this.checkForPastL1DepositInitializedEvents({
+    //   fromBlock: this.config.l1StartBlock,
+    // }).catch((error) => {
+    //   logger.error(
+    //     `Error during initial scan for past L1 DepositInitialized events for ${this.config.chainName}: ${error.message}`,
+    //     error,
+    //   );
+    // });
+
+    this.checkForPastL1DepositorEvents({
       fromBlock: this.config.l1StartBlock,
     }).catch((error) => {
       logger.error(
-        `Error during initial scan for past L1 DepositInitialized events for ${this.config.chainName}: ${error.message}`,
+        `Error during initial scan for past L1 Depositor events for ${this.config.chainName}: ${error.message}`,
         error,
       );
     });

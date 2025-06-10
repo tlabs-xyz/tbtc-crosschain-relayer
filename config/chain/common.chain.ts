@@ -15,7 +15,7 @@ type CommonChainInput = z.input<typeof CommonChainConfigSchema>;
 
 // Vault Addresses by network type
 export const VAULT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5', // Mainnet vault address - verify before production deployment
+  [NETWORK.MAINNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD', // Mainnet vault address - verify before production deployment
   [NETWORK.TESTNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5',
   [NETWORK.DEVNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5',
 } as const;
@@ -23,7 +23,7 @@ export const VAULT_ADDRESSES = {
 // StarkNetBitcoinDepositor contract addresses for L1 operations
 // TODO: Other networks use different contracts, we need to update this
 export const L1_CONTRACT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0x0b41A67de304964f25D43d8f564c0FF3d42fa843', // Mainnet deployer contract - update with actual production address
+  [NETWORK.MAINNET]: '0xC9031f76006da0BD4bFa9E02aDf0d448dB3BC155', // Mainnet deployer contract
   [NETWORK.TESTNET]: '0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA', // Sepolia testnet address
   [NETWORK.DEVNET]: '0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA', // Development environment address
 } as const;
