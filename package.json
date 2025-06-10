@@ -46,7 +46,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",
     "@ethersproject/experimental": "^5.8.0",
-    "@prisma/client": "6.8.2",
+    "@prisma/client": "^6.9.0",
     "@solana/web3.js": "^1.98.0",
     "@wormhole-foundation/sdk": "^1.18.0",
     "bitcoinjs-lib": "^6.1.7",
@@ -61,7 +61,7 @@
     "p-limit": "^6.2.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
-    "prisma": "^6.8.2",
+    "prisma": "^6.9.0",
     "rimraf": "^6.0.1",
     "starknet": "=6.0.0",
     "zod": "^3.25.16"

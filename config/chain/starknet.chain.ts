@@ -46,10 +46,7 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     ),
     l1Confirmations: commonTestnetStarknetInput.l1Confirmations,
     useEndpoint: commonTestnetStarknetInput.useEndpoint,
-    supportsRevealDepositAPI:
-      commonTestnetStarknetInput.supportsRevealDepositAPI === undefined
-        ? false
-        : commonTestnetStarknetInput.supportsRevealDepositAPI,
+    supportsRevealDepositAPI: commonTestnetStarknetInput.supportsRevealDepositAPI,
     endpointUrl: commonTestnetStarknetInput.endpointUrl,
     l1FeeAmountWei: getEnv(
       'CHAIN_STARKNETTESTNET_L1_FEE_AMOUNT_WEI',
