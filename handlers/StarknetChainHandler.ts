@@ -148,24 +148,24 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     logger.info(`L1 event listener is active for ${this.config.chainName}`);
 
-    // TODO: Disable for now, investigate later
-    // this.checkForPastL1DepositInitializedEvents({
-    //   fromBlock: this.config.l1StartBlock,
-    // }).catch((error) => {
-    //   logger.error(
-    //     `Error during initial scan for past L1 DepositInitialized events for ${this.config.chainName}: ${error.message}`,
-    //     error,
-    //   );
-    // });
-
-    this.checkForPastL1DepositorEvents({
+    this.checkForPastL1DepositInitializedEvents({
       fromBlock: this.config.l1StartBlock,
     }).catch((error) => {
       logger.error(
-        `Error during initial scan for past L1 Depositor events for ${this.config.chainName}: ${error.message}`,
+        `Error during initial scan for past L1 DepositInitialized events for ${this.config.chainName}: ${error.message}`,
         error,
       );
     });
+
+    // TODO: Disable for now, investigate later
+    // this.checkForPastL1DepositorEvents({
+    //   fromBlock: this.config.l1StartBlock,
+    // }).catch((error) => {
+    //   logger.error(
+    //     `Error during initial scan for past L1 Depositor events for ${this.config.chainName}: ${error.message}`,
+    //     error,
+    //   );
+    // });
   }
 
   protected async processPastL1DepositorEvents(
@@ -518,6 +518,30 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         gasLimit: gasEstimate.mul(120).div(100), // 20% buffer
         gasPrice: gasPrice.mul(110).div(100), // 10% buffer
       };
+
+      // 5. Simulate Transaction
+      try {
+        logger.info(`${logPrefix} Simulating finalizeDeposit call...`);
+        await this.l1DepositorContract.callStatic.finalizeDeposit(depositKey, txOverrides);
+        logger.info(`${logPrefix} Simulation successful. Proceeding with actual transaction.`);
+      } catch (error: any) {
+        if (error.message?.includes('Deposit not finalized by the bridge')) {
+          logger.warn(
+            `${logPrefix} Simulation reverted with expected reason: 'Deposit not finalized by the bridge'. This is likely a transient state. Will retry later.`,
+          );
+          return undefined;
+        } else {
+          const errorMessage = `Simulation failed with unexpected error: ${error.message}`;
+          logger.error(`${logPrefix} ${errorMessage}. Aborting finalization.`);
+          logErrorContext(`${logPrefix} ${errorMessage}`, error);
+          await logDepositError(
+            deposit.id,
+            `L1 finalizeDeposit simulation failed: ${error.message}`,
+            { error },
+          );
+          return undefined;
+        }
+      }
 
       logger.info(
         `${logPrefix} Calling L1 Depositor contract finalizeDeposit for depositKey: ${depositKey} with fee: ${ethers.utils.formatEther(
