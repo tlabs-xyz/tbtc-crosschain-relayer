@@ -661,7 +661,7 @@ export const createPartialDepositFromOnChainData = (
         btcTxHash: null,
       },
       eth: {
-        initializeTxHash: null,
+        initializeTxHash: initializeTxHash,
         finalizeTxHash: null,
       },
       solana: {
@@ -685,7 +685,7 @@ export const createPartialDepositFromOnChainData = (
       },
       reveal: {
         blindingFactor: '0x',
-        fundingOutputIndex: -1, // Sentinel value for "not available"
+        fundingOutputIndex: 0, // Not available, set to 0 as a placeholder
         refundLocktime: '0',
         refundPubKeyHash: '0x',
         vault: '0x',
