@@ -38,9 +38,12 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     chainType:
       commonTestnetStarknetInput.chainType as import('../schemas/common.schema.js').CHAIN_TYPE.STARKNET,
     l1Rpc: commonTestnetStarknetInput.l1Rpc as string,
-    vaultAddress: commonTestnetStarknetInput.vaultAddress as string,
+    vaultAddress: getEnv(
+      'STARKNET_TESTNET_VAULT_ADDRESS',
+      commonTestnetStarknetInput.vaultAddress as string,
+    ),
     l1ContractAddress: getEnv(
-      'CHAIN_STARKNETTESTNET_L1_CONTRACT_ADDRESS',
+      'STARKNET_TESTNET_L1_CONTRACT_ADDRESS',
       commonTestnetStarknetInput.l1ContractAddress as string,
     ),
     l1Confirmations: commonTestnetStarknetInput.l1Confirmations as number,
@@ -54,6 +57,10 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     l1FeeAmountWei: getEnv(
       'CHAIN_STARKNETTESTNET_L1_FEE_AMOUNT_WEI',
       commonTestnetStarknetInput.l1FeeAmountWei as string,
+    ),
+    starkGateBridgeAddress: getEnv(
+      'STARKNET_TESTNET_STARKGATE_BRIDGE_ADDRESS',
+      commonTestnetStarknetInput.starkGateBridgeAddress as string,
     ),
 
     chainName: 'StarknetTestnet',

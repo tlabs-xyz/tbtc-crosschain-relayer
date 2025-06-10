@@ -55,26 +55,25 @@ const mockContractInstance = {
 const mockGetTransactionReceiptImplementation = jest.fn();
 
 // Default config for tests
-// Explicitly type mockStarknetConfig to help with property inference
 const mockStarknetConfig: StarknetChainConfig = StarknetChainConfigSchema.parse({
+  // CommonChainConfigSchema fields
   chainId: 'SN_TEST',
   chainName: 'StarkNetTestnet',
-  chainType: CHAIN_TYPE.STARKNET,
   network: NETWORK.TESTNET,
+  l1ChainName: 'SepoliaTestnet',
+  l1Confirmations: 3,
   l1Rpc: 'http://l1-rpc.test',
-  l1ContractAddress: '0x1234567890123456789012345678901234567890', // Validated by EthereumAddressSchema
-  vaultAddress: '0xabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde',
-  l1PrivateKey: '0x123456789012345678901234567890123456789012345678901234567890abcd', // Corrected from privateKey
   l2Rpc: 'http://l2-rpc.test',
-  l1FeeAmountWei: '100000000000000', // This is now part of StarknetChainConfigSchema
-  l1Confirmations: 1,
-  // Common fields that StarknetChainConfigSchema inherits and might be used by BaseChainHandler:
-  l2WsRpc: 'ws://l2-ws-rpc.test', // Example, ensure all common fields are covered if Base uses them
-  l2ContractAddress: '0xfedcbafedcbafedcbafedcbafedcbafedcbafedc', // Validated by EthereumAddressSchema
-  l1BitcoinRedeemerAddress: '0x11223344556677889900aabbccddeeff11223344', // Validated by EthereumAddressSchema
-  l2WormholeGatewayAddress: '0x223344556677889900aabbccddeeff1122334455', // Validated by EthereumAddressSchema
-  l2WormholeChainId: 2, // Example StarkNet Sepolia is 2 for Wormhole
+  l1ContractAddress: '0x1234567890123456789012345678901234567890',
+  vaultAddress: '0xabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde',
+  l1BitcoinRedeemerAddress: '0x11223344556677889900aabbccddeeff11223344',
   l2StartBlock: 0,
+
+  // StarknetChainBaseSchema fields
+  chainType: CHAIN_TYPE.STARKNET,
+  l1FeeAmountWei: '100000000000000',
+  privateKey: '0x123456789012345678901234567890123456789012345678901234567890abcd',
+  starkGateBridgeAddress: '0xae0Ee0A63A2cE6BaeEFFE56e7714FB4E8416f274',
 });
 
 describe('StarknetChainHandler', () => {
@@ -270,7 +269,7 @@ describe('StarknetChainHandler', () => {
   describe('Constructor and Initialization', () => {
     it('should construct and initialize L1 components successfully with valid config', async () => {
       expect(handler).toBeInstanceOf(StarknetChainHandler);
-      expect(ethers.Contract).toHaveBeenCalledTimes(1); // Only tbtcVaultProvider is instantiated in test setup
+      expect(ethers.Contract).toHaveBeenCalledTimes(2); // tbtcVaultProvider and starkGateBridgeContract
       expect((handler as any).l1DepositorContract).toBeDefined();
       expect((handler as any).l1DepositorContractProvider).toBeDefined();
     });
@@ -763,7 +762,7 @@ describe('StarknetChainHandler', () => {
         mockMessageNonce, // Added mockMessageNonce
         mockL1TxHash,
         false, // isPastEvent = false
-      ); // isPastEvent = false
+      );
 
       expect(mockDepositStore.update).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith(
