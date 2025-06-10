@@ -17,6 +17,7 @@ import {
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
   updateLastActivity,
+  createFinalizedDepositFromOnChainData,
 } from '../utils/Deposits.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
@@ -66,28 +67,33 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc);
 
     // EVM-specific L1 setup (Signer)
-    if (this.config.chainType === CHAIN_TYPE.EVM) {
-      const evmConfig = this.config as EvmChainConfig;
-      if (!evmConfig.privateKey) {
-        throw new Error(`Missing privateKey for EVM chain ${this.config.chainName}`);
-      }
-      this.l1Signer = new ethers.Wallet(evmConfig.privateKey, this.l1Provider);
-      this.nonceManagerL1 = new NonceManager(this.l1Signer);
+    if (this.config.chainType === CHAIN_TYPE.EVM || this.config.chainType === CHAIN_TYPE.STARKNET) {
+      const evmConfig = this.config as EvmChainConfig; // Starknet config is a superset of this for privateKey
+      if (!('privateKey' in evmConfig) || !evmConfig.privateKey) {
+        logger.warn(
+          `L1 Signer and transaction-capable contracts not initialized for ${this.config.chainName}. This might be expected in read-only setups.`,
+        );
+      } else {
+        this.l1Signer = new ethers.Wallet(evmConfig.privateKey, this.l1Provider);
+        this.nonceManagerL1 = new NonceManager(this.l1Signer);
 
-      // L1 Contracts for transactions (require signer)
-      this.l1BitcoinDepositor = new ethers.Contract(
-        this.config.l1ContractAddress,
-        L1BitcoinDepositorABI,
-        this.nonceManagerL1,
-      );
-      this.tbtcVault = new ethers.Contract( // Keep for completeness, though not sending txs currently
-        this.config.vaultAddress,
-        TBTCVaultABI,
-        this.l1Signer, // Use l1Signer here, not nonceManagerL1 unless needed
-      );
+        // L1 Contracts for transactions (require signer) - only for EVM standard flow
+        if (this.config.chainType === CHAIN_TYPE.EVM) {
+          this.l1BitcoinDepositor = new ethers.Contract(
+            this.config.l1ContractAddress,
+            L1BitcoinDepositorABI,
+            this.nonceManagerL1,
+          );
+          this.tbtcVault = new ethers.Contract( // Keep for completeness, though not sending txs currently
+            this.config.vaultAddress,
+            TBTCVaultABI,
+            this.l1Signer, // Use l1Signer here, not nonceManagerL1 unless needed
+          );
+        }
+      }
     } else {
-      // For non-EVM chains, check if they need L1 signer for endpoint mode
-      // StarkNet and Solana using endpoint mode need to pay L1 transactions
+      // For other non-EVM chains, check if they need L1 signer for endpoint mode
+      // This logic might need to be adjusted for other future non-EVM chains
       if ('privateKey' in this.config && this.config.privateKey && this.config.useEndpoint) {
         logger.info(
           `Setting up L1 signer for non-EVM chain ${this.config.chainName} in endpoint mode`,
@@ -142,7 +148,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   }
 
   async setupListeners(): Promise<void> {
-    logger.debug(`Setting up Base L1 listeners for ${this.config.chainName}`);
+    logger.debug(`Setting up L1 listeners for ${this.config.chainName}`);
     await this.setupL1Listeners();
     logger.debug(`Setting up L2 listeners (delegated) for ${this.config.chainName}`);
     await this.setupL2Listeners();
@@ -169,7 +175,63 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             }
           } else {
             logger.warn(
-              `Received OptimisticMintingFinalized event for unknown Deposit Key: ${depositId}`,
+              `Received OptimisticMintingFinalized event for unknown Deposit Key: ${depositId}. Attempting to recover from chain history.`,
+            );
+
+            // Query for the corresponding OptimisticMintingRequested event
+            const filter = this.tbtcVaultProvider.filters.OptimisticMintingRequested(
+              null, // any minter
+              depositKey, // the specific depositKey we're interested in
+            );
+
+            const events = await this.tbtcVaultProvider.queryFilter(filter);
+
+            if (events.length === 0) {
+              logger.error(
+                `CRITICAL: Could not find OptimisticMintingRequested event for finalized deposit key ${depositId}. The deposit cannot be created. This may require manual intervention.`,
+              );
+              logDepositError(
+                depositId,
+                'Could not find OptimisticMintingRequested event for finalized but unknown deposit.',
+              );
+              return; // Exit
+            }
+
+            if (events.length > 1) {
+              logger.warn(
+                `Found multiple OptimisticMintingRequested events for deposit key ${depositId}. Using the first one.`,
+              );
+            }
+
+            const requestEvent = events[0];
+            if (!requestEvent.args) {
+              logger.error(
+                `CRITICAL: OptimisticMintingRequested event for deposit key ${depositId} has no arguments. Cannot create deposit.`,
+              );
+              logDepositError(
+                depositId,
+                'OptimisticMintingRequested event for finalized but unknown deposit has no arguments.',
+              );
+              return; // Exit
+            }
+            const { fundingTxHash, fundingOutputIndex, depositor } =
+              requestEvent.args as unknown as {
+                fundingTxHash: string;
+                fundingOutputIndex: number;
+                depositor: string;
+              };
+
+            const newDeposit = createFinalizedDepositFromOnChainData(
+              depositId,
+              fundingTxHash,
+              fundingOutputIndex,
+              depositor,
+              this.config.chainName,
+            );
+
+            await DepositStore.create(newDeposit);
+            logger.info(
+              `Successfully recovered and created deposit ${depositId} from on-chain event history.`,
             );
           }
         } catch (error: any) {
@@ -542,7 +604,14 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     const now = Date.now();
     return deposits.filter((deposit) => {
       // If lastActivityAt doesn't exist yet (e.g., freshly created via listener/endpoint), process immediately
-      if (!deposit.dates.lastActivityAt) return true;
+      if (!deposit.dates.lastActivityAt || !deposit.dates.createdAt) return true;
+
+      // If the deposit was just created (last activity is the creation time), process immediately.
+      // We check if they are within a small threshold to account for ms differences during creation.
+      if (Math.abs(deposit.dates.lastActivityAt - deposit.dates.createdAt) < 1000) {
+        return true;
+      }
+
       // Otherwise, process only if enough time has passed since last activity
       return now - deposit.dates.lastActivityAt > DEFAULT_DEPOSIT_RETRY_MS;
     });

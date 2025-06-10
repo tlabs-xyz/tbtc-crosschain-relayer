@@ -6,6 +6,7 @@ import {
   updateToAwaitingWormholeVAA,
   updateToBridgedDeposit,
   updateLastActivity,
+  createPartialDepositFromOnChainData,
 } from '../../../utils/Deposits.js';
 import { ethers } from 'ethers';
 import { type FundingTransaction } from '../../../types/FundingTransaction.type.js';
@@ -1231,5 +1232,49 @@ describe('Deposits Util', () => {
       );
       expect(returnedDeposit.dates.bridgedAt).toBe(complexDeposit.dates.bridgedAt);
     });
+  });
+});
+
+describe('createPartialDepositFromOnChainData', () => {
+  const mockDepositId =
+    '36798305888235649988225211365882253459035954999386348233314415494390505703047';
+  const mockL1Sender = '0x' + 'f'.repeat(40);
+  const mockChainName = 'StarkNetTestnet';
+  const mockInitializeTxHash = '0x' + 'init_tx'.padEnd(64, '0');
+  const mockTimestamp = 1678886400000; // March 15, 2023 12:00:00 PM UTC
+
+  let dateNowSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(mockTimestamp);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should create a partial deposit object with correct structure and values', () => {
+    const deposit = createPartialDepositFromOnChainData(
+      mockDepositId,
+      mockL1Sender,
+      mockChainName,
+      mockInitializeTxHash,
+    );
+
+    expect(deposit.id).toBe(mockDepositId);
+    expect(deposit.chainId).toBe(mockChainName);
+    expect(deposit.fundingTxHash).toBeNull();
+    expect(deposit.outputIndex).toBeNull();
+    expect(deposit.status).toBe(DepositStatus.INITIALIZED);
+    expect(deposit.owner).toBe(mockL1Sender);
+
+    expect(deposit.hashes.btc.btcTxHash).toBeNull();
+    expect(deposit.hashes.eth.initializeTxHash).toBe(mockInitializeTxHash);
+    expect(deposit.hashes.eth.finalizeTxHash).toBeNull();
+
+    expect(deposit.dates.createdAt).toBe(mockTimestamp);
+    expect(deposit.dates.initializationAt).toBe(mockTimestamp);
+    expect(deposit.dates.lastActivityAt).toBe(mockTimestamp);
+    expect(deposit.dates.finalizationAt).toBeNull();
   });
 });

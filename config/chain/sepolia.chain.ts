@@ -31,11 +31,11 @@ export const getSepoliaTestnetChainInput = (): EvmChainInput => {
   }
 
   const config: EvmChainInput = {
-    network: commonTestnetInput.network as NETWORK,
-    l1Rpc: commonTestnetInput.l1Rpc as string,
-    vaultAddress: commonTestnetInput.vaultAddress as string,
-    l1ContractAddress: commonTestnetInput.l1ContractAddress as string,
-    l1Confirmations: commonTestnetInput.l1Confirmations as number,
+    network: commonTestnetInput.network,
+    l1Rpc: commonTestnetInput.l1Rpc!,
+    vaultAddress: commonTestnetInput.vaultAddress!,
+    l1ContractAddress: commonTestnetInput.l1ContractAddress!,
+    l1Confirmations: commonTestnetInput.l1Confirmations!,
     enableL2Redemption: commonTestnetInput.enableL2Redemption as boolean,
     useEndpoint: commonTestnetInput.useEndpoint as boolean,
     // supportsRevealDepositAPI is optional in CommonChainConfigSchema, defaults to false

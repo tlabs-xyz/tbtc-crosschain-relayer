@@ -449,3 +449,266 @@ export const getDepositKey = (
   const values = [hashToUse, fundingOutputIndex];
   return ethers.utils.solidityKeccak256(types, values);
 };
+
+/**
+ * @name createFinalizedDepositFromOnChainData
+ * @description Creates a new deposit object for a deposit that was already finalized on-chain but not tracked locally.
+ * This happens if the relayer was down when the deposit was requested and finalized.
+ * The function uses minimal data fetched from the `OptimisticMintingRequested` event.
+ * Many fields will be placeholders as the full original data is not available.
+ *
+ * @param {string} depositId - The deposit key.
+ * @param {string} fundingTxHash - The Bitcoin funding transaction hash.
+ * @param {number} fundingOutputIndex - The output index of the funding transaction.
+ * @param {string} depositor - The address of the depositor.
+ * @param {string} chainId - The chain ID of the deposit.
+ *
+ * @returns {Deposit} A structured, but partially filled, deposit object.
+ */
+export const createFinalizedDepositFromOnChainData = (
+  depositId: string,
+  fundingTxHash: string,
+  fundingOutputIndex: number,
+  depositor: string,
+  chainId: string,
+): Deposit => {
+  const now = Date.now();
+  const deposit: Deposit = {
+    id: depositId,
+    chainId: chainId,
+    fundingTxHash: fundingTxHash,
+    outputIndex: fundingOutputIndex,
+    hashes: {
+      btc: {
+        btcTxHash: fundingTxHash,
+      },
+      eth: {
+        initializeTxHash: 'unknown-recovered', // Mark as recovered
+        finalizeTxHash: 'unknown-recovered', // Mark as recovered
+      },
+      solana: {
+        bridgeTxHash: null,
+      },
+    },
+    receipt: {
+      depositor: depositor,
+      // These fields are unknown and set to placeholders
+      blindingFactor: '0x',
+      walletPublicKeyHash: '0x',
+      refundPublicKeyHash: '0x',
+      refundLocktime: '0',
+      extraData: depositor, // Assume owner is depositor
+    },
+    L1OutputEvent: {
+      // This data is not available, set to placeholders
+      fundingTx: {
+        version: '0',
+        inputVector: '0x',
+        outputVector: '0x',
+        locktime: '0',
+      },
+      reveal: {
+        blindingFactor: '0x',
+        fundingOutputIndex: fundingOutputIndex,
+        refundLocktime: '0',
+        refundPubKeyHash: '0x',
+        vault: '0x',
+        walletPubKeyHash: '0x',
+      },
+      l2DepositOwner: depositor,
+      l2Sender: depositor,
+    },
+    owner: depositor, // Assume owner is depositor
+    status: DepositStatus.FINALIZED, // It's already finalized
+    dates: {
+      createdAt: now,
+      initializationAt: now, // Mark as initialized at recovery time
+      finalizationAt: now,
+      awaitingWormholeVAAMessageSince: null,
+      bridgedAt: null,
+      lastActivityAt: now,
+    },
+    wormholeInfo: {
+      txHash: null,
+      transferSequence: null,
+      bridgingAttempted: false,
+    },
+    error: null,
+  };
+
+  logDepositCreated(deposit);
+  logStatusChange(deposit, DepositStatus.FINALIZED, DepositStatus.QUEUED); // Log transition
+  logDepositFinalized(deposit);
+
+  return deposit;
+};
+
+/**
+ * @name createInitializedDepositFromOnChainData
+ * @description Creates a new deposit object for a deposit that was initialized on-chain but not tracked locally.
+ * This can happen if the relayer was down when the deposit was initiated.
+ * The function uses data from the `DepositInitialized` event.
+ *
+ * @param {string} depositId - The deposit key.
+ * @param {string} fundingTxHash - The Bitcoin funding transaction hash.
+ * @param {number} fundingOutputIndex - The output index of the funding transaction.
+ * @param {string} depositor - The address of the depositor.
+ * @param {string} chainId - The chain ID of the deposit.
+ * @param {string} initializeTxHash - The hash of the initialization transaction.
+ *
+ * @returns {Deposit} A structured, but partially filled, deposit object.
+ */
+export const createInitializedDepositFromOnChainData = (
+  depositId: string,
+  fundingTxHash: string,
+  fundingOutputIndex: number,
+  depositor: string,
+  chainId: string,
+  initializeTxHash: string,
+): Deposit => {
+  const now = Date.now();
+  const deposit: Deposit = {
+    id: depositId,
+    chainId: chainId,
+    fundingTxHash: fundingTxHash,
+    outputIndex: fundingOutputIndex,
+    hashes: {
+      btc: {
+        btcTxHash: fundingTxHash,
+      },
+      eth: {
+        initializeTxHash: initializeTxHash,
+        finalizeTxHash: null,
+      },
+      solana: {
+        bridgeTxHash: null,
+      },
+    },
+    receipt: {
+      depositor: depositor,
+      blindingFactor: '0x',
+      walletPublicKeyHash: '0x',
+      refundPublicKeyHash: '0x',
+      refundLocktime: '0',
+      extraData: depositor,
+    },
+    L1OutputEvent: {
+      fundingTx: {
+        version: '0',
+        inputVector: '0x',
+        outputVector: '0x',
+        locktime: '0',
+      },
+      reveal: {
+        blindingFactor: '0x',
+        fundingOutputIndex: fundingOutputIndex,
+        refundLocktime: '0',
+        refundPubKeyHash: '0x',
+        vault: '0x',
+        walletPubKeyHash: '0x',
+      },
+      l2DepositOwner: depositor,
+      l2Sender: depositor,
+    },
+    owner: depositor,
+    status: DepositStatus.INITIALIZED,
+    dates: {
+      createdAt: now,
+      initializationAt: now,
+      finalizationAt: null,
+      awaitingWormholeVAAMessageSince: null,
+      bridgedAt: null,
+      lastActivityAt: now,
+    },
+    wormholeInfo: {
+      txHash: null,
+      transferSequence: null,
+      bridgingAttempted: false,
+    },
+    error: null,
+  };
+
+  logDepositCreated(deposit);
+  logStatusChange(deposit, DepositStatus.INITIALIZED, DepositStatus.QUEUED);
+
+  return deposit;
+};
+
+/**
+ * Creates a simplified, partial deposit object from on-chain event data.
+ * This is used to back-fill deposits that are found on-chain but are missing from the local database.
+ * The created deposit is in an INITIALIZED state but lacks BTC funding details.
+ *
+ * @param depositKey The unique key for the deposit.
+ * @param depositor The address of the depositor.
+ * @param chainId The ID of the chain where the deposit occurred.
+ * @param initializeTxHash The transaction hash of the initialization event.
+ * @returns A partial Deposit object.
+ */
+export const createPartialDepositFromOnChainData = (
+  depositKey: string,
+  depositor: string,
+  chainId: string,
+  initializeTxHash: string,
+): Deposit => {
+  return {
+    id: depositKey,
+    chainId,
+    fundingTxHash: null, // This information is not available from the event
+    outputIndex: null, // This information is not available from the event
+    hashes: {
+      btc: {
+        btcTxHash: null,
+      },
+      eth: {
+        initializeTxHash: initializeTxHash,
+        finalizeTxHash: null,
+      },
+      solana: {
+        bridgeTxHash: null,
+      },
+    },
+    receipt: {
+      depositor: depositor,
+      blindingFactor: '0x',
+      walletPublicKeyHash: '0x',
+      refundPublicKeyHash: '0x',
+      refundLocktime: '0',
+      extraData: depositor, // In this context, the depositor is also the owner
+    },
+    L1OutputEvent: {
+      fundingTx: {
+        version: '0',
+        inputVector: '0x',
+        outputVector: '0x',
+        locktime: '0',
+      },
+      reveal: {
+        blindingFactor: '0x',
+        fundingOutputIndex: 0, // Not available, set to 0 as a placeholder
+        refundLocktime: '0',
+        refundPubKeyHash: '0x',
+        vault: '0x',
+        walletPubKeyHash: '0x',
+      },
+      l2DepositOwner: depositor,
+      l2Sender: depositor,
+    },
+    owner: depositor,
+    status: DepositStatus.INITIALIZED,
+    dates: {
+      createdAt: Date.now(),
+      initializationAt: Date.now(),
+      finalizationAt: null,
+      awaitingWormholeVAAMessageSince: null,
+      bridgedAt: null,
+      lastActivityAt: Date.now(),
+    },
+    wormholeInfo: {
+      txHash: null,
+      transferSequence: null,
+      bridgingAttempted: false,
+    },
+    error: null,
+  };
+};

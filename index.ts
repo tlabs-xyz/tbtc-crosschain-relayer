@@ -21,6 +21,7 @@ import logger from './utils/Logger.js';
 import {
   initializeAllChains,
   initializeAllL2RedemptionServices,
+  runStartupTasks,
   startCronJobs,
 } from './services/Core.js';
 import { logErrorContext } from './utils/Logger.js';
@@ -79,6 +80,11 @@ async function initializeBackgroundServices() {
   await initializeAllL2RedemptionServices();
   logger.info('All L2 redemption listeners initialized successfully.');
 
+  logger.info('Running startup tasks...');
+  await runStartupTasks();
+  logger.info('Startup tasks complete.');
+
+  logger.info('Starting cron jobs...');
   startCronJobs();
   logger.info('Cron jobs started.');
 }
