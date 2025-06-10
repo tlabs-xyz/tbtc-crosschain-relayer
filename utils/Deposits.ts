@@ -449,3 +449,96 @@ export const getDepositKey = (
   const values = [hashToUse, fundingOutputIndex];
   return ethers.utils.solidityKeccak256(types, values);
 };
+
+/**
+ * @name createFinalizedDepositFromOnChainData
+ * @description Creates a new deposit object for a deposit that was already finalized on-chain but not tracked locally.
+ * This happens if the relayer was down when the deposit was requested and finalized.
+ * The function uses minimal data fetched from the `OptimisticMintingRequested` event.
+ * Many fields will be placeholders as the full original data is not available.
+ *
+ * @param {string} depositId - The deposit key.
+ * @param {string} fundingTxHash - The Bitcoin funding transaction hash.
+ * @param {number} fundingOutputIndex - The output index of the funding transaction.
+ * @param {string} depositor - The address of the depositor.
+ * @param {string} chainId - The chain ID of the deposit.
+ *
+ * @returns {Deposit} A structured, but partially filled, deposit object.
+ */
+export const createFinalizedDepositFromOnChainData = (
+  depositId: string,
+  fundingTxHash: string,
+  fundingOutputIndex: number,
+  depositor: string,
+  chainId: string,
+): Deposit => {
+  const now = Date.now();
+  const deposit: Deposit = {
+    id: depositId,
+    chainId: chainId,
+    fundingTxHash: fundingTxHash,
+    outputIndex: fundingOutputIndex,
+    hashes: {
+      btc: {
+        btcTxHash: fundingTxHash,
+      },
+      eth: {
+        initializeTxHash: 'unknown-recovered', // Mark as recovered
+        finalizeTxHash: 'unknown-recovered', // Mark as recovered
+      },
+      solana: {
+        bridgeTxHash: null,
+      },
+    },
+    receipt: {
+      depositor: depositor,
+      // These fields are unknown and set to placeholders
+      blindingFactor: '0x',
+      walletPublicKeyHash: '0x',
+      refundPublicKeyHash: '0x',
+      refundLocktime: '0',
+      extraData: depositor, // Assume owner is depositor
+    },
+    L1OutputEvent: {
+      // This data is not available, set to placeholders
+      fundingTx: {
+        version: '0',
+        inputVector: '0x',
+        outputVector: '0x',
+        locktime: '0',
+      },
+      reveal: {
+        blindingFactor: '0x',
+        fundingOutputIndex: fundingOutputIndex,
+        refundLocktime: '0',
+        refundPubKeyHash: '0x',
+        vault: '0x',
+        walletPubKeyHash: '0x',
+      },
+      l2DepositOwner: depositor,
+      l2Sender: depositor,
+    },
+    owner: depositor, // Assume owner is depositor
+    status: DepositStatus.FINALIZED, // It's already finalized
+    dates: {
+      createdAt: now,
+      initializationAt: now, // Mark as initialized at recovery time
+      finalizationAt: now,
+      awaitingWormholeVAAMessageSince: null,
+      bridgedAt: null,
+      lastActivityAt: now,
+    },
+    wormholeInfo: {
+      txHash: null,
+      transferSequence: null,
+      bridgingAttempted: false,
+    },
+    error: null,
+  };
+
+  logDepositCreated(deposit);
+  logStatusChange(deposit, DepositStatus.FINALIZED, DepositStatus.QUEUED); // Log transition
+  logDepositFinalized(deposit);
+
+  return deposit;
+};

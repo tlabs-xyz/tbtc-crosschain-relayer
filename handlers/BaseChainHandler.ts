@@ -17,6 +17,7 @@ import {
   updateToInitializedDeposit,
   updateToFinalizedDeposit,
   updateLastActivity,
+  createFinalizedDepositFromOnChainData,
 } from '../utils/Deposits.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
@@ -142,7 +143,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   }
 
   async setupListeners(): Promise<void> {
-    logger.debug(`Setting up Base L1 listeners for ${this.config.chainName}`);
+    logger.debug(`Setting up L1 listeners for ${this.config.chainName}`);
     await this.setupL1Listeners();
     logger.debug(`Setting up L2 listeners (delegated) for ${this.config.chainName}`);
     await this.setupL2Listeners();
@@ -169,7 +170,63 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             }
           } else {
             logger.warn(
-              `Received OptimisticMintingFinalized event for unknown Deposit Key: ${depositId}`,
+              `Received OptimisticMintingFinalized event for unknown Deposit Key: ${depositId}. Attempting to recover from chain history.`,
+            );
+
+            // Query for the corresponding OptimisticMintingRequested event
+            const filter = this.tbtcVaultProvider.filters.OptimisticMintingRequested(
+              null, // any minter
+              depositKey, // the specific depositKey we're interested in
+            );
+
+            const events = await this.tbtcVaultProvider.queryFilter(filter);
+
+            if (events.length === 0) {
+              logger.error(
+                `CRITICAL: Could not find OptimisticMintingRequested event for finalized deposit key ${depositId}. The deposit cannot be created. This may require manual intervention.`,
+              );
+              logDepositError(
+                depositId,
+                'Could not find OptimisticMintingRequested event for finalized but unknown deposit.',
+              );
+              return; // Exit
+            }
+
+            if (events.length > 1) {
+              logger.warn(
+                `Found multiple OptimisticMintingRequested events for deposit key ${depositId}. Using the first one.`,
+              );
+            }
+
+            const requestEvent = events[0];
+            if (!requestEvent.args) {
+              logger.error(
+                `CRITICAL: OptimisticMintingRequested event for deposit key ${depositId} has no arguments. Cannot create deposit.`,
+              );
+              logDepositError(
+                depositId,
+                'OptimisticMintingRequested event for finalized but unknown deposit has no arguments.',
+              );
+              return; // Exit
+            }
+            const { fundingTxHash, fundingOutputIndex, depositor } =
+              requestEvent.args as unknown as {
+                fundingTxHash: string;
+                fundingOutputIndex: number;
+                depositor: string;
+              };
+
+            const newDeposit = createFinalizedDepositFromOnChainData(
+              depositId,
+              fundingTxHash,
+              fundingOutputIndex,
+              depositor,
+              this.config.chainName,
+            );
+
+            await DepositStore.create(newDeposit);
+            logger.info(
+              `Successfully recovered and created deposit ${depositId} from on-chain event history.`,
             );
           }
         } catch (error: any) {
