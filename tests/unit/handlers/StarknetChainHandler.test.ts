@@ -418,6 +418,10 @@ describe('StarknetChainHandler', () => {
         mockFundingTx,
         revealInstance,
         ethers.BigNumber.from(expectedFormattedOwner),
+        expect.objectContaining({
+          gasLimit: expect.any(Object),
+          gasPrice: expect.any(Object),
+        }),
       );
 
       expect(mockDepositsUtil.updateToInitializedDeposit).toHaveBeenCalledTimes(1);
