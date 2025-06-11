@@ -626,6 +626,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   public async initializeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
+    // --- Constants & Helpers ---
+    const FALLBACK_GAS_LIMIT = ethers.BigNumber.from(500000);
+
     const fundingTxHash = getFundingTxHash(deposit.L1OutputEvent.fundingTx);
     const depositId = getDepositId(fundingTxHash, deposit.L1OutputEvent.reveal.fundingOutputIndex);
     const depositKey = this.toDepositKey(deposit);
@@ -633,32 +636,32 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     const logId = deposit.id || depositId;
     const logPrefix = `INITIALIZE_DEPOSIT ${this.config.chainName} ${logId} |`;
 
+    const logAndReturnError = async (message: string, errorObj?: any): Promise<undefined> => {
+      logger.error(`[${this.config.chainName}] ${logPrefix} ${message}`);
+      if (errorObj) {
+        logErrorContext(`${logPrefix} ${message}`, errorObj, { chainName: this.config.chainName });
+      }
+      await logDepositError(logId, message, errorObj);
+      return undefined;
+    };
+
     logger.info(
       `[${this.config.chainName}] ${logPrefix} Attempting to initialize deposit on L1 Depositor contract.`,
     );
 
+    // --- Check contract availability ---
     if (!this.l1DepositorContract) {
-      logger.error(
-        `[${this.config.chainName}] ${logPrefix} L1 Depositor contract (signer) instance not available. Cannot initialize deposit.`,
-      );
-      logErrorContext(
-        `${logPrefix} L1 Depositor contract (signer) not available`,
-        new Error('L1 Depositor contract (signer) not available'),
-        { chainName: this.config.chainName },
-      );
-      await logDepositError(
-        logId,
+      return await logAndReturnError(
         'L1 Depositor contract (signer) instance not available for initialization.',
         { internalError: 'L1 Depositor contract (signer) not available' },
       );
-      return undefined;
     }
 
     const fundingTx: FundingTransaction = deposit.L1OutputEvent.fundingTx;
     const reveal: Reveal = deposit.L1OutputEvent.reveal;
     let l2DepositOwner: string = deposit.L1OutputEvent.l2DepositOwner;
 
-    // Query on-chain directly via provider using depositKey (bytes32)
+    // --- Check deposit state on-chain ---
     const depositState = await this.l1DepositorContractProvider!.deposits(depositKey);
     logger.info(
       `[${this.config.chainName}] ${logPrefix} Deposit state for deposit key ${depositKey}: ${depositState}`,
@@ -696,36 +699,100 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       `[${this.config.chainName}] ${logPrefix} Deposit not initialized. ID: ${depositId}`,
     );
 
+    // --- Convert and validate StarkNet address ---
     try {
       l2DepositOwner = toUint256StarknetAddress(l2DepositOwner);
       if (!validateStarkNetAddress(l2DepositOwner)) {
         throw new Error('Invalid StarkNet address after conversion.');
       }
     } catch (err) {
-      logger.error(
-        `[${this.config.chainName}] ${logPrefix} Invalid deposit owner address: ${deposit.L1OutputEvent.l2DepositOwner}`,
+      return await logAndReturnError(
+        `Invalid deposit owner address: ${deposit.L1OutputEvent.l2DepositOwner}`,
+        { address: deposit.L1OutputEvent.l2DepositOwner },
       );
-      await logDepositError(logId, 'Invalid deposit owner address.', {
-        address: deposit.L1OutputEvent.l2DepositOwner,
-      });
-      return undefined;
     }
 
     try {
       logger.info(
-        `[${this.config.chainName}] ${logPrefix} Calling L1 Depositor contract initializeDeposit for StarkNet recipient: ${l2DepositOwner})`,
+        `[${this.config.chainName}] ${logPrefix} Preparing to estimate gas and simulate initializeDeposit...`,
       );
-      logger.debug(
-        `[${this.config.chainName}] ${logPrefix} L1 Contract Funding Tx Arg:`,
-        fundingTx,
-      );
-      logger.debug(`[${this.config.chainName}] ${logPrefix} L1 Contract Reveal Arg:`, reveal);
-
       const l2DepositOwnerBN = ethers.BigNumber.from(l2DepositOwner);
+
+      // --- Gas estimation ---
+      let gasEstimate: ethers.BigNumber;
+      try {
+        gasEstimate = await this.l1DepositorContract.estimateGas.initializeDeposit(
+          fundingTx,
+          reveal,
+          l2DepositOwnerBN,
+        );
+        logger.info(
+          `[${this.config.chainName}] ${logPrefix} Gas estimate for initializeDeposit: ${gasEstimate.toString()}`,
+        );
+      } catch (error: any) {
+        logger.warn(
+          `[${this.config.chainName}] ${logPrefix} Gas estimation failed, using fallback.`,
+        );
+        gasEstimate = FALLBACK_GAS_LIMIT;
+      }
+
+      // --- Gas price ---
+      const gasPrice = await this.l1Provider.getGasPrice();
+      logger.info(
+        `[${this.config.chainName}] ${logPrefix} Current gas price: ${ethers.utils.formatUnits(gasPrice, 'gwei')} gwei`,
+      );
+
+      // --- Balance check ---
+      const totalGasCost = gasEstimate.mul(gasPrice);
+      const relayerBalance = await this.l1Signer.getBalance();
+      logger.info(
+        `[${this.config.chainName}] ${logPrefix} Relayer L1 balance: ${ethers.utils.formatEther(relayerBalance)} ETH`,
+      );
+      logger.info(
+        `[${this.config.chainName}] ${logPrefix} Required balance for initialization (gas): ${ethers.utils.formatEther(totalGasCost)} ETH`,
+      );
+
+      if (relayerBalance.lt(totalGasCost)) {
+        return await logAndReturnError(
+          `Insufficient ETH balance for initialization. Required: ${ethers.utils.formatEther(totalGasCost)}, Have: ${ethers.utils.formatEther(relayerBalance)}`,
+          {
+            requiredBalance: totalGasCost.toString(),
+            relayerBalance: relayerBalance.toString(),
+          },
+        );
+      }
+
+      const txOverrides: PayableOverrides = {
+        gasLimit: gasEstimate.mul(120).div(100), // 20% buffer
+        gasPrice: gasPrice.mul(110).div(100), // 10% buffer
+      };
+
+      // --- Simulate transaction ---
+      try {
+        logger.info(`[${this.config.chainName}] ${logPrefix} Simulating initializeDeposit call...`);
+        await this.l1DepositorContract.callStatic.initializeDeposit(
+          fundingTx,
+          reveal,
+          l2DepositOwnerBN,
+          txOverrides,
+        );
+        logger.info(
+          `[${this.config.chainName}] ${logPrefix} Simulation successful. Proceeding with actual transaction.`,
+        );
+      } catch (error: any) {
+        return await logAndReturnError(`Simulation failed: ${error.message}`, { error });
+      }
+
+      logger.info(
+        `[${this.config.chainName}] ${logPrefix} Calling L1 Depositor contract initializeDeposit for StarkNet recipient: ${l2DepositOwner}) with gasLimit: ${txOverrides.gasLimit?.toString()}, gasPrice: ${ethers.utils.formatUnits(txOverrides.gasPrice as BigNumberish, 'gwei')} gwei.`,
+      );
+
+      // --- Send transaction ---
       const txResponse = await this.l1DepositorContract.initializeDeposit(
         fundingTx,
         reveal,
         l2DepositOwnerBN,
+        txOverrides,
       );
 
       logger.info(
@@ -756,15 +823,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         return undefined;
       }
     } catch (error: any) {
-      logger.error(
-        `[${this.config.chainName}] ${logPrefix} Error during L1 initializeDeposit: ${error.message}`,
-      );
-      logErrorContext(`${logPrefix} Error during L1 initializeDeposit: ${error.message}`, error, {
-        chainName: this.config.chainName,
-      });
-
-      await logDepositError(logId, `Error during L1 initializeDeposit: ${error.message}`, error);
-      return undefined;
+      return await logAndReturnError(`Error during L1 initializeDeposit: ${error.message}`, error);
     }
   }
 
