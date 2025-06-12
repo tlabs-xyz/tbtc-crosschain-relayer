@@ -44,7 +44,7 @@ function setupMiddleware(app: Express) {
   if (appConfig.CORS_ENABLED) {
     const corsOptions = {
       credentials: true,
-      origin: appConfig.CORS_URL,
+      origin: appConfig.CORS_URL === '*' ? '*' : appConfig.CORS_URL,
     };
     app.use(cors(corsOptions));
     logger.info(`CORS enabled for origin: ${appConfig.CORS_URL || '*'}`);
