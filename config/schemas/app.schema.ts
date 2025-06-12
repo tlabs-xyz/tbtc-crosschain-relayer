@@ -30,8 +30,10 @@ export const AppConfigSchema = z.object({
   CORS_ENABLED: envBoolean.default(true),
   CORS_URL: z
     .string()
-    .url('CORS_URL must be a valid URL')
     .min(1, 'CORS_URL is required if CORS_ENABLED is true')
+    .refine((val) => val === '*' || /^https?:\/\/.+/i.test(val), {
+      message: "CORS_URL must be a valid URL or '*'",
+    })
     .optional(),
   CLEAN_QUEUED_TIME: z.coerce.number().int().positive().default(48),
   CLEAN_FINALIZED_TIME: z.coerce.number().int().positive().default(12),

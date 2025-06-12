@@ -165,13 +165,19 @@ describe('AppConfigSchema Direct Validation', () => {
 
   it('should fail for invalid CORS_URL format', () => {
     const env = { ...MINIMAL_VALID_ENV, CORS_URL: 'not-a-valid-url' };
-    expect(() => AppConfigSchema.parse(env)).toThrow(/CORS_URL must be a valid URL/);
+    expect(() => AppConfigSchema.parse(env)).toThrow(/CORS_URL must be a valid URL or '\*'/);
   });
 
   it('should pass if CORS_URL is a valid URL when CORS_ENABLED is true (default)', () => {
     const env = { ...MINIMAL_VALID_ENV, CORS_URL: 'http://valid.url' };
     const parsed = AppConfigSchema.parse(env);
     expect(parsed.CORS_URL).toBe('http://valid.url');
+  });
+
+  it("should accept '*' as a valid CORS_URL", () => {
+    const env = { ...MINIMAL_VALID_ENV, CORS_URL: '*' };
+    const parsed = AppConfigSchema.parse(env);
+    expect(parsed.CORS_URL).toBe('*');
   });
 
   it('should pass if CORS_URL is undefined and CORS_ENABLED is true (default)', () => {
