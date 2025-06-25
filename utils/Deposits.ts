@@ -275,6 +275,17 @@ export const updateToAwaitingWormholeVAA = async (
   logDepositAwaitingWormholeVAA(updatedDeposit);
 };
 
+const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'unknown' => {
+  const lowerChainId = chainId.toLowerCase();
+  if (lowerChainId.includes('sui')) {
+    return 'sui';
+  }
+  if (lowerChainId.includes('solana')) {
+    return 'solana';
+  }
+  return 'unknown';
+};
+
 /**
  * @name updateToBridgedDeposit
  * @description Updates the status of a deposit to `BRIDGED`
@@ -296,30 +307,43 @@ export const updateToBridgedDeposit = async (
   const oldStatus = deposit.status;
   const newStatus = DepositStatus.BRIDGED;
 
-  // Determine chain type and update appropriate hash structure
-  const isSuiChain = deposit.chainId.toLowerCase().includes('sui');
   let updatedHashes;
+  const chainType = getChainTypeFromId(deposit.chainId);
 
-  if (isSuiChain) {
-    // Update SUI-specific hash structure
-    const newSuiHashes = {
-      ...deposit.hashes?.sui,
-      l2BridgeTxHash: txSignature,
-    };
-    updatedHashes = {
-      ...deposit.hashes,
-      sui: newSuiHashes,
-    };
-  } else {
-    // Default to Solana for backward compatibility
-    const newSolanaHashes = {
-      ...deposit.hashes?.solana,
-      bridgeTxHash: txSignature,
-    };
-    updatedHashes = {
-      ...deposit.hashes,
-      solana: newSolanaHashes,
-    };
+  switch (chainType) {
+    case 'sui':
+      // Update SUI-specific hash structure
+      updatedHashes = {
+        ...deposit.hashes,
+        sui: {
+          ...deposit.hashes?.sui,
+          l2BridgeTxHash: txSignature,
+        },
+      };
+      break;
+    case 'solana':
+      // Update Solana-specific hash structure
+      updatedHashes = {
+        ...deposit.hashes,
+        solana: {
+          ...deposit.hashes?.solana,
+          bridgeTxHash: txSignature,
+        },
+      };
+      break;
+    default:
+      logger.warn(
+        `[updateToBridgedDeposit] Unknown chainId: ${deposit.chainId}. Defaulting to Solana hash structure for backward compatibility.`,
+      );
+      // Default to Solana for backward compatibility
+      updatedHashes = {
+        ...deposit.hashes,
+        solana: {
+          ...deposit.hashes?.solana,
+          bridgeTxHash: txSignature,
+        },
+      };
+      break;
   }
 
   const updatedDeposit: Deposit = {

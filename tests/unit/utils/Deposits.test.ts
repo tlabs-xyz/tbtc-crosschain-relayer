@@ -1013,6 +1013,7 @@ describe('Deposits Util', () => {
     let logStatusChangeSpy: jest.SpyInstance;
     let logDepositBridgedSpy: jest.SpyInstance;
     let dateNowSpy: jest.SpyInstance;
+    let loggerWarnSpy: jest.SpyInstance;
 
     beforeEach(() => {
       depositStoreUpdateSpy = jest.spyOn(DepositStore.DepositStore, 'update').mockResolvedValue();
@@ -1020,6 +1021,7 @@ describe('Deposits Util', () => {
       logStatusChangeSpy = jest.spyOn(AuditLog, 'logStatusChange').mockImplementation();
       logDepositBridgedSpy = jest.spyOn(AuditLog, 'logDepositBridged').mockImplementation();
       dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(mockTimestamp);
+      loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
     });
 
     afterEach(() => {
@@ -1200,6 +1202,9 @@ describe('Deposits Util', () => {
         DepositStatus.AWAITING_WORMHOLE_VAA,
       );
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        `[updateToBridgedDeposit] Unknown chainId: ${ambiguousDeposit.chainId}. Defaulting to Solana hash structure for backward compatibility.`,
+      );
     });
   });
 
