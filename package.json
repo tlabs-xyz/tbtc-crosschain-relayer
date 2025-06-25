@@ -46,6 +46,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "0.28.0",
     "@ethersproject/experimental": "^5.8.0",
+    "@mysten/sui": "^1.34.0",
     "@prisma/client": "^6.9.0",
     "@solana/web3.js": "^1.98.0",
     "@wormhole-foundation/sdk": "^1.18.0",

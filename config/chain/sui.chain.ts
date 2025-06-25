@@ -51,15 +51,15 @@ export const getSuiTestnetChainInput = (): SuiChainInput => {
     // SuiTestnet-specific values
     chainName: 'SuiTestnet',
     l2Rpc: getEnv('CHAIN_SUITESTNET_L2_RPC', 'https://fullnode.testnet.sui.io'),
-    l2WsRpc: getEnv('CHAIN_SUITESTNET_L2_WS_RPC', ''), // Default to empty string if not set
+    l2WsRpc: getEnv('CHAIN_SUITESTNET_L2_WS_RPC', 'wss://fullnode.testnet.sui.io'),
     l2StartBlock: getEnvNumber('CHAIN_SUITESTNET_L2_START_BLOCK', 0),
     l2ContractAddress: getEnv(
       'CHAIN_SUITESTNET_L2_CONTRACT_ADDRESS',
-      '0xSuiPackageId::module::Struct', // Default placeholder
+      '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor',
     ),
     l2WormholeGatewayAddress: getEnv(
       'CHAIN_SUITESTNET_WORMHOLE_GATEWAY',
-      '0x00mockSuiWormholeGateway000000000000000000000000000000000000000', // Mock Sui address format
+      '0xc57508ee0d4595e5a8728974a4a93a787d38f339757230d441e895422c07aba9',
     ),
     l2WormholeChainId: getEnvNumber('CHAIN_SUITESTNET_WORMHOLE_CHAIN_ID', 21),
     suiPrivateKey: getEnv('CHAIN_SUITESTNET_SUI_PRIVATE_KEY'),
