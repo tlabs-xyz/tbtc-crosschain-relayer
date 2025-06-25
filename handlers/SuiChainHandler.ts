@@ -2,7 +2,9 @@ import { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fromBase64 } from '@mysten/bcs';
 import type { SuiEvent, SuiEventFilter } from '@mysten/sui/client';
+import { signSendWait, Wormhole } from '@wormhole-foundation/sdk';
 import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
+import { getSuiSigner } from '@wormhole-foundation/sdk-sui';
 import { ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
 
@@ -12,7 +14,7 @@ import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 import { type Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { updateToAwaitingWormholeVAA } from '../utils/Deposits.js';
+import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
 import { DepositStore } from '../utils/DepositStore.js';
 
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
@@ -292,25 +294,44 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
       logger.info(`VAA found for deposit ${deposit.id}. Posting VAA to Sui...`);
 
-      // Use Wormhole SDK pattern similar to Solana
+      // Create SUI signer using Wormhole SDK
+      const suiWormholeSigner = await getSuiSigner(this.suiClient, this.config.suiPrivateKey);
+
+      // Get sender address
+      const sender = Wormhole.parseAddress(suiWormholeSigner.chain(), suiWormholeSigner.address());
+
+      // Get SUI chain context and bridge
       const toChain = this.suiWormholeContext;
-      await toChain.getTBTCBridge();
+      const bridge = await toChain.getTBTCBridge();
 
-      // For now, log that the Wormhole bridging is set up but needs Sui signer integration
-      // This would need to be completed with proper Sui signer integration from Wormhole SDK
-      logger.info(`Wormhole bridge integration for Sui requires further SDK integration`);
+      // Create unsigned redemption transactions
+      const unsignedTransactions = bridge.redeem(sender, vaa);
 
-      // Placeholder for successful bridging
-      // In a complete implementation, this would use:
-      // const unsignedTransactions = bridge.redeem(sender, vaa);
-      // const result = await signSendWait(toChain, unsignedTransactions, suiSigner);
-
-      logger.info(
-        `Sui bridging setup complete for deposit ${deposit.id} - requires full Wormhole SDK integration`,
+      // Sign and send transactions
+      const destinationTransactionIds = await signSendWait(
+        toChain,
+        unsignedTransactions,
+        suiWormholeSigner,
       );
 
-      // For now, don't update the deposit status until full integration is complete
-      // await updateToBridgedDeposit(deposit, result.digest);
+      // Validate transaction results
+      if (!destinationTransactionIds || destinationTransactionIds.length === 0) {
+        logger.warn(`No transaction IDs returned from SUI bridging for deposit ${deposit.id}`);
+        return;
+      }
+
+      const firstTx = destinationTransactionIds[0];
+      if (!firstTx || !firstTx.txid) {
+        logger.warn(`Invalid transaction result from SUI bridging for deposit ${deposit.id}`);
+        return;
+      }
+
+      logger.info(
+        `Sui bridging success for deposit ${deposit.id}, txids=${destinationTransactionIds.map((tx) => tx.txid).join(', ')}`,
+      );
+
+      // Update deposit status to BRIDGED with SUI-specific hash structure
+      await updateToBridgedDeposit(deposit, firstTx.txid);
     } catch (error: any) {
       const reason = error.message || 'Unknown bridging error';
       logger.warn(`Wormhole bridging not ready for deposit ${deposit.id}: ${reason}`);

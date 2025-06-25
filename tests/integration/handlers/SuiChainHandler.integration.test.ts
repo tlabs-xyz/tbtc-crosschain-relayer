@@ -1,8 +1,18 @@
 // Mock problematic modules first to prevent deep loading
 jest.mock('@wormhole-foundation/sdk', () => ({
   wormhole: jest.fn(),
-  Wormhole: jest.fn(),
+  Wormhole: {
+    parseAddress: jest.fn().mockReturnValue('mock-address'),
+  },
   signSendWait: jest.fn(),
+  __esModule: true,
+}));
+
+jest.mock('@wormhole-foundation/sdk-sui', () => ({
+  getSuiSigner: jest.fn().mockResolvedValue({
+    chain: jest.fn().mockReturnValue('Sui'),
+    address: jest.fn().mockReturnValue('0xsuiaddress'),
+  }),
   __esModule: true,
 }));
 
@@ -36,14 +46,32 @@ jest.mock('@mysten/sui/transactions', () => ({
   __esModule: true,
 }));
 
+// Mock @mysten/bcs to prevent deep loading and transform errors
 jest.mock('@mysten/bcs', () => ({
   fromBase64: jest.fn().mockReturnValue(new Uint8Array(32)),
+  toBase64: jest.fn().mockReturnValue('base64-string'),
   BCS: jest.fn(),
   bcs: {
-    bytes: () => ({ serialize: jest.fn(), deserialize: jest.fn() }),
-    string: () => ({ serialize: jest.fn(), deserialize: jest.fn() }),
-    u8: () => ({ serialize: jest.fn(), deserialize: jest.fn() }),
-    u64: () => ({ serialize: jest.fn(), deserialize: jest.fn() }),
+    bytes: jest.fn().mockReturnValue({
+      serialize: jest.fn(),
+      deserialize: jest.fn(),
+      transform: jest.fn(),
+    }),
+    string: jest.fn().mockReturnValue({
+      serialize: jest.fn(),
+      deserialize: jest.fn(),
+      transform: jest.fn(),
+    }),
+    u8: jest.fn().mockReturnValue({
+      serialize: jest.fn(),
+      deserialize: jest.fn(),
+      transform: jest.fn(),
+    }),
+    u64: jest.fn().mockReturnValue({
+      serialize: jest.fn(),
+      deserialize: jest.fn(),
+      transform: jest.fn(),
+    }),
   },
   __esModule: true,
 }));

@@ -9,7 +9,6 @@ import logger from '../../../utils/Logger.js';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import * as depositUtils from '../../../utils/Deposits.js';
-import * as auditLog from '../../../utils/AuditLog.js';
 import { ethers } from 'ethers';
 
 // Mock external dependencies
@@ -88,6 +87,11 @@ jest.mock('@wormhole-foundation/sdk', () => ({
   Wormhole: {
     parseAddress: jest.fn().mockReturnValue('mock-address'),
   },
+}));
+
+// Mock Wormhole SDK Sui
+jest.mock('@wormhole-foundation/sdk-sui', () => ({
+  getSuiSigner: jest.fn(),
 }));
 
 // Default config for tests
@@ -555,14 +559,77 @@ describe('SuiChainHandler', () => {
       );
     });
 
-    it('should log successful bridging setup', async () => {
+    it('should successfully bridge deposit to Sui', async () => {
+      // Mock successful bridging flow
+      const mockSuiSigner = {
+        chain: jest.fn().mockReturnValue('Sui'),
+        address: jest.fn().mockReturnValue('0xsuiaddress'),
+      };
+
+      // Mock getSuiSigner
+      const mockGetSuiSigner = require('@wormhole-foundation/sdk-sui').getSuiSigner;
+      mockGetSuiSigner.mockResolvedValue(mockSuiSigner);
+
+      // Mock signSendWait
+      const mockSignSendWait = require('@wormhole-foundation/sdk').signSendWait;
+      mockSignSendWait.mockResolvedValue([{ txid: 'mock-sui-tx-hash' }]);
+
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
       expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Bridging deposit test-deposit-id on Sui...'),
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('Sui bridging success for deposit test-deposit-id'),
+      );
+      expect(mockDepositsUtil.updateToBridgedDeposit).toHaveBeenCalledWith(
+        mockDeposit,
+        'mock-sui-tx-hash',
+      );
+    });
+
+    it('should handle empty transaction results gracefully', async () => {
+      // Mock getSuiSigner
+      const mockGetSuiSigner = require('@wormhole-foundation/sdk-sui').getSuiSigner;
+      mockGetSuiSigner.mockResolvedValue({
+        chain: jest.fn().mockReturnValue('Sui'),
+        address: jest.fn().mockReturnValue('0xsuiaddress'),
+      });
+
+      // Mock signSendWait to return empty array
+      const mockSignSendWait = require('@wormhole-foundation/sdk').signSendWait;
+      mockSignSendWait.mockResolvedValue([]);
+
+      await (handler as any).bridgeSuiDeposit(mockDeposit);
+
+      expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining(
-          'Wormhole bridge integration for Sui requires further SDK integration',
+          'No transaction IDs returned from SUI bridging for deposit test-deposit-id',
         ),
       );
+      expect(mockDepositsUtil.updateToBridgedDeposit).not.toHaveBeenCalled();
+    });
+
+    it('should handle missing txid in transaction results', async () => {
+      // Mock getSuiSigner
+      const mockGetSuiSigner = require('@wormhole-foundation/sdk-sui').getSuiSigner;
+      mockGetSuiSigner.mockResolvedValue({
+        chain: jest.fn().mockReturnValue('Sui'),
+        address: jest.fn().mockReturnValue('0xsuiaddress'),
+      });
+
+      // Mock signSendWait to return transaction without txid
+      const mockSignSendWait = require('@wormhole-foundation/sdk').signSendWait;
+      mockSignSendWait.mockResolvedValue([{ digest: 'some-digest' }]); // Missing txid
+
+      await (handler as any).bridgeSuiDeposit(mockDeposit);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Invalid transaction result from SUI bridging for deposit test-deposit-id',
+        ),
+      );
+      expect(mockDepositsUtil.updateToBridgedDeposit).not.toHaveBeenCalled();
     });
   });
 

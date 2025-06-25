@@ -296,10 +296,31 @@ export const updateToBridgedDeposit = async (
   const oldStatus = deposit.status;
   const newStatus = DepositStatus.BRIDGED;
 
-  const newSolanaHashes = {
-    ...deposit.hashes?.solana,
-    bridgeTxHash: txSignature,
-  };
+  // Determine chain type and update appropriate hash structure
+  const isSuiChain = deposit.chainId.toLowerCase().includes('sui');
+  let updatedHashes;
+
+  if (isSuiChain) {
+    // Update SUI-specific hash structure
+    const newSuiHashes = {
+      ...deposit.hashes?.sui,
+      l2BridgeTxHash: txSignature,
+    };
+    updatedHashes = {
+      ...deposit.hashes,
+      sui: newSuiHashes,
+    };
+  } else {
+    // Default to Solana for backward compatibility
+    const newSolanaHashes = {
+      ...deposit.hashes?.solana,
+      bridgeTxHash: txSignature,
+    };
+    updatedHashes = {
+      ...deposit.hashes,
+      solana: newSolanaHashes,
+    };
+  }
 
   const updatedDeposit: Deposit = {
     ...deposit,
@@ -308,10 +329,7 @@ export const updateToBridgedDeposit = async (
       ...deposit.wormholeInfo,
       bridgingAttempted: true,
     },
-    hashes: {
-      ...deposit.hashes,
-      solana: newSolanaHashes,
-    },
+    hashes: updatedHashes,
     error: null, // clear any previous error
     dates: {
       ...deposit.dates,

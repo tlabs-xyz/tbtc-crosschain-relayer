@@ -124,6 +124,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         Solana: {
           rpc: this.config.l2Rpc,
         },
+        Sui: {
+          rpc: this.config.l2Rpc,
+        },
       },
     });
     // this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc); // Moved up
