@@ -47,6 +47,13 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
 
     try {
+      // Validate l2ContractAddress format
+      if (!this.config.l2ContractAddress?.includes('::')) {
+        throw new Error(
+          `Invalid l2ContractAddress format for ${this.config.chainName}: '${this.config.l2ContractAddress}'. It must contain '::'.`,
+        );
+      }
+
       // Initialize SUI client
       this.suiClient = new SuiClient({ url: this.config.l2Rpc });
 
