@@ -11,7 +11,8 @@
       "Bash(docker exec:*)",
       "Bash(yarn run:*)",
       "Bash(yarn fix)",
-      "Bash(yarn lint:*)"
+      "Bash(yarn lint:*)",
+      "Bash(npx jest:*)"
     ],
     "deny": []
   }
