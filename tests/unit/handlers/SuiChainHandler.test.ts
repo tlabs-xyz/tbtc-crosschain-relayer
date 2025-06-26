@@ -195,7 +195,7 @@ describe('SuiChainHandler', () => {
 
     it('should warn when L2 RPC is not configured', async () => {
       const configWithoutL2Rpc = { ...mockSuiConfig };
-      delete (configWithoutL2Rpc as any).l2Rpc;
+      (configWithoutL2Rpc as any).l2Rpc = undefined;
       const handlerWithoutL2Rpc = new SuiChainHandler(configWithoutL2Rpc as any);
 
       await (handlerWithoutL2Rpc as any).initializeL2();
@@ -335,7 +335,7 @@ describe('SuiChainHandler', () => {
 
     it('should return false when L2 RPC is not configured', () => {
       const noRpcConfig = { ...mockSuiConfig };
-      delete (noRpcConfig as any).l2Rpc;
+      (noRpcConfig as any).l2Rpc = undefined;
       const noRpcHandler = new SuiChainHandler(noRpcConfig as any);
 
       const supports = noRpcHandler.supportsPastDepositCheck();
