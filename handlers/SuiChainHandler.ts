@@ -47,13 +47,6 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
 
     try {
-      // Validate l2ContractAddress format
-      if (!this.config.l2ContractAddress?.includes('::')) {
-        throw new Error(
-          `Invalid l2ContractAddress format for ${this.config.chainName}: '${this.config.l2ContractAddress}'. It must contain '::'.`,
-        );
-      }
-
       // Initialize SUI client
       this.suiClient = new SuiClient({ url: this.config.l2Rpc });
 
@@ -71,6 +64,21 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
   }
 
+  private _getPackageId(contractAddress: string | undefined): string {
+    if (!contractAddress) {
+      const errorMessage = `SUI contract address is undefined.`;
+      logErrorContext(errorMessage);
+      throw new Error(errorMessage);
+    }
+    const parts = contractAddress.split('::');
+    if (parts.length < 2 || !parts[0]) {
+      const errorMessage = `Invalid SUI contract address format: '${contractAddress}'. It must be in the format 'packageId::module'.`;
+      logErrorContext(errorMessage);
+      throw new Error(errorMessage);
+    }
+    return parts[0];
+  }
+
   protected async setupL2Listeners(): Promise<void> {
     if (this.config.useEndpoint || !this.suiClient) {
       logger.debug(
@@ -81,7 +89,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
     try {
       // Parse package ID from L2 contract address
-      const packageId = this.config.l2ContractAddress.split('::')[0];
+      const packageId = this._getPackageId(this.config.l2ContractAddress);
 
       // Subscribe to DepositInitialized events
       const eventFilter: SuiEventFilter = {
@@ -126,7 +134,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
 
     try {
-      const packageId = this.config.l2ContractAddress.split('::')[0];
+      const packageId = this._getPackageId(this.config.l2ContractAddress);
 
       const eventFilter: SuiEventFilter = {
         MoveModule: {

@@ -210,7 +210,7 @@ describe('SuiChainHandler Integration Tests', () => {
       expect(endpointHandler.supportsPastDepositCheck()).toBe(false);
 
       const noRpcConfig = { ...mockConfig };
-      delete (noRpcConfig as any).l2Rpc;
+      (noRpcConfig as any).l2Rpc = undefined;
       const noRpcHandler = new SuiChainHandler(noRpcConfig as any);
       expect(noRpcHandler.supportsPastDepositCheck()).toBe(false);
     });
