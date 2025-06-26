@@ -35,9 +35,24 @@ export const SuiChainConfigSchema = CommonConfigForSui.merge(SuiChainBaseSchema)
     suiGasObjectId: SuiChainBaseSchema.shape.suiGasObjectId,
 
     // Override inherited EthereumAddressSchema with a generic string for Sui addresses/IDs
-    l2ContractAddress: z.string().min(1, 'l2ContractAddress is required for Sui'),
+    l2ContractAddress: z
+      .string()
+      .min(1, 'l2ContractAddress is required for Sui')
+      .refine(
+        (address) => {
+          const parts = address.split('::');
+          return parts.length >= 2 && !!parts[0];
+        },
+        {
+          message: "Invalid l2ContractAddress format. Expected format: 'package_id::module_name'.",
+        },
+      ),
     l2WormholeGatewayAddress: z.string().min(1, 'l2WormholeGatewayAddress is required for Sui'),
   })
+  .transform((data) => ({
+    ...data,
+    l2PackageId: data.l2ContractAddress.split('::')[0],
+  }))
   .refine((data) => data.chainType === CHAIN_TYPE.SUI, {
     message: 'Chain type must be Sui for SuiChainConfigSchema.',
     path: ['chainType'],

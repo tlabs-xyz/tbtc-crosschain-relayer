@@ -64,21 +64,6 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
   }
 
-  private _getPackageId(contractAddress: string | undefined): string {
-    if (!contractAddress) {
-      const errorMessage = `SUI contract address is undefined.`;
-      logErrorContext(errorMessage);
-      throw new Error(errorMessage);
-    }
-    const parts = contractAddress.split('::');
-    if (parts.length < 2 || !parts[0]) {
-      const errorMessage = `Invalid SUI contract address format: '${contractAddress}'. It must be in the format 'packageId::module'.`;
-      logErrorContext(errorMessage);
-      throw new Error(errorMessage);
-    }
-    return parts[0];
-  }
-
   protected async setupL2Listeners(): Promise<void> {
     if (this.config.useEndpoint || !this.suiClient) {
       logger.debug(
@@ -88,13 +73,10 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
 
     try {
-      // Parse package ID from L2 contract address
-      const packageId = this._getPackageId(this.config.l2ContractAddress);
-
       // Subscribe to DepositInitialized events
       const eventFilter: SuiEventFilter = {
         MoveModule: {
-          package: packageId,
+          package: this.config.l2PackageId,
           module: 'bitcoin_depositor',
         },
       };
@@ -134,11 +116,9 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
 
     try {
-      const packageId = this._getPackageId(this.config.l2ContractAddress);
-
       const eventFilter: SuiEventFilter = {
         MoveModule: {
-          package: packageId,
+          package: this.config.l2PackageId,
           module: 'bitcoin_depositor',
         },
       };
