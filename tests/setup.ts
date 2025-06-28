@@ -51,7 +51,7 @@ else if (process.env.DATABASE_URL) {
 
 // --- Supported Chains (Minimal set for focused and faster Jest tests) ---
 // This overrides the SUPPORTED_CHAINS loaded from env.test.base for the Jest execution context.
-process.env.SUPPORTED_CHAINS = 'sepoliaTestnet,solanaDevnet';
+process.env.SUPPORTED_CHAINS = 'sepoliaTestnet,solanaDevnet,suiTestnet';
 
 // Variables like VERBOSE_APP, API_ONLY_MODE, ENABLE_CLEANUP_CRON, CLEAN_*, JSON_PATH,
 // all mock private keys, RPC URLs, and block configurations are now expected to be loaded
