@@ -1,61 +1,63 @@
 import { z } from 'zod';
-import { CHAIN_TYPE, CommonChainConfigSchema } from './common.schema.js';
+import { CommonChainConfigSchema, CHAIN_TYPE } from './common.schema.js';
+import { SuiObjectIdSchema, SuiTypeSchema } from './shared.js';
 
-// Base schema for fields that are specific to Sui chains.
-const SuiChainBaseSchema = z.object({
-  chainName: z.string().default('Sui'),
-  chainType: z.literal(CHAIN_TYPE.SUI).default(CHAIN_TYPE.SUI),
-  // Sui-specific fields
-  suiPrivateKey: z
-    .string({
-      required_error:
-        'SUI_PRIVATE_KEY is required. Set it in the environment or provide it in the config data.',
-    })
-    .min(1, 'SUI_PRIVATE_KEY must not be empty.')
-    .regex(
-      /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{4})$/,
-      'Sui private key must be a valid base64 string.',
-    )
-    .refine((key) => key.length >= 32, {
-      // Check for a reasonable minimum length for a base64 key
-      message: 'Sui private key base64 string is too short.',
-    }),
-  suiGasObjectId: z.string().optional(), // Optional: Can be provided by ENV or defaults to on-chain query
-});
-
-// Omit privateKey as it's handled by suiPrivateKey
+// Use CommonChainConfigSchema.omit({ privateKey: true }) since we use a different private key field
 const CommonConfigForSui = CommonChainConfigSchema.omit({ privateKey: true });
 
-export const SuiChainConfigSchema = CommonConfigForSui.merge(SuiChainBaseSchema)
+// Sui-specific schema that extends the common chain configuration
+// but omits the Wormhole fields that are specific to EVM chains
+export const SuiChainConfigSchema = CommonConfigForSui.omit({
+  l2WormholeGatewayAddress: true,
+  l2WormholeChainId: true,
+})
   .extend({
-    // Ensure these specific Sui fields are part of the final schema shape
-    chainType: SuiChainBaseSchema.shape.chainType,
-    chainName: SuiChainBaseSchema.shape.chainName,
-    suiPrivateKey: SuiChainBaseSchema.shape.suiPrivateKey,
-    suiGasObjectId: SuiChainBaseSchema.shape.suiGasObjectId,
+    chainType: z.literal(CHAIN_TYPE.SUI),
 
-    // Override inherited EthereumAddressSchema with a generic string for Sui addresses/IDs
+    // Override l2ContractAddress to allow Sui contract format (package::module)
     l2ContractAddress: z
       .string()
-      .min(1, 'l2ContractAddress is required for Sui')
-      .refine(
-        (address) => {
-          const parts = address.split('::');
-          return parts.length >= 2 && !!parts[0];
-        },
-        {
-          message: "Invalid l2ContractAddress format. Expected format: 'package_id::module_name'.",
-        },
+      .regex(
+        /^0x[a-fA-F0-9]{64}::[a-zA-Z_][a-zA-Z0-9_]*$/,
+        'l2ContractAddress must be in Sui format: 0x{package_id}::{module_name}',
       ),
-    l2WormholeGatewayAddress: z.string().min(1, 'l2WormholeGatewayAddress is required for Sui'),
+
+    // Sui-specific private key field
+    suiPrivateKey: z.string().min(1, 'suiPrivateKey is required and must not be empty'),
+
+    // Optional gas object ID for transactions (can be managed automatically)
+    suiGasObjectId: z
+      .string()
+      .optional()
+      .transform((val) => (val === '' ? undefined : val))
+      .refine((val) => val === undefined || /^0x[a-fA-F0-9]{64}$/.test(val), {
+        message: 'suiGasObjectId must be a valid Sui object ID',
+      })
+      .describe(
+        'Optional specific gas object ID. If not provided, gas objects will be managed automatically.',
+      ),
+
+    // Sui-specific Wormhole integration using Object IDs instead of contract addresses
+    wormholeCoreId: SuiObjectIdSchema.describe('Wormhole Core shared object ID on Sui'),
+    tokenBridgeId: SuiObjectIdSchema.describe('Wormhole Token Bridge shared object ID on Sui'),
+    wrappedTbtcType: SuiTypeSchema.describe(
+      'Wrapped tBTC coin type on Sui (package::module::Type format)',
+    ),
+
+    // BitcoinDepositor shared object IDs on Sui
+    receiverStateId: SuiObjectIdSchema.describe('BitcoinDepositor receiver state shared object ID'),
+    gatewayStateId: SuiObjectIdSchema.describe(
+      'BitcoinDepositor gateway state shared object ID for Wormhole messaging',
+    ),
+    capabilitiesId: SuiObjectIdSchema.describe('BitcoinDepositor capabilities shared object ID'),
+    treasuryId: SuiObjectIdSchema.describe('BitcoinDepositor treasury shared object ID'),
+    tokenStateId: SuiObjectIdSchema.describe('BitcoinDepositor token state shared object ID'),
   })
   .transform((data) => ({
     ...data,
+    // Automatically derive l2PackageId from l2ContractAddress
     l2PackageId: data.l2ContractAddress.split('::')[0],
-  }))
-  .refine((data) => data.chainType === CHAIN_TYPE.SUI, {
-    message: 'Chain type must be Sui for SuiChainConfigSchema.',
-    path: ['chainType'],
-  });
+  }));
 
 export type SuiChainConfig = z.infer<typeof SuiChainConfigSchema>;
+export type SuiChainInput = z.input<typeof SuiChainConfigSchema>;

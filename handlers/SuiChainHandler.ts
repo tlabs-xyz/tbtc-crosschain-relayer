@@ -2,9 +2,8 @@ import { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fromBase64 } from '@mysten/bcs';
 import type { SuiEvent, SuiEventFilter } from '@mysten/sui/client';
-import { signSendWait, Wormhole } from '@wormhole-foundation/sdk';
+import { Transaction } from '@mysten/sui/transactions';
 import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
-import { getSuiSigner } from '@wormhole-foundation/sdk-sui';
 import { ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
 
@@ -14,8 +13,13 @@ import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 import { type Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
+import {
+  updateToAwaitingWormholeVAA,
+  updateToBridgedDeposit,
+  createDeposit,
+} from '../utils/Deposits.js';
 import { DepositStore } from '../utils/DepositStore.js';
+import { parseDepositInitializedEvent } from '../utils/SuiMoveEventParser.js';
 
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
   'TokensTransferredWithPayload(uint256,bytes32,uint64)',
@@ -203,48 +207,86 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     return finalizedDepositReceipt;
   }
 
+  /**
+   * Processes SUI DepositInitialized Move events from the BitcoinDepositor contract.
+   *
+   * **Event Processing Strategy:**
+   * This method uses the `parseDepositInitializedEvent` utility function for robust
+   * binary data parsing rather than direct event casting. This approach is preferred because:
+   *
+   * - ✅ **Handles Binary Data Correctly**: SUI Move events contain vector<u8> fields that
+   *   can be serialized as either `number[]` arrays or hex strings depending on the RPC endpoint
+   * - ✅ **Type Safety**: Provides comprehensive validation and type conversion
+   * - ✅ **Error Resilience**: Includes specific error handling for Bitcoin parsing failures
+   * - ✅ **Address Conversion**: Properly converts binary address data to SUI hex format
+   *
+   * **Move Event Structure:**
+   * ```move
+   * public struct DepositInitialized has copy, drop {
+   *     funding_tx: vector<u8>,      // Bitcoin transaction bytes
+   *     deposit_reveal: vector<u8>,  // Reveal data (112 bytes)
+   *     deposit_owner: vector<u8>,   // L2 deposit owner address
+   *     sender: vector<u8>,          // L2 transaction sender address
+   * }
+   * ```
+   *
+   * **Processing Flow:**
+   * 1. Parse binary event fields using utility function
+   * 2. Create deposit object from parsed Bitcoin data
+   * 3. Check for existing deposits to prevent duplicates
+   * 4. Save to database and log successful processing
+   *
+   * @param event - SUI Move event containing DepositInitialized data
+   * @param _isPastEvent - Whether this is a historical event (unused but kept for interface compatibility)
+   */
   private async handleSuiDepositEvent(event: SuiEvent, _isPastEvent = false): Promise<void> {
     try {
-      // Parse SUI Move event data
-      const eventType = event.type;
-      const eventData = event.parsedJson as any;
+      // Use the utility function to parse the event data
+      const parsedEvent = parseDepositInitializedEvent(event, this.config.chainName);
 
-      // Filter for DepositInitialized events
-      if (!eventType.includes('DepositInitialized')) {
+      if (!parsedEvent) {
+        // Event parsing failed or event is not a DepositInitialized event
         return;
       }
 
-      // Extract deposit information from event data
-      const depositKey = eventData.deposit_key;
-      const fundingTxHash = eventData.funding_tx_hash;
-      const outputIndex = eventData.output_index;
-
-      if (!depositKey || !fundingTxHash || outputIndex === undefined) {
-        logger.warn(`Incomplete SUI deposit event data for ${this.config.chainName}`);
-        return;
-      }
-
-      // Check if deposit already exists
-      const existingDeposit = await DepositStore.getById(depositKey);
-      if (existingDeposit) {
-        logger.debug(`Deposit ${depositKey} already exists for ${this.config.chainName}`);
-        return;
-      }
-
-      // For SUI, we'll need to handle the deposit creation differently
-      // since SUI events don't provide the same structure as EVM DepositInitialized events
-      // This is a simplified approach - in a full implementation, you'd need to:
-      // 1. Query the SUI transaction to get the full deposit details
-      // 2. Construct the proper funding transaction and reveal objects
-      // 3. Use the standard createDeposit function
-
-      // For now, create a minimal deposit record to track the SUI deposit
-      // This will be expanded when the full SUI contract integration is complete
-      logger.info(
-        `SUI deposit event received: ${depositKey} - requires full integration with SUI contract details`,
+      // Create deposit using the parsed event data
+      const deposit = createDeposit(
+        parsedEvent.fundingTransaction,
+        parsedEvent.reveal,
+        parsedEvent.depositOwner,
+        parsedEvent.sender,
+        this.config.chainName,
       );
 
-      logger.info(`SUI deposit queued: ${depositKey} for ${this.config.chainName}`);
+      logger.debug(`Created deposit object for SUI event:`, {
+        depositId: deposit.id,
+        depositOwner: parsedEvent.depositOwner,
+        sender: parsedEvent.sender,
+        fundingOutputIndex: parsedEvent.reveal.fundingOutputIndex,
+        chainName: this.config.chainName,
+        status: deposit.status,
+      });
+
+      // Check if deposit already exists to prevent duplicates
+      const existingDeposit = await DepositStore.getById(deposit.id);
+      if (existingDeposit) {
+        logger.debug(
+          `Deposit ${deposit.id} already exists for ${this.config.chainName}. Skipping creation.`,
+        );
+        return;
+      }
+
+      // Save deposit to database
+      await DepositStore.create(deposit);
+
+      logger.info(`SUI deposit successfully created and saved: ${deposit.id}`, {
+        depositOwner: deposit.L1OutputEvent.l2DepositOwner,
+        sender: deposit.L1OutputEvent.l2Sender,
+        fundingOutputIndex: deposit.outputIndex,
+        chainName: this.config.chainName,
+        status: deposit.status,
+        fundingTxHash: deposit.fundingTxHash,
+      });
     } catch (error: any) {
       logErrorContext(`Error handling SUI deposit event for ${this.config.chainName}`, error);
     }
@@ -289,47 +331,117 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
       logger.info(`VAA found for deposit ${deposit.id}. Posting VAA to Sui...`);
 
-      // Create SUI signer using Wormhole SDK
-      const suiWormholeSigner = await getSuiSigner(this.suiClient, this.config.suiPrivateKey);
-
-      // Get sender address
-      const sender = Wormhole.parseAddress(suiWormholeSigner.chain(), suiWormholeSigner.address());
-
-      // Get SUI chain context and bridge
-      const toChain = this.suiWormholeContext;
-      const bridge = await toChain.getTBTCBridge();
-
-      // Create unsigned redemption transactions
-      const unsignedTransactions = bridge.redeem(sender, vaa);
-
-      // Sign and send transactions
-      const destinationTransactionIds = await signSendWait(
-        toChain,
-        unsignedTransactions,
-        suiWormholeSigner,
-      );
-
-      // Validate transaction results
-      if (!destinationTransactionIds || destinationTransactionIds.length === 0) {
-        logger.warn(`No transaction IDs returned from SUI bridging for deposit ${deposit.id}`);
-        return;
+      // Convert VAA binary to array format for Sui Move call
+      let vaaUint8Array: Uint8Array;
+      if ('bytes' in vaa && (vaa as any).bytes instanceof Uint8Array) {
+        vaaUint8Array = (vaa as any).bytes;
+      } else if (typeof (vaa as any).serialize === 'function') {
+        vaaUint8Array = (vaa as any).serialize();
+      } else {
+        throw new Error('Unable to extract VAA bytes from VAA object');
       }
+      const vaaBytes = Array.from(vaaUint8Array) as number[];
 
-      const firstTx = destinationTransactionIds[0];
-      if (!firstTx || !firstTx.txid) {
-        logger.warn(`Invalid transaction result from SUI bridging for deposit ${deposit.id}`);
-        return;
+      logger.debug(`Prepared VAA for Sui transaction`, {
+        depositId: deposit.id,
+        vaaLength: vaaBytes.length,
+        transferSequence: deposit.wormholeInfo.transferSequence,
+      });
+
+      // Create Sui transaction
+      const tx = new Transaction();
+
+      try {
+        // Call receiveWormholeMessages directly on the BitcoinDepositor contract
+        tx.moveCall({
+          target: `${this.config.l2PackageId}::bitcoin_depositor::receiveWormholeMessages`,
+          arguments: [
+            tx.object(this.config.receiverStateId),
+            tx.object(this.config.gatewayStateId),
+            tx.object(this.config.capabilitiesId),
+            tx.object(this.config.treasuryId),
+            tx.object(this.config.wormholeCoreId),
+            tx.object(this.config.tokenBridgeId),
+            tx.object(this.config.tokenStateId),
+            tx.pure.vector('u8', vaaBytes),
+            tx.object('0x6'), // Clock object
+          ],
+          typeArguments: [this.config.wrappedTbtcType],
+        });
+
+        logger.debug(`Constructed Sui transaction for receiveWormholeMessages`, {
+          depositId: deposit.id,
+          packageId: this.config.l2PackageId,
+          receiverStateId: this.config.receiverStateId,
+          gatewayStateId: this.config.gatewayStateId,
+          capabilitiesId: this.config.capabilitiesId,
+          treasuryId: this.config.treasuryId,
+          wormholeCoreId: this.config.wormholeCoreId,
+          tokenBridgeId: this.config.tokenBridgeId,
+          tokenStateId: this.config.tokenStateId,
+          wrappedTbtcType: this.config.wrappedTbtcType,
+        });
+
+        // Sign and execute transaction
+        const result = await this.suiClient.signAndExecuteTransaction({
+          transaction: tx,
+          signer: this.keypair,
+          options: {
+            showEffects: true,
+            showEvents: true,
+          },
+        });
+
+        // Validate transaction execution
+        if (result.effects?.status?.status !== 'success') {
+          const errorMessage = result.effects?.status?.error || 'Unknown transaction error';
+          throw new Error(`Transaction failed: ${errorMessage}`);
+        }
+
+        if (!result.digest) {
+          throw new Error('Transaction executed but no digest returned');
+        }
+
+        logger.info(`Successfully submitted VAA to BitcoinDepositor. TX: ${result.digest}`, {
+          depositId: deposit.id,
+          transactionDigest: result.digest,
+          transferSequence: deposit.wormholeInfo.transferSequence,
+          gasUsed: result.effects?.gasUsed || 'unknown',
+        });
+
+        // Log transaction events for debugging
+        if (result.events && result.events.length > 0) {
+          logger.debug(`Transaction events for deposit ${deposit.id}:`, {
+            eventCount: result.events.length,
+            events: result.events.map((event) => ({
+              type: event.type,
+              sender: event.sender,
+            })),
+          });
+        }
+
+        // Update deposit status to BRIDGED
+        await updateToBridgedDeposit(deposit, result.digest);
+
+        logger.info(`Sui bridging completed successfully for deposit ${deposit.id}`);
+      } catch (transactionError: any) {
+        logger.error(`Failed to execute Sui transaction for deposit ${deposit.id}`, {
+          error: transactionError.message,
+          depositId: deposit.id,
+          transferSequence: deposit.wormholeInfo.transferSequence,
+          packageId: this.config.l2PackageId,
+        });
+        throw transactionError;
       }
-
-      logger.info(
-        `Sui bridging success for deposit ${deposit.id}, txids=${destinationTransactionIds.map((tx) => tx.txid).join(', ')}`,
-      );
-
-      // Update deposit status to BRIDGED with SUI-specific hash structure
-      await updateToBridgedDeposit(deposit, firstTx.txid);
     } catch (error: any) {
       const reason = error.message || 'Unknown bridging error';
-      logger.warn(`Wormhole bridging not ready for deposit ${deposit.id}: ${reason}`);
+      logger.warn(`Wormhole bridging failed for deposit ${deposit.id}: ${reason}`, {
+        depositId: deposit.id,
+        transferSequence: deposit.wormholeInfo?.transferSequence,
+        errorType: error.constructor.name,
+        errorMessage: error.message,
+        stack: error.stack,
+      });
     }
   }
 

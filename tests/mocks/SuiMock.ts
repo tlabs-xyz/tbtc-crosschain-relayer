@@ -19,7 +19,7 @@ export class MockSuiClient {
     // Add some default test events
     this.events = [
       {
-        type: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor::DepositInitialized',
+        type: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae::bitcoin_depositor::DepositInitialized',
         parsedJson: {
           deposit_key: 'mock-deposit-1',
           funding_tx_hash: '0xbitcoin1234567890123456789012345678901234567890123456789012345678',
@@ -30,7 +30,7 @@ export class MockSuiClient {
           txDigest: 'sui-tx-digest-1',
           eventSeq: '0',
         },
-        packageId: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7',
+        packageId: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae',
         sender: '0xsui1234567890123456789012345678901234567890123456789012345678901234',
         transactionModule: 'bitcoin_depositor',
         bcs: 'base64data',
@@ -38,7 +38,7 @@ export class MockSuiClient {
         checkpoint: '12340',
       } as SuiEvent & { checkpoint: string },
       {
-        type: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor::DepositInitialized',
+        type: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae::bitcoin_depositor::DepositInitialized',
         parsedJson: {
           deposit_key: 'mock-deposit-2',
           funding_tx_hash: '0xbitcoin9876543210987654321098765432109876543210987654321098765432',
@@ -49,7 +49,7 @@ export class MockSuiClient {
           txDigest: 'sui-tx-digest-2',
           eventSeq: '1',
         },
-        packageId: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7',
+        packageId: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae',
         sender: '0xsui9876543210987654321098765432109876543210987654321098765432109876',
         transactionModule: 'bitcoin_depositor',
         bcs: 'base64data',
@@ -292,7 +292,7 @@ export function createMockSuiDepositEvent(
   const eventData = { ...defaults, ...overrides };
 
   return {
-    type: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor::DepositInitialized',
+    type: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae::bitcoin_depositor::DepositInitialized',
     parsedJson: {
       deposit_key: eventData.depositKey,
       funding_tx_hash: eventData.fundingTxHash,
@@ -303,7 +303,7 @@ export function createMockSuiDepositEvent(
       txDigest: eventData.txDigest,
       eventSeq: '0',
     },
-    packageId: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7',
+    packageId: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae',
     sender: eventData.depositor,
     transactionModule: 'bitcoin_depositor',
     bcs: 'base64data',

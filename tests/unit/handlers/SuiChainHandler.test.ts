@@ -56,16 +56,19 @@ jest.mock('@mysten/sui/keypairs/ed25519', () => {
   };
 });
 
-jest.mock('@mysten/sui/transactions', () => {
-  const mockTransaction = {
-    moveCall: jest.fn(),
-    setGasPayment: jest.fn(),
-    object: jest.fn(),
-    pure: jest.fn(),
-  };
+// Create shared mock transaction instance to track calls across tests
+const sharedMockTransaction = {
+  moveCall: jest.fn(),
+  setGasPayment: jest.fn(),
+  object: jest.fn().mockReturnValue('mock-object-ref'),
+  pure: Object.assign(jest.fn().mockReturnValue('mock-pure-ref'), {
+    vector: jest.fn().mockReturnValue('mock-vector-ref'),
+  }),
+};
 
+jest.mock('@mysten/sui/transactions', () => {
   return {
-    Transaction: jest.fn().mockImplementation(() => mockTransaction),
+    Transaction: jest.fn().mockImplementation(() => sharedMockTransaction),
     __esModule: true,
   };
 });
@@ -83,15 +86,9 @@ jest.mock('../../../config/index.js', () => ({
 
 // Mock Wormhole SDK
 jest.mock('@wormhole-foundation/sdk', () => ({
-  signSendWait: jest.fn(),
   Wormhole: {
     parseAddress: jest.fn().mockReturnValue('mock-address'),
   },
-}));
-
-// Mock Wormhole SDK Sui
-jest.mock('@wormhole-foundation/sdk-sui', () => ({
-  getSuiSigner: jest.fn(),
 }));
 
 // Default config for tests
@@ -114,11 +111,21 @@ const mockSuiConfig: SuiChainConfig = SuiChainConfigSchema.parse({
   // SuiChainBaseSchema fields
   chainType: CHAIN_TYPE.SUI,
   suiPrivateKey: 'dGVzdC1zdWktcHJpdmF0ZS1rZXktZm9yLXRlc3Rpbmc=', // base64 encoded test key (longer)
-  suiGasObjectId: '0x123456789abcdef',
+  suiGasObjectId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   l2ContractAddress:
-    '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor',
-  l2WormholeGatewayAddress: '0xc57508ee0d4595e5a8728974a4a93a787d38f339757230d441e895422c07aba9',
-  l2WormholeChainId: 21,
+    '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae::bitcoin_depositor',
+  // l2WormholeGatewayAddress and l2WormholeChainId removed - not used in Sui chains
+  // (replaced by gatewayStateId and native Wormhole SDK integration)
+
+  // Additional required fields for SUI
+  wormholeCoreId: '0x5306f64e312b581766351c07af79c72fcb1cd25147157fdc2f8ad76de9a3fb6a',
+  tokenBridgeId: '0xc57508ee0d4595e5a8728974a4a93a787d38f339757230d441e895422c07aba9',
+  wrappedTbtcType: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae::tbtc::TBTC',
+  receiverStateId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  gatewayStateId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde0',
+  capabilitiesId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd01',
+  treasuryId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abc012',
+  tokenStateId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab0123',
 });
 
 describe('SuiChainHandler', () => {
@@ -129,9 +136,6 @@ describe('SuiChainHandler', () => {
   // Mock wormhole object
   const mockWormhole = {
     getChain: jest.fn().mockReturnValue({
-      getTBTCBridge: jest.fn().mockResolvedValue({
-        redeem: jest.fn().mockReturnValue([]),
-      }),
       parseTransaction: jest.fn().mockResolvedValue([
         {
           chain: 'Ethereum',
@@ -141,12 +145,19 @@ describe('SuiChainHandler', () => {
       ]),
     }),
     getVaa: jest.fn().mockResolvedValue({
-      binary: new Uint8Array([1, 2, 3, 4]),
+      bytes: new Uint8Array([1, 2, 3, 4]),
     }),
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Clear the shared mock transaction calls
+    sharedMockTransaction.moveCall.mockClear();
+    sharedMockTransaction.object.mockClear();
+    (sharedMockTransaction.pure as jest.Mock).mockClear();
+    (sharedMockTransaction.pure.vector as jest.Mock).mockClear();
+    sharedMockTransaction.setGasPayment.mockClear();
 
     // Setup mocked modules
     mockDepositStore = DepositStore as jest.Mocked<typeof DepositStore>;
@@ -155,8 +166,20 @@ describe('SuiChainHandler', () => {
     // Setup default mock implementations
     mockDepositStore.getById = jest.fn().mockResolvedValue(null);
     mockDepositStore.getByStatus = jest.fn().mockResolvedValue([]);
+    mockDepositStore.create = jest.fn().mockResolvedValue(undefined);
     (mockDepositsUtil as any).updateToAwaitingWormholeVAA = jest.fn().mockResolvedValue(undefined);
     (mockDepositsUtil as any).updateToBridgedDeposit = jest.fn().mockResolvedValue(undefined);
+    (mockDepositsUtil as any).createDeposit = jest.fn().mockReturnValue({
+      id: 'mock-deposit-id',
+      chainId: 'SuiTestnet',
+      status: DepositStatus.INITIALIZED,
+      fundingTxHash: 'mock-funding-tx-hash',
+      outputIndex: 1,
+      L1OutputEvent: {
+        l2DepositOwner: '0x0506070800000000000000000000000000000000000000000000000000000000',
+        l2Sender: '0x090a0b0c00000000000000000000000000000000000000000000000000000000',
+      },
+    });
 
     // Create handler instance
     handler = new SuiChainHandler(mockSuiConfig);
@@ -226,7 +249,7 @@ describe('SuiChainHandler', () => {
       expect((handler as any).suiClient.subscribeEvent).toHaveBeenCalledWith({
         filter: {
           MoveModule: {
-            package: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7',
+            package: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae',
             module: 'bitcoin_depositor',
           },
         },
@@ -296,7 +319,7 @@ describe('SuiChainHandler', () => {
       expect((handler as any).suiClient.queryEvents).toHaveBeenCalledWith({
         query: {
           MoveModule: {
-            package: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7',
+            package: '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae',
             module: 'bitcoin_depositor',
           },
         },
@@ -560,74 +583,76 @@ describe('SuiChainHandler', () => {
     });
 
     it('should successfully bridge deposit to Sui', async () => {
-      // Mock successful bridging flow
-      const mockSuiSigner = {
-        chain: jest.fn().mockReturnValue('Sui'),
-        address: jest.fn().mockReturnValue('0xsuiaddress'),
-      };
-
-      // Mock getSuiSigner
-      const mockGetSuiSigner = require('@wormhole-foundation/sdk-sui').getSuiSigner;
-      mockGetSuiSigner.mockResolvedValue(mockSuiSigner);
-
-      // Mock signSendWait
-      const mockSignSendWait = require('@wormhole-foundation/sdk').signSendWait;
-      mockSignSendWait.mockResolvedValue([{ txid: 'mock-sui-tx-hash' }]);
-
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining('Bridging deposit test-deposit-id on Sui...'),
       );
       expect(logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('Sui bridging success for deposit test-deposit-id'),
+        expect.stringContaining('Successfully submitted VAA to BitcoinDepositor'),
+        expect.any(Object),
       );
       expect(mockDepositsUtil.updateToBridgedDeposit).toHaveBeenCalledWith(
         mockDeposit,
-        'mock-sui-tx-hash',
+        'mock-transaction-digest',
       );
     });
 
-    it('should handle empty transaction results gracefully', async () => {
-      // Mock getSuiSigner
-      const mockGetSuiSigner = require('@wormhole-foundation/sdk-sui').getSuiSigner;
-      mockGetSuiSigner.mockResolvedValue({
-        chain: jest.fn().mockReturnValue('Sui'),
-        address: jest.fn().mockReturnValue('0xsuiaddress'),
-      });
+    it('should use all required object IDs from configuration', async () => {
+      await (handler as any).bridgeSuiDeposit(mockDeposit);
 
-      // Mock signSendWait to return empty array
-      const mockSignSendWait = require('@wormhole-foundation/sdk').signSendWait;
-      mockSignSendWait.mockResolvedValue([]);
+      expect(sharedMockTransaction.object).toHaveBeenCalledWith(mockSuiConfig.receiverStateId);
+      expect(sharedMockTransaction.object).toHaveBeenCalledWith(mockSuiConfig.gatewayStateId);
+      expect(sharedMockTransaction.object).toHaveBeenCalledWith(mockSuiConfig.capabilitiesId);
+      expect(sharedMockTransaction.object).toHaveBeenCalledWith(mockSuiConfig.treasuryId);
+      expect(sharedMockTransaction.object).toHaveBeenCalledWith(mockSuiConfig.wormholeCoreId);
+      expect(sharedMockTransaction.object).toHaveBeenCalledWith(mockSuiConfig.tokenBridgeId);
+      expect(sharedMockTransaction.object).toHaveBeenCalledWith(mockSuiConfig.tokenStateId);
+      expect(sharedMockTransaction.object).toHaveBeenCalledWith('0x6'); // Clock object
+    });
+
+    it('should call receiveWormholeMessages with correct target', async () => {
+      await (handler as any).bridgeSuiDeposit(mockDeposit);
+
+      expect(sharedMockTransaction.moveCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: `${mockSuiConfig.l2PackageId}::bitcoin_depositor::receiveWormholeMessages`,
+          typeArguments: [mockSuiConfig.wrappedTbtcType],
+        }),
+      );
+    });
+
+    it('should handle transaction failure gracefully', async () => {
+      // Mock failed transaction
+      (handler as any).suiClient.signAndExecuteTransaction.mockResolvedValueOnce({
+        digest: 'failed-transaction-digest',
+        effects: {
+          status: { status: 'failure', error: 'Insufficient gas' },
+        },
+      });
 
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'No transaction IDs returned from SUI bridging for deposit test-deposit-id',
-        ),
+        expect.stringContaining('Wormhole bridging failed for deposit test-deposit-id'),
+        expect.any(Object),
       );
       expect(mockDepositsUtil.updateToBridgedDeposit).not.toHaveBeenCalled();
     });
 
-    it('should handle missing txid in transaction results', async () => {
-      // Mock getSuiSigner
-      const mockGetSuiSigner = require('@wormhole-foundation/sdk-sui').getSuiSigner;
-      mockGetSuiSigner.mockResolvedValue({
-        chain: jest.fn().mockReturnValue('Sui'),
-        address: jest.fn().mockReturnValue('0xsuiaddress'),
+    it('should handle missing transaction digest', async () => {
+      // Mock transaction without digest
+      (handler as any).suiClient.signAndExecuteTransaction.mockResolvedValueOnce({
+        effects: {
+          status: { status: 'success' },
+        },
       });
-
-      // Mock signSendWait to return transaction without txid
-      const mockSignSendWait = require('@wormhole-foundation/sdk').signSendWait;
-      mockSignSendWait.mockResolvedValue([{ digest: 'some-digest' }]); // Missing txid
 
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Invalid transaction result from SUI bridging for deposit test-deposit-id',
-        ),
+        expect.stringContaining('Wormhole bridging failed for deposit test-deposit-id'),
+        expect.any(Object),
       );
       expect(mockDepositsUtil.updateToBridgedDeposit).not.toHaveBeenCalled();
     });
@@ -638,14 +663,53 @@ describe('SuiChainHandler', () => {
       await (handler as any).initializeL2();
     });
 
-    it('should process valid SUI deposit event', async () => {
+    it('should process valid SUI deposit event with hex string format', async () => {
+      // Create valid Bitcoin transaction data (minimal coinbase transaction)
+      const createMinimalTransaction = (): number[] => {
+        const tx: number[] = [];
+        tx.push(0x01, 0x00, 0x00, 0x00); // version 1
+        tx.push(0x01); // 1 input
+        for (let i = 0; i < 32; i++) tx.push(0x00); // prev tx hash (all zeros for coinbase)
+        tx.push(0xff, 0xff, 0xff, 0xff); // output index (0xffffffff for coinbase)
+        tx.push(0x00); // script sig length (0 bytes)
+        tx.push(0xff, 0xff, 0xff, 0xff); // sequence
+        tx.push(0x01); // 1 output
+        tx.push(0x00, 0xf2, 0x05, 0x2a, 0x01, 0x00, 0x00, 0x00); // value (5000000000 satoshis)
+        tx.push(0x19); // script pubkey length (25 bytes)
+        tx.push(0x76, 0xa9, 0x14); // OP_DUP OP_HASH160 <20-byte hash>
+        for (let i = 0; i < 20; i++) tx.push(0x00); // 20-byte hash
+        tx.push(0x88, 0xac); // OP_EQUALVERIFY OP_CHECKSIG
+        tx.push(0x00, 0x00, 0x00, 0x00); // locktime
+        return tx;
+      };
+
+      // Create valid reveal data (112 bytes total)
+      const createValidReveal = (): number[] => {
+        const reveal: number[] = [];
+        reveal.push(0x01, 0x00, 0x00, 0x00); // funding output index (index 1)
+        for (let i = 0; i < 32; i++) reveal.push(0xaa); // blinding factor
+        for (let i = 0; i < 20; i++) reveal.push(0xbb); // wallet pubkey hash
+        for (let i = 0; i < 20; i++) reveal.push(0xcc); // refund pubkey hash
+        reveal.push(0x20, 0xa1, 0x07, 0x00); // refund locktime (500000)
+        for (let i = 0; i < 32; i++) reveal.push(0xdd); // vault
+        return reveal;
+      };
+
+      // Convert to hex strings for this test
+      const mockFundingTx = '0x' + Buffer.from(createMinimalTransaction()).toString('hex');
+      const mockReveal = '0x' + Buffer.from(createValidReveal()).toString('hex');
+      // Mock binary address data (32 bytes each for SUI addresses)
+      const mockDepositOwner =
+        '0x' + '0506070800000000000000000000000000000000000000000000000000000000';
+      const mockSender = '0x' + '090a0b0c00000000000000000000000000000000000000000000000000000000';
+
       const mockEvent = {
         type: 'DepositInitialized',
         parsedJson: {
-          deposit_key: 'test-deposit-key',
-          funding_tx_hash: '0xtest-funding-hash',
-          output_index: 1,
-          depositor: '0xtest-depositor',
+          funding_tx: mockFundingTx,
+          deposit_reveal: mockReveal,
+          deposit_owner: mockDepositOwner,
+          sender: mockSender,
         },
         id: {
           txDigest: 'test-tx-digest',
@@ -653,10 +717,78 @@ describe('SuiChainHandler', () => {
         checkpoint: 12345,
       };
 
+      // Mock DepositStore.getById to return null (no existing deposit)
+      mockDepositStore.getById.mockResolvedValueOnce(null);
+
       await (handler as any).handleSuiDepositEvent(mockEvent);
 
       expect(logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('SUI deposit event received'),
+        expect.stringContaining('SUI deposit successfully created and saved'),
+        expect.any(Object),
+      );
+    });
+
+    it('should process valid SUI deposit event with number array format', async () => {
+      // Create valid Bitcoin transaction data (minimal coinbase transaction)
+      const createMinimalTransaction = (): number[] => {
+        const tx: number[] = [];
+        tx.push(0x01, 0x00, 0x00, 0x00); // version 1
+        tx.push(0x01); // 1 input
+        for (let i = 0; i < 32; i++) tx.push(0x00); // prev tx hash (all zeros for coinbase)
+        tx.push(0xff, 0xff, 0xff, 0xff); // output index (0xffffffff for coinbase)
+        tx.push(0x00); // script sig length (0 bytes)
+        tx.push(0xff, 0xff, 0xff, 0xff); // sequence
+        tx.push(0x01); // 1 output
+        tx.push(0x00, 0xf2, 0x05, 0x2a, 0x01, 0x00, 0x00, 0x00); // value (5000000000 satoshis)
+        tx.push(0x19); // script pubkey length (25 bytes)
+        tx.push(0x76, 0xa9, 0x14); // OP_DUP OP_HASH160 <20-byte hash>
+        for (let i = 0; i < 20; i++) tx.push(0x00); // 20-byte hash
+        tx.push(0x88, 0xac); // OP_EQUALVERIFY OP_CHECKSIG
+        tx.push(0x00, 0x00, 0x00, 0x00); // locktime
+        return tx;
+      };
+
+      // Create valid reveal data (112 bytes total)
+      const createValidReveal = (): number[] => {
+        const reveal: number[] = [];
+        reveal.push(0x01, 0x00, 0x00, 0x00); // funding output index (index 1)
+        for (let i = 0; i < 32; i++) reveal.push(0xaa); // blinding factor
+        for (let i = 0; i < 20; i++) reveal.push(0xbb); // wallet pubkey hash
+        for (let i = 0; i < 20; i++) reveal.push(0xcc); // refund pubkey hash
+        reveal.push(0x20, 0xa1, 0x07, 0x00); // refund locktime (500000)
+        for (let i = 0; i < 32; i++) reveal.push(0xdd); // vault
+        return reveal;
+      };
+
+      // Use number arrays directly for this test
+      const mockFundingTx = createMinimalTransaction();
+      const mockReveal = createValidReveal();
+      // Mock binary address data as number arrays (32 bytes each for SUI addresses)
+      const mockDepositOwner = [5, 6, 7, 8, ...Array(28).fill(0)]; // 32 bytes
+      const mockSender = [9, 10, 11, 12, ...Array(28).fill(0)]; // 32 bytes
+
+      const mockEvent = {
+        type: 'DepositInitialized',
+        parsedJson: {
+          funding_tx: mockFundingTx,
+          deposit_reveal: mockReveal,
+          deposit_owner: mockDepositOwner,
+          sender: mockSender,
+        },
+        id: {
+          txDigest: 'test-tx-digest',
+        },
+        checkpoint: 12345,
+      };
+
+      // Mock DepositStore.getById to return null (no existing deposit)
+      mockDepositStore.getById.mockResolvedValueOnce(null);
+
+      await (handler as any).handleSuiDepositEvent(mockEvent);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('SUI deposit successfully created and saved'),
+        expect.any(Object),
       );
     });
 
@@ -670,7 +802,7 @@ describe('SuiChainHandler', () => {
       await (handler as any).handleSuiDepositEvent(mockEvent);
 
       expect(logger.info).not.toHaveBeenCalledWith(
-        expect.stringContaining('SUI deposit event received'),
+        expect.stringContaining('SUI deposit successfully created and saved'),
       );
     });
 
@@ -678,7 +810,7 @@ describe('SuiChainHandler', () => {
       const mockEvent = {
         type: 'DepositInitialized',
         parsedJson: {
-          deposit_key: 'test-deposit-key',
+          funding_tx: '0x' + '01'.repeat(100), // Valid looking hex data
           // Missing required fields
         },
         id: { txDigest: 'test-tx-digest' },
@@ -688,28 +820,393 @@ describe('SuiChainHandler', () => {
 
       expect(logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('Incomplete SUI deposit event data'),
+        expect.any(Object),
       );
     });
 
     it('should skip existing deposits', async () => {
+      // Create valid Bitcoin transaction data (minimal coinbase transaction)
+      const createMinimalTransaction = (): number[] => {
+        const tx: number[] = [];
+        tx.push(0x01, 0x00, 0x00, 0x00); // version 1
+        tx.push(0x01); // 1 input
+        for (let i = 0; i < 32; i++) tx.push(0x00); // prev tx hash (all zeros for coinbase)
+        tx.push(0xff, 0xff, 0xff, 0xff); // output index (0xffffffff for coinbase)
+        tx.push(0x00); // script sig length (0 bytes)
+        tx.push(0xff, 0xff, 0xff, 0xff); // sequence
+        tx.push(0x01); // 1 output
+        tx.push(0x00, 0xf2, 0x05, 0x2a, 0x01, 0x00, 0x00, 0x00); // value (5000000000 satoshis)
+        tx.push(0x19); // script pubkey length (25 bytes)
+        tx.push(0x76, 0xa9, 0x14); // OP_DUP OP_HASH160 <20-byte hash>
+        for (let i = 0; i < 20; i++) tx.push(0x00); // 20-byte hash
+        tx.push(0x88, 0xac); // OP_EQUALVERIFY OP_CHECKSIG
+        tx.push(0x00, 0x00, 0x00, 0x00); // locktime
+        return tx;
+      };
+
+      // Create valid reveal data (112 bytes total)
+      const createValidReveal = (): number[] => {
+        const reveal: number[] = [];
+        reveal.push(0x01, 0x00, 0x00, 0x00); // funding output index (index 1)
+        for (let i = 0; i < 32; i++) reveal.push(0xaa); // blinding factor
+        for (let i = 0; i < 20; i++) reveal.push(0xbb); // wallet pubkey hash
+        for (let i = 0; i < 20; i++) reveal.push(0xcc); // refund pubkey hash
+        reveal.push(0x20, 0xa1, 0x07, 0x00); // refund locktime (500000)
+        for (let i = 0; i < 32; i++) reveal.push(0xdd); // vault
+        return reveal;
+      };
+
+      const mockFundingTx = '0x' + Buffer.from(createMinimalTransaction()).toString('hex');
+      const mockReveal = '0x' + Buffer.from(createValidReveal()).toString('hex');
+      // Mock binary address data for SUI addresses
+      const mockDepositOwner =
+        '0x' + '0506070800000000000000000000000000000000000000000000000000000000';
+      const mockSender = '0x' + '090a0b0c00000000000000000000000000000000000000000000000000000000';
+
       const mockEvent = {
         type: 'DepositInitialized',
         parsedJson: {
-          deposit_key: 'existing-deposit-key',
-          funding_tx_hash: '0xtest-funding-hash',
-          output_index: 1,
-          depositor: '0xtest-depositor',
+          funding_tx: mockFundingTx,
+          deposit_reveal: mockReveal,
+          deposit_owner: mockDepositOwner,
+          sender: mockSender,
         },
-        id: { txDigest: 'test-tx-digest' },
+        id: { txDigest: 'existing-tx-digest' },
       };
 
       mockDepositStore.getById.mockResolvedValueOnce({} as Deposit);
 
       await (handler as any).handleSuiDepositEvent(mockEvent);
 
-      expect(logger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Deposit existing-deposit-key already exists'),
+      expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('already exists'));
+    });
+
+    it('should handle parsing errors gracefully', async () => {
+      const mockEvent = {
+        type: 'DepositInitialized',
+        parsedJson: {
+          funding_tx: 'invalid_hex_data',
+          deposit_reveal: 'invalid_hex_data',
+          deposit_owner: '0x' + '0506070800000000000000000000000000000000000000000000000000000000',
+          sender: '0x' + '090a0b0c00000000000000000000000000000000000000000000000000000000',
+        },
+        id: { txDigest: 'test-tx-digest' },
+      };
+
+      await (handler as any).handleSuiDepositEvent(mockEvent);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to parse Bitcoin data from SUI event for SuiTestnet:'),
+        expect.objectContaining({
+          error: expect.any(String),
+          eventType: 'DepositInitialized',
+          txDigest: 'test-tx-digest',
+        }),
       );
+    });
+
+    it('should handle invalid binary field format', async () => {
+      const mockEvent = {
+        type: 'DepositInitialized',
+        parsedJson: {
+          funding_tx: 12345, // Invalid format (not string or array)
+          deposit_reveal: '01000000' + '00'.repeat(108),
+          deposit_owner: '0x' + '0506070800000000000000000000000000000000000000000000000000000000',
+          sender: '0x' + '090a0b0c00000000000000000000000000000000000000000000000000000000',
+        },
+        id: { txDigest: 'test-tx-digest' },
+      };
+
+      await (handler as any).handleSuiDepositEvent(mockEvent);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to parse Bitcoin data from SUI event for SuiTestnet:'),
+        expect.objectContaining({
+          error: expect.any(String),
+          eventType: 'DepositInitialized',
+          txDigest: 'test-tx-digest',
+        }),
+      );
+    });
+  });
+
+  describe('Deposit Persistence', () => {
+    beforeEach(async () => {
+      await (handler as any).initializeL2();
+    });
+
+    it('should create and persist deposit to database when processing valid SUI event', async () => {
+      // Setup mock data for a valid SUI DepositInitialized event
+      const mockFundingTx = [1, 0, 0, 0, 1, ...Array(100).fill(0)]; // Valid binary data
+      const mockReveal = [1, 0, 0, 0, ...Array(108).fill(0)]; // Valid binary data
+      const mockDepositOwner = [5, 6, 7, 8, ...Array(28).fill(0)]; // 32 bytes for SUI address
+      const mockSender = [9, 10, 11, 12, ...Array(28).fill(0)]; // 32 bytes for SUI address
+
+      const mockEvent = {
+        type: 'DepositInitialized',
+        parsedJson: {
+          funding_tx: mockFundingTx,
+          deposit_reveal: mockReveal,
+          deposit_owner: mockDepositOwner,
+          sender: mockSender,
+        },
+        id: { txDigest: 'test-tx-digest-for-persistence' },
+        checkpoint: 12345,
+      };
+
+      // Mock the expected deposit object that createDeposit should return
+      const mockCreatedDeposit: Deposit = {
+        id: 'test-deposit-id-123',
+        chainId: 'SuiTestnet',
+        status: DepositStatus.INITIALIZED,
+        fundingTxHash: 'mock-funding-tx-hash',
+        outputIndex: 1,
+        hashes: {
+          btc: { btcTxHash: null },
+          eth: { initializeTxHash: null, finalizeTxHash: null },
+          solana: { bridgeTxHash: null },
+          sui: { l2BridgeTxHash: null },
+        },
+        receipt: {
+          depositor: '0x123',
+          blindingFactor: '0x456',
+          walletPublicKeyHash: '0x789',
+          refundPublicKeyHash: '0xabc',
+          refundLocktime: '0',
+          extraData: '0x',
+        },
+        owner: 'test-owner',
+        L1OutputEvent: {
+          fundingTx: {
+            version: '01000000',
+            inputVector: 'mock_input_vector',
+            outputVector: 'mock_output_vector',
+            locktime: '00000000',
+          },
+          reveal: {
+            fundingOutputIndex: 1,
+            blindingFactor: '0x' + '00'.repeat(32),
+            walletPubKeyHash: '0x' + '00'.repeat(20),
+            refundPubKeyHash: '0x' + '00'.repeat(20),
+            refundLocktime: '0',
+            vault: '0x' + '00'.repeat(32),
+          },
+          l2DepositOwner: '0x0506070800000000000000000000000000000000000000000000000000000000',
+          l2Sender: '0x090a0b0c00000000000000000000000000000000000000000000000000000000',
+        },
+        dates: {
+          createdAt: Date.now(),
+          initializationAt: null,
+          finalizationAt: null,
+          awaitingWormholeVAAMessageSince: null,
+          bridgedAt: null,
+          lastActivityAt: Date.now(),
+        },
+        wormholeInfo: {
+          txHash: null,
+          transferSequence: null,
+          bridgingAttempted: false,
+        },
+        error: null,
+      };
+
+      // Mock createDeposit to return our test deposit
+      mockDepositsUtil.createDeposit.mockReturnValue(mockCreatedDeposit);
+
+      // Mock Bitcoin parser functions to return valid data
+      const mockParseFundingTransaction = jest.spyOn(
+        require('../../../utils/BitcoinTransactionParser.js'),
+        'parseFundingTransaction',
+      );
+      const mockParseReveal = jest.spyOn(
+        require('../../../utils/BitcoinTransactionParser.js'),
+        'parseReveal',
+      );
+
+      mockParseFundingTransaction.mockReturnValue({
+        version: '01000000',
+        inputVector: 'mock_input_vector',
+        outputVector: 'mock_output_vector',
+        locktime: '00000000',
+      });
+
+      mockParseReveal.mockReturnValue({
+        fundingOutputIndex: 1,
+        blindingFactor: '0x' + '00'.repeat(32),
+        walletPubKeyHash: '0x' + '00'.repeat(20),
+        refundPubKeyHash: '0x' + '00'.repeat(20),
+        refundLocktime: '0',
+        vault: '0x' + '00'.repeat(32),
+      });
+
+      // Ensure no existing deposit is found
+      mockDepositStore.getById.mockResolvedValue(null);
+
+      // Process the event
+      await (handler as any).handleSuiDepositEvent(mockEvent);
+
+      // Verify createDeposit was called with correct parameters
+      expect(mockDepositsUtil.createDeposit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          version: '01000000',
+          inputVector: 'mock_input_vector',
+          outputVector: 'mock_output_vector',
+          locktime: '00000000',
+        }),
+        expect.objectContaining({
+          fundingOutputIndex: 1,
+          vault: '0x' + '00'.repeat(32),
+        }),
+        '0x0506070800000000000000000000000000000000000000000000000000000000', // depositOwner
+        '0x090a0b0c00000000000000000000000000000000000000000000000000000000', // sender
+        'SuiTestnet', // chainName
+      );
+
+      // Verify the deposit was checked for duplicates
+      expect(mockDepositStore.getById).toHaveBeenCalledWith('test-deposit-id-123');
+
+      // Verify the deposit was persisted to the database
+      expect(mockDepositStore.create).toHaveBeenCalledWith(mockCreatedDeposit);
+
+      // Verify success was logged
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining('SUI deposit successfully created and saved: test-deposit-id-123'),
+        expect.objectContaining({
+          depositOwner: '0x0506070800000000000000000000000000000000000000000000000000000000',
+          sender: '0x090a0b0c00000000000000000000000000000000000000000000000000000000',
+          fundingOutputIndex: 1,
+          chainName: 'SuiTestnet',
+          status: DepositStatus.INITIALIZED,
+          fundingTxHash: 'mock-funding-tx-hash',
+        }),
+      );
+
+      // Cleanup mocks
+      mockParseFundingTransaction.mockRestore();
+      mockParseReveal.mockRestore();
+    });
+
+    it('should not persist deposit if it already exists in database', async () => {
+      const mockFundingTx = [1, 0, 0, 0, 1, ...Array(100).fill(0)];
+      const mockReveal = [1, 0, 0, 0, ...Array(108).fill(0)];
+      const mockDepositOwner = [5, 6, 7, 8, ...Array(28).fill(0)];
+      const mockSender = [9, 10, 11, 12, ...Array(28).fill(0)];
+
+      const mockEvent = {
+        type: 'DepositInitialized',
+        parsedJson: {
+          funding_tx: mockFundingTx,
+          deposit_reveal: mockReveal,
+          deposit_owner: mockDepositOwner,
+          sender: mockSender,
+        },
+        id: { txDigest: 'existing-tx-digest' },
+      };
+
+      const mockCreatedDeposit: Deposit = {
+        id: 'existing-deposit-id',
+        chainId: 'SuiTestnet',
+        status: DepositStatus.INITIALIZED,
+        fundingTxHash: 'existing-funding-tx-hash',
+        outputIndex: 1,
+        hashes: {
+          btc: { btcTxHash: null },
+          eth: { initializeTxHash: null, finalizeTxHash: null },
+          solana: { bridgeTxHash: null },
+          sui: { l2BridgeTxHash: null },
+        },
+        receipt: {
+          depositor: '0x123',
+          blindingFactor: '0x456',
+          walletPublicKeyHash: '0x789',
+          refundPublicKeyHash: '0xabc',
+          refundLocktime: '0',
+          extraData: '0x',
+        },
+        owner: 'existing-owner',
+        L1OutputEvent: {
+          fundingTx: {
+            version: '01000000',
+            inputVector: 'mock_input_vector',
+            outputVector: 'mock_output_vector',
+            locktime: '00000000',
+          },
+          reveal: {
+            fundingOutputIndex: 1,
+            blindingFactor: '0x' + '00'.repeat(32),
+            walletPubKeyHash: '0x' + '00'.repeat(20),
+            refundPubKeyHash: '0x' + '00'.repeat(20),
+            refundLocktime: '0',
+            vault: '0x' + '00'.repeat(32),
+          },
+          l2DepositOwner: '0x0506070800000000000000000000000000000000000000000000000000000000',
+          l2Sender: '0x090a0b0c00000000000000000000000000000000000000000000000000000000',
+        },
+        dates: {
+          createdAt: Date.now(),
+          initializationAt: null,
+          finalizationAt: null,
+          awaitingWormholeVAAMessageSince: null,
+          bridgedAt: null,
+          lastActivityAt: Date.now(),
+        },
+        wormholeInfo: {
+          txHash: null,
+          transferSequence: null,
+          bridgingAttempted: false,
+        },
+        error: null,
+      };
+
+      // Mock existing deposit found in database
+      mockDepositStore.getById.mockResolvedValue(mockCreatedDeposit as Deposit);
+      mockDepositsUtil.createDeposit.mockReturnValue(mockCreatedDeposit);
+
+      // Mock Bitcoin parser functions
+      const mockParseFundingTransaction = jest.spyOn(
+        require('../../../utils/BitcoinTransactionParser.js'),
+        'parseFundingTransaction',
+      );
+      const mockParseReveal = jest.spyOn(
+        require('../../../utils/BitcoinTransactionParser.js'),
+        'parseReveal',
+      );
+
+      mockParseFundingTransaction.mockReturnValue({
+        version: '01000000',
+        inputVector: 'mock_input_vector',
+        outputVector: 'mock_output_vector',
+        locktime: '00000000',
+      });
+
+      mockParseReveal.mockReturnValue({
+        fundingOutputIndex: 1,
+        blindingFactor: '0x' + '00'.repeat(32),
+        walletPubKeyHash: '0x' + '00'.repeat(20),
+        refundPubKeyHash: '0x' + '00'.repeat(20),
+        refundLocktime: '0',
+        vault: '0x' + '00'.repeat(32),
+      });
+
+      await (handler as any).handleSuiDepositEvent(mockEvent);
+
+      // Verify deposit creation still happened
+      expect(mockDepositsUtil.createDeposit).toHaveBeenCalled();
+
+      // Verify duplicate check was performed
+      expect(mockDepositStore.getById).toHaveBeenCalledWith('existing-deposit-id');
+
+      // Verify deposit was NOT persisted again
+      expect(mockDepositStore.create).not.toHaveBeenCalled();
+
+      // Verify skip message was logged
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.stringContaining('already exists for SuiTestnet. Skipping creation.'),
+      );
+
+      // Cleanup mocks
+      mockParseFundingTransaction.mockRestore();
+      mockParseReveal.mockRestore();
     });
   });
 

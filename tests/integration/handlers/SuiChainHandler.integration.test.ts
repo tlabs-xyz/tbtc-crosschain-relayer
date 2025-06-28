@@ -27,6 +27,45 @@ import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import { createTestDeposit } from '../../mocks/BlockchainMock.js';
 
+// Test type definitions
+interface MockSuiClient {
+  getLatestCheckpointSequenceNumber: jest.Mock;
+  subscribeEvent: jest.Mock;
+  queryEvents: jest.Mock;
+  signAndExecuteTransaction?: jest.Mock;
+}
+
+// Test constants
+const MOCK_ADDRESSES = {
+  L1_CONTRACT: '0x1234567890123456789012345678901234567890',
+  VAULT: '0xabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde',
+  SUI_CONTRACT:
+    '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae::bitcoin_depositor',
+  WORMHOLE_GATEWAY: '0xc57508ee0d4595e5a8728974a4a93a787d38f339757230d441e895422c07aba9',
+  WORMHOLE_CORE: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+  TOKEN_BRIDGE: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+  WRAPPED_TBTC:
+    '0x9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba::wrapped_tbtc::WrappedTBTC',
+} as const;
+
+const MOCK_OBJECT_IDS = {
+  RECEIVER_STATE: '0x1111111111111111111111111111111111111111111111111111111111111111',
+  GATEWAY_STATE: '0x2222222222222222222222222222222222222222222222222222222222222222',
+  CAPABILITIES: '0x3333333333333333333333333333333333333333333333333333333333333333',
+  TREASURY: '0x4444444444444444444444444444444444444444444444444444444444444444',
+  TOKEN_STATE: '0x5555555555555555555555555555555555555555555555555555555555555555',
+} as const;
+
+// Helper functions
+function createMockSuiClient(overrides: Partial<MockSuiClient> = {}): MockSuiClient {
+  return {
+    getLatestCheckpointSequenceNumber: jest.fn().mockResolvedValue('0'),
+    subscribeEvent: jest.fn().mockResolvedValue(() => jest.fn()),
+    queryEvents: jest.fn().mockResolvedValue({ data: [], hasNextPage: false, nextCursor: null }),
+    ...overrides,
+  };
+}
+
 // Mock SUI SDK for integration tests with enhanced ESM support
 jest.mock('@mysten/sui/client', () => ({
   SuiClient: jest.fn(),
@@ -86,6 +125,20 @@ jest.mock('../../../config/index.js', () => ({
 jest.mock('../../../utils/Deposits.js', () => ({
   updateToAwaitingWormholeVAA: jest.fn().mockResolvedValue(undefined),
   updateToBridgedDeposit: jest.fn().mockResolvedValue(undefined),
+  createDeposit: jest.fn().mockImplementation(() => ({
+    id: `integration-test-deposit-${Date.now()}`,
+    chainId: 'SuiTestnet',
+    status: 'INITIALIZED',
+    fundingTxHash: `0xfunding-${Date.now()}`,
+    outputIndex: 0,
+    hashes: {
+      btc: { btcTxHash: `0xbtc-${Date.now()}` },
+      eth: { initializeTxHash: null, finalizeTxHash: null },
+      solana: { initializeTxHash: null, finalizeTxHash: null },
+      sui: { initializeTxHash: null, finalizeTxHash: null },
+      starknet: { initializeTxHash: null, finalizeTxHash: null },
+    },
+  })),
 }));
 
 describe('SuiChainHandler Integration Tests', () => {
@@ -102,20 +155,27 @@ describe('SuiChainHandler Integration Tests', () => {
       l1Rpc: 'http://localhost:8545',
       l2Rpc: 'https://fullnode.testnet.sui.io',
       l2WsRpc: 'wss://fullnode.testnet.sui.io',
-      l1ContractAddress: '0x1234567890123456789012345678901234567890',
-      vaultAddress: '0xabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde',
+      l1ContractAddress: MOCK_ADDRESSES.L1_CONTRACT,
+      vaultAddress: MOCK_ADDRESSES.VAULT,
       l1StartBlock: 1,
       l2StartBlock: 0,
       enableL2Redemption: false,
       useEndpoint: false,
       chainType: CHAIN_TYPE.SUI,
       suiPrivateKey: 'dGVzdC1zdWktcHJpdmF0ZS1rZXktZm9yLXRlc3Rpbmc=',
-      suiGasObjectId: '0x123456789abcdef',
-      l2ContractAddress:
-        '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor',
-      l2WormholeGatewayAddress:
-        '0xc57508ee0d4595e5a8728974a4a93a787d38f339757230d441e895422c07aba9',
-      l2WormholeChainId: 21,
+      suiGasObjectId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      l2ContractAddress: MOCK_ADDRESSES.SUI_CONTRACT,
+      // l2WormholeGatewayAddress and l2WormholeChainId removed - not used in Sui chains
+      // (replaced by gatewayStateId and native Wormhole SDK integration)
+      // Required Sui-specific Wormhole and Bridge Object IDs
+      wormholeCoreId: MOCK_ADDRESSES.WORMHOLE_CORE,
+      tokenBridgeId: MOCK_ADDRESSES.TOKEN_BRIDGE,
+      wrappedTbtcType: MOCK_ADDRESSES.WRAPPED_TBTC,
+      receiverStateId: MOCK_OBJECT_IDS.RECEIVER_STATE,
+      gatewayStateId: MOCK_OBJECT_IDS.GATEWAY_STATE,
+      capabilitiesId: MOCK_OBJECT_IDS.CAPABILITIES,
+      treasuryId: MOCK_OBJECT_IDS.TREASURY,
+      tokenStateId: MOCK_OBJECT_IDS.TOKEN_STATE,
     });
   });
 
@@ -145,22 +205,15 @@ describe('SuiChainHandler Integration Tests', () => {
 
   describe('Chain Handler Lifecycle', () => {
     it('should initialize and setup listeners successfully', async () => {
-      // Mock SUI client methods
-      const mockSuiClient = {
+      const mockSuiClient = createMockSuiClient({
         getLatestCheckpointSequenceNumber: jest.fn().mockResolvedValue('12345'),
-        subscribeEvent: jest.fn().mockResolvedValue(() => jest.fn()),
-        queryEvents: jest.fn().mockResolvedValue({
-          data: [],
-          hasNextPage: false,
-          nextCursor: null,
-        }),
-      };
+      });
 
-      const { SuiClient } = require('@mysten/sui/client');
-      SuiClient.mockImplementation(() => mockSuiClient);
+      const suiClientModule = await import('@mysten/sui/client');
+      (suiClientModule.SuiClient as jest.Mock).mockImplementation(() => mockSuiClient);
 
-      const { Ed25519Keypair } = require('@mysten/sui/keypairs/ed25519');
-      Ed25519Keypair.fromSecretKey.mockReturnValue({
+      const ed25519Module = await import('@mysten/sui/keypairs/ed25519');
+      (ed25519Module.Ed25519Keypair.fromSecretKey as jest.Mock).mockReturnValue({
         publicKey: jest.fn().mockReturnValue('mock-public-key'),
       });
 
@@ -178,7 +231,7 @@ describe('SuiChainHandler Integration Tests', () => {
       expect(mockSuiClient.subscribeEvent).toHaveBeenCalledWith({
         filter: {
           MoveModule: {
-            package: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7',
+            package: mockConfig.l2PackageId,
             module: 'bitcoin_depositor',
           },
         },
@@ -187,12 +240,12 @@ describe('SuiChainHandler Integration Tests', () => {
     });
 
     it('should handle checkpoint-based block management', async () => {
-      const mockSuiClient = {
+      const mockSuiClient = createMockSuiClient({
         getLatestCheckpointSequenceNumber: jest.fn().mockResolvedValue('54321'),
-      };
+      });
 
-      const { SuiClient } = require('@mysten/sui/client');
-      SuiClient.mockImplementation(() => mockSuiClient);
+      const suiClientModule = await import('@mysten/sui/client');
+      (suiClientModule.SuiClient as jest.Mock).mockImplementation(() => mockSuiClient);
 
       await (handler as any).initializeL2();
 
@@ -243,11 +296,11 @@ describe('SuiChainHandler Integration Tests', () => {
         }),
       };
 
-      const { SuiClient } = require('@mysten/sui/client');
-      SuiClient.mockImplementation(() => mockSuiClient);
+      const suiClientModule = await import('@mysten/sui/client');
+      (suiClientModule.SuiClient as jest.Mock).mockImplementation(() => mockSuiClient);
 
-      const { Ed25519Keypair } = require('@mysten/sui/keypairs/ed25519');
-      Ed25519Keypair.fromSecretKey.mockReturnValue({
+      const ed25519Module = await import('@mysten/sui/keypairs/ed25519');
+      (ed25519Module.Ed25519Keypair.fromSecretKey as jest.Mock).mockReturnValue({
         publicKey: jest.fn().mockReturnValue('mock-public-key'),
       });
 
@@ -268,8 +321,8 @@ describe('SuiChainHandler Integration Tests', () => {
 
     it('should handle deposit finalization with Wormhole sequence extraction', async () => {
       // Import ethers to get the correct topic signature
-      const ethers = require('ethers');
-      const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
+      const ethersModule = await import('ethers');
+      const TOKENS_TRANSFERRED_SIG = ethersModule.utils.id(
         'TokensTransferredWithPayload(uint256,bytes32,uint64)',
       );
 
@@ -313,13 +366,47 @@ describe('SuiChainHandler Integration Tests', () => {
 
   describe('Event Processing Integration', () => {
     it('should process SUI Move events correctly', async () => {
+      // Mock Bitcoin funding transaction bytes (minimal valid transaction)
+      const mockFundingTxBytes = [
+        ...new Uint8Array([1, 0, 0, 0]), // version (4 bytes)
+        1, // input count (1 byte)
+        ...new Uint8Array(32), // previous output hash (32 bytes)
+        ...new Uint8Array([255, 255, 255, 255]), // previous output index (4 bytes)
+        0, // script length (1 byte)
+        ...new Uint8Array([255, 255, 255, 255]), // sequence (4 bytes)
+        1, // output count (1 byte)
+        ...new Uint8Array(8), // value (8 bytes)
+        25, // script length (1 byte)
+        118,
+        169,
+        20, // OP_DUP OP_HASH160 <20 bytes>
+        ...Array.from({ length: 20 }, (_, i) => (i % 10) + 1), // 20 bytes of address
+        136,
+        172, // OP_EQUALVERIFY OP_CHECKSIG
+        ...new Uint8Array(4), // locktime (4 bytes)
+      ];
+
+      // Mock Bitcoin reveal bytes (112 bytes total as expected by parseReveal)
+      const mockRevealBytes = [
+        ...new Uint8Array(4), // funding output index (4 bytes)
+        ...Array.from({ length: 32 }, (_, i) => i + 1), // blindingFactor (32 bytes)
+        ...Array.from({ length: 20 }, (_, i) => (i % 10) + 1), // wallet pubkey hash (20 bytes)
+        ...Array.from({ length: 20 }, (_, i) => (i % 10) + 11), // refund pubkey hash (20 bytes)
+        ...new Uint8Array(4), // refund locktime (4 bytes)
+        ...Array.from({ length: 32 }, (_, i) => i + 1), // vault (32 bytes)
+      ];
+
+      // Convert SUI addresses to binary format (as they would come from Move events)
+      const depositOwnerBytes = Array.from(Buffer.from('sui-depositor-address'.padEnd(32, '0')));
+      const senderBytes = Array.from(Buffer.from('sui-sender-address'.padEnd(32, '0')));
+
       const mockEvent = {
-        type: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor::DepositInitialized',
+        type: `${MOCK_ADDRESSES.SUI_CONTRACT}::DepositInitialized`,
         parsedJson: {
-          deposit_key: 'integration-test-deposit',
-          funding_tx_hash: '0xbitcoin-funding-hash',
-          output_index: 2,
-          depositor: '0xsui-depositor-address',
+          funding_tx: mockFundingTxBytes,
+          deposit_reveal: mockRevealBytes,
+          deposit_owner: depositOwnerBytes,
+          sender: senderBytes,
         },
         id: {
           txDigest: 'sui-transaction-digest',
@@ -327,21 +414,24 @@ describe('SuiChainHandler Integration Tests', () => {
         checkpoint: 67890,
       };
 
-      // Mock DepositStore
+      // Mock DepositStore methods
       jest.spyOn(DepositStore, 'getById').mockResolvedValue(null);
+      jest.spyOn(DepositStore, 'create').mockResolvedValue(undefined);
 
       await (handler as any).initializeL2();
+
       await (handler as any).handleSuiDepositEvent(mockEvent);
 
       // Verify the event was processed
-      expect(DepositStore.getById).toHaveBeenCalledWith('integration-test-deposit');
+      expect(DepositStore.getById).toHaveBeenCalled();
+      expect(DepositStore.create).toHaveBeenCalled();
     });
 
     it('should query past events with pagination', async () => {
       const mockEventsPage1 = {
         data: [
           {
-            type: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor::DepositInitialized',
+            type: `${MOCK_ADDRESSES.SUI_CONTRACT}::DepositInitialized`,
             parsedJson: { deposit_key: 'past-deposit-1' },
           },
         ],
@@ -352,7 +442,7 @@ describe('SuiChainHandler Integration Tests', () => {
       const mockEventsPage2 = {
         data: [
           {
-            type: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7::bitcoin_depositor::DepositInitialized',
+            type: `${MOCK_ADDRESSES.SUI_CONTRACT}::DepositInitialized`,
             parsedJson: { deposit_key: 'past-deposit-2' },
           },
         ],
@@ -367,8 +457,8 @@ describe('SuiChainHandler Integration Tests', () => {
           .mockResolvedValueOnce(mockEventsPage2),
       };
 
-      const { SuiClient } = require('@mysten/sui/client');
-      SuiClient.mockImplementation(() => mockSuiClient);
+      const suiClientModule = await import('@mysten/sui/client');
+      (suiClientModule.SuiClient as jest.Mock).mockImplementation(() => mockSuiClient);
 
       await (handler as any).initializeL2();
 
@@ -380,7 +470,7 @@ describe('SuiChainHandler Integration Tests', () => {
       expect(mockSuiClient.queryEvents).toHaveBeenNthCalledWith(1, {
         query: {
           MoveModule: {
-            package: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7',
+            package: mockConfig.l2PackageId,
             module: 'bitcoin_depositor',
           },
         },
@@ -391,7 +481,7 @@ describe('SuiChainHandler Integration Tests', () => {
       expect(mockSuiClient.queryEvents).toHaveBeenNthCalledWith(2, {
         query: {
           MoveModule: {
-            package: '0x1db1fcdaada7c286d77f3347e593e06d8f33b8255e0861033a0a9f321f4eade7',
+            package: mockConfig.l2PackageId,
             module: 'bitcoin_depositor',
           },
         },
@@ -419,8 +509,8 @@ describe('SuiChainHandler Integration Tests', () => {
           .mockRejectedValue(new Error('Checkpoint query failed')),
       };
 
-      const { SuiClient } = require('@mysten/sui/client');
-      SuiClient.mockImplementation(() => mockSuiClient);
+      const suiClientModule = await import('@mysten/sui/client');
+      (suiClientModule.SuiClient as jest.Mock).mockImplementation(() => mockSuiClient);
 
       await (handler as any).initializeL2();
 
@@ -435,11 +525,11 @@ describe('SuiChainHandler Integration Tests', () => {
         subscribeEvent: jest.fn().mockRejectedValue(new Error('WebSocket connection failed')),
       };
 
-      const { SuiClient } = require('@mysten/sui/client');
-      SuiClient.mockImplementation(() => mockSuiClient);
+      const suiClientModule = await import('@mysten/sui/client');
+      (suiClientModule.SuiClient as jest.Mock).mockImplementation(() => mockSuiClient);
 
-      const { Ed25519Keypair } = require('@mysten/sui/keypairs/ed25519');
-      Ed25519Keypair.fromSecretKey.mockReturnValue({
+      const ed25519Module = await import('@mysten/sui/keypairs/ed25519');
+      (ed25519Module.Ed25519Keypair.fromSecretKey as jest.Mock).mockReturnValue({
         publicKey: jest.fn().mockReturnValue('mock-public-key'),
       });
 
@@ -490,11 +580,11 @@ describe('SuiChainHandler Integration Tests', () => {
         }),
       };
 
-      const { SuiClient } = require('@mysten/sui/client');
-      SuiClient.mockImplementation(() => mockSuiClient);
+      const suiClientModule = await import('@mysten/sui/client');
+      (suiClientModule.SuiClient as jest.Mock).mockImplementation(() => mockSuiClient);
 
-      const { Ed25519Keypair } = require('@mysten/sui/keypairs/ed25519');
-      Ed25519Keypair.fromSecretKey.mockReturnValue({
+      const ed25519Module = await import('@mysten/sui/keypairs/ed25519');
+      (ed25519Module.Ed25519Keypair.fromSecretKey as jest.Mock).mockReturnValue({
         publicKey: jest.fn().mockReturnValue('mock-public-key'),
       });
 

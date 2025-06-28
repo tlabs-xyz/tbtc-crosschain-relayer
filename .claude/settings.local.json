@@ -12,7 +12,16 @@
       "Bash(yarn run:*)",
       "Bash(yarn fix)",
       "Bash(yarn lint:*)",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Bash(gh api:*)",
+      "mcp__mcp-sequentialthinking-tools__sequentialthinking_tools",
+      "Bash(npx tsc:*)",
+      "Bash(yarn tsc:*)",
+      "Bash(yarn validate-config:*)",
+      "Bash(mv:*)",
+      "Bash(echo:*)",
+      "Bash(yarn install)",
+      "Bash(yarn format:fix)"
     ],
     "deny": [
       "Bash(git push:*--force*)",
