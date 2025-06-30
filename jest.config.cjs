@@ -27,7 +27,10 @@ module.exports = {
   },
   globalSetup: '<rootDir>/jest.global-setup.js',
   globalTeardown: '<rootDir>/jest.global-teardown.js',
-  transformIgnorePatterns: ['/node_modules/(?!.*(p-limit|yocto-queue))/', '\\.pnp\\.[^\\/]+$'],
+  transformIgnorePatterns: [
+    '/node_modules/(?!.*(p-limit|yocto-queue|@mysten))/',
+    '\\.pnp\\.[^\\/]+$',
+  ],
   transform: {
     '^.+\\.m?[tj]sx?$': [
       'ts-jest',

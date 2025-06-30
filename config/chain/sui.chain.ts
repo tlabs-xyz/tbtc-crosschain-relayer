@@ -6,11 +6,11 @@ import { getSuiCommonInput } from './sui-common.js';
 
 type SuiChainInput = z.input<typeof SuiChainConfigSchema>;
 
-// Generic Sui Testnet Configuration
-export const getSuiTestnetChainInput = (): SuiChainInput => {
-  const commonTestnetSuiInput = getSuiCommonInput(NETWORK.TESTNET);
+// Generic Sui Mainnet Configuration
+export const getSuiMainnetChainInput = (): SuiChainInput => {
+  const commonMainnetSuiInput = getSuiCommonInput(NETWORK.MAINNET);
 
-  // Validate required properties from commonTestnetSuiInput
+  // Validate required properties from commonMainnetSuiInput
   const requiredFields: Array<keyof Partial<SuiChainInput>> = [
     'network',
     'chainType',
@@ -22,47 +22,85 @@ export const getSuiTestnetChainInput = (): SuiChainInput => {
     'useEndpoint',
   ];
   for (const field of requiredFields) {
-    if (commonTestnetSuiInput[field] === undefined || commonTestnetSuiInput[field] === null) {
+    if (commonMainnetSuiInput[field] === undefined || commonMainnetSuiInput[field] === null) {
       throw new Error(
-        `getSuiTestnetChainInput: Missing required field '${String(field)}' in commonTestnetSuiInput.`,
+        `getSuiMainnetChainInput: Missing required field '${String(field)}' in commonMainnetSuiInput.`,
       );
     }
   }
 
   const config: SuiChainInput = {
-    network: commonTestnetSuiInput.network!,
-    chainType: commonTestnetSuiInput.chainType!,
-    l1Rpc: commonTestnetSuiInput.l1Rpc!,
-    vaultAddress: commonTestnetSuiInput.vaultAddress!,
-    l1ContractAddress: commonTestnetSuiInput.l1ContractAddress!,
-    l1Confirmations: commonTestnetSuiInput.l1Confirmations!,
-    enableL2Redemption: commonTestnetSuiInput.enableL2Redemption!,
-    useEndpoint: commonTestnetSuiInput.useEndpoint!,
+    network: commonMainnetSuiInput.network!,
+    chainType: commonMainnetSuiInput.chainType!,
+    l1Rpc: commonMainnetSuiInput.l1Rpc!,
+    vaultAddress: commonMainnetSuiInput.vaultAddress!,
+    l1ContractAddress: commonMainnetSuiInput.l1ContractAddress!,
+    l1Confirmations: commonMainnetSuiInput.l1Confirmations!,
+    enableL2Redemption: commonMainnetSuiInput.enableL2Redemption!,
+    useEndpoint: commonMainnetSuiInput.useEndpoint!,
     supportsRevealDepositAPI:
-      commonTestnetSuiInput.supportsRevealDepositAPI === undefined
+      commonMainnetSuiInput.supportsRevealDepositAPI === undefined
         ? false
-        : commonTestnetSuiInput.supportsRevealDepositAPI,
-    endpointUrl: commonTestnetSuiInput.endpointUrl,
+        : commonMainnetSuiInput.supportsRevealDepositAPI,
+    endpointUrl: commonMainnetSuiInput.endpointUrl,
     suiGasObjectId: getEnv(
-      'CHAIN_SUITESTNET_SUI_GAS_OBJECT_ID',
-      commonTestnetSuiInput.suiGasObjectId, // Default from getSuiCommonInput (can be empty string)
+      'CHAIN_SUIMAINNET_SUI_GAS_OBJECT_ID',
+      commonMainnetSuiInput.suiGasObjectId, // Default from getSuiCommonInput (can be empty string)
     ),
 
-    // SuiTestnet-specific values
-    chainName: 'SuiTestnet',
-    l2Rpc: getEnv('CHAIN_SUITESTNET_L2_RPC', 'https://fullnode.testnet.sui.io'),
-    l2WsRpc: getEnv('CHAIN_SUITESTNET_L2_WS_RPC', ''), // Default to empty string if not set
-    l2StartBlock: getEnvNumber('CHAIN_SUITESTNET_L2_START_BLOCK', 0),
+    // SuiMainnet-specific values
+    chainName: 'SuiMainnet',
+    l2Rpc: getEnv('CHAIN_SUIMAINNET_L2_RPC', 'https://fullnode.mainnet.sui.io'),
+    l2WsRpc: getEnv('CHAIN_SUIMAINNET_L2_WS_RPC', 'wss://fullnode.mainnet.sui.io'),
+    l2StartBlock: getEnvNumber('CHAIN_SUIMAINNET_L2_START_BLOCK', 0),
+    // TODO: Replace with actual mainnet BitcoinDepositor contract package and module
     l2ContractAddress: getEnv(
-      'CHAIN_SUITESTNET_L2_CONTRACT_ADDRESS',
-      '0xSuiPackageId::module::Struct', // Default placeholder
+      'CHAIN_SUIMAINNET_L2_CONTRACT_ADDRESS',
+      '0x0000000000000000000000000000000000000000000000000000000000000000::bitcoin_depositor', // TODO: Replace with actual mainnet package ID
     ),
-    l2WormholeGatewayAddress: getEnv(
-      'CHAIN_SUITESTNET_WORMHOLE_GATEWAY',
-      '0x00mockSuiWormholeGateway000000000000000000000000000000000000000', // Mock Sui address format
+    suiPrivateKey: getEnv('CHAIN_SUIMAINNET_SUI_PRIVATE_KEY'),
+
+    // Sui-specific Wormhole and Bridge Object IDs (Mainnet values - ALL NEED TO BE UPDATED)
+    // TODO: Replace with actual mainnet Wormhole Core object ID
+    wormholeCoreId: getEnv(
+      'CHAIN_SUIMAINNET_WORMHOLE_CORE_ID',
+      '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Get from Wormhole mainnet deployment
     ),
-    l2WormholeChainId: getEnvNumber('CHAIN_SUITESTNET_WORMHOLE_CHAIN_ID', 21),
-    suiPrivateKey: getEnv('CHAIN_SUITESTNET_SUI_PRIVATE_KEY'),
+    // TODO: Replace with actual mainnet Token Bridge object ID
+    tokenBridgeId: getEnv(
+      'CHAIN_SUIMAINNET_TOKEN_BRIDGE_ID',
+      '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Get from Wormhole mainnet deployment
+    ),
+    // TODO: Replace with actual mainnet wrapped tBTC coin type
+    wrappedTbtcType: getEnv(
+      'CHAIN_SUIMAINNET_WRAPPED_TBTC_TYPE',
+      '0x0000000000000000000000000000000000000000000000000000000000000000::coin::COIN', // TODO: Get from tBTC mainnet deployment
+    ),
+    // TODO: Replace with actual mainnet receiver state object ID
+    receiverStateId: getEnv(
+      'CHAIN_SUIMAINNET_RECEIVER_STATE_ID',
+      '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Get from BitcoinDepositor mainnet deployment
+    ),
+    // TODO: Replace with actual mainnet gateway state object ID (Wormhole messaging)
+    gatewayStateId: getEnv(
+      'CHAIN_SUIMAINNET_GATEWAY_STATE_ID',
+      '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Get from BitcoinDepositor mainnet deployment
+    ),
+    // TODO: Replace with actual mainnet capabilities object ID
+    capabilitiesId: getEnv(
+      'CHAIN_SUIMAINNET_CAPABILITIES_ID',
+      '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Get from BitcoinDepositor mainnet deployment
+    ),
+    // TODO: Replace with actual mainnet treasury object ID
+    treasuryId: getEnv(
+      'CHAIN_SUIMAINNET_TREASURY_ID',
+      '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Get from BitcoinDepositor mainnet deployment
+    ),
+    // TODO: Replace with actual mainnet token state object ID
+    tokenStateId: getEnv(
+      'CHAIN_SUIMAINNET_TOKEN_STATE_ID',
+      '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Get from BitcoinDepositor mainnet deployment
+    ),
   };
   return config;
 };
