@@ -21,7 +21,9 @@
       "Bash(mv:*)",
       "Bash(echo:*)",
       "Bash(yarn install)",
-      "Bash(yarn format:fix)"
+      "Bash(yarn format:fix)",
+      "Bash(gh run view:*)",
+      "Bash(gh run list:*)"
     ],
     "deny": [
       "Bash(git push:*--force*)",

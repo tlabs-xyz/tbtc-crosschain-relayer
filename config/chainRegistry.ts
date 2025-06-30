@@ -11,11 +11,12 @@ import { getSepoliaTestnetChainInput } from './chain/sepolia.chain.js';
 import { getSolanaDevnetChainInput } from './chain/solana.chain.js';
 import { getStarknetTestnetChainInput } from './chain/starknet.chain.js';
 import { getStarknetMainnetChainInput } from './chain/starknetMainnet.chain.js';
-import { getSuiTestnetChainInput, getSuiMainnetChainInput } from './chain/sui.chain.js';
+import { getSuiMainnetChainInput } from './chain/sui.chain.js';
 import { getArbitrumMainnetChainInput } from './chain/arbitrumMainnet.chain.js';
 import { getBaseMainnetChainInput } from './chain/baseMainnet.chain.js';
 import { getSolanaDevnetImportedChainInput } from './chain/solanaDevnetImported.chain.js';
 import { getBaseSepoliaTestnetChainInput } from './chain/base-sepolia-testnet.chain.js'; // Assuming this path and export
+import { getSuiTestnetChainInput } from './chain/suiTestnet.chain.js';
 
 // Re-exporting these types as they might be useful for consumers of the registry
 export type { EvmChainConfig, SolanaChainConfig, StarknetChainConfig, SuiChainConfig };
