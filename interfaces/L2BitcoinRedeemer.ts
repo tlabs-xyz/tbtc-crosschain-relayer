@@ -3,16 +3,55 @@ export const L2BitcoinRedeemerABI = [
     anonymous: false,
     inputs: [
       {
-        indexed: true,
-        internalType: 'bytes20',
-        name: 'walletPubKey',
-        type: 'bytes20',
+        indexed: false,
+        internalType: 'uint8',
+        name: 'version',
+        type: 'uint8',
       },
+    ],
+    name: 'Initialized',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
       {
         indexed: false,
-        internalType: 'struct BitcoinTx.UTXO',
-        name: 'mainUtxo',
-        type: 'tuple',
+        internalType: 'uint256',
+        name: 'newMinimumAmount',
+        type: 'uint256',
+      },
+    ],
+    name: 'MinimumRedemptionAmountUpdated',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: 'address',
+        name: 'previousOwner',
+        type: 'address',
+      },
+      {
+        indexed: true,
+        internalType: 'address',
+        name: 'newOwner',
+        type: 'address',
+      },
+    ],
+    name: 'OwnershipTransferred',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
       },
       {
         indexed: false,
@@ -22,42 +61,120 @@ export const L2BitcoinRedeemerABI = [
       },
       {
         indexed: false,
-        internalType: 'uint64',
-        name: 'amount',
-        type: 'uint64',
+        internalType: 'uint32',
+        name: 'nonce',
+        type: 'uint32',
       },
     ],
-    name: 'RedemptionRequested',
+    name: 'RedemptionRequestedOnL2',
     type: 'event',
+  },
+  {
+    inputs: [],
+    name: 'gateway',
+    outputs: [
+      {
+        internalType: 'contract IL2WormholeGateway',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
   },
   {
     inputs: [
       {
-        internalType: 'bytes20',
-        name: 'walletPubKeyHash',
-        type: 'bytes20',
+        internalType: 'address',
+        name: '_tbtc',
+        type: 'address',
       },
       {
-        components: [
-          {
-            internalType: 'bytes32',
-            name: 'txHash',
-            type: 'bytes32',
-          },
-          {
-            internalType: 'uint32',
-            name: 'txOutputIndex',
-            type: 'uint32',
-          },
-          {
-            internalType: 'uint64',
-            name: 'txOutputValue',
-            type: 'uint64',
-          },
-        ],
-        internalType: 'struct BitcoinTx.UTXO',
-        name: 'mainUtxo',
-        type: 'tuple',
+        internalType: 'address',
+        name: '_gateway',
+        type: 'address',
+      },
+      {
+        internalType: 'bytes32',
+        name: '_l1BtcRedeemerWormholeAddress',
+        type: 'bytes32',
+      },
+    ],
+    name: 'initialize',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'l1BtcRedeemerWormholeAddress',
+    outputs: [
+      {
+        internalType: 'bytes32',
+        name: '',
+        type: 'bytes32',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'minimumRedemptionAmount',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'owner',
+    outputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'redeemedAmount',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'renounceOwnership',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint16',
+        name: 'recipientChain',
+        type: 'uint16',
       },
       {
         internalType: 'bytes',
@@ -65,12 +182,57 @@ export const L2BitcoinRedeemerABI = [
         type: 'bytes',
       },
       {
-        internalType: 'uint64',
-        name: 'amount',
-        type: 'uint64',
+        internalType: 'uint32',
+        name: 'nonce',
+        type: 'uint32',
       },
     ],
     name: 'requestRedemption',
+    outputs: [
+      {
+        internalType: 'uint64',
+        name: '',
+        type: 'uint64',
+      },
+    ],
+    stateMutability: 'payable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'tbtc',
+    outputs: [
+      {
+        internalType: 'contract IERC20Upgradeable',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'newOwner',
+        type: 'address',
+      },
+    ],
+    name: 'transferOwnership',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint256',
+        name: '_newMinimumRedemptionAmount',
+        type: 'uint256',
+      },
+    ],
+    name: 'updateMinimumRedemptionAmount',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',

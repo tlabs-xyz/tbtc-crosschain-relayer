@@ -60,8 +60,9 @@ export const getBaseSepoliaTestnetChainInput = (): EvmChainInput => {
     l2WsRpc: getEnv('CHAIN_BASESEPOLIATESTNET_L2_WS_RPC', PUBLIC_WS_RPCS['base-sepolia']),
     l2StartBlock: getEnvNumber('CHAIN_BASESEPOLIATESTNET_L2_START_BLOCK', 123456),
     l2ContractAddress: '0xDEbD9aA9BC4845c7Cd2d9a997F82A2Daea540bD5',
-    l2WormholeGatewayAddress: WORMHOLE_GATEWAYS.BASE_SEPOLIA,
-    l2WormholeChainId: WORMHOLE_CHAIN_IDS.BASE_SEPOLIA,
+    l2WormholeGatewayAddress: '0x210127134B50aF4236357A436d4632a931322237',
+    l2WormholeChainId: 10004,
+    l1StartBlock: 21173079,
   };
   return config;
 };

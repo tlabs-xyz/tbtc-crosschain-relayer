@@ -65,11 +65,8 @@ export const CommonChainConfigSchema = z.object({
   l1ContractAddress: EthereumAddressSchema, // L1BitcoinDepositor on Ethereum
   l2ContractAddress: EthereumAddressSchema, // L2BitcoinDepositor on target network
 
-  // Bitcoin Redeemer contracts are not currently deployed in tBTC v2
-  // Based on research of official Threshold docs and tBTC v2 GitHub repo
-  // These features may be added in future versions
-  // l1BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
-  // l2BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
+  l1BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
+  l2BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
 
   // Wormhole Configuration for cross-chain messaging
   l2WormholeGatewayAddress: EthereumAddressSchema, // Wormhole Gateway on target network
