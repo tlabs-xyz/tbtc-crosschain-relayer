@@ -1,9 +1,8 @@
 import { L1RedemptionHandler } from './L1RedemptionHandler.js';
 import type { AnyChainConfig } from '../config/index.js';
-import logger from '../utils/Logger.js';
-import { ethers } from 'ethers';
-import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import { NETWORK } from '../config/schemas/common.schema.js';
 
 /**
  * Manages L1RedemptionHandler instances.
@@ -11,55 +10,71 @@ import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
  * to reuse handlers for chains sharing the same L1 configuration.
  */
 class L1RedemptionHandlerRegistry {
-  private handlers: Map<string, L1RedemptionHandler> = new Map();
+  private handler: L1RedemptionHandler | null = null;
+  private isInitialized = false;
 
-  private generateKey(
-    l1RpcUrl: string,
-    l1ContractAddress: string,
-    l1SignerAddress: string,
-  ): string {
-    return `${l1RpcUrl.toLowerCase()}-${l1ContractAddress.toLowerCase()}-${l1SignerAddress.toLowerCase()}`;
-  }
-
-  public get(chainConfig: AnyChainConfig): L1RedemptionHandler {
-    if (chainConfig.chainType !== CHAIN_TYPE.EVM) {
-      const errorMsg = `L1RedemptionHandler is only applicable to EVM chains. Chain ${chainConfig.chainName} is of type ${chainConfig.chainType}.`;
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-    // Now we know it's an EVM chain
-    const evmConfig = chainConfig as EvmChainConfig;
-
-    if (!evmConfig.privateKey) {
-      const errorMsg = `Private key is missing for EVM chain ${evmConfig.chainName} in L1RedemptionHandlerRegistry.`;
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
+  public async initialize(chainConfigs: AnyChainConfig[]): Promise<void> {
+    if (this.isInitialized) {
+      logger.warn('L1RedemptionHandlerRegistry is already initialized.');
+      return;
     }
 
-    const l1SignerAddress = new ethers.Wallet(evmConfig.privateKey).address;
-    const key = this.generateKey(evmConfig.l1Rpc, evmConfig.l1ContractAddress, l1SignerAddress);
+    const evmChainConfigs = chainConfigs.filter(
+      (config): config is EvmChainConfig => config.enableL2Redemption,
+    );
 
-    if (!this.handlers.has(key)) {
-      logger.info(`Creating new L1RedemptionHandler instance for key: ${key}`);
-      const handler = new L1RedemptionHandler(
-        evmConfig.l1Rpc,
-        evmConfig.l1ContractAddress,
-        evmConfig.privateKey,
+    if (evmChainConfigs.length === 0) {
+      logger.info(
+        'No EVM chains with L2 redemption enabled. L1RedemptionHandler will not be created.',
       );
-      this.handlers.set(key, handler);
-      return handler;
+      this.isInitialized = true;
+      return;
     }
-    logger.debug(`Reusing existing L1RedemptionHandler instance for key: ${key}`);
-    return this.handlers.get(key)!;
+
+    // All EVM chains share the same L1. We can pick the L1 RPC and private key from the first configured chain.
+    const referenceConfig = evmChainConfigs[0];
+    const l1RpcUrl = referenceConfig.l1Rpc;
+    const isTestnet = referenceConfig.network === NETWORK.TESTNET;
+    const relayerL1PrivateKey = referenceConfig.privateKey;
+
+    if (!relayerL1PrivateKey) {
+      // This should theoretically not be hit if schema validation is correct, but it's a good safeguard.
+      throw new Error(
+        `Private key is missing for EVM chain ${referenceConfig.chainName}. Cannot initialize L1RedemptionHandler.`,
+      );
+    }
+
+    try {
+      this.handler = await L1RedemptionHandler.create(
+        l1RpcUrl,
+        relayerL1PrivateKey,
+        evmChainConfigs,
+        isTestnet,
+      );
+      logger.info('L1RedemptionHandler singleton instance created successfully.');
+    } catch (error) {
+      logErrorContext('Failed to create L1RedemptionHandler singleton instance', error);
+      throw new Error('Could not initialize L1RedemptionHandler.');
+    }
+
+    this.isInitialized = true;
   }
 
-  public list(): L1RedemptionHandler[] {
-    return Array.from(this.handlers.values());
+  public get(): L1RedemptionHandler | null {
+    if (!this.isInitialized) {
+      const errorMsg = 'L1RedemptionHandlerRegistry has not been initialized yet.';
+      logger.error(errorMsg);
+      // Depending on strictness, you might want to throw an error
+      // For now, returning null to allow services to fail gracefully if they check the return value.
+      return null;
+    }
+    return this.handler;
   }
 
   public clear(): void {
-    this.handlers.clear();
-    logger.info('L1RedemptionHandlerRegistry cleared.');
+    this.handler = null;
+    this.isInitialized = false;
+    logger.info('L1RedemptionHandlerRegistry cleared and reset.');
   }
 }
 

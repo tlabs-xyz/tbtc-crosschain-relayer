@@ -15,6 +15,7 @@ import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
 import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
 
 let effectiveChainConfigs: AnyChainConfig[] = [];
 
@@ -226,6 +227,17 @@ export async function initializeAllChains(): Promise<void> {
   await chainHandlerRegistry.initialize(chainConfigsArray);
   logger.info('ChainHandlerRegistry initialized for all chains.');
 
+  // Initialize L1 Redemption Handler Registry
+  try {
+    await l1RedemptionHandlerRegistry.initialize(chainConfigsArray);
+    logger.info('L1RedemptionHandlerRegistry initialized.');
+  } catch (error) {
+    logErrorContext(
+      'Failed to initialize L1RedemptionHandlerRegistry. L2 redemptions may not be processed.',
+      error,
+    );
+  }
+
   // Initialize handlers and setup listeners concurrently
   const initLimit = pLimit(5); // Limit concurrency for initialization
   const initializationPromises = chainHandlerRegistry.list().map((handler) =>
@@ -267,6 +279,7 @@ export async function initializeAllL2RedemptionServices(): Promise<void> {
         logger.info(`Initializing L2RedemptionService for ${chainName}...`);
         try {
           const service = await L2RedemptionService.create(config);
+          await service.startListening(); // Start listening for events
           l2RedemptionServices.set(chainName, service);
           logger.info(`L2RedemptionService for ${chainName} initialized and listeners set up.`);
         } catch (error) {
