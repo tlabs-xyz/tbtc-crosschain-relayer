@@ -141,11 +141,15 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             for (const event of response.data) {
               await this.handleSuiDepositEvent(event);
             }
-          }
 
-          // Update cursor for pagination if there are more events
-          if (response.hasNextPage && response.nextCursor) {
-            this.lastEventCursor = response.nextCursor as any;
+            // Update cursor after processing events to avoid reprocessing the same events
+            // This should be done whenever we have a nextCursor, regardless of hasNextPage
+            if (response.nextCursor) {
+              this.lastEventCursor = response.nextCursor as any;
+              logger.debug(
+                `Updated SUI event cursor for ${this.config.chainName}: ${this.lastEventCursor}`,
+              );
+            }
           }
         } catch (error: any) {
           logErrorContext(`Error polling SUI events for ${this.config.chainName}`, error);
