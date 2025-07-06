@@ -18,6 +18,8 @@ export const getSuiCommonInput = (targetNetwork: NETWORK): PartialDeep<SuiChainC
     enableL2Redemption: false,
     // Default Gas Object ID for Sui transactions, optional. Can be overridden by specific ENV or config.
     suiGasObjectId: getEnv('SUI_DEFAULT_GAS_OBJECT_ID', ''),
+    // Use polling for Sui chains
+    useEndpoint: false,
     // Other Sui-specific common defaults can be added here
   };
 };
