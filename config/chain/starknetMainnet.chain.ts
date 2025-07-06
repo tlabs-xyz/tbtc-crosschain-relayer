@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { getEnv } from '../../utils/Env.js';
 import type { StarknetChainConfigSchema } from '../schemas/starknet.chain.schema.js';
 import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
-import { getCommonChainInput } from './common.chain.js';
+import { getCommonChainInput, STARKNET_L1_CONTRACT_ADDRESSES } from './common.chain.js';
 
 type StarknetChainInput = z.input<typeof StarknetChainConfigSchema>;
 
@@ -33,7 +33,7 @@ export const getStarknetMainnetChainInput = (): StarknetChainInput => {
     vaultAddress: getEnv('STARKNET_MAINNET_VAULT_ADDRESS', common.vaultAddress as string),
     l1ContractAddress: getEnv(
       'STARKNET_MAINNET_L1_CONTRACT_ADDRESS',
-      common.l1ContractAddress as string,
+      STARKNET_L1_CONTRACT_ADDRESSES[NETWORK.MAINNET],
     ),
     l1StartBlock: 22670140,
   };
