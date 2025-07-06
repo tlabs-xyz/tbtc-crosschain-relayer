@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { type Deposit } from '../types/Deposit.type.js';
 import { type FundingTransaction } from '../types/FundingTransaction.type.js';
-import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
+import { getTransactionHash } from './GetTransactionHash.js';
 import { DepositStore } from './DepositStore.js';
 import logger from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -95,6 +95,11 @@ export const getDepositKey = (
   let hashToUse = fundingTxHash;
   if (reverse) {
     hashToUse = reverseHexString(fundingTxHash);
+    logger.debug('getDepositKey reversal:', {
+      original: fundingTxHash,
+      reversed: hashToUse,
+      outputIndex: fundingOutputIndex,
+    });
   }
   // Use uint32 for output index to match on-chain contract
   const types = ['bytes32', 'uint32'];
@@ -131,16 +136,35 @@ export const createDeposit = (
   l2Sender: string,
   chainId: string,
 ): Deposit => {
-  const fundingTxHash = getFundingTxHash(fundingTx);
-  const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
+  // For deposit ID calculation, we need to match the reference script's behavior:
+  // 1. Use Bitcoin format hash (reversed)
+  // 2. getDepositId will reverse it back to big-endian for keccak256
+  
+  // Calculate Bitcoin transaction hash (double SHA256 + reverse)
+  // This works for all chains including SUI
+  const bitcoinTxHash = getTransactionHash(fundingTx); // This returns reversed hash
+  const fundingTxHashHex = '0x' + bitcoinTxHash;
+  
+  const depositId = getDepositId(fundingTxHashHex, reveal.fundingOutputIndex);
+  
+  // Debug logging for hash transformations
+  logger.debug('Deposit hash transformations:', {
+    chainId,
+    bitcoinTxHash,
+    fundingTxHashHex,
+    outputIndex: reveal.fundingOutputIndex,
+    depositId,
+    depositIdHex: '0x' + ethers.BigNumber.from(depositId).toHexString().slice(2).padStart(64, '0'),
+  });
+  
   const deposit: Deposit = {
     id: depositId,
     chainId: chainId,
-    fundingTxHash: fundingTxHash,
+    fundingTxHash: fundingTxHashHex,
     outputIndex: reveal.fundingOutputIndex,
     hashes: {
       btc: {
-        btcTxHash: getTransactionHash(fundingTx),
+        btcTxHash: bitcoinTxHash,
       },
       eth: {
         initializeTxHash: null,

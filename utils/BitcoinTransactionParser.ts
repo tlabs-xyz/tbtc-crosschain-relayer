@@ -1,6 +1,7 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
+import logger from './Logger.js';
 
 /**
  * Error classes for Bitcoin transaction parsing
@@ -231,6 +232,12 @@ export function parseFundingTransaction(bytes: number[]): FundingTransaction {
     const buffer = Buffer.from(bytes);
     let offset = 0;
 
+    logger.debug('Parsing Bitcoin transaction', {
+      totalLength: bytes.length,
+      first16Bytes: bytes.slice(0, 16),
+      hexPreview: buffer.toString('hex').slice(0, 32) + '...',
+    });
+
     // Read version (4 bytes, little-endian)
     if (offset + 4 > buffer.length) {
       throw new InvalidTransactionFormatError('Buffer too short to read version');
@@ -350,12 +357,23 @@ export function parseFundingTransaction(bytes: number[]): FundingTransaction {
     const inputCountHex = inputCount.toString(16).padStart(2, '0');
     const outputCountHex = outputCount.toString(16).padStart(2, '0');
 
-    return {
-      version: toLittleEndianHex(version),
-      inputVector: `${inputCountHex}${inputVectorHex}`,
-      outputVector: `${outputCountHex}${outputVectorHex}`,
-      locktime: toLittleEndianHex(locktime),
+    const result = {
+      version: '0x' + toLittleEndianHex(version),
+      inputVector: '0x' + `${inputCountHex}${inputVectorHex}`,
+      outputVector: '0x' + `${outputCountHex}${outputVectorHex}`,
+      locktime: '0x' + toLittleEndianHex(locktime),
     };
+
+    logger.debug('Parsed Bitcoin transaction result', {
+      version: result.version,
+      inputCount: inputCount,
+      outputCount: outputCount,
+      inputVectorLen: result.inputVector.length,
+      outputVectorLen: result.outputVector.length,
+      locktime: result.locktime,
+    });
+
+    return result;
   } catch (error) {
     if (error instanceof BitcoinParsingError) {
       throw error;

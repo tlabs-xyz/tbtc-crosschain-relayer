@@ -327,6 +327,14 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
       // Create deposit using the parsed event data
       // Note: The 0x prefix handling is done in BaseChainHandler.initializeDeposit for SUI chains
+      logger.debug('Creating deposit from parsed SUI event', {
+        fundingTxVersion: parsedEvent.fundingTransaction.version,
+        fundingOutputIndex: parsedEvent.reveal.fundingOutputIndex,
+        depositOwner: parsedEvent.depositOwner,
+        sender: parsedEvent.sender,
+        chainName: this.config.chainName,
+      });
+
       const deposit = createDeposit(
         parsedEvent.fundingTransaction,
         revealWithVault,
@@ -342,6 +350,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         fundingOutputIndex: parsedEvent.reveal.fundingOutputIndex,
         chainName: this.config.chainName,
         status: deposit.status,
+        fundingTxHash: deposit.fundingTxHash,
+        outputIndex: deposit.outputIndex,
       });
 
       // Check if deposit already exists to prevent duplicates

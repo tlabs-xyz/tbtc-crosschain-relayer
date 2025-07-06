@@ -111,9 +111,20 @@ function parseSuiReveal(bytes: number[]): Reveal {
     const buffer = Buffer.from(bytes);
     let offset = 0;
 
+    logger.debug('Parsing SUI reveal data', {
+      totalLength: bytes.length,
+      first16Bytes: bytes.slice(0, 16),
+      hexPreview: buffer.toString('hex').slice(0, 32) + '...',
+    });
+
     // Read funding output index (4 bytes, BIG-ENDIAN as per sui-event-listener.cjs)
     // NOTE: SUI uses BIG-ENDIAN but L1 expects LITTLE-ENDIAN, so we keep as number
     const fundingOutputIndex = buffer.readUInt32BE(offset);
+    logger.debug('Read fundingOutputIndex', {
+      bytes: Array.from(buffer.subarray(offset, offset + 4)),
+      asBE: fundingOutputIndex,
+      asLE: buffer.readUInt32LE(offset),
+    });
     offset += SUI_REVEAL_DATA_LENGTHS.FUNDING_OUTPUT_INDEX;
 
     // Read blinding factor (8 bytes)
@@ -170,6 +181,12 @@ export function parseDepositInitializedEvent(
       return null;
     }
 
+    logger.debug('Parsing SUI DepositInitialized event', {
+      chainName,
+      txDigest: event.id?.txDigest,
+      eventType: event.type,
+    });
+
     // Parse event data according to the Move struct
     const eventData = event.parsedJson as DepositInitializedEventData;
 
@@ -211,13 +228,39 @@ export function parseDepositInitializedEvent(
       return null;
     }
 
+    logger.debug('Parsed binary fields from SUI event', {
+      chainName,
+      fundingTxLength: fundingTxBytes.length,
+      fundingTxFirst8: fundingTxBytes.slice(0, 8),
+      revealLength: revealBytes.length,
+      revealFirst8: revealBytes.slice(0, 8),
+      depositOwnerLength: depositOwnerBytes.length,
+      senderLength: senderBytes.length,
+    });
+
     // Parse Bitcoin transaction and reveal data
     const fundingTransaction = parseFundingTransaction(fundingTxBytes);
     const reveal = parseSuiReveal(revealBytes);  // Use SUI-specific parser
 
+    logger.debug('Parsed Bitcoin transaction and reveal', {
+      chainName,
+      fundingTxVersion: fundingTransaction.version,
+      fundingTxInputVector: fundingTransaction.inputVector?.slice(0, 16) + '...',
+      fundingTxOutputVector: fundingTransaction.outputVector?.slice(0, 16) + '...',
+      revealFundingOutputIndex: reveal.fundingOutputIndex,
+      revealBlindingFactor: reveal.blindingFactor,
+      revealWalletPubKeyHash: reveal.walletPubKeyHash,
+    });
+
     // Convert SUI addresses to hex format
     const depositOwner = convertBinaryToSuiAddress(depositOwnerBytes);
     const sender = convertBinaryToSuiAddress(senderBytes);
+
+    logger.debug('Converted SUI addresses', {
+      chainName,
+      depositOwner,
+      sender,
+    });
 
     return {
       fundingTransaction,
