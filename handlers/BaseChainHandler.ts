@@ -95,9 +95,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       // For other non-EVM chains, check if they need L1 signer
       // The L1 Bitcoin Depositor is always on EVM (Ethereum), so we need an L1 signer
       if ('privateKey' in this.config && this.config.privateKey) {
-        logger.info(
-          `Setting up L1 signer for non-EVM chain ${this.config.chainName}`,
-        );
+        logger.info(`Setting up L1 signer for non-EVM chain ${this.config.chainName}`);
         this.l1Signer = new ethers.Wallet(this.config.privateKey as string, this.l1Provider);
         this.nonceManagerL1 = new NonceManager(this.l1Signer);
 
@@ -122,12 +120,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     // Only include platforms that are actually needed
     const platforms: any[] = [evm];
     const chainConfigs: any = {};
-    
+
     // Always add Ethereum config since we need to parse L1 transactions
     chainConfigs.Ethereum = {
       rpc: this.config.l1Rpc,
     };
-    
+
     // Only add Solana if this is a Solana chain
     if (this.config.chainType === CHAIN_TYPE.SOLANA) {
       platforms.push(solana);
@@ -135,7 +133,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         rpc: this.config.l2Rpc,
       };
     }
-    
+
     // Only add SUI if this is a SUI chain
     if (this.config.chainType === CHAIN_TYPE.SUI) {
       platforms.push(sui);
@@ -274,7 +272,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   }
 
   // --- Core Deposit Logic (L1 Interactions) ---
-  
+
   /**
    * Transform L1OutputEvent data for SUI chains to ensure proper 0x prefix formatting
    * @param l1OutputEvent - The L1OutputEvent data to transform

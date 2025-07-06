@@ -63,7 +63,7 @@ export function getTransactionHash(fundingTx: FundingTransaction): string {
   const serializedTx = serializeTransaction(fundingTx);
   const hash = doubleSha256(serializedTx);
   const reversedHash = hash.reverse().toString('hex');
-  
+
   logger.debug('getTransactionHash calculation', {
     inputVersion: fundingTx.version,
     inputVectorLen: fundingTx.inputVector?.length,
@@ -73,7 +73,7 @@ export function getTransactionHash(fundingTx: FundingTransaction): string {
     hashBeforeReverse: Buffer.from(hash).reverse().toString('hex'), // Show original hash
     hashAfterReverse: reversedHash,
   });
-  
+
   return reversedHash;
 }
 

@@ -83,13 +83,16 @@ export function convertBinaryToSuiAddress(addressBytes: number[]): string {
  */
 const SUI_REVEAL_DATA_LENGTHS = {
   FUNDING_OUTPUT_INDEX: 4,
-  BLINDING_FACTOR: 8,  // 8 bytes for SUI
+  BLINDING_FACTOR: 8, // 8 bytes for SUI
   WALLET_PUBKEY_HASH: 20,
   REFUND_PUBKEY_HASH: 20,
   REFUND_LOCKTIME: 4,
 } as const;
 
-const SUI_REVEAL_TOTAL_LENGTH = Object.values(SUI_REVEAL_DATA_LENGTHS).reduce((sum, len) => sum + len, 0); // 56 bytes
+const SUI_REVEAL_TOTAL_LENGTH = Object.values(SUI_REVEAL_DATA_LENGTHS).reduce(
+  (sum, len) => sum + len,
+  0,
+); // 56 bytes
 
 /**
  * Parses SUI-specific 56-byte reveal data
@@ -128,15 +131,21 @@ function parseSuiReveal(bytes: number[]): Reveal {
     offset += SUI_REVEAL_DATA_LENGTHS.FUNDING_OUTPUT_INDEX;
 
     // Read blinding factor (8 bytes)
-    const blindingFactor = bytesToHex(Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.BLINDING_FACTOR)));
+    const blindingFactor = bytesToHex(
+      Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.BLINDING_FACTOR)),
+    );
     offset += SUI_REVEAL_DATA_LENGTHS.BLINDING_FACTOR;
 
     // Read wallet public key hash (20 bytes)
-    const walletPubKeyHash = bytesToHex(Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.WALLET_PUBKEY_HASH)));
+    const walletPubKeyHash = bytesToHex(
+      Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.WALLET_PUBKEY_HASH)),
+    );
     offset += SUI_REVEAL_DATA_LENGTHS.WALLET_PUBKEY_HASH;
 
     // Read refund public key hash (20 bytes)
-    const refundPubKeyHash = bytesToHex(Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.REFUND_PUBKEY_HASH)));
+    const refundPubKeyHash = bytesToHex(
+      Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.REFUND_PUBKEY_HASH)),
+    );
     offset += SUI_REVEAL_DATA_LENGTHS.REFUND_PUBKEY_HASH;
 
     // Read refund locktime (4 bytes, BIG-ENDIAN to match fundingOutputIndex)
@@ -240,7 +249,7 @@ export function parseDepositInitializedEvent(
 
     // Parse Bitcoin transaction and reveal data
     const fundingTransaction = parseFundingTransaction(fundingTxBytes);
-    const reveal = parseSuiReveal(revealBytes);  // Use SUI-specific parser
+    const reveal = parseSuiReveal(revealBytes); // Use SUI-specific parser
 
     logger.debug('Parsed Bitcoin transaction and reveal', {
       chainName,

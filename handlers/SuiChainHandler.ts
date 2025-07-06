@@ -81,8 +81,10 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   private lastEventCursor: string | null = null;
 
   protected async setupL2Listeners(): Promise<void> {
-    logger.info(`Setting up L2 listeners for ${this.config.chainName}, useEndpoint: ${this.config.useEndpoint}, suiClient: ${!!this.suiClient}`);
-    
+    logger.info(
+      `Setting up L2 listeners for ${this.config.chainName}, useEndpoint: ${this.config.useEndpoint}, suiClient: ${!!this.suiClient}`,
+    );
+
     if (this.config.useEndpoint || !this.suiClient) {
       logger.info(
         `Sui L2 Listeners skipped for ${this.config.chainName} (using Endpoint: ${this.config.useEndpoint} or client not initialized: ${!this.suiClient}).`,
@@ -93,7 +95,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     try {
       // SUI doesn't support WebSocket subscriptions, so we use polling
       const POLLING_INTERVAL_MS = 5000; // Poll every 5 seconds
-      
+
       const eventFilter: SuiEventFilter = {
         MoveModule: {
           package: this.config.l2PackageId,
@@ -104,8 +106,10 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       // Start polling for events
       this.pollingInterval = setInterval(async () => {
         try {
-          logger.debug(`Polling SUI events for ${this.config.chainName}, cursor: ${this.lastEventCursor || 'null'}`);
-          
+          logger.debug(
+            `Polling SUI events for ${this.config.chainName}, cursor: ${this.lastEventCursor || 'null'}`,
+          );
+
           const response = await this.suiClient!.queryEvents({
             query: eventFilter,
             cursor: this.lastEventCursor as any,
@@ -113,11 +117,15 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             order: 'ascending',
           });
 
-          logger.debug(`SUI event query response for ${this.config.chainName}: ${response.data.length} events, hasNextPage: ${response.hasNextPage}`);
+          logger.debug(
+            `SUI event query response for ${this.config.chainName}: ${response.data.length} events, hasNextPage: ${response.hasNextPage}`,
+          );
 
           if (response.data.length > 0) {
-            logger.info(`Found ${response.data.length} new SUI events for ${this.config.chainName}`);
-            
+            logger.info(
+              `Found ${response.data.length} new SUI events for ${this.config.chainName}`,
+            );
+
             for (const event of response.data) {
               await this.handleSuiDepositEvent(event);
             }
@@ -132,7 +140,9 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         }
       }, POLLING_INTERVAL_MS);
 
-      logger.info(`Sui L2 event polling started for ${this.config.chainName} (interval: ${POLLING_INTERVAL_MS}ms)`);
+      logger.info(
+        `Sui L2 event polling started for ${this.config.chainName} (interval: ${POLLING_INTERVAL_MS}ms)`,
+      );
     } catch (error: any) {
       logErrorContext(`Failed to setup Sui L2 listeners for ${this.config.chainName}`, error);
       throw error;
@@ -196,7 +206,9 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           order: 'descending',
         });
 
-        logger.debug(`checkForPastDeposits batch for ${this.config.chainName}: ${response.data.length} events`);
+        logger.debug(
+          `checkForPastDeposits batch for ${this.config.chainName}: ${response.data.length} events`,
+        );
         totalEvents += response.data.length;
 
         for (const eventData of response.data) {
@@ -207,7 +219,9 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         cursor = response.nextCursor;
       }
 
-      logger.debug(`checkForPastDeposits completed for ${this.config.chainName}: ${totalEvents} total events processed`);
+      logger.debug(
+        `checkForPastDeposits completed for ${this.config.chainName}: ${totalEvents} total events processed`,
+      );
 
       logger.debug(
         `Checked past deposits for ${this.config.chainName}: ${options.pastTimeInMinutes} minutes`,
@@ -303,8 +317,10 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
    */
   private async handleSuiDepositEvent(event: SuiEvent, _isPastEvent = false): Promise<void> {
     try {
-      logger.debug(`handleSuiDepositEvent called for ${this.config.chainName}, event type: ${event.type}`);
-      
+      logger.debug(
+        `handleSuiDepositEvent called for ${this.config.chainName}, event type: ${event.type}`,
+      );
+
       // Use the utility function to parse the event data
       const parsedEvent = parseDepositInitializedEvent(event, this.config.chainName);
 
@@ -313,7 +329,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         logger.debug(`Event parsing returned null for ${this.config.chainName}`);
         return;
       }
-      
+
       logger.info(`Successfully parsed SUI deposit event for ${this.config.chainName}`);
 
       // For SUI, we need to set the correct vault address since it's not included in the event
@@ -322,7 +338,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         ...parsedEvent.reveal,
         vault: this.config.vaultAddress,
       };
-      
+
       logger.info(`Setting vault address for SUI deposit: ${this.config.vaultAddress}`);
 
       // Create deposit using the parsed event data
@@ -388,31 +404,33 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     try {
       // Get the correct emitter chain and address based on network
       const emitterChain = this.config.network === NETWORK.MAINNET ? '2' : '10002'; // Ethereum mainnet or Sepolia
-      
+
       // The emitter is the Token Bridge contract on L1 (Ethereum)
       // Wormhole Token Bridge addresses:
       // Mainnet: 0x3ee18B2214AFF97000D974cf647E7C347E8fa585
       // Sepolia: 0xDB5492265f6038831E89f495670fF909aDe94bd9
-      const tokenBridgeAddress = this.config.network === NETWORK.MAINNET 
-        ? '0x3ee18B2214AFF97000D974cf647E7C347E8fa585'
-        : '0xDB5492265f6038831E89f495670fF909aDe94bd9';
+      const tokenBridgeAddress =
+        this.config.network === NETWORK.MAINNET
+          ? '0x3ee18B2214AFF97000D974cf647E7C347E8fa585'
+          : '0xDB5492265f6038831E89f495670fF909aDe94bd9';
       const emitterAddress = tokenBridgeAddress.slice(2).toLowerCase().padStart(64, '0');
-      
+
       const vaaId = `${emitterChain}/${emitterAddress}/${sequence}`;
       logger.debug(`Fetching VAA with ID: ${vaaId}`);
-      
+
       // Wormhole API endpoint
-      const wormholeApi = this.config.network === NETWORK.MAINNET 
-        ? 'https://api.wormholescan.io' 
-        : 'https://api.testnet.wormholescan.io';
-      
+      const wormholeApi =
+        this.config.network === NETWORK.MAINNET
+          ? 'https://api.wormholescan.io'
+          : 'https://api.testnet.wormholescan.io';
+
       const maxAttempts = 20; // 10 minutes with 30 second intervals
       let attempts = 0;
-      
+
       while (attempts < maxAttempts) {
         try {
           const response = await fetch(`${wormholeApi}/api/v1/vaas/${vaaId}`);
-          
+
           if (response.ok) {
             const data = await response.json();
             if (data && data.data && data.data.vaa) {
@@ -420,21 +438,23 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
               return data.data.vaa;
             }
           } else if (response.status === 404) {
-            logger.debug(`VAA not ready yet for sequence ${sequence} (attempt ${attempts + 1}/${maxAttempts})`);
+            logger.debug(
+              `VAA not ready yet for sequence ${sequence} (attempt ${attempts + 1}/${maxAttempts})`,
+            );
           } else {
             logger.warn(`Unexpected response status ${response.status} when fetching VAA`);
           }
         } catch (error: any) {
           logger.warn(`Error fetching VAA: ${error.message}`);
         }
-        
+
         attempts++;
         if (attempts < maxAttempts) {
           logger.debug(`Waiting 30 seconds before retry...`);
-          await new Promise(resolve => setTimeout(resolve, 30000));
+          await new Promise((resolve) => setTimeout(resolve, 30000));
         }
       }
-      
+
       return null;
     } catch (error: any) {
       logErrorContext(`Error in fetchVAAFromAPI for sequence ${sequence}`, error);
@@ -457,13 +477,17 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       }
 
       logger.info(`Bridging deposit ${deposit.id} on Sui...`);
-      logger.info(`Using sequence ${deposit.wormholeInfo.transferSequence} from L1 tx ${deposit.wormholeInfo.txHash}`);
+      logger.info(
+        `Using sequence ${deposit.wormholeInfo.transferSequence} from L1 tx ${deposit.wormholeInfo.txHash}`,
+      );
 
       // Fetch VAA using Wormhole API directly
       const vaaBytes = await this.fetchVAAFromAPI(deposit.wormholeInfo.transferSequence);
-      
+
       if (!vaaBytes) {
-        logger.warn(`VAA not yet available for deposit ${deposit.id}, sequence ${deposit.wormholeInfo.transferSequence}`);
+        logger.warn(
+          `VAA not yet available for deposit ${deposit.id}, sequence ${deposit.wormholeInfo.transferSequence}`,
+        );
         return;
       }
 

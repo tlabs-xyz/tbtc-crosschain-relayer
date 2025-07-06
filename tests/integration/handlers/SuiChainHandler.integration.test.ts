@@ -75,7 +75,13 @@ jest.mock('@mysten/sui/client', () => ({
 
 jest.mock('@mysten/sui/keypairs/ed25519', () => ({
   Ed25519Keypair: {
-    fromSecretKey: jest.fn(),
+    fromSecretKey: jest.fn().mockReturnValue({
+      getPublicKey: jest.fn().mockReturnValue({
+        toSuiAddress: jest
+          .fn()
+          .mockReturnValue('0xmocksuiaddress1234567890abcdef1234567890abcdef1234567890abcdef12'),
+      }),
+    }),
   },
   __esModule: true,
 }));
@@ -111,7 +117,20 @@ jest.mock('@mysten/bcs', () => ({
       deserialize: jest.fn(),
       transform: jest.fn(),
     }),
+    vector: jest.fn().mockReturnValue({
+      serialize: jest.fn(),
+      deserialize: jest.fn(),
+      transform: jest.fn(),
+    }),
   },
+  __esModule: true,
+}));
+
+jest.mock('@mysten/sui/cryptography', () => ({
+  decodeSuiPrivateKey: jest.fn().mockReturnValue({
+    schema: 'ED25519',
+    secretKey: new Uint8Array(32),
+  }),
   __esModule: true,
 }));
 
@@ -119,6 +138,26 @@ jest.mock('@mysten/bcs', () => ({
 jest.mock('../../../config/index.js', () => ({
   chainConfigs: {},
   getAvailableChainKeys: () => ['suiTestnet'],
+}));
+
+// Mock the SuiMoveEventParser
+jest.mock('../../../utils/SuiMoveEventParser.js', () => ({
+  parseDepositInitializedEvent: jest.fn().mockReturnValue({
+    fundingTransaction: {
+      version: 1,
+      outputs: [{ value: '100000000' }],
+    },
+    reveal: {
+      fundingOutputIndex: 0,
+      blindingFactor: '0x' + '0'.repeat(64),
+      walletPubKeyHash: '0x' + '0'.repeat(40),
+      refundPubKeyHash: '0x' + '0'.repeat(40),
+      refundLocktime: '0x00000000',
+    },
+    depositOwner: '0xdeposit-owner',
+    sender: '0xsender',
+    txDigest: 'sui-tx-digest',
+  }),
 }));
 
 // Mock the Deposits utility module
@@ -214,7 +253,11 @@ describe('SuiChainHandler Integration Tests', () => {
 
       const ed25519Module = await import('@mysten/sui/keypairs/ed25519');
       (ed25519Module.Ed25519Keypair.fromSecretKey as jest.Mock).mockReturnValue({
-        publicKey: jest.fn().mockReturnValue('mock-public-key'),
+        getPublicKey: jest.fn().mockReturnValue({
+          toSuiAddress: jest
+            .fn()
+            .mockReturnValue('0xmocksuiaddress1234567890abcdef1234567890abcdef1234567890abcdef12'),
+        }),
       });
 
       // Initialize L2 components
@@ -227,16 +270,9 @@ describe('SuiChainHandler Integration Tests', () => {
       // Setup listeners
       await (handler as any).setupL2Listeners();
 
-      // Verify event subscription was called
-      expect(mockSuiClient.subscribeEvent).toHaveBeenCalledWith({
-        filter: {
-          MoveModule: {
-            package: mockConfig.l2PackageId,
-            module: 'bitcoin_depositor',
-          },
-        },
-        onMessage: expect.any(Function),
-      });
+      // Verify polling interval was set
+      expect((handler as any).pollingInterval).toBeDefined();
+      expect((handler as any).pollingInterval).not.toBeNull();
     });
 
     it('should handle checkpoint-based block management', async () => {
@@ -301,7 +337,11 @@ describe('SuiChainHandler Integration Tests', () => {
 
       const ed25519Module = await import('@mysten/sui/keypairs/ed25519');
       (ed25519Module.Ed25519Keypair.fromSecretKey as jest.Mock).mockReturnValue({
-        publicKey: jest.fn().mockReturnValue('mock-public-key'),
+        getPublicKey: jest.fn().mockReturnValue({
+          toSuiAddress: jest
+            .fn()
+            .mockReturnValue('0xmocksuiaddress1234567890abcdef1234567890abcdef1234567890abcdef12'),
+        }),
       });
 
       await (handler as any).initializeL2();
@@ -316,7 +356,7 @@ describe('SuiChainHandler Integration Tests', () => {
       );
 
       // Verify Wormhole context was used
-      expect((handler as any).wormhole.getChain).toHaveBeenCalledWith('Ethereum');
+      expect((handler as any).wormhole.getChain).toHaveBeenCalledWith('Sui');
     });
 
     it('should handle deposit finalization with Wormhole sequence extraction', async () => {
@@ -471,7 +511,7 @@ describe('SuiChainHandler Integration Tests', () => {
         query: {
           MoveModule: {
             package: mockConfig.l2PackageId,
-            module: 'bitcoin_depositor',
+            module: 'BitcoinDepositor',
           },
         },
         cursor: null,
@@ -482,7 +522,7 @@ describe('SuiChainHandler Integration Tests', () => {
         query: {
           MoveModule: {
             package: mockConfig.l2PackageId,
-            module: 'bitcoin_depositor',
+            module: 'BitcoinDepositor',
           },
         },
         cursor: 'cursor-1',
@@ -530,14 +570,28 @@ describe('SuiChainHandler Integration Tests', () => {
 
       const ed25519Module = await import('@mysten/sui/keypairs/ed25519');
       (ed25519Module.Ed25519Keypair.fromSecretKey as jest.Mock).mockReturnValue({
-        publicKey: jest.fn().mockReturnValue('mock-public-key'),
+        getPublicKey: jest.fn().mockReturnValue({
+          toSuiAddress: jest
+            .fn()
+            .mockReturnValue('0xmocksuiaddress1234567890abcdef1234567890abcdef1234567890abcdef12'),
+        }),
       });
+
+      // Mock wormhole to avoid initialization issues
+      (handler as any).wormhole = {
+        getChain: jest.fn().mockReturnValue({
+          getTBTCBridge: jest.fn().mockResolvedValue({
+            redeem: jest.fn().mockReturnValue([]),
+          }),
+        }),
+      };
 
       await (handler as any).initializeL2();
 
-      await expect((handler as any).setupL2Listeners()).rejects.toThrow(
-        'WebSocket connection failed',
-      );
+      // Since SUI uses polling, not WebSocket, setupL2Listeners won't throw
+      // Instead, we verify that it sets up polling interval correctly
+      await (handler as any).setupL2Listeners();
+      expect((handler as any).pollingInterval).toBeDefined();
     });
   });
 
@@ -585,7 +639,11 @@ describe('SuiChainHandler Integration Tests', () => {
 
       const ed25519Module = await import('@mysten/sui/keypairs/ed25519');
       (ed25519Module.Ed25519Keypair.fromSecretKey as jest.Mock).mockReturnValue({
-        publicKey: jest.fn().mockReturnValue('mock-public-key'),
+        getPublicKey: jest.fn().mockReturnValue({
+          toSuiAddress: jest
+            .fn()
+            .mockReturnValue('0xmocksuiaddress1234567890abcdef1234567890abcdef1234567890abcdef12'),
+        }),
       });
 
       // Mock complete Wormhole workflow
@@ -594,6 +652,9 @@ describe('SuiChainHandler Integration Tests', () => {
       });
 
       await (handler as any).initializeL2();
+
+      // Mock fetchVAAFromAPI to return a VAA
+      (handler as any).fetchVAAFromAPI = jest.fn().mockResolvedValue('base64-encoded-vaa-data');
 
       // Test the complete workflow
       const testDeposit = {
@@ -609,8 +670,8 @@ describe('SuiChainHandler Integration Tests', () => {
       await (handler as any).bridgeSuiDeposit(testDeposit);
 
       // Verify Wormhole components were called
-      expect((handler as any).wormhole.getChain).toHaveBeenCalledWith('Ethereum');
-      expect((handler as any).wormhole.getVaa).toHaveBeenCalled();
+      expect((handler as any).wormhole.getChain).toHaveBeenCalledWith('Sui');
+      expect((handler as any).fetchVAAFromAPI).toHaveBeenCalledWith('999');
     });
   });
 });

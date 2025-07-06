@@ -139,14 +139,14 @@ export const createDeposit = (
   // For deposit ID calculation, we need to match the reference script's behavior:
   // 1. Use Bitcoin format hash (reversed)
   // 2. getDepositId will reverse it back to big-endian for keccak256
-  
+
   // Calculate Bitcoin transaction hash (double SHA256 + reverse)
   // This works for all chains including SUI
   const bitcoinTxHash = getTransactionHash(fundingTx); // This returns reversed hash
   const fundingTxHashHex = '0x' + bitcoinTxHash;
-  
+
   const depositId = getDepositId(fundingTxHashHex, reveal.fundingOutputIndex);
-  
+
   // Debug logging for hash transformations
   logger.debug('Deposit hash transformations:', {
     chainId,
@@ -156,7 +156,7 @@ export const createDeposit = (
     depositId,
     depositIdHex: '0x' + ethers.BigNumber.from(depositId).toHexString().slice(2).padStart(64, '0'),
   });
-  
+
   const deposit: Deposit = {
     id: depositId,
     chainId: chainId,
