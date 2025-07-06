@@ -20,12 +20,18 @@ export const VAULT_ADDRESSES = {
   [NETWORK.DEVNET]: '0xB5679dE944A79732A75CE556191DF11F489448d5',
 } as const;
 
-// StarkNetBitcoinDepositor contract addresses for L1 operations
-// TODO: Other networks use different contracts, we need to update this
-export const L1_CONTRACT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0xC9031f76006da0BD4bFa9E02aDf0d448dB3BC155', // Mainnet deployer contract
-  [NETWORK.TESTNET]: '0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA', // Sepolia testnet address
-  [NETWORK.DEVNET]: '0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA', // Development environment address
+// StarkNet-specific L1 Bitcoin depositor contract addresses
+export const STARKNET_L1_CONTRACT_ADDRESSES = {
+  [NETWORK.MAINNET]: '0xC9031f76006da0BD4bFa9E02aDf0d448dB3BC155', // StarkNet Mainnet L1 depositor
+  [NETWORK.TESTNET]: '0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA', // StarkNet Sepolia testnet L1 depositor
+  [NETWORK.DEVNET]: '0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA', // StarkNet Development environment L1 depositor
+} as const;
+
+// Sui-specific L1 Bitcoin depositor contract addresses
+export const SUI_L1_CONTRACT_ADDRESSES = {
+  [NETWORK.MAINNET]: '0xb810AbD43d8FCFD812d6FEB14fefc236E92a341A', // Sui Mainnet L1 depositor (placeholder - update with actual address)
+  [NETWORK.TESTNET]: '0x25b614064293A6B9012E82Bb31BC2B1Be34e36Cb', // Sui Testnet L1 depositor (placeholder - update with actual address)
+  [NETWORK.DEVNET]: '0x25b614064293A6B9012E82Bb31BC2B1Be34e36Cb', // Sui Development environment L1 depositor (placeholder - update with actual address)
 } as const;
 
 // =============================================================================
@@ -100,6 +106,7 @@ export const FEATURE_FLAGS = {
 /**
  * Returns a partial common chain input configuration for the given network.
  * Used to provide shared defaults and structure for EVM, Sui, and other chain configs.
+ * Note: l1ContractAddress is not included here as each chain type should set it directly.
  * @param targetNetwork The network to generate config for (mainnet, testnet, devnet)
  * @returns Partial<CommonChainInput> with shared defaults
  */
@@ -114,8 +121,6 @@ export const getCommonChainInput = (targetNetwork: NETWORK): Partial<CommonChain
         ? getEnv('ETHEREUM_MAINNET_RPC', PUBLIC_RPCS['ethereum-mainnet'])
         : getEnv('ETHEREUM_SEPOLIA_RPC', PUBLIC_RPCS['ethereum-sepolia']),
     vaultAddress: VAULT_ADDRESSES[targetNetwork] || VAULT_ADDRESSES[NETWORK.TESTNET],
-    l1ContractAddress:
-      L1_CONTRACT_ADDRESSES[targetNetwork] || L1_CONTRACT_ADDRESSES[NETWORK.TESTNET],
     l1Confirmations: l1ConfValue,
     enableL2Redemption:
       targetNetwork === NETWORK.MAINNET
