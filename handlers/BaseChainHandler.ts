@@ -702,6 +702,21 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         return true;
       }
 
+      // For deposits that are freshly created but have been updated once (common with SUI deposits),
+      // allow immediate processing if they were created recently and are still in early stages
+      const timeSinceCreation = now - deposit.dates.createdAt;
+      if (timeSinceCreation < 10 * 60 * 1000) {
+        // 10 minutes
+        // Process immediately if deposit is in early stages (QUEUED or INITIALIZED)
+        if (deposit.status === 0 || deposit.status === 1) {
+          // QUEUED or INITIALIZED
+          logger.debug(
+            `FILTER | Deposit ${deposit.id} is in early stage (status: ${deposit.status}) and created recently (${timeSinceCreation}ms ago), processing immediately`,
+          );
+          return true;
+        }
+      }
+
       // Otherwise, process only if enough time has passed since last activity
       const timeSinceLastActivity = now - deposit.dates.lastActivityAt;
       const shouldProcess = timeSinceLastActivity > DEFAULT_DEPOSIT_RETRY_MS;
