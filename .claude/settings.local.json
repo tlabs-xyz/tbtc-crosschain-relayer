@@ -23,7 +23,8 @@
       "Bash(yarn install)",
       "Bash(yarn format:fix)",
       "Bash(gh run view:*)",
-      "Bash(gh run list:*)"
+      "Bash(gh run list:*)",
+      "Bash(grep:*)"
     ],
     "deny": [
       "Bash(git push:*--force*)",
@@ -34,5 +35,6 @@
       "Bash(git push:* -f)",
       "Bash(git push:* -f *)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": false
 }

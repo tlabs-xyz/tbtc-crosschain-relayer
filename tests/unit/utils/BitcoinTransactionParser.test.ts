@@ -176,8 +176,8 @@ describe('BitcoinTransactionParser', () => {
       const txBytes = createMinimalTransaction();
       const result = parseFundingTransaction(txBytes);
 
-      expect(result.version).toBe('01000000'); // Version 1 in little-endian format
-      expect(result.locktime).toBe('00000000'); // Locktime 0 in little-endian format
+      expect(result.version).toBe('0x01000000'); // Version 1 in little-endian format
+      expect(result.locktime).toBe('0x00000000'); // Locktime 0 in little-endian format
       expect(result.inputVector).toBeDefined();
       expect(result.outputVector).toBeDefined();
     });
@@ -257,8 +257,8 @@ describe('BitcoinTransactionParser', () => {
       tx.push(0x00, 0x00, 0x00, 0x00);
 
       const result = parseFundingTransaction(tx);
-      expect(result.version).toBe('01000000'); // Version 1 in little-endian format
-      expect(result.locktime).toBe('00000000'); // Locktime 0 in little-endian format
+      expect(result.version).toBe('0x01000000'); // Version 1 in little-endian format
+      expect(result.locktime).toBe('0x00000000'); // Locktime 0 in little-endian format
       expect(result.inputVector).toBeDefined();
       expect(result.outputVector).toBeDefined();
     });
@@ -534,12 +534,12 @@ describe('BitcoinTransactionParser', () => {
     // Contract: 0x40c74a5f0b0e6CC3Ae4E8dD2Db46d372504445DA
     // Ethereum TX: 0xc50021cf0f103c307b5fcd025e657621aa72cf72345625ce7c3d3cbe0b6db90c
     const REAL_TBTC_TRANSACTION = {
-      version: '02000000', // Version 2 (little-endian)
+      version: '0x02000000', // Version 2 (little-endian)
       inputVector:
-        '014a2d47df7d16bc0d5523a7b9bf2d9edfe7fc78eb1cc4b2036dc62be52446981e0100000000fdffffff',
+        '0x014a2d47df7d16bc0d5523a7b9bf2d9edfe7fc78eb1cc4b2036dc62be52446981e0100000000fdffffff',
       outputVector:
-        '0240420f0000000000220020401a160a6d28b39260526c9b9dfc3e9ef4a4fb946a12dea4dac76c699142ba7cec9c060700000000160014a1ba8e6eca8f24ee5048abde56e0b8a45931e34a',
-      locktime: '895e4500', // Locktime (little-endian)
+        '0x0240420f0000000000220020401a160a6d28b39260526c9b9dfc3e9ef4a4fb946a12dea4dac76c699142ba7cec9c060700000000160014a1ba8e6eca8f24ee5048abde56e0b8a45931e34a',
+      locktime: '0x895e4500', // Locktime (little-endian)
     } as const;
 
     const REAL_REVEAL_DATA = {
@@ -555,7 +555,12 @@ describe('BitcoinTransactionParser', () => {
      * Helper function to create full transaction hex from components
      */
     const createFullTransactionHex = (tx: typeof REAL_TBTC_TRANSACTION): string => {
-      return tx.version + tx.inputVector + tx.outputVector + tx.locktime;
+      // Remove '0x' prefix from each component before concatenating
+      const version = tx.version.slice(2);
+      const inputVector = tx.inputVector.slice(2);
+      const outputVector = tx.outputVector.slice(2);
+      const locktime = tx.locktime.slice(2);
+      return version + inputVector + outputVector + locktime;
     };
 
     test('parses real TBTC testnet funding transaction from Ethereum L1BitcoinDepositor', () => {
@@ -572,8 +577,8 @@ describe('BitcoinTransactionParser', () => {
       expect(parsed.locktime).toBe(REAL_TBTC_TRANSACTION.locktime);
 
       // Verify transaction structure characteristics
-      expect(parsed.inputVector.substring(0, 2)).toBe('01'); // 1 input
-      expect(parsed.outputVector.substring(0, 2)).toBe('02'); // 2 outputs
+      expect(parsed.inputVector.substring(2, 4)).toBe('01'); // 1 input (skip '0x' prefix)
+      expect(parsed.outputVector.substring(2, 4)).toBe('02'); // 2 outputs (skip '0x' prefix)
     });
 
     test('parses real TBTC testnet reveal data from Ethereum L1BitcoinDepositor', () => {
@@ -600,7 +605,7 @@ describe('BitcoinTransactionParser', () => {
       const inputVector = REAL_TBTC_TRANSACTION.inputVector;
 
       // Parse input vector manually to understand structure
-      let offset = 0;
+      let offset = 2; // Skip '0x' prefix
       const inputCount = parseInt(inputVector.substring(offset, offset + 2), 16);
       expect(inputCount).toBe(1); // 1 input
       offset += 2;
@@ -628,7 +633,7 @@ describe('BitcoinTransactionParser', () => {
       // Analyze the output vector structure using real data
       const outputVector = REAL_TBTC_TRANSACTION.outputVector;
 
-      let offset = 0;
+      let offset = 2; // Skip '0x' prefix
       const outputCount = parseInt(outputVector.substring(offset, offset + 2), 16);
       expect(outputCount).toBe(2); // 2 outputs (typical TBTC pattern)
       offset += 2;
@@ -679,7 +684,7 @@ describe('BitcoinTransactionParser', () => {
     test('compares real data characteristics with expected TBTC patterns', () => {
       // Real transaction uses version 2 (standard Bitcoin transaction version)
       // Note: version is stored in little-endian format, so we need to convert it properly
-      const versionBytes = hexToBytes('0x' + REAL_TBTC_TRANSACTION.version);
+      const versionBytes = hexToBytes(REAL_TBTC_TRANSACTION.version);
       const versionDecimal =
         versionBytes[0] +
         (versionBytes[1] << 8) +
@@ -689,7 +694,7 @@ describe('BitcoinTransactionParser', () => {
 
       // Real transaction uses specific locktime (block height or timestamp)
       // Note: locktime is also stored in little-endian format
-      const locktimeBytes = hexToBytes('0x' + REAL_TBTC_TRANSACTION.locktime);
+      const locktimeBytes = hexToBytes(REAL_TBTC_TRANSACTION.locktime);
       const locktimeDecimal =
         locktimeBytes[0] +
         (locktimeBytes[1] << 8) +
@@ -698,8 +703,8 @@ describe('BitcoinTransactionParser', () => {
       expect(locktimeDecimal).toBe(4546185); // Actual computed value from little-endian conversion
 
       // Real transaction follows typical TBTC pattern: 1 input, 2 outputs
-      const inputCount = parseInt(REAL_TBTC_TRANSACTION.inputVector.substring(0, 2), 16);
-      const outputCount = parseInt(REAL_TBTC_TRANSACTION.outputVector.substring(0, 2), 16);
+      const inputCount = parseInt(REAL_TBTC_TRANSACTION.inputVector.substring(2, 4), 16); // Skip '0x' prefix
+      const outputCount = parseInt(REAL_TBTC_TRANSACTION.outputVector.substring(2, 4), 16); // Skip '0x' prefix
       expect(inputCount).toBe(1);
       expect(outputCount).toBe(2);
 

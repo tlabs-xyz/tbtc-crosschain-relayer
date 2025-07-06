@@ -109,19 +109,15 @@ describe('Deposits Util', () => {
     const mockChainId = '1';
     const mockTimestamp = 1678886400000; // March 15, 2023 12:00:00 PM UTC
 
-    let getFundingTxHashSpy: jest.SpyInstance;
     let getTransactionHashSpy: jest.SpyInstance;
     let logDepositCreatedSpy: jest.SpyInstance;
     let dateNowSpy: jest.SpyInstance;
 
     beforeEach(() => {
       // Mock dependencies
-      getFundingTxHashSpy = jest
-        .spyOn(GetTransactionHash, 'getFundingTxHash')
-        .mockReturnValue('0x' + 'a'.repeat(64));
       getTransactionHashSpy = jest
         .spyOn(GetTransactionHash, 'getTransactionHash')
-        .mockReturnValue('0x' + 'a'.repeat(64));
+        .mockReturnValue('a'.repeat(64)); // No 0x prefix
       logDepositCreatedSpy = jest.spyOn(AuditLog, 'logDepositCreated').mockImplementation();
       dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(mockTimestamp);
 
@@ -157,7 +153,7 @@ describe('Deposits Util', () => {
       expect(deposit.chainId).toBe(mockChainId);
       expect(deposit.fundingTxHash).toBe(expectedFundingTxHash);
       expect(deposit.outputIndex).toBe(mockReveal.fundingOutputIndex);
-      expect(deposit.hashes.btc.btcTxHash).toBe('0x' + 'a'.repeat(64));
+      expect(deposit.hashes.btc.btcTxHash).toBe('a'.repeat(64));
       expect(deposit.hashes.eth.initializeTxHash).toBeNull();
       expect(deposit.hashes.eth.finalizeTxHash).toBeNull();
       expect(deposit.hashes.solana.bridgeTxHash).toBeNull();
@@ -184,7 +180,8 @@ describe('Deposits Util', () => {
       expect(deposit.wormholeInfo.bridgingAttempted).toBe(false);
       expect(deposit.error).toBeNull();
 
-      expect(getFundingTxHashSpy).toHaveBeenCalledWith(mockFundingTx);
+      // getFundingTxHash is no longer used in createDeposit
+      // expect(getFundingTxHashSpy).toHaveBeenCalledWith(mockFundingTx);
       expect(getTransactionHashSpy).toHaveBeenCalledWith(mockFundingTx);
       expect(logDepositCreatedSpy).toHaveBeenCalledWith(deposit);
       expect(dateNowSpy).toHaveBeenCalledTimes(2); // For createdAt and lastActivityAt
