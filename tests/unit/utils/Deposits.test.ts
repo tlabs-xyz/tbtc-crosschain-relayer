@@ -109,19 +109,15 @@ describe('Deposits Util', () => {
     const mockChainId = '1';
     const mockTimestamp = 1678886400000; // March 15, 2023 12:00:00 PM UTC
 
-    let getFundingTxHashSpy: jest.SpyInstance;
     let getTransactionHashSpy: jest.SpyInstance;
     let logDepositCreatedSpy: jest.SpyInstance;
     let dateNowSpy: jest.SpyInstance;
 
     beforeEach(() => {
       // Mock dependencies
-      getFundingTxHashSpy = jest
-        .spyOn(GetTransactionHash, 'getFundingTxHash')
-        .mockReturnValue('0x' + 'a'.repeat(64));
       getTransactionHashSpy = jest
         .spyOn(GetTransactionHash, 'getTransactionHash')
-        .mockReturnValue('0x' + 'a'.repeat(64));
+        .mockReturnValue('a'.repeat(64)); // No 0x prefix
       logDepositCreatedSpy = jest.spyOn(AuditLog, 'logDepositCreated').mockImplementation();
       dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(mockTimestamp);
 
@@ -157,7 +153,7 @@ describe('Deposits Util', () => {
       expect(deposit.chainId).toBe(mockChainId);
       expect(deposit.fundingTxHash).toBe(expectedFundingTxHash);
       expect(deposit.outputIndex).toBe(mockReveal.fundingOutputIndex);
-      expect(deposit.hashes.btc.btcTxHash).toBe('0x' + 'a'.repeat(64));
+      expect(deposit.hashes.btc.btcTxHash).toBe('a'.repeat(64));
       expect(deposit.hashes.eth.initializeTxHash).toBeNull();
       expect(deposit.hashes.eth.finalizeTxHash).toBeNull();
       expect(deposit.hashes.solana.bridgeTxHash).toBeNull();
@@ -184,7 +180,8 @@ describe('Deposits Util', () => {
       expect(deposit.wormholeInfo.bridgingAttempted).toBe(false);
       expect(deposit.error).toBeNull();
 
-      expect(getFundingTxHashSpy).toHaveBeenCalledWith(mockFundingTx);
+      // getFundingTxHash is no longer used in createDeposit
+      // expect(getFundingTxHashSpy).toHaveBeenCalledWith(mockFundingTx);
       expect(getTransactionHashSpy).toHaveBeenCalledWith(mockFundingTx);
       expect(logDepositCreatedSpy).toHaveBeenCalledWith(deposit);
       expect(dateNowSpy).toHaveBeenCalledTimes(2); // For createdAt and lastActivityAt
@@ -1013,6 +1010,7 @@ describe('Deposits Util', () => {
     let logStatusChangeSpy: jest.SpyInstance;
     let logDepositBridgedSpy: jest.SpyInstance;
     let dateNowSpy: jest.SpyInstance;
+    let loggerWarnSpy: jest.SpyInstance;
 
     beforeEach(() => {
       depositStoreUpdateSpy = jest.spyOn(DepositStore.DepositStore, 'update').mockResolvedValue();
@@ -1020,6 +1018,7 @@ describe('Deposits Util', () => {
       logStatusChangeSpy = jest.spyOn(AuditLog, 'logStatusChange').mockImplementation();
       logDepositBridgedSpy = jest.spyOn(AuditLog, 'logDepositBridged').mockImplementation();
       dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(mockTimestamp);
+      loggerWarnSpy = jest.spyOn(logger, 'warn').mockImplementation();
     });
 
     afterEach(() => {
@@ -1108,6 +1107,101 @@ describe('Deposits Util', () => {
         `Deposit has been moved to BRIDGED | ID: ${depositToUpdate.id}`,
       );
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
+    });
+
+    it('should update deposit to BRIDGED and set SUI tx hash for SUI chains', async () => {
+      // Create a SUI-specific deposit
+      const suiDeposit: Deposit = {
+        ...mockInitialDeposit,
+        chainId: 'SuiTestnet', // SUI chain identifier
+        hashes: {
+          ...mockInitialDeposit.hashes,
+          sui: { l2BridgeTxHash: null }, // Add SUI hash structure
+        },
+      };
+      const mockSuiTxSignature = 'sui_tx_digest_' + 'S'.repeat(50);
+
+      await updateToBridgedDeposit(suiDeposit, mockSuiTxSignature);
+
+      expect(dateNowSpy).toHaveBeenCalledTimes(2); // lastActivityAt and bridgedAt
+      const expectedUpdatedDeposit: Deposit = {
+        ...suiDeposit,
+        status: DepositStatus.BRIDGED,
+        wormholeInfo: {
+          ...suiDeposit.wormholeInfo,
+          bridgingAttempted: true,
+        },
+        hashes: {
+          ...suiDeposit.hashes,
+          sui: {
+            l2BridgeTxHash: mockSuiTxSignature,
+          },
+        },
+        error: null,
+        dates: {
+          ...suiDeposit.dates,
+          lastActivityAt: mockTimestamp,
+          bridgedAt: mockTimestamp,
+        },
+      };
+
+      expect(depositStoreUpdateSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
+      expect(loggerInfoSpy).toHaveBeenCalledWith(
+        `Deposit has been moved to BRIDGED | ID: ${suiDeposit.id}`,
+      );
+      expect(logStatusChangeSpy).toHaveBeenCalledWith(
+        expectedUpdatedDeposit,
+        DepositStatus.BRIDGED,
+        DepositStatus.AWAITING_WORMHOLE_VAA,
+      );
+      expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
+    });
+
+    it('should default to Solana when chain detection is ambiguous', async () => {
+      // Create a deposit with non-obvious chain ID
+      const ambiguousDeposit: Deposit = {
+        ...mockInitialDeposit,
+        chainId: 'CustomChain', // Non-SUI, non-Solana chain
+      };
+      const mockTxSignature = 'ambiguous_tx_' + 'A'.repeat(50);
+
+      await updateToBridgedDeposit(ambiguousDeposit, mockTxSignature);
+
+      expect(dateNowSpy).toHaveBeenCalledTimes(2);
+      const expectedUpdatedDeposit: Deposit = {
+        ...ambiguousDeposit,
+        status: DepositStatus.BRIDGED,
+        wormholeInfo: {
+          ...ambiguousDeposit.wormholeInfo,
+          bridgingAttempted: true,
+        },
+        hashes: {
+          ...ambiguousDeposit.hashes,
+          solana: {
+            bridgeTxHash: mockTxSignature, // Should default to Solana
+          },
+        },
+        error: null,
+        dates: {
+          ...ambiguousDeposit.dates,
+          lastActivityAt: mockTimestamp,
+          bridgedAt: mockTimestamp,
+        },
+      };
+
+      expect(depositStoreUpdateSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
+      expect(loggerInfoSpy).toHaveBeenCalledWith(
+        `Deposit has been moved to BRIDGED | ID: ${ambiguousDeposit.id}`,
+      );
+      expect(logStatusChangeSpy).toHaveBeenCalledWith(
+        expectedUpdatedDeposit,
+        DepositStatus.BRIDGED,
+        DepositStatus.AWAITING_WORMHOLE_VAA,
+      );
+      expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        `[updateToBridgedDeposit] Unknown chainId: ${ambiguousDeposit.chainId}. Defaulting to Solana hash structure for backward compatibility.`,
+      );
     });
   });
 

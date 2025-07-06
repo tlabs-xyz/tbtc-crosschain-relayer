@@ -14,6 +14,8 @@ export const getSuiCommonInput = (targetNetwork: NETWORK): PartialDeep<SuiChainC
   return {
     ...commonInput,
     chainType: CHAIN_TYPE.SUI,
+    // Disable L2 redemption for Sui chains - L2RedemptionService only supports EVM chains
+    enableL2Redemption: false,
     // Default Gas Object ID for Sui transactions, optional. Can be overridden by specific ENV or config.
     suiGasObjectId: getEnv('SUI_DEFAULT_GAS_OBJECT_ID', ''),
     // Other Sui-specific common defaults can be added here
