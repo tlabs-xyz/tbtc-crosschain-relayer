@@ -108,6 +108,11 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         try {
           logger.debug(
             `Polling SUI events for ${this.config.chainName}, cursor: ${this.lastEventCursor || 'null'}`,
+            {
+              eventFilter: eventFilter,
+              l2PackageId: this.config.l2PackageId,
+              l2ContractAddress: this.config.l2ContractAddress,
+            },
           );
 
           const response = await this.suiClient!.queryEvents({
@@ -119,6 +124,13 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
           logger.debug(
             `SUI event query response for ${this.config.chainName}: ${response.data.length} events, hasNextPage: ${response.hasNextPage}`,
+            {
+              cursor: this.lastEventCursor,
+              nextCursor: response.nextCursor,
+              hasNextPage: response.hasNextPage,
+              responseDataLength: response.data?.length || 0,
+              responseKeys: Object.keys(response || {}),
+            },
           );
 
           if (response.data.length > 0) {
@@ -495,6 +507,14 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
       // Convert base64 VAA to array format for Sui Move call
       const vaaArray = Array.from(Buffer.from(vaaBytes, 'base64')) as number[];
+
+      // Validate VAA array before using it in the transaction
+      if (vaaArray.length === 0) {
+        logger.error(
+          `VAA array is empty for deposit ${deposit.id}. Cannot proceed with transaction.`,
+        );
+        throw new Error(`Invalid VAA data: array is empty`);
+      }
 
       logger.debug(`Prepared VAA for Sui transaction`, {
         depositId: deposit.id,
