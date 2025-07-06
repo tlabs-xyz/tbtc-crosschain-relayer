@@ -702,6 +702,17 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         return true;
       }
 
+      // For deposits that are freshly created but have been updated once (common with SUI deposits),
+      // allow immediate processing if they were created in the last 10 minutes and are still QUEUED
+      const timeSinceCreation = now - deposit.dates.createdAt;
+      if (deposit.status === 0 && timeSinceCreation < 10 * 60 * 1000) {
+        // 10 minutes
+        logger.debug(
+          `FILTER | Deposit ${deposit.id} is QUEUED and created recently (${timeSinceCreation}ms ago), processing immediately`,
+        );
+        return true;
+      }
+
       // Otherwise, process only if enough time has passed since last activity
       const timeSinceLastActivity = now - deposit.dates.lastActivityAt;
       const shouldProcess = timeSinceLastActivity > DEFAULT_DEPOSIT_RETRY_MS;
