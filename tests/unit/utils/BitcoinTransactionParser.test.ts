@@ -14,6 +14,51 @@ import {
 } from '../../../utils/BitcoinTransactionParser.js';
 
 describe('BitcoinTransactionParser', () => {
+  // Helper function to create a minimal valid Bitcoin transaction
+  // Used across multiple test suites to avoid code duplication
+  const createMinimalTransaction = (): number[] => {
+    const tx: number[] = [];
+
+    // Version (4 bytes, little-endian) - version 1
+    tx.push(0x01, 0x00, 0x00, 0x00);
+
+    // Input count (varint) - 1 input
+    tx.push(0x01);
+
+    // Input:
+    // Previous transaction hash (32 bytes, all zeros for coinbase)
+    for (let i = 0; i < 32; i++) tx.push(0x00);
+
+    // Output index (4 bytes, little-endian) - 0xffffffff for coinbase
+    tx.push(0xff, 0xff, 0xff, 0xff);
+
+    // Script signature length (varint) - 0 bytes
+    tx.push(0x00);
+
+    // Sequence (4 bytes, little-endian)
+    tx.push(0xff, 0xff, 0xff, 0xff);
+
+    // Output count (varint) - 1 output
+    tx.push(0x01);
+
+    // Output:
+    // Value (8 bytes, little-endian) - 5000000000 satoshis
+    tx.push(0x00, 0xf2, 0x05, 0x2a, 0x01, 0x00, 0x00, 0x00);
+
+    // Script public key length (varint) - 25 bytes (standard P2PKH)
+    tx.push(0x19);
+
+    // Script public key (25 bytes) - OP_DUP OP_HASH160 <20-byte hash> OP_EQUALVERIFY OP_CHECKSIG
+    tx.push(0x76, 0xa9, 0x14);
+    for (let i = 0; i < 20; i++) tx.push(0x00); // 20-byte hash
+    tx.push(0x88, 0xac);
+
+    // Locktime (4 bytes, little-endian) - 0
+    tx.push(0x00, 0x00, 0x00, 0x00);
+
+    return tx;
+  };
+
   describe('bytesToHex', () => {
     test('converts byte array to hex string', () => {
       const bytes = [0, 255, 16, 32];
@@ -128,50 +173,6 @@ describe('BitcoinTransactionParser', () => {
   });
 
   describe('parseFundingTransaction', () => {
-    // Create a minimal valid Bitcoin transaction
-    const createMinimalTransaction = (): number[] => {
-      const tx: number[] = [];
-
-      // Version (4 bytes, little-endian) - version 1
-      tx.push(0x01, 0x00, 0x00, 0x00);
-
-      // Input count (varint) - 1 input
-      tx.push(0x01);
-
-      // Input:
-      // Previous transaction hash (32 bytes, all zeros for coinbase)
-      for (let i = 0; i < 32; i++) tx.push(0x00);
-
-      // Output index (4 bytes, little-endian) - 0xffffffff for coinbase
-      tx.push(0xff, 0xff, 0xff, 0xff);
-
-      // Script signature length (varint) - 0 bytes
-      tx.push(0x00);
-
-      // Sequence (4 bytes, little-endian)
-      tx.push(0xff, 0xff, 0xff, 0xff);
-
-      // Output count (varint) - 1 output
-      tx.push(0x01);
-
-      // Output:
-      // Value (8 bytes, little-endian) - 5000000000 satoshis
-      tx.push(0x00, 0xf2, 0x05, 0x2a, 0x01, 0x00, 0x00, 0x00);
-
-      // Script public key length (varint) - 25 bytes (standard P2PKH)
-      tx.push(0x19);
-
-      // Script public key (25 bytes) - OP_DUP OP_HASH160 <20-byte hash> OP_EQUALVERIFY OP_CHECKSIG
-      tx.push(0x76, 0xa9, 0x14);
-      for (let i = 0; i < 20; i++) tx.push(0x00); // 20-byte hash
-      tx.push(0x88, 0xac);
-
-      // Locktime (4 bytes, little-endian) - 0
-      tx.push(0x00, 0x00, 0x00, 0x00);
-
-      return tx;
-    };
-
     test('parses minimal valid transaction', () => {
       const txBytes = createMinimalTransaction();
       const result = parseFundingTransaction(txBytes);
@@ -340,50 +341,6 @@ describe('BitcoinTransactionParser', () => {
 
   describe('calculateTransactionHash', () => {
     test('calculates hash for valid transaction', () => {
-      // Create a valid Bitcoin transaction using our createMinimalTransaction helper
-      const createMinimalTransaction = (): number[] => {
-        const tx: number[] = [];
-
-        // Version (4 bytes, little-endian) - version 1
-        tx.push(0x01, 0x00, 0x00, 0x00);
-
-        // Input count (varint) - 1 input
-        tx.push(0x01);
-
-        // Input:
-        // Previous transaction hash (32 bytes, all zeros for coinbase)
-        for (let i = 0; i < 32; i++) tx.push(0x00);
-
-        // Output index (4 bytes, little-endian) - 0xffffffff for coinbase
-        tx.push(0xff, 0xff, 0xff, 0xff);
-
-        // Script signature length (varint) - 0 bytes
-        tx.push(0x00);
-
-        // Sequence (4 bytes, little-endian)
-        tx.push(0xff, 0xff, 0xff, 0xff);
-
-        // Output count (varint) - 1 output
-        tx.push(0x01);
-
-        // Output:
-        // Value (8 bytes, little-endian) - 5000000000 satoshis
-        tx.push(0x00, 0xf2, 0x05, 0x2a, 0x01, 0x00, 0x00, 0x00);
-
-        // Script public key length (varint) - 25 bytes (standard P2PKH)
-        tx.push(0x19);
-
-        // Script public key (25 bytes) - OP_DUP OP_HASH160 <20-byte hash> OP_EQUALVERIFY OP_CHECKSIG
-        tx.push(0x76, 0xa9, 0x14);
-        for (let i = 0; i < 20; i++) tx.push(0x00); // 20-byte hash
-        tx.push(0x88, 0xac);
-
-        // Locktime (4 bytes, little-endian) - 0
-        tx.push(0x00, 0x00, 0x00, 0x00);
-
-        return tx;
-      };
-
       const txBytes = createMinimalTransaction();
       const result = calculateTransactionHash(txBytes);
 
@@ -399,50 +356,6 @@ describe('BitcoinTransactionParser', () => {
 
   describe('validateBitcoinTransaction', () => {
     test('validates correct transaction', () => {
-      // Create a valid Bitcoin transaction using our createMinimalTransaction helper
-      const createMinimalTransaction = (): number[] => {
-        const tx: number[] = [];
-
-        // Version (4 bytes, little-endian) - version 1
-        tx.push(0x01, 0x00, 0x00, 0x00);
-
-        // Input count (varint) - 1 input
-        tx.push(0x01);
-
-        // Input:
-        // Previous transaction hash (32 bytes, all zeros for coinbase)
-        for (let i = 0; i < 32; i++) tx.push(0x00);
-
-        // Output index (4 bytes, little-endian) - 0xffffffff for coinbase
-        tx.push(0xff, 0xff, 0xff, 0xff);
-
-        // Script signature length (varint) - 0 bytes
-        tx.push(0x00);
-
-        // Sequence (4 bytes, little-endian)
-        tx.push(0xff, 0xff, 0xff, 0xff);
-
-        // Output count (varint) - 1 output
-        tx.push(0x01);
-
-        // Output:
-        // Value (8 bytes, little-endian) - 5000000000 satoshis
-        tx.push(0x00, 0xf2, 0x05, 0x2a, 0x01, 0x00, 0x00, 0x00);
-
-        // Script public key length (varint) - 25 bytes (standard P2PKH)
-        tx.push(0x19);
-
-        // Script public key (25 bytes) - OP_DUP OP_HASH160 <20-byte hash> OP_EQUALVERIFY OP_CHECKSIG
-        tx.push(0x76, 0xa9, 0x14);
-        for (let i = 0; i < 20; i++) tx.push(0x00); // 20-byte hash
-        tx.push(0x88, 0xac);
-
-        // Locktime (4 bytes, little-endian) - 0
-        tx.push(0x00, 0x00, 0x00, 0x00);
-
-        return tx;
-      };
-
       const txBytes = createMinimalTransaction();
       const result = validateBitcoinTransaction(txBytes);
 
