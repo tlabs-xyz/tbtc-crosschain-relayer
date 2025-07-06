@@ -123,6 +123,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     const platforms: any[] = [evm];
     const chainConfigs: any = {};
     
+    // Always add Ethereum config since we need to parse L1 transactions
+    chainConfigs.Ethereum = {
+      rpc: this.config.l1Rpc,
+    };
+    
     // Only add Solana if this is a Solana chain
     if (this.config.chainType === CHAIN_TYPE.SOLANA) {
       platforms.push(solana);
