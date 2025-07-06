@@ -55,7 +55,7 @@ export const getSuiMainnetChainInput = (): SuiChainInput => {
     chainName: 'SuiMainnet',
     l2Rpc: getEnv('CHAIN_SUIMAINNET_L2_RPC', 'https://fullnode.mainnet.sui.io'),
     l2WsRpc: getEnv('CHAIN_SUIMAINNET_L2_WS_RPC', 'wss://fullnode.mainnet.sui.io'),
-    l2StartBlock: getEnvNumber('CHAIN_SUIMAINNET_L2_START_BLOCK', 0),
+    l2StartBlock: getEnvNumber('CHAIN_SUIMAINNET_L2_START_BLOCK', 3776927722),
     // Mainnet BitcoinDepositor contract package and module
     l2ContractAddress: getEnv(
       'CHAIN_SUIMAINNET_L2_CONTRACT_ADDRESS',
