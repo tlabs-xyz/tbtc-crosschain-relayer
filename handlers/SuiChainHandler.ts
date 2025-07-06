@@ -108,6 +108,11 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         try {
           logger.debug(
             `Polling SUI events for ${this.config.chainName}, cursor: ${this.lastEventCursor || 'null'}`,
+            {
+              eventFilter: eventFilter,
+              l2PackageId: this.config.l2PackageId,
+              l2ContractAddress: this.config.l2ContractAddress,
+            },
           );
 
           const response = await this.suiClient!.queryEvents({
@@ -119,6 +124,13 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
           logger.debug(
             `SUI event query response for ${this.config.chainName}: ${response.data.length} events, hasNextPage: ${response.hasNextPage}`,
+            {
+              cursor: this.lastEventCursor,
+              nextCursor: response.nextCursor,
+              hasNextPage: response.hasNextPage,
+              responseDataLength: response.data?.length || 0,
+              responseKeys: Object.keys(response || {}),
+            },
           );
 
           if (response.data.length > 0) {
