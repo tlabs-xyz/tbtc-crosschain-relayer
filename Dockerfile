@@ -36,6 +36,12 @@ COPY target/ ./target/
 
 RUN yarn build
 
+# Add entrypoint script for running migrations in development stage
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["node", "dist/index.js"]
+
 FROM node:20-alpine3.21 AS production
 
 ARG NODE_ENV=production

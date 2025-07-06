@@ -44,24 +44,6 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     }
 
     logger.debug(`[${this.config.chainName}] StarknetChainHandler setup complete`);
-
-    try {
-      const starkGateBridgeAbi = ['function estimateDepositFeeWei() view returns (uint256)'];
-      this.starkGateBridgeContract = new ethers.Contract(
-        this.config.starkGateBridgeAddress,
-        starkGateBridgeAbi,
-        this.l1Provider,
-      );
-      logger.info(
-        `[${this.config.chainName}] StarkGate Bridge contract provider instance created at ${this.config.starkGateBridgeAddress}`,
-      );
-    } catch (error: any) {
-      logger.error(
-        `[${this.config.chainName}] Failed to instantiate StarkGate Bridge contract: ${error.message}`,
-        error,
-        { chainName: this.config.chainName },
-      );
-    }
   }
 
   protected async initializeL2(): Promise<void> {
@@ -103,6 +85,25 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       } else {
         logger.warn(
           `[${this.config.chainName}] L1 signer not available (privateKey not configured or failed to init in Base). L1 Depositor contract transactions disabled. Read-only mode.`,
+        );
+      }
+
+      // Initialize StarkGate Bridge contract for fee estimation
+      try {
+        const starkGateBridgeAbi = ['function estimateDepositFeeWei() view returns (uint256)'];
+        this.starkGateBridgeContract = new ethers.Contract(
+          this.config.starkGateBridgeAddress,
+          starkGateBridgeAbi,
+          this.l1Provider,
+        );
+        logger.info(
+          `[${this.config.chainName}] StarkGate Bridge contract provider instance created at ${this.config.starkGateBridgeAddress}`,
+        );
+      } catch (error: any) {
+        logger.error(
+          `[${this.config.chainName}] Failed to instantiate StarkGate Bridge contract: ${error.message}`,
+          error,
+          { chainName: this.config.chainName },
         );
       }
     } catch (error: any) {
