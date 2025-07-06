@@ -12,6 +12,10 @@
  * - Chain configurations specified by SUPPORTED_CHAINS (or all if not set)
  * - Environment variable requirements
  *
+ * Usage:
+ * - tsx scripts/validate-config.ts [env-file-path]
+ * - Default env file: .env
+ *
  * Exit codes:
  * - 0: All configurations valid
  * - 1: Configuration validation failed
@@ -20,13 +24,27 @@
 const SCRIPT_NAME = 'validate-config';
 let supportedChainsToValidate: string[] = [];
 
+// Parse command line arguments
+const args = process.argv.slice(2);
+const envFilePath = args[0] || '.env';
+
 /**
  * Load environment variables if not in CI and parse SUPPORTED_CHAINS
  */
 async function loadEnvironment() {
   // Only load dotenv in non-CI environments since CI sets environment variables directly
   if (process.env.CI !== 'true' && process.env.GITHUB_ACTIONS !== 'true') {
-    await import('dotenv/config');
+    const { config } = await import('dotenv');
+    const result = config({ path: envFilePath });
+
+    if (result.error) {
+      console.warn(
+        `[${SCRIPT_NAME}] Warning: Could not load environment file '${envFilePath}':`,
+        result.error.message,
+      );
+    } else {
+      console.log(`[${SCRIPT_NAME}] Loaded environment variables from '${envFilePath}'`);
+    }
   }
 
   const supportedChainsEnv = process.env.SUPPORTED_CHAINS;
@@ -392,9 +410,11 @@ async function gracefulShutdown(exitCode: number): Promise<void> {
  */
 async function main(): Promise<void> {
   console.log(`[${SCRIPT_NAME}] Starting configuration validation...`);
+  console.log(`[${SCRIPT_NAME}] Using environment file: ${envFilePath}`);
   await loadEnvironment();
   const { logger } = await importConfigModules();
   logger.info(`[${SCRIPT_NAME}] Environment setup complete, beginning validation...`);
+  logger.info(`[${SCRIPT_NAME}] Environment file: ${envFilePath}`);
   logger.info(
     `[${SCRIPT_NAME}] Chains to validate based on SUPPORTED_CHAINS (or all if empty): ${supportedChainsToValidate.length > 0 ? supportedChainsToValidate.join(', ') : 'ALL_AVAILABLE'}`,
   );
