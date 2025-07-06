@@ -504,9 +504,21 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       DepositStatus.QUEUED,
       this.config.chainName,
     );
+    logger.debug(
+      `PROCESS INITIALIZE | Found ${depositsToInitialize.length} QUEUED deposits for ${this.config.chainName}`,
+    );
+
     const filteredDeposits = this.filterDepositsActivityTime(depositsToInitialize);
+    logger.debug(
+      `PROCESS INITIALIZE | After filtering: ${filteredDeposits.length} deposits for ${this.config.chainName}`,
+    );
 
     if (filteredDeposits.length === 0) {
+      if (depositsToInitialize.length > 0) {
+        logger.debug(
+          `PROCESS INITIALIZE | ${depositsToInitialize.length} deposits were filtered out by activity time for ${this.config.chainName}`,
+        );
+      }
       return;
     }
 
@@ -673,16 +685,30 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     const now = Date.now();
     return deposits.filter((deposit) => {
       // If lastActivityAt doesn't exist yet (e.g., freshly created via listener/endpoint), process immediately
-      if (!deposit.dates.lastActivityAt || !deposit.dates.createdAt) return true;
+      if (!deposit.dates.lastActivityAt || !deposit.dates.createdAt) {
+        logger.debug(
+          `FILTER | Deposit ${deposit.id} has no activity dates, processing immediately`,
+        );
+        return true;
+      }
 
       // If the deposit was just created (last activity is the creation time), process immediately.
       // We check if they are within a small threshold to account for ms differences during creation.
-      if (Math.abs(deposit.dates.lastActivityAt - deposit.dates.createdAt) < 1000) {
+      const timeDiff = Math.abs(deposit.dates.lastActivityAt - deposit.dates.createdAt);
+      if (timeDiff < 1000) {
+        logger.debug(
+          `FILTER | Deposit ${deposit.id} was just created (diff: ${timeDiff}ms), processing immediately`,
+        );
         return true;
       }
 
       // Otherwise, process only if enough time has passed since last activity
-      return now - deposit.dates.lastActivityAt > DEFAULT_DEPOSIT_RETRY_MS;
+      const timeSinceLastActivity = now - deposit.dates.lastActivityAt;
+      const shouldProcess = timeSinceLastActivity > DEFAULT_DEPOSIT_RETRY_MS;
+      logger.debug(
+        `FILTER | Deposit ${deposit.id} time since last activity: ${timeSinceLastActivity}ms, retry threshold: ${DEFAULT_DEPOSIT_RETRY_MS}ms, should process: ${shouldProcess}`,
+      );
+      return shouldProcess;
     });
   }
 }
