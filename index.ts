@@ -83,6 +83,10 @@ async function initializeBackgroundServices() {
   logger.info('Starting cron jobs...');
   startCronJobs();
   logger.info('Cron jobs started.');
+
+  logger.info('Running startup tasks to check for past deposits...');
+  await runStartupTasks();
+  logger.info('Startup tasks completed.');
 }
 
 // -------------------------------------------------------------------------

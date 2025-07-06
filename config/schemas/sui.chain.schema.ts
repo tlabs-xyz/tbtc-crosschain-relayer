@@ -24,6 +24,9 @@ export const SuiChainConfigSchema = CommonConfigForSui.omit({
 
     // Sui-specific private key field
     suiPrivateKey: z.string().min(1, 'suiPrivateKey is required and must not be empty'),
+    
+    // L1 private key for interacting with Ethereum L1 contracts
+    privateKey: z.string().optional(),
 
     // Optional gas object ID for transactions (can be managed automatically)
     suiGasObjectId: z

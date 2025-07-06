@@ -1,9 +1,10 @@
 import type { SuiEvent } from '@mysten/sui/client';
 import {
   parseFundingTransaction,
-  parseReveal,
   normalizeInput,
   BitcoinParsingError,
+  InvalidRevealFormatError,
+  bytesToHex,
 } from './BitcoinTransactionParser.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
@@ -78,6 +79,82 @@ export function convertBinaryToSuiAddress(addressBytes: number[]): string {
 }
 
 /**
+ * SUI-specific reveal data structure (56 bytes)
+ */
+const SUI_REVEAL_DATA_LENGTHS = {
+  FUNDING_OUTPUT_INDEX: 4,
+  BLINDING_FACTOR: 8,  // 8 bytes for SUI
+  WALLET_PUBKEY_HASH: 20,
+  REFUND_PUBKEY_HASH: 20,
+  REFUND_LOCKTIME: 4,
+} as const;
+
+const SUI_REVEAL_TOTAL_LENGTH = Object.values(SUI_REVEAL_DATA_LENGTHS).reduce((sum, len) => sum + len, 0); // 56 bytes
+
+/**
+ * Parses SUI-specific 56-byte reveal data
+ * @param bytes - Array of bytes representing the reveal data
+ * @returns Parsed reveal object
+ */
+function parseSuiReveal(bytes: number[]): Reveal {
+  if (!Array.isArray(bytes)) {
+    throw new InvalidRevealFormatError('Input must be an array of bytes');
+  }
+
+  if (bytes.length !== SUI_REVEAL_TOTAL_LENGTH) {
+    throw new InvalidRevealFormatError(
+      `Invalid SUI reveal data length. Expected ${SUI_REVEAL_TOTAL_LENGTH} bytes, got ${bytes.length} bytes`,
+    );
+  }
+
+  try {
+    const buffer = Buffer.from(bytes);
+    let offset = 0;
+
+    // Read funding output index (4 bytes, BIG-ENDIAN as per sui-event-listener.cjs)
+    // NOTE: SUI uses BIG-ENDIAN but L1 expects LITTLE-ENDIAN, so we keep as number
+    const fundingOutputIndex = buffer.readUInt32BE(offset);
+    offset += SUI_REVEAL_DATA_LENGTHS.FUNDING_OUTPUT_INDEX;
+
+    // Read blinding factor (8 bytes)
+    const blindingFactor = bytesToHex(Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.BLINDING_FACTOR)));
+    offset += SUI_REVEAL_DATA_LENGTHS.BLINDING_FACTOR;
+
+    // Read wallet public key hash (20 bytes)
+    const walletPubKeyHash = bytesToHex(Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.WALLET_PUBKEY_HASH)));
+    offset += SUI_REVEAL_DATA_LENGTHS.WALLET_PUBKEY_HASH;
+
+    // Read refund public key hash (20 bytes)
+    const refundPubKeyHash = bytesToHex(Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.REFUND_PUBKEY_HASH)));
+    offset += SUI_REVEAL_DATA_LENGTHS.REFUND_PUBKEY_HASH;
+
+    // Read refund locktime (4 bytes, BIG-ENDIAN to match fundingOutputIndex)
+    // SUI stores this as big-endian bytes, we keep it as-is
+    const refundLocktime = '0x' + buffer.subarray(offset, offset + 4).toString('hex');
+
+    // Vault field is not present in SUI's 56-byte format
+    // For SUI, we need to use the configured vault address from the chain config
+    // This will be set by the handler when creating the deposit
+    // For now, we'll use a placeholder that the handler should replace
+    const vault = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+    return {
+      fundingOutputIndex,
+      blindingFactor,
+      walletPubKeyHash,
+      refundPubKeyHash,
+      refundLocktime,
+      vault,
+    };
+  } catch (error) {
+    if (error instanceof BitcoinParsingError) {
+      throw error;
+    }
+    throw new InvalidRevealFormatError('Failed to parse SUI reveal data', error as Error);
+  }
+}
+
+/**
  * Parses a SUI DepositInitialized event and returns parsed data
  * @param event - SUI event object
  * @param chainName - Name of the chain processing the event (used for logging)
@@ -136,7 +213,7 @@ export function parseDepositInitializedEvent(
 
     // Parse Bitcoin transaction and reveal data
     const fundingTransaction = parseFundingTransaction(fundingTxBytes);
-    const reveal = parseReveal(revealBytes);
+    const reveal = parseSuiReveal(revealBytes);  // Use SUI-specific parser
 
     // Convert SUI addresses to hex format
     const depositOwner = convertBinaryToSuiAddress(depositOwnerBytes);

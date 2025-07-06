@@ -1,6 +1,7 @@
 import { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fromBase64 } from '@mysten/bcs';
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import type { SuiEvent, SuiEventFilter } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
@@ -54,46 +55,96 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       // Initialize SUI client
       this.suiClient = new SuiClient({ url: this.config.l2Rpc });
 
-      // Initialize keypair from base64 private key
-      const privateKeyBytes = fromBase64(this.config.suiPrivateKey);
-      this.keypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
+      // Initialize keypair - support both base64 and Bech32 formats
+      if (this.config.suiPrivateKey.startsWith('suiprivkey1')) {
+        // Handle Bech32-encoded private key
+        const decoded = decodeSuiPrivateKey(this.config.suiPrivateKey);
+        this.keypair = Ed25519Keypair.fromSecretKey(decoded.secretKey);
+      } else {
+        // Handle base64-encoded private key
+        const privateKeyBytes = fromBase64(this.config.suiPrivateKey);
+        this.keypair = Ed25519Keypair.fromSecretKey(privateKeyBytes);
+      }
 
       // Get SUI Wormhole context for cross-chain operations
       this.suiWormholeContext = this.wormhole.getChain('Sui' as Chain);
 
       logger.info(`Sui L2 client initialized for ${this.config.chainName}`);
+      logger.info(`SUI address: ${this.keypair.getPublicKey().toSuiAddress()}`);
     } catch (error: any) {
       logErrorContext(`Failed to initialize Sui L2 client for ${this.config.chainName}`, error);
       throw error;
     }
   }
 
+  private pollingInterval: NodeJS.Timeout | null = null;
+  private lastEventCursor: string | null = null;
+
   protected async setupL2Listeners(): Promise<void> {
+    logger.info(`Setting up L2 listeners for ${this.config.chainName}, useEndpoint: ${this.config.useEndpoint}, suiClient: ${!!this.suiClient}`);
+    
     if (this.config.useEndpoint || !this.suiClient) {
-      logger.debug(
-        `Sui L2 Listeners skipped for ${this.config.chainName} (using Endpoint or client not initialized).`,
+      logger.info(
+        `Sui L2 Listeners skipped for ${this.config.chainName} (using Endpoint: ${this.config.useEndpoint} or client not initialized: ${!this.suiClient}).`,
       );
       return;
     }
 
     try {
-      // Subscribe to DepositInitialized events
+      // SUI doesn't support WebSocket subscriptions, so we use polling
+      const POLLING_INTERVAL_MS = 5000; // Poll every 5 seconds
+      
       const eventFilter: SuiEventFilter = {
         MoveModule: {
           package: this.config.l2PackageId,
-          module: 'bitcoin_depositor',
+          module: 'BitcoinDepositor',
         },
       };
 
-      await this.suiClient.subscribeEvent({
-        filter: eventFilter,
-        onMessage: (event: SuiEvent) => this.handleSuiDepositEvent(event),
-      });
+      // Start polling for events
+      this.pollingInterval = setInterval(async () => {
+        try {
+          logger.debug(`Polling SUI events for ${this.config.chainName}, cursor: ${this.lastEventCursor || 'null'}`);
+          
+          const response = await this.suiClient!.queryEvents({
+            query: eventFilter,
+            cursor: this.lastEventCursor as any,
+            limit: 50,
+            order: 'ascending',
+          });
 
-      logger.debug(`Sui L2 event listeners setup for ${this.config.chainName}`);
+          logger.debug(`SUI event query response for ${this.config.chainName}: ${response.data.length} events, hasNextPage: ${response.hasNextPage}`);
+
+          if (response.data.length > 0) {
+            logger.info(`Found ${response.data.length} new SUI events for ${this.config.chainName}`);
+            
+            for (const event of response.data) {
+              await this.handleSuiDepositEvent(event);
+            }
+          }
+
+          // Update cursor for pagination if there are more events
+          if (response.hasNextPage && response.nextCursor) {
+            this.lastEventCursor = response.nextCursor as any;
+          }
+        } catch (error: any) {
+          logErrorContext(`Error polling SUI events for ${this.config.chainName}`, error);
+        }
+      }, POLLING_INTERVAL_MS);
+
+      logger.info(`Sui L2 event polling started for ${this.config.chainName} (interval: ${POLLING_INTERVAL_MS}ms)`);
     } catch (error: any) {
       logErrorContext(`Failed to setup Sui L2 listeners for ${this.config.chainName}`, error);
       throw error;
+    }
+  }
+
+  // Add cleanup method to stop polling
+  async cleanup(): Promise<void> {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+      logger.info(`Stopped SUI event polling for ${this.config.chainName}`);
     }
   }
 
@@ -123,13 +174,19 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       const eventFilter: SuiEventFilter = {
         MoveModule: {
           package: this.config.l2PackageId,
-          module: 'bitcoin_depositor',
+          module: 'BitcoinDepositor',
         },
       };
+
+      logger.debug(`checkForPastDeposits filter for ${this.config.chainName}:`, {
+        package: this.config.l2PackageId,
+        module: 'BitcoinDepositor',
+      });
 
       // Query events in batches
       let cursor = null;
       let hasNextPage = true;
+      let totalEvents = 0;
 
       while (hasNextPage) {
         const response: any = await this.suiClient.queryEvents({
@@ -139,6 +196,9 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           order: 'descending',
         });
 
+        logger.debug(`checkForPastDeposits batch for ${this.config.chainName}: ${response.data.length} events`);
+        totalEvents += response.data.length;
+
         for (const eventData of response.data) {
           await this.handleSuiDepositEvent(eventData, true); // true = isPastEvent
         }
@@ -146,6 +206,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         hasNextPage = response.hasNextPage;
         cursor = response.nextCursor;
       }
+
+      logger.debug(`checkForPastDeposits completed for ${this.config.chainName}: ${totalEvents} total events processed`);
 
       logger.debug(
         `Checked past deposits for ${this.config.chainName}: ${options.pastTimeInMinutes} minutes`,
@@ -241,18 +303,33 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
    */
   private async handleSuiDepositEvent(event: SuiEvent, _isPastEvent = false): Promise<void> {
     try {
+      logger.debug(`handleSuiDepositEvent called for ${this.config.chainName}, event type: ${event.type}`);
+      
       // Use the utility function to parse the event data
       const parsedEvent = parseDepositInitializedEvent(event, this.config.chainName);
 
       if (!parsedEvent) {
         // Event parsing failed or event is not a DepositInitialized event
+        logger.debug(`Event parsing returned null for ${this.config.chainName}`);
         return;
       }
+      
+      logger.info(`Successfully parsed SUI deposit event for ${this.config.chainName}`);
+
+      // For SUI, we need to set the correct vault address since it's not included in the event
+      // Update the reveal object with the correct vault address from the config
+      const revealWithVault = {
+        ...parsedEvent.reveal,
+        vault: this.config.vaultAddress,
+      };
+      
+      logger.info(`Setting vault address for SUI deposit: ${this.config.vaultAddress}`);
 
       // Create deposit using the parsed event data
+      // Note: The 0x prefix handling is done in BaseChainHandler.initializeDeposit for SUI chains
       const deposit = createDeposit(
         parsedEvent.fundingTransaction,
-        parsedEvent.reveal,
+        revealWithVault,
         parsedEvent.depositOwner,
         parsedEvent.sender,
         this.config.chainName,
@@ -354,7 +431,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       try {
         // Call receiveWormholeMessages directly on the BitcoinDepositor contract
         tx.moveCall({
-          target: `${this.config.l2PackageId}::bitcoin_depositor::receiveWormholeMessages`,
+          target: `${this.config.l2PackageId}::BitcoinDepositor::receiveWormholeMessages`,
           arguments: [
             tx.object(this.config.receiverStateId),
             tx.object(this.config.gatewayStateId),

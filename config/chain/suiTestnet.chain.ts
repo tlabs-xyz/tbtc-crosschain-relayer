@@ -34,7 +34,10 @@ export const getSuiTestnetChainInput = (): SuiChainInput => {
     chainType: commonTestnetSuiInput.chainType!,
     l1Rpc: commonTestnetSuiInput.l1Rpc!,
     vaultAddress: commonTestnetSuiInput.vaultAddress!,
-    l1ContractAddress: commonTestnetSuiInput.l1ContractAddress!,
+    l1ContractAddress: getEnv(
+      'CHAIN_SUITESTNET_L1_CONTRACT_ADDRESS',
+      commonTestnetSuiInput.l1ContractAddress!,
+    ),
     l1Confirmations: commonTestnetSuiInput.l1Confirmations!,
     enableL2Redemption: commonTestnetSuiInput.enableL2Redemption!,
     useEndpoint: commonTestnetSuiInput.useEndpoint!,
@@ -58,6 +61,7 @@ export const getSuiTestnetChainInput = (): SuiChainInput => {
       '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae::bitcoin_depositor',
     ),
     suiPrivateKey: getEnv('CHAIN_SUITESTNET_SUI_PRIVATE_KEY'),
+    privateKey: getEnv('CHAIN_SUITESTNET_PRIVATE_KEY'),
 
     // Sui-specific Wormhole and Bridge Object IDs (Testnet values)
     wormholeCoreId: getEnv(
