@@ -496,6 +496,14 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       // Convert base64 VAA to array format for Sui Move call
       const vaaArray = Array.from(Buffer.from(vaaBytes, 'base64')) as number[];
 
+      // Validate VAA array before using it in the transaction
+      if (vaaArray.length === 0) {
+        logger.error(
+          `VAA array is empty for deposit ${deposit.id}. Cannot proceed with transaction.`,
+        );
+        throw new Error(`Invalid VAA data: array is empty`);
+      }
+
       logger.debug(`Prepared VAA for Sui transaction`, {
         depositId: deposit.id,
         vaaLength: vaaArray.length,
