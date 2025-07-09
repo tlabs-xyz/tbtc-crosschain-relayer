@@ -480,8 +480,8 @@ describe('SuiChainHandler', () => {
         .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
         .mockResolvedValue(mockReceipt);
 
-      // Mock the l1BitcoinDepositor interface
-      (handler as any).l1BitcoinDepositor = {
+      // Mock the l1BitcoinDepositorProvider interface (changed from l1BitcoinDepositor)
+      (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
             args: { transferSequence: ethers.BigNumber.from(123) },
