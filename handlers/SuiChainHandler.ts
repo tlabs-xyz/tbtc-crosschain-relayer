@@ -278,9 +278,10 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
       for (const log of logs) {
         if (log.topics[0] === TOKENS_TRANSFERRED_SIG) {
-          const parsedLog = this.l1BitcoinDepositor.interface.parseLog(log);
+          const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
           const { transferSequence: seq } = parsedLog.args;
           transferSequence = seq.toString();
+          logger.debug(`Found transfer sequence ${transferSequence} for deposit ${deposit.id}`);
           break;
         }
       }
