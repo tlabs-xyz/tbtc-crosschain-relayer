@@ -816,7 +816,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           const widerSearchResult = await this.searchForTransferSequence(
             deposit,
             searchStartBlock - 10,
-            20,
+            30,
           );
           if (widerSearchResult) {
             logger.info(
@@ -846,7 +846,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   private async searchForTransferSequence(
     deposit: Deposit,
     startBlock: number,
-    searchBlocks: number = 10,
+    searchBlocks: number = 15,
   ): Promise<{ sequence: string; txHash: string } | null> {
     try {
       const endBlock = Math.min(startBlock + searchBlocks, await this.l1Provider.getBlockNumber());
@@ -866,6 +866,13 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       logger.info(
         `Found ${logs.length} TokensTransferredWithPayload events in blocks ${startBlock}-${endBlock}`,
       );
+
+      // Log each event found for debugging
+      logs.forEach((log, index) => {
+        logger.debug(
+          `Event ${index}: from ${log.address} in block ${log.blockNumber}, tx: ${log.transactionHash}`,
+        );
+      });
 
       // Filter to find events from L1BitcoinDepositor
       const l1BitcoinDepositorAddress = this.config.l1ContractAddress.toLowerCase();
