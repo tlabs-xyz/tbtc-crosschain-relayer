@@ -272,33 +272,102 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       return finalizedDepositReceipt;
     }
 
+    // More robust event finding logic
     let transferSequence: string | null = null;
+    let eventTxHash: string | null = null;
+
     try {
       const logs = l1Receipt.logs || [];
-
+      
+      // Method 1: Try parsing all logs regardless of topics
       for (const log of logs) {
-        if (log.topics[0] === TOKENS_TRANSFERRED_SIG) {
+        try {
+          // Try to parse the log with our interface
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          const { transferSequence: seq } = parsedLog.args;
-          transferSequence = seq.toString();
-          logger.debug(`Found transfer sequence ${transferSequence} for deposit ${deposit.id}`);
-          break;
+          
+          // Check if this is the TokensTransferredWithPayload event
+          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+            transferSequence = parsedLog.args.transferSequence.toString();
+            eventTxHash = l1Receipt.transactionHash;
+            logger.info(`Found transfer sequence ${transferSequence} in parsed log for deposit ${deposit.id}`);
+            break;
+          }
+        } catch (parseError) {
+          // This log doesn't match our interface, continue to next
+          continue;
+        }
+      }
+      
+      // Method 2: If not found, check by event signature in any topic position
+      if (!transferSequence) {
+        for (const log of logs) {
+          // Check if any topic contains our event signature
+          if (log.topics.some(topic => topic === TOKENS_TRANSFERRED_SIG)) {
+            try {
+              const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
+              if (parsedLog.args.transferSequence) {
+                transferSequence = parsedLog.args.transferSequence.toString();
+                eventTxHash = l1Receipt.transactionHash;
+                logger.info(`Found transfer sequence ${transferSequence} by signature search for deposit ${deposit.id}`);
+                break;
+              }
+            } catch (error) {
+              logger.debug(`Failed to parse log with matching signature: ${error}`);
+            }
+          }
+        }
+      }
+      
+      // Method 3: If still not found, filter logs by contract address
+      if (!transferSequence) {
+        const contractLogs = logs.filter(log => 
+          log.address.toLowerCase() === this.config.l1ContractAddress.toLowerCase()
+        );
+        
+        for (const log of contractLogs) {
+          try {
+            const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
+            if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+              transferSequence = parsedLog.args.transferSequence.toString();
+              eventTxHash = l1Receipt.transactionHash;
+              logger.info(`Found transfer sequence ${transferSequence} by contract address filter for deposit ${deposit.id}`);
+              break;
+            }
+          } catch (error) {
+            continue;
+          }
         }
       }
     } catch (error: any) {
       logErrorContext(`Error parsing L1 logs for deposit ${deposit.id}`, error);
     }
 
+    // If still not found in the same transaction, implement the recovery logic
     if (!transferSequence) {
-      logger.warn(`Could not find transferSequence in logs for deposit ${deposit.id}.`);
-      return finalizedDepositReceipt;
+      logger.warn(`Transfer sequence not found in finalization transaction for deposit ${deposit.id}`);
+      
+      // Try to find it immediately in subsequent blocks
+      try {
+        const searchResult = await this.searchForTransferSequence(deposit, l1Receipt.blockNumber, 5);
+        if (searchResult) {
+          transferSequence = searchResult.sequence;
+          eventTxHash = searchResult.txHash;
+        }
+      } catch (searchError) {
+        logErrorContext(`Failed to search for transfer sequence`, searchError);
+      }
     }
 
-    await updateToAwaitingWormholeVAA(l1Receipt.transactionHash, deposit, transferSequence);
-    logger.info(`Deposit ${deposit.id} now awaiting Wormhole VAA.`);
+    if (transferSequence && eventTxHash) {
+      await updateToAwaitingWormholeVAA(eventTxHash, deposit, transferSequence);
+      logger.info(`Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`);
+    } else {
+      logger.warn(`Could not find transfer sequence for deposit ${deposit.id}. It will be retried in the hourly recovery task.`);
+    }
 
     return finalizedDepositReceipt;
   }
+
 
   /**
    * Processes SUI DepositInitialized Move events from the BitcoinDepositor contract.
@@ -643,6 +712,119 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         continue;
       }
       await this.bridgeSuiDeposit(deposit);
+    }
+  }
+
+  /**
+   * Recover deposits that are stuck in FINALIZED status by searching for their
+   * TokensTransferredWithPayload events in recent blocks
+   */
+  public async recoverStuckFinalizedDeposits(deposits: Deposit[]): Promise<void> {
+    if (!deposits || deposits.length === 0) return;
+    
+    logger.info(`Attempting to recover ${deposits.length} stuck finalized deposits for ${this.config.chainName}`);
+    
+    // Filter to only deposits that have been finalized for more than 5 minutes
+    const now = Date.now();
+    const RECOVERY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
+    
+    const stuckDeposits = deposits.filter(deposit => {
+      if (!deposit.dates.finalizationAt) return false;
+      const timeSinceFinalized = now - deposit.dates.finalizationAt;
+      return timeSinceFinalized > RECOVERY_DELAY_MS;
+    });
+    
+    if (stuckDeposits.length === 0) {
+      logger.debug(`No deposits have been finalized long enough for recovery`);
+      return;
+    }
+    
+    logger.info(`Found ${stuckDeposits.length} deposits finalized more than 5 minutes ago`);
+    
+    for (const deposit of stuckDeposits) {
+      try {
+        logger.info(`Attempting recovery for deposit ${deposit.id}`);
+        
+        // Get the finalization transaction details
+        if (!deposit.hashes?.eth?.finalizeTxHash) {
+          logger.warn(`Deposit ${deposit.id} missing finalization tx hash, skipping recovery`);
+          continue;
+        }
+        
+        // Get the finalization receipt to determine block number
+        const finalizeTxReceipt = await this.l1Provider.getTransactionReceipt(deposit.hashes.eth.finalizeTxHash);
+        if (!finalizeTxReceipt) {
+          logger.warn(`Could not get finalization receipt for deposit ${deposit.id}`);
+          continue;
+        }
+        
+        // Search for transfer sequence starting from finalization block
+        const searchResult = await this.searchForTransferSequence(deposit, finalizeTxReceipt.blockNumber);
+        
+        if (searchResult) {
+          logger.info(`Found transfer sequence ${searchResult.sequence} for deposit ${deposit.id} in recovery`);
+          await updateToAwaitingWormholeVAA(searchResult.txHash, deposit, searchResult.sequence);
+          logger.info(`Successfully recovered deposit ${deposit.id} - updated to AWAITING_WORMHOLE_VAA`);
+        } else {
+          // Search a wider range if initial search failed
+          const widerSearchResult = await this.searchForTransferSequence(deposit, finalizeTxReceipt.blockNumber - 10, 20);
+          if (widerSearchResult) {
+            logger.info(`Found transfer sequence ${widerSearchResult.sequence} for deposit ${deposit.id} in wider search`);
+            await updateToAwaitingWormholeVAA(widerSearchResult.txHash, deposit, widerSearchResult.sequence);
+            logger.info(`Successfully recovered deposit ${deposit.id} with wider search`);
+          } else {
+            logger.warn(`Could not find transfer sequence for deposit ${deposit.id} even with wider search`);
+          }
+        }
+      } catch (error) {
+        logErrorContext(`Error recovering deposit ${deposit.id}`, error);
+      }
+    }
+  }
+
+  /**
+   * Enhanced search for transfer sequence with configurable block range
+   */
+  private async searchForTransferSequence(
+    deposit: Deposit, 
+    startBlock: number,
+    searchBlocks: number = 5
+  ): Promise<{ sequence: string; txHash: string } | null> {
+    try {
+      const endBlock = Math.min(startBlock + searchBlocks, await this.l1Provider.getBlockNumber());
+      
+      // Get all logs from the L1BitcoinDepositor contract in the block range
+      const logs = await this.l1Provider.getLogs({
+        address: this.config.l1ContractAddress,
+        fromBlock: startBlock,
+        toBlock: endBlock,
+      });
+      
+      logger.debug(`Searching ${logs.length} logs from L1BitcoinDepositor in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`);
+      
+      for (const log of logs) {
+        try {
+          const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
+          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+            // Additional validation: check if this might be for our deposit
+            // You could add more validation here based on timing, amount, etc.
+            logger.info(`Found potential transfer sequence ${parsedLog.args.transferSequence} in tx ${log.transactionHash}`);
+            
+            return {
+              sequence: parsedLog.args.transferSequence.toString(),
+              txHash: log.transactionHash,
+            };
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+      
+      logger.debug(`No transfer sequence found in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`);
+      return null;
+    } catch (error: any) {
+      logErrorContext(`Error searching for transfer sequence`, error);
+      return null;
     }
   }
 }

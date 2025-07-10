@@ -526,8 +526,9 @@ describe('SuiChainHandler', () => {
 
       expect(result).toBe(receiptWithoutTransferSequence);
       expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
+      // Check for either warning message since the implementation logs two warnings
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Could not find transferSequence'),
+        expect.stringContaining('Could not find transfer sequence'),
       );
     });
   });
