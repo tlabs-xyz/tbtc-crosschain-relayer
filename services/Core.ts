@@ -216,18 +216,18 @@ export const startCronJobs = () => {
 
 export async function recoverStuckFinalizedDeposits(): Promise<void> {
   logger.info('Recovering stuck finalized deposits...');
-  
+
   try {
     // Get all finalized deposits across all chains
     const finalizedDeposits = await DepositStore.getByStatus(DepositStatus.FINALIZED);
-    
+
     if (finalizedDeposits.length === 0) {
       logger.debug('No stuck finalized deposits found');
       return;
     }
-    
+
     logger.info(`Found ${finalizedDeposits.length} finalized deposits to check`);
-    
+
     // Group deposits by chain
     const depositsByChain = new Map<string, Deposit[]>();
     for (const deposit of finalizedDeposits) {
@@ -235,23 +235,25 @@ export async function recoverStuckFinalizedDeposits(): Promise<void> {
       chainDeposits.push(deposit);
       depositsByChain.set(deposit.chainId, chainDeposits);
     }
-    
+
     // Process each chain's deposits
     await Promise.all(
       Array.from(depositsByChain.entries()).map(async ([chainName, deposits]) => {
         try {
           // Get the handler for this chain
-          const handler = chainHandlerRegistry.list().find(
-            h => (h as BaseChainHandler<AnyChainConfig>).config.chainName === chainName
-          );
-          
+          const handler = chainHandlerRegistry
+            .list()
+            .find(
+              (h) => (h as BaseChainHandler<AnyChainConfig>).config.chainName === chainName,
+            );
+
           if (!handler) {
             logger.warn(`No handler found for chain ${chainName}, skipping recovery`);
             return;
           }
-          
+
           // Check if handler supports recovery (currently only SUI)
-          if (typeof (handler as any).recoverStuckFinalizedDeposits === 'function') {
+          if ('recoverStuckFinalizedDeposits' in handler && typeof (handler as any).recoverStuckFinalizedDeposits === 'function') {
             logger.info(`Running recovery for ${deposits.length} deposits on ${chainName}`);
             await (handler as any).recoverStuckFinalizedDeposits(deposits);
           } else {
@@ -260,9 +262,9 @@ export async function recoverStuckFinalizedDeposits(): Promise<void> {
         } catch (error) {
           logErrorContext(`Error recovering stuck deposits for ${chainName}:`, error);
         }
-      })
+      }),
     );
-    
+
     logger.info('Stuck finalized deposits recovery complete');
   } catch (error) {
     logErrorContext('Error in recoverStuckFinalizedDeposits:', error);
