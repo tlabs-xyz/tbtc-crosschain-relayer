@@ -786,41 +786,52 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
    * Enhanced search for transfer sequence with configurable block range
    */
   private async searchForTransferSequence(
-    deposit: Deposit, 
+    deposit: Deposit,
     startBlock: number,
-    searchBlocks: number = 5
+    searchBlocks: number = 5,
   ): Promise<{ sequence: string; txHash: string } | null> {
     try {
-      const endBlock = Math.min(startBlock + searchBlocks, await this.l1Provider.getBlockNumber());
-      
+      const endBlock = Math.min(
+        startBlock + searchBlocks,
+        await this.l1Provider.getBlockNumber(),
+      );
+
       // Get all logs from the L1BitcoinDepositor contract in the block range
       const logs = await this.l1Provider.getLogs({
         address: this.config.l1ContractAddress,
         fromBlock: startBlock,
         toBlock: endBlock,
       });
-      
-      logger.debug(`Searching ${logs.length} logs from L1BitcoinDepositor in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`);
-      
+
+      logger.debug(
+        `Searching ${logs.length} logs from L1BitcoinDepositor in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`,
+      );
+
       for (const log of logs) {
         try {
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+          if (
+            parsedLog.name === 'TokensTransferredWithPayload' &&
+            parsedLog.args.transferSequence
+          ) {
             // Additional validation: check if this might be for our deposit
             // You could add more validation here based on timing, amount, etc.
-            logger.info(`Found potential transfer sequence ${parsedLog.args.transferSequence} in tx ${log.transactionHash}`);
-            
+            logger.info(
+              `Found potential transfer sequence ${parsedLog.args.transferSequence} in tx ${log.transactionHash}`,
+            );
+
             return {
               sequence: parsedLog.args.transferSequence.toString(),
               txHash: log.transactionHash,
             };
           }
         } catch (error) {
-          continue;
         }
       }
-      
-      logger.debug(`No transfer sequence found in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`);
+
+      logger.debug(
+        `No transfer sequence found in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`,
+      );
       return null;
     } catch (error: any) {
       logErrorContext(`Error searching for transfer sequence`, error);
