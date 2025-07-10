@@ -721,59 +721,86 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
    */
   public async recoverStuckFinalizedDeposits(deposits: Deposit[]): Promise<void> {
     if (!deposits || deposits.length === 0) return;
-    
-    logger.info(`Attempting to recover ${deposits.length} stuck finalized deposits for ${this.config.chainName}`);
-    
+
+    logger.info(
+      `Attempting to recover ${deposits.length} stuck finalized deposits for ${this.config.chainName}`,
+    );
+
     // Filter to only deposits that have been finalized for more than 5 minutes
     const now = Date.now();
     const RECOVERY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
-    
-    const stuckDeposits = deposits.filter(deposit => {
+
+    const stuckDeposits = deposits.filter((deposit) => {
       if (!deposit.dates.finalizationAt) return false;
       const timeSinceFinalized = now - deposit.dates.finalizationAt;
       return timeSinceFinalized > RECOVERY_DELAY_MS;
     });
-    
+
     if (stuckDeposits.length === 0) {
       logger.debug(`No deposits have been finalized long enough for recovery`);
       return;
     }
-    
+
     logger.info(`Found ${stuckDeposits.length} deposits finalized more than 5 minutes ago`);
-    
+
     for (const deposit of stuckDeposits) {
       try {
         logger.info(`Attempting recovery for deposit ${deposit.id}`);
-        
+
         // Get the finalization transaction details
         if (!deposit.hashes?.eth?.finalizeTxHash) {
           logger.warn(`Deposit ${deposit.id} missing finalization tx hash, skipping recovery`);
           continue;
         }
-        
+
         // Get the finalization receipt to determine block number
-        const finalizeTxReceipt = await this.l1Provider.getTransactionReceipt(deposit.hashes.eth.finalizeTxHash);
+        const finalizeTxReceipt = await this.l1Provider.getTransactionReceipt(
+          deposit.hashes.eth.finalizeTxHash,
+        );
         if (!finalizeTxReceipt) {
           logger.warn(`Could not get finalization receipt for deposit ${deposit.id}`);
           continue;
         }
-        
+
         // Search for transfer sequence starting from finalization block
-        const searchResult = await this.searchForTransferSequence(deposit, finalizeTxReceipt.blockNumber);
-        
+        const searchResult = await this.searchForTransferSequence(
+          deposit,
+          finalizeTxReceipt.blockNumber,
+        );
+
         if (searchResult) {
-          logger.info(`Found transfer sequence ${searchResult.sequence} for deposit ${deposit.id} in recovery`);
-          await updateToAwaitingWormholeVAA(searchResult.txHash, deposit, searchResult.sequence);
-          logger.info(`Successfully recovered deposit ${deposit.id} - updated to AWAITING_WORMHOLE_VAA`);
+          logger.info(
+            `Found transfer sequence ${searchResult.sequence} for deposit ${deposit.id} in recovery`,
+          );
+          await updateToAwaitingWormholeVAA(
+            searchResult.txHash,
+            deposit,
+            searchResult.sequence,
+          );
+          logger.info(
+            `Successfully recovered deposit ${deposit.id} - updated to AWAITING_WORMHOLE_VAA`,
+          );
         } else {
           // Search a wider range if initial search failed
-          const widerSearchResult = await this.searchForTransferSequence(deposit, finalizeTxReceipt.blockNumber - 10, 20);
+          const widerSearchResult = await this.searchForTransferSequence(
+            deposit,
+            finalizeTxReceipt.blockNumber - 10,
+            20,
+          );
           if (widerSearchResult) {
-            logger.info(`Found transfer sequence ${widerSearchResult.sequence} for deposit ${deposit.id} in wider search`);
-            await updateToAwaitingWormholeVAA(widerSearchResult.txHash, deposit, widerSearchResult.sequence);
+            logger.info(
+              `Found transfer sequence ${widerSearchResult.sequence} for deposit ${deposit.id} in wider search`,
+            );
+            await updateToAwaitingWormholeVAA(
+              widerSearchResult.txHash,
+              deposit,
+              widerSearchResult.sequence,
+            );
             logger.info(`Successfully recovered deposit ${deposit.id} with wider search`);
           } else {
-            logger.warn(`Could not find transfer sequence for deposit ${deposit.id} even with wider search`);
+            logger.warn(
+              `Could not find transfer sequence for deposit ${deposit.id} even with wider search`,
+            );
           }
         }
       } catch (error) {
