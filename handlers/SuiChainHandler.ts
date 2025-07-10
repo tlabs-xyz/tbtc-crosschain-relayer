@@ -767,26 +767,41 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       try {
         logger.info(`Attempting recovery for deposit ${deposit.id}`);
 
-        // Get the finalization transaction details
-        if (!deposit.hashes?.eth?.finalizeTxHash) {
-          logger.warn(`Deposit ${deposit.id} missing finalization tx hash, skipping recovery`);
-          continue;
+        // First, we need to find which block to start searching from
+        let searchStartBlock: number;
+
+        if (deposit.hashes?.eth?.finalizeTxHash) {
+          // If we have the finalization tx hash, use it to get the block number
+          const finalizeTxReceipt = await this.l1Provider.getTransactionReceipt(
+            deposit.hashes.eth.finalizeTxHash,
+          );
+          if (!finalizeTxReceipt) {
+            logger.warn(`Could not get finalization receipt for deposit ${deposit.id}`);
+            continue;
+          }
+          searchStartBlock = finalizeTxReceipt.blockNumber;
+        } else {
+          // If no finalization tx hash, estimate the block based on finalization timestamp
+          logger.info(
+            `Deposit ${deposit.id} missing finalization tx hash, estimating search block...`,
+          );
+
+          const currentBlock = await this.l1Provider.getBlockNumber();
+          const currentTimestamp = (await this.l1Provider.getBlock(currentBlock)).timestamp;
+
+          // We know finalizationAt exists because we filtered for it earlier
+          const finalizationTimestamp = Math.floor(deposit.dates.finalizationAt! / 1000);
+          const secondsAgo = currentTimestamp - finalizationTimestamp;
+          const blocksAgo = Math.floor(secondsAgo / 12); // ~12 second block time on Ethereum
+          searchStartBlock = Math.max(1, currentBlock - blocksAgo);
+
+          logger.info(
+            `Estimated search start block: ${searchStartBlock} for deposit ${deposit.id}`,
+          );
         }
 
-        // Get the finalization receipt to determine block number
-        const finalizeTxReceipt = await this.l1Provider.getTransactionReceipt(
-          deposit.hashes.eth.finalizeTxHash,
-        );
-        if (!finalizeTxReceipt) {
-          logger.warn(`Could not get finalization receipt for deposit ${deposit.id}`);
-          continue;
-        }
-
-        // Search for transfer sequence starting from finalization block
-        const searchResult = await this.searchForTransferSequence(
-          deposit,
-          finalizeTxReceipt.blockNumber,
-        );
+        // Search for transfer sequence starting from the determined block
+        const searchResult = await this.searchForTransferSequence(deposit, searchStartBlock);
 
         if (searchResult) {
           logger.info(
@@ -800,7 +815,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           // Search a wider range if initial search failed
           const widerSearchResult = await this.searchForTransferSequence(
             deposit,
-            finalizeTxReceipt.blockNumber - 10,
+            searchStartBlock - 10,
             20,
           );
           if (widerSearchResult) {
@@ -831,47 +846,54 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   private async searchForTransferSequence(
     deposit: Deposit,
     startBlock: number,
-    searchBlocks: number = 5,
+    searchBlocks: number = 10,
   ): Promise<{ sequence: string; txHash: string } | null> {
     try {
       const endBlock = Math.min(startBlock + searchBlocks, await this.l1Provider.getBlockNumber());
 
-      // Get all logs from the L1BitcoinDepositor contract in the block range
+      logger.debug(
+        `Searching for TokensTransferredWithPayload events in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`,
+      );
+
+      // Search for TokensTransferredWithPayload events by topic signature
+      // This catches events from any contract, not just L1BitcoinDepositor
       const logs = await this.l1Provider.getLogs({
-        address: this.config.l1ContractAddress,
+        topics: [TOKENS_TRANSFERRED_SIG],
         fromBlock: startBlock,
         toBlock: endBlock,
       });
 
-      logger.debug(
-        `Searching ${logs.length} logs from L1BitcoinDepositor in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`,
+      logger.info(
+        `Found ${logs.length} TokensTransferredWithPayload events in blocks ${startBlock}-${endBlock}`,
       );
+
+      // Filter to find events from L1BitcoinDepositor
+      const l1BitcoinDepositorAddress = this.config.l1ContractAddress.toLowerCase();
 
       for (const log of logs) {
         try {
-          const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          if (
-            parsedLog.name === 'TokensTransferredWithPayload' &&
-            parsedLog.args.transferSequence
-          ) {
-            // Additional validation: check if this might be for our deposit
-            // You could add more validation here based on timing, amount, etc.
-            logger.info(
-              `Found potential transfer sequence ${parsedLog.args.transferSequence} in tx ${log.transactionHash}`,
-            );
+          // Check if this event is from L1BitcoinDepositor
+          if (log.address.toLowerCase() === l1BitcoinDepositorAddress) {
+            const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
 
-            return {
-              sequence: parsedLog.args.transferSequence.toString(),
-              txHash: log.transactionHash,
-            };
+            if (parsedLog.args.transferSequence) {
+              logger.info(
+                `Found transfer sequence ${parsedLog.args.transferSequence} from L1BitcoinDepositor in tx ${log.transactionHash}`,
+              );
+
+              return {
+                sequence: parsedLog.args.transferSequence.toString(),
+                txHash: log.transactionHash,
+              };
+            }
           }
         } catch (error) {
-          // Skip logs that fail to parse
+          logger.debug(`Failed to parse log: ${error}`);
         }
       }
 
       logger.debug(
-        `No transfer sequence found in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`,
+        `No transfer sequence found from L1BitcoinDepositor in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`,
       );
       return null;
     } catch (error: any) {
