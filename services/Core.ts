@@ -243,9 +243,7 @@ export async function recoverStuckFinalizedDeposits(): Promise<void> {
           // Get the handler for this chain
           const handler = chainHandlerRegistry
             .list()
-            .find(
-              (h) => (h as BaseChainHandler<AnyChainConfig>).config.chainName === chainName,
-            );
+            .find((h) => (h as BaseChainHandler<AnyChainConfig>).config.chainName === chainName);
 
           if (!handler) {
             logger.warn(`No handler found for chain ${chainName}, skipping recovery`);
@@ -253,7 +251,10 @@ export async function recoverStuckFinalizedDeposits(): Promise<void> {
           }
 
           // Check if handler supports recovery (currently only SUI)
-          if ('recoverStuckFinalizedDeposits' in handler && typeof (handler as any).recoverStuckFinalizedDeposits === 'function') {
+          if (
+            'recoverStuckFinalizedDeposits' in handler &&
+            typeof (handler as any).recoverStuckFinalizedDeposits === 'function'
+          ) {
             logger.info(`Running recovery for ${deposits.length} deposits on ${chainName}`);
             await (handler as any).recoverStuckFinalizedDeposits(deposits);
           } else {
@@ -274,10 +275,10 @@ export async function recoverStuckFinalizedDeposits(): Promise<void> {
 export async function runStartupTasks(): Promise<void> {
   logger.info('Running startup tasks...');
   await Promise.all([
-    processDeposits(), 
-    processRedemptions(), 
+    processDeposits(),
+    processRedemptions(),
     checkForPastDepositsForAllChains(),
-    recoverStuckFinalizedDeposits()
+    recoverStuckFinalizedDeposits(),
   ]);
   logger.info('Startup tasks complete.');
 }

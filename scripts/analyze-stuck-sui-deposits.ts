@@ -2,26 +2,26 @@
 
 /**
  * Analysis Script for Stuck SUI Deposits
- * 
+ *
  * This script searches for on-chain data for stuck deposits without updating the database.
  * It outputs the results to a JSON file for manual review or SQL generation.
- * 
+ *
  * Purpose:
  *   When SUI deposits get stuck at FINALIZED status due to the bug in SuiChainHandler line 281,
  *   this script finds the missing TokensTransferredWithPayload events that were emitted but not
  *   parsed. It searches in subsequent blocks after finalization to find the bridging transactions.
- * 
+ *
  * Usage:
  *   export L1_RPC_URL=https://mainnet.infura.io/v3/YOUR_KEY
  *   npx tsx analyze-stuck-sui-deposits.ts
- * 
+ *
  * Output:
  *   - Creates stuck-deposits-analysis.json with:
  *     - finalizeTxHash: The transaction where OptimisticMintingFinalized was emitted
  *     - eventDetails.transactionHash: The transaction where TokensTransferredWithPayload was emitted
  *     - transferSequence: The Wormhole sequence number needed for bridging
  *     - sqlQuery: Ready-to-use SQL to update the database
- * 
+ *
  * Important: The generated SQL uses eventDetails.transactionHash for wormholeInfo.txHash,
  * NOT the finalizeTxHash, as the bridging event may occur in a different transaction.
  */
@@ -33,7 +33,7 @@ import logger from '../utils/Logger.js';
 
 // Constants
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
-  'TokensTransferredWithPayload(uint256,bytes32,uint64)'
+  'TokensTransferredWithPayload(uint256,bytes32,uint64)',
 );
 
 // Properly formed deposits stuck at FINALIZED (finalizeTxHash: null)
@@ -41,23 +41,23 @@ const STUCK_DEPOSITS = [
   {
     id: '42325933540219796465723565385385761189597086032936836552159044303576256984712',
     fundingTxHash: '0x62991f738b38cdb4708ec507850b2e4f224d7e3bb9c537608304ef8338f3208d',
-    finalizationAt: 1752026321505
+    finalizationAt: 1752026321505,
   },
   {
     id: '88792792259779513503100670664758251890525032976044653250247310878831247262577',
     fundingTxHash: '0x53239d9484cd9a15b66f6acf1d3b56594f5608fdadc98081a84b40b3bca93a28',
-    finalizationAt: 1752050882156
+    finalizationAt: 1752050882156,
   },
   {
     id: '31022509137923903033077930255006009924958543410544690861794806772687396463515',
     fundingTxHash: '0x9c91917e5a9c98b9f42232e5ac50654cf083fd91256da9eed56ce1102e256910',
-    finalizationAt: 1752016335503
+    finalizationAt: 1752016335503,
   },
   {
     id: '91196437094864865312666930921039917604124891491712695595444269776339724709022',
     fundingTxHash: '0x8da834a9dcb376718e784d6a3ba984961f6f594ea3ee13565fdf960f50dc2705',
-    finalizationAt: 1752023957066
-  }
+    finalizationAt: 1752023957066,
+  },
 ];
 
 interface DepositAnalysis {
@@ -78,7 +78,7 @@ interface DepositAnalysis {
 async function searchForFinalizationTx(
   provider: ethers.providers.JsonRpcProvider,
   depositId: string,
-  approximateTimestamp: number
+  approximateTimestamp: number,
 ): Promise<{ txHash: string | null; searchDetails: any }> {
   try {
     // Convert timestamp to block number (approximate)
@@ -88,32 +88,38 @@ async function searchForFinalizationTx(
     const secondsAgo = currentTimestamp - Math.floor(approximateTimestamp / 1000);
     const blocksAgo = Math.floor(secondsAgo / 12);
     const targetBlock = Math.max(1, currentBlock - blocksAgo);
-    
-    logger.info(`  Searching around block ${targetBlock} (timestamp: ${new Date(approximateTimestamp).toISOString()})`);
-    
+
+    logger.info(
+      `  Searching around block ${targetBlock} (timestamp: ${new Date(approximateTimestamp).toISOString()})`,
+    );
+
     // Search in a range of blocks
     const searchRange = 50; // +/- 50 blocks (~10 minutes)
     const fromBlock = Math.max(1, targetBlock - searchRange);
     const toBlock = Math.min(currentBlock, targetBlock + searchRange);
-    
+
     const searchDetails = {
       searchedBlocks: { from: fromBlock, to: toBlock },
       targetBlock,
-      approximateTimestamp: new Date(approximateTimestamp).toISOString()
+      approximateTimestamp: new Date(approximateTimestamp).toISOString(),
     };
-    
+
     // Look for OptimisticMintingFinalized events with our depositKey
     const depositKey = ethers.BigNumber.from(depositId);
-    
+
     // Query for OptimisticMintingFinalized events
     const vaultAddress = '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD'; // TBTC Vault on mainnet
-    const vaultContract = new ethers.Contract(vaultAddress, [
-      'event OptimisticMintingFinalized(address indexed minter, uint256 indexed depositKey, address indexed depositor, uint256 optimisticMintingDebt)'
-    ], provider);
-    
+    const vaultContract = new ethers.Contract(
+      vaultAddress,
+      [
+        'event OptimisticMintingFinalized(address indexed minter, uint256 indexed depositKey, address indexed depositor, uint256 optimisticMintingDebt)',
+      ],
+      provider,
+    );
+
     const filter = vaultContract.filters.OptimisticMintingFinalized(null, depositKey);
     const events = await vaultContract.queryFilter(filter, fromBlock, toBlock);
-    
+
     if (events.length > 0) {
       const event = events[0];
       logger.info(`  ✓ Found OptimisticMintingFinalized event in tx: ${event.transactionHash}`);
@@ -122,26 +128,25 @@ async function searchForFinalizationTx(
         searchDetails: {
           ...searchDetails,
           foundInBlock: event.blockNumber,
-          foundInTxIndex: event.transactionIndex
-        }
+          foundInTxIndex: event.transactionIndex,
+        },
       };
     }
-    
+
     logger.warn(`  No OptimisticMintingFinalized event found in blocks ${fromBlock}-${toBlock}`);
     return { txHash: null, searchDetails };
-    
   } catch (error: any) {
     logger.error(`  Error searching for finalization tx: ${error.message}`);
-    return { 
-      txHash: null, 
-      searchDetails: { error: error.message }
+    return {
+      txHash: null,
+      searchDetails: { error: error.message },
     };
   }
 }
 
 async function analyzeStuckDeposits(): Promise<void> {
   const results: DepositAnalysis[] = [];
-  
+
   try {
     // Validate environment
     const l1RpcUrl = process.env.L1_RPC_URL;
@@ -176,7 +181,7 @@ async function analyzeStuckDeposits(): Promise<void> {
     for (const depositMeta of STUCK_DEPOSITS) {
       logger.info(`\nAnalyzing deposit ${depositMeta.id}`);
       logger.info(`  Funding TX: ${depositMeta.fundingTxHash}`);
-      
+
       const analysis: DepositAnalysis = {
         id: depositMeta.id,
         fundingTxHash: depositMeta.fundingTxHash,
@@ -184,33 +189,33 @@ async function analyzeStuckDeposits(): Promise<void> {
         finalizeTxHash: null,
         transferSequence: null,
         eventDetails: null,
-        searchDetails: null
+        searchDetails: null,
       };
-      
+
       try {
         // Search for the finalization transaction
         logger.info(`  Searching for finalization transaction...`);
         const { txHash, searchDetails } = await searchForFinalizationTx(
-          provider, 
-          depositMeta.id, 
-          depositMeta.finalizationAt
+          provider,
+          depositMeta.id,
+          depositMeta.finalizationAt,
         );
-        
+
         analysis.searchDetails = searchDetails;
-        
+
         if (!txHash) {
           analysis.error = 'Could not find finalization transaction';
           logger.error(`  ❌ ${analysis.error}`);
           results.push(analysis);
           continue;
         }
-        
+
         analysis.finalizeTxHash = txHash;
-        
+
         // Fetch transaction receipt
         logger.info(`  Fetching transaction receipt...`);
         const receipt = await provider.getTransactionReceipt(txHash);
-        
+
         if (!receipt) {
           analysis.error = `No receipt found for transaction ${txHash}`;
           logger.error(`  ❌ ${analysis.error}`);
@@ -218,7 +223,9 @@ async function analyzeStuckDeposits(): Promise<void> {
           continue;
         }
 
-        logger.info(`  ✓ Receipt found - Block ${receipt.blockNumber}, ${receipt.logs.length} logs`);
+        logger.info(
+          `  ✓ Receipt found - Block ${receipt.blockNumber}, ${receipt.logs.length} logs`,
+        );
 
         // Find and parse TokensTransferredWithPayload event
         let transferSequence: string | null = null;
@@ -234,27 +241,33 @@ async function analyzeStuckDeposits(): Promise<void> {
         // Now look for TokensTransferredWithPayload event - it might be in a subsequent transaction or block
         // Let's search in a wider range of blocks (finalization might trigger bridging in next blocks)
         const searchRangeBlocks = 10; // Search up to 10 blocks after finalization
-        logger.info(`  Searching for TokensTransferredWithPayload events in blocks ${receipt.blockNumber} to ${receipt.blockNumber + searchRangeBlocks}...`);
-        
+        logger.info(
+          `  Searching for TokensTransferredWithPayload events in blocks ${receipt.blockNumber} to ${receipt.blockNumber + searchRangeBlocks}...`,
+        );
+
         const l1BitcoinDepositorAddress = '0xb810AbD43d8FCFD812d6FEB14fefc236E92a341A'; // Mainnet address
         const tokenBridgeAddress = '0x3ee18B2214AFF97000D974cf647E7C347E8fa585'; // Wormhole Token Bridge mainnet
-        
+
         // Get all logs in the block range that match our event signature
         const blockLogs = await provider.getLogs({
           fromBlock: receipt.blockNumber,
           toBlock: receipt.blockNumber + searchRangeBlocks,
-          topics: [TOKENS_TRANSFERRED_SIG]
+          topics: [TOKENS_TRANSFERRED_SIG],
         });
-        
-        logger.info(`  Found ${blockLogs.length} TokensTransferredWithPayload events in blocks ${receipt.blockNumber}-${receipt.blockNumber + searchRangeBlocks}`);
-        
+
+        logger.info(
+          `  Found ${blockLogs.length} TokensTransferredWithPayload events in blocks ${receipt.blockNumber}-${receipt.blockNumber + searchRangeBlocks}`,
+        );
+
         // Check if any of these logs are from our contracts and relate to our deposit
         for (const log of blockLogs) {
           try {
             const parsedLog = contractInterface.parseLog(log);
             // Check if this event might be related to our deposit by checking the amount or timing
-            logger.info(`    Event from ${log.address} with sequence ${parsedLog.args.transferSequence}`);
-            
+            logger.info(
+              `    Event from ${log.address} with sequence ${parsedLog.args.transferSequence}`,
+            );
+
             // If this is from L1BitcoinDepositor, it's likely ours
             if (log.address.toLowerCase() === l1BitcoinDepositorAddress.toLowerCase()) {
               transferSequence = parsedLog.args.transferSequence.toString();
@@ -264,7 +277,7 @@ async function analyzeStuckDeposits(): Promise<void> {
                 emittingContract: log.address,
                 logIndex: log.logIndex,
                 transactionHash: log.transactionHash,
-                transactionIndex: log.transactionIndex
+                transactionIndex: log.transactionIndex,
               };
               logger.info(`    ✓ Found matching event from L1BitcoinDepositor!`);
               break;
@@ -280,7 +293,7 @@ async function analyzeStuckDeposits(): Promise<void> {
         } else {
           analysis.transferSequence = transferSequence;
           analysis.eventDetails = eventDetails;
-          
+
           // Log event details
           logger.info(`  ✓ Found TokensTransferredWithPayload event:`);
           logger.info(`    - Transfer Sequence: ${transferSequence}`);
@@ -288,12 +301,11 @@ async function analyzeStuckDeposits(): Promise<void> {
           logger.info(`    - Destination: ${eventDetails.destinationChainReceiver}`);
           logger.info(`    - Emitted by: ${eventDetails.emittingContract}`);
         }
-
       } catch (error: any) {
         analysis.error = `Error processing deposit: ${error.message}`;
         logger.error(`  ❌ ${analysis.error}`);
       }
-      
+
       results.push(analysis);
     }
 
@@ -302,16 +314,16 @@ async function analyzeStuckDeposits(): Promise<void> {
       timestamp: new Date().toISOString(),
       rpcUrl: l1RpcUrl,
       totalDeposits: STUCK_DEPOSITS.length,
-      successfulAnalysis: results.filter(r => r.transferSequence !== null).length,
-      failedAnalysis: results.filter(r => r.transferSequence === null).length,
+      successfulAnalysis: results.filter((r) => r.transferSequence !== null).length,
+      failedAnalysis: results.filter((r) => r.transferSequence === null).length,
       deposits: results,
-      sqlQuery: generateSQLQuery(results)
+      sqlQuery: generateSQLQuery(results),
     };
 
     // Save to JSON file
     const outputPath = './stuck-deposits-analysis.json';
     writeFileSync(outputPath, JSON.stringify(output, null, 2));
-    
+
     // Print summary
     logger.info('');
     logger.info('========================================');
@@ -322,7 +334,6 @@ async function analyzeStuckDeposits(): Promise<void> {
     logger.info(`Failed to find data: ${output.failedAnalysis}`);
     logger.info('');
     logger.info(`Results saved to: ${outputPath}`);
-
   } catch (error: any) {
     logger.error(`Fatal error: ${error.message}`);
     logger.error(error.stack);
@@ -331,12 +342,12 @@ async function analyzeStuckDeposits(): Promise<void> {
 }
 
 function generateSQLQuery(results: DepositAnalysis[]): string {
-  const successfulResults = results.filter(r => r.transferSequence !== null);
-  
+  const successfulResults = results.filter((r) => r.transferSequence !== null);
+
   if (successfulResults.length === 0) {
     return '-- No deposits with valid transfer sequences found';
   }
-  
+
   let sql = `-- SQL Query to update stuck SUI deposits with on-chain data
 -- Generated at: ${new Date().toISOString()}
 
@@ -360,7 +371,7 @@ function generateSQLQuery(results: DepositAnalysis[]): string {
 
 -- Update deposits with their finalization data
 `;
-  
+
   for (const deposit of successfulResults) {
     sql += `
 -- Deposit ${deposit.id}
@@ -387,14 +398,14 @@ AND "status" = 2 -- Only update if still FINALIZED
 AND "chainId" = 'SuiMainnet'; -- Use exact match for case-sensitive chainId
 `;
   }
-  
+
   sql += `
 -- Verify the updates
 SELECT "id", "chainId", "status", "wormholeInfo", "hashes"->'eth'->'finalizeTxHash' as "finalizeTxHash"
 FROM "Deposit"
-WHERE "id" IN (${successfulResults.map(d => `'${d.id}'`).join(', ')});
+WHERE "id" IN (${successfulResults.map((d) => `'${d.id}'`).join(', ')});
 `;
-  
+
   return sql;
 }
 

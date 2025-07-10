@@ -278,37 +278,43 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
     try {
       const logs = l1Receipt.logs || [];
-      
+
       // Method 1: Try parsing all logs regardless of topics
       for (const log of logs) {
         try {
           // Try to parse the log with our interface
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          
+
           // Check if this is the TokensTransferredWithPayload event
-          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+          if (
+            parsedLog.name === 'TokensTransferredWithPayload' &&
+            parsedLog.args.transferSequence
+          ) {
             transferSequence = parsedLog.args.transferSequence.toString();
             eventTxHash = l1Receipt.transactionHash;
-            logger.info(`Found transfer sequence ${transferSequence} in parsed log for deposit ${deposit.id}`);
+            logger.info(
+              `Found transfer sequence ${transferSequence} in parsed log for deposit ${deposit.id}`,
+            );
             break;
           }
         } catch (parseError) {
-          // This log doesn't match our interface, continue to next
-          continue;
+          // This log doesn't match our interface
         }
       }
-      
+
       // Method 2: If not found, check by event signature in any topic position
       if (!transferSequence) {
         for (const log of logs) {
           // Check if any topic contains our event signature
-          if (log.topics.some(topic => topic === TOKENS_TRANSFERRED_SIG)) {
+          if (log.topics.some((topic) => topic === TOKENS_TRANSFERRED_SIG)) {
             try {
               const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
               if (parsedLog.args.transferSequence) {
                 transferSequence = parsedLog.args.transferSequence.toString();
                 eventTxHash = l1Receipt.transactionHash;
-                logger.info(`Found transfer sequence ${transferSequence} by signature search for deposit ${deposit.id}`);
+                logger.info(
+                  `Found transfer sequence ${transferSequence} by signature search for deposit ${deposit.id}`,
+                );
                 break;
               }
             } catch (error) {
@@ -317,24 +323,29 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           }
         }
       }
-      
+
       // Method 3: If still not found, filter logs by contract address
       if (!transferSequence) {
-        const contractLogs = logs.filter(log => 
-          log.address.toLowerCase() === this.config.l1ContractAddress.toLowerCase()
+        const contractLogs = logs.filter(
+          (log) => log.address.toLowerCase() === this.config.l1ContractAddress.toLowerCase(),
         );
-        
+
         for (const log of contractLogs) {
           try {
             const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-            if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+            if (
+              parsedLog.name === 'TokensTransferredWithPayload' &&
+              parsedLog.args.transferSequence
+            ) {
               transferSequence = parsedLog.args.transferSequence.toString();
               eventTxHash = l1Receipt.transactionHash;
-              logger.info(`Found transfer sequence ${transferSequence} by contract address filter for deposit ${deposit.id}`);
+              logger.info(
+                `Found transfer sequence ${transferSequence} by contract address filter for deposit ${deposit.id}`,
+              );
               break;
             }
           } catch (error) {
-            continue;
+            // Skip logs that don't parse as TokensTransferredWithPayload
           }
         }
       }
@@ -344,11 +355,17 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
     // If still not found in the same transaction, implement the recovery logic
     if (!transferSequence) {
-      logger.warn(`Transfer sequence not found in finalization transaction for deposit ${deposit.id}`);
-      
+      logger.warn(
+        `Transfer sequence not found in finalization transaction for deposit ${deposit.id}`,
+      );
+
       // Try to find it immediately in subsequent blocks
       try {
-        const searchResult = await this.searchForTransferSequence(deposit, l1Receipt.blockNumber, 5);
+        const searchResult = await this.searchForTransferSequence(
+          deposit,
+          l1Receipt.blockNumber,
+          5,
+        );
         if (searchResult) {
           transferSequence = searchResult.sequence;
           eventTxHash = searchResult.txHash;
@@ -360,14 +377,17 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
     if (transferSequence && eventTxHash) {
       await updateToAwaitingWormholeVAA(eventTxHash, deposit, transferSequence);
-      logger.info(`Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`);
+      logger.info(
+        `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
+      );
     } else {
-      logger.warn(`Could not find transfer sequence for deposit ${deposit.id}. It will be retried in the hourly recovery task.`);
+      logger.warn(
+        `Could not find transfer sequence for deposit ${deposit.id}. It will be retried in the hourly recovery task.`,
+      );
     }
 
     return finalizedDepositReceipt;
   }
-
 
   /**
    * Processes SUI DepositInitialized Move events from the BitcoinDepositor contract.
@@ -772,11 +792,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           logger.info(
             `Found transfer sequence ${searchResult.sequence} for deposit ${deposit.id} in recovery`,
           );
-          await updateToAwaitingWormholeVAA(
-            searchResult.txHash,
-            deposit,
-            searchResult.sequence,
-          );
+          await updateToAwaitingWormholeVAA(searchResult.txHash, deposit, searchResult.sequence);
           logger.info(
             `Successfully recovered deposit ${deposit.id} - updated to AWAITING_WORMHOLE_VAA`,
           );
@@ -818,10 +834,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     searchBlocks: number = 5,
   ): Promise<{ sequence: string; txHash: string } | null> {
     try {
-      const endBlock = Math.min(
-        startBlock + searchBlocks,
-        await this.l1Provider.getBlockNumber(),
-      );
+      const endBlock = Math.min(startBlock + searchBlocks, await this.l1Provider.getBlockNumber());
 
       // Get all logs from the L1BitcoinDepositor contract in the block range
       const logs = await this.l1Provider.getLogs({
@@ -853,6 +866,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             };
           }
         } catch (error) {
+          // Skip logs that fail to parse
         }
       }
 
