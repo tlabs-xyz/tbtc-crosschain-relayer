@@ -382,7 +382,7 @@ describe('SuiChainHandler Integration Tests', () => {
         .mockResolvedValue(mockReceipt);
 
       // Mock L1 contract interface - need to ensure parseLog is called successfully
-      (handler as any).l1BitcoinDepositor = {
+      (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
             args: { transferSequence: { toString: () => '456' } },

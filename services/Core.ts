@@ -15,6 +15,9 @@ import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
 import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
+import type { Deposit } from '../types/Deposit.type.js';
 
 let effectiveChainConfigs: AnyChainConfig[] = [];
 
@@ -165,6 +168,11 @@ export const startCronJobs = () => {
     await checkForPastDepositsForAllChains();
   });
 
+  // Every 60 minutes - recover stuck finalized deposits (for chains that support it)
+  cron.schedule('*/60 * * * *', async () => {
+    await recoverStuckFinalizedDeposits();
+  });
+
   if (process.env.ENABLE_CLEANUP_CRON === 'true') {
     // Every 10 minutes - cleanup deposits
     cron.schedule('*/10 * * * *', async () => {
@@ -206,9 +214,72 @@ export const startCronJobs = () => {
   logger.debug('Multi-chain cron job setup complete.');
 };
 
+export async function recoverStuckFinalizedDeposits(): Promise<void> {
+  logger.info('Recovering stuck finalized deposits...');
+
+  try {
+    // Get all finalized deposits across all chains
+    const finalizedDeposits = await DepositStore.getByStatus(DepositStatus.FINALIZED);
+
+    if (finalizedDeposits.length === 0) {
+      logger.debug('No stuck finalized deposits found');
+      return;
+    }
+
+    logger.info(`Found ${finalizedDeposits.length} finalized deposits to check`);
+
+    // Group deposits by chain
+    const depositsByChain = new Map<string, Deposit[]>();
+    for (const deposit of finalizedDeposits) {
+      const chainDeposits = depositsByChain.get(deposit.chainId) || [];
+      chainDeposits.push(deposit);
+      depositsByChain.set(deposit.chainId, chainDeposits);
+    }
+
+    // Process each chain's deposits
+    await Promise.all(
+      Array.from(depositsByChain.entries()).map(async ([chainName, deposits]) => {
+        try {
+          // Get the handler for this chain
+          const handler = chainHandlerRegistry
+            .list()
+            .find((h) => (h as BaseChainHandler<AnyChainConfig>).config.chainName === chainName);
+
+          if (!handler) {
+            logger.warn(`No handler found for chain ${chainName}, skipping recovery`);
+            return;
+          }
+
+          // Check if handler supports recovery (currently only SUI)
+          if (
+            'recoverStuckFinalizedDeposits' in handler &&
+            typeof (handler as any).recoverStuckFinalizedDeposits === 'function'
+          ) {
+            logger.info(`Running recovery for ${deposits.length} deposits on ${chainName}`);
+            await (handler as any).recoverStuckFinalizedDeposits(deposits);
+          } else {
+            logger.debug(`Chain ${chainName} does not support finalized deposit recovery`);
+          }
+        } catch (error) {
+          logErrorContext(`Error recovering stuck deposits for ${chainName}:`, error);
+        }
+      }),
+    );
+
+    logger.info('Stuck finalized deposits recovery complete');
+  } catch (error) {
+    logErrorContext('Error in recoverStuckFinalizedDeposits:', error);
+  }
+}
+
 export async function runStartupTasks(): Promise<void> {
   logger.info('Running startup tasks...');
-  await Promise.all([processDeposits(), processRedemptions(), checkForPastDepositsForAllChains()]);
+  await Promise.all([
+    processDeposits(),
+    processRedemptions(),
+    checkForPastDepositsForAllChains(),
+    recoverStuckFinalizedDeposits(),
+  ]);
   logger.info('Startup tasks complete.');
 }
 

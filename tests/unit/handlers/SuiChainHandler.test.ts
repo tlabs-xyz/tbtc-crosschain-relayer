@@ -480,8 +480,8 @@ describe('SuiChainHandler', () => {
         .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
         .mockResolvedValue(mockReceipt);
 
-      // Mock the l1BitcoinDepositor interface
-      (handler as any).l1BitcoinDepositor = {
+      // Mock the l1BitcoinDepositorProvider interface (changed from l1BitcoinDepositor)
+      (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
             args: { transferSequence: ethers.BigNumber.from(123) },
@@ -526,8 +526,9 @@ describe('SuiChainHandler', () => {
 
       expect(result).toBe(receiptWithoutTransferSequence);
       expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
+      // Check for either warning message since the implementation logs two warnings
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Could not find transferSequence'),
+        expect.stringContaining('Could not find transfer sequence'),
       );
     });
   });
