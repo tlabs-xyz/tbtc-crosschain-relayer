@@ -668,7 +668,11 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
       return await this.executeInitializeTransaction(context, deposit, l2DepositOwner, txOverrides);
     } catch (error: any) {
-      return await this.logAndReturnError(context, `Error during L1 initializeDeposit: ${error.message}`, error);
+      return await this.logAndReturnError(
+        context,
+        `Error during L1 initializeDeposit: ${error.message}`,
+        error,
+      );
     }
   }
 
@@ -697,7 +701,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   ): Promise<undefined> {
     logger.error(`[${this.config.chainName}] ${context.logPrefix} ${message}`);
     if (errorObj) {
-      logErrorContext(`${context.logPrefix} ${message}`, errorObj, { chainName: this.config.chainName });
+      logErrorContext(`${context.logPrefix} ${message}`, errorObj, {
+        chainName: this.config.chainName,
+      });
     }
     await logDepositError(context.logId, message, errorObj);
     return undefined;
@@ -707,7 +713,6 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     context: { depositKey: any; depositId: string; logPrefix: string },
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
-
     const depositState = await this.l1DepositorContractProvider!.deposits(context.depositKey);
     logger.info(
       `[${this.config.chainName}] ${context.logPrefix} Deposit state for deposit key ${context.depositKey}: ${depositState}`,
@@ -751,7 +756,6 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     context: { logPrefix: string },
     deposit: Deposit,
   ): Promise<string | undefined> {
-
     let l2DepositOwner = deposit.L1OutputEvent.l2DepositOwner;
     try {
       l2DepositOwner = toUint256StarknetAddress(l2DepositOwner);
@@ -774,11 +778,10 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     deposit: Deposit,
     l2DepositOwner: string,
   ): Promise<PayableOverrides | undefined> {
-
     logger.info(
       `[${this.config.chainName}] ${context.logPrefix} Preparing to estimate gas and simulate initializeDeposit...`,
     );
-    
+
     const l2DepositOwnerBN = ethers.BigNumber.from(l2DepositOwner);
 
     // --- Gas estimation ---
@@ -839,7 +842,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   ): Promise<boolean> {
     const totalGasCost = gasEstimate.mul(gasPrice);
     const relayerBalance = await this.l1Signer.getBalance();
-    
+
     logger.info(
       `[${this.config.chainName}] ${context.logPrefix} Relayer L1 balance: ${ethers.utils.formatEther(relayerBalance)} ETH`,
     );
@@ -867,7 +870,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     txOverrides: PayableOverrides,
   ): Promise<boolean> {
     try {
-      logger.info(`[${this.config.chainName}] ${context.logPrefix} Simulating initializeDeposit call...`);
+      logger.info(
+        `[${this.config.chainName}] ${context.logPrefix} Simulating initializeDeposit call...`,
+      );
       await this.l1DepositorContract.callStatic.initializeDeposit(
         context.fundingTx,
         context.reveal,
@@ -890,9 +895,8 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     l2DepositOwner: string,
     txOverrides: PayableOverrides,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
-
     const l2DepositOwnerBN = ethers.BigNumber.from(l2DepositOwner);
-    
+
     logger.info(
       `[${this.config.chainName}] ${context.logPrefix} Calling L1 Depositor contract initializeDeposit for StarkNet recipient: ${l2DepositOwner}) with gasLimit: ${txOverrides.gasLimit?.toString()}, gasPrice: ${ethers.utils.formatUnits(txOverrides.gasPrice as BigNumberish, 'gwei')} gwei.`,
     );

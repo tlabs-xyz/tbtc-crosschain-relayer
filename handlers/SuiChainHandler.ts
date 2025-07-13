@@ -337,78 +337,93 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         `handleSuiDepositEvent called for ${this.config.chainName}, event type: ${event.type}`,
       );
 
-      // Use the utility function to parse the event data
-      const parsedEvent = parseDepositInitializedEvent(event, this.config.chainName);
+      const parsedEvent = this.parseAndValidateSuiEvent(event);
+      if (!parsedEvent) return;
 
-      if (!parsedEvent) {
-        // Event parsing failed or event is not a DepositInitialized event
-        logger.debug(`Event parsing returned null for ${this.config.chainName}`);
-        return;
-      }
+      const deposit = this.createDepositFromSuiEvent(parsedEvent);
 
-      logger.info(`Successfully parsed SUI deposit event for ${this.config.chainName}`);
+      const shouldSkip = await this.shouldSkipExistingDeposit(deposit.id);
+      if (shouldSkip) return;
 
-      // For SUI, we need to set the correct vault address since it's not included in the event
-      // Update the reveal object with the correct vault address from the config
-      const revealWithVault = {
-        ...parsedEvent.reveal,
-        vault: this.config.vaultAddress,
-      };
-
-      logger.info(`Setting vault address for SUI deposit: ${this.config.vaultAddress}`);
-
-      // Create deposit using the parsed event data
-      // Note: The 0x prefix handling is done in BaseChainHandler.initializeDeposit for SUI chains
-      logger.debug('Creating deposit from parsed SUI event', {
-        fundingTxVersion: parsedEvent.fundingTransaction.version,
-        fundingOutputIndex: parsedEvent.reveal.fundingOutputIndex,
-        depositOwner: parsedEvent.depositOwner,
-        sender: parsedEvent.sender,
-        chainName: this.config.chainName,
-      });
-
-      const deposit = createDeposit(
-        parsedEvent.fundingTransaction,
-        revealWithVault,
-        parsedEvent.depositOwner,
-        parsedEvent.sender,
-        this.config.chainName,
-      );
-
-      logger.debug(`Created deposit object for SUI event:`, {
-        depositId: deposit.id,
-        depositOwner: parsedEvent.depositOwner,
-        sender: parsedEvent.sender,
-        fundingOutputIndex: parsedEvent.reveal.fundingOutputIndex,
-        chainName: this.config.chainName,
-        status: deposit.status,
-        fundingTxHash: deposit.fundingTxHash,
-        outputIndex: deposit.outputIndex,
-      });
-
-      // Check if deposit already exists to prevent duplicates
-      const existingDeposit = await DepositStore.getById(deposit.id);
-      if (existingDeposit) {
-        logger.debug(
-          `Deposit ${deposit.id} already exists for ${this.config.chainName}. Skipping creation.`,
-        );
-        return;
-      }
-
-      // Save deposit to database
-      await DepositStore.create(deposit);
-
-      logger.info(`SUI deposit successfully created and saved: ${deposit.id}`, {
-        depositOwner: deposit.L1OutputEvent.l2DepositOwner,
-        sender: deposit.L1OutputEvent.l2Sender,
-        fundingOutputIndex: deposit.outputIndex,
-        chainName: this.config.chainName,
-        status: deposit.status,
-        fundingTxHash: deposit.fundingTxHash,
-      });
+      await this.persistSuiDeposit(deposit);
     } catch (error: any) {
       logErrorContext(`Error handling SUI deposit event for ${this.config.chainName}`, error);
     }
+  }
+
+  private parseAndValidateSuiEvent(event: SuiEvent): any | null {
+    const parsedEvent = parseDepositInitializedEvent(event, this.config.chainName);
+
+    if (!parsedEvent) {
+      logger.debug(`Event parsing returned null for ${this.config.chainName}`);
+      return null;
+    }
+
+    logger.info(`Successfully parsed SUI deposit event for ${this.config.chainName}`);
+    return parsedEvent;
+  }
+
+  private createDepositFromSuiEvent(parsedEvent: any): Deposit {
+    // For SUI, we need to set the correct vault address since it's not included in the event
+    const revealWithVault = {
+      ...parsedEvent.reveal,
+      vault: this.config.vaultAddress,
+    };
+
+    logger.info(`Setting vault address for SUI deposit: ${this.config.vaultAddress}`);
+
+    logger.debug('Creating deposit from parsed SUI event', {
+      fundingTxVersion: parsedEvent.fundingTransaction.version,
+      fundingOutputIndex: parsedEvent.reveal.fundingOutputIndex,
+      depositOwner: parsedEvent.depositOwner,
+      sender: parsedEvent.sender,
+      chainName: this.config.chainName,
+    });
+
+    const deposit = createDeposit(
+      parsedEvent.fundingTransaction,
+      revealWithVault,
+      parsedEvent.depositOwner,
+      parsedEvent.sender,
+      this.config.chainName,
+    );
+
+    logger.debug(`Created deposit object for SUI event:`, {
+      depositId: deposit.id,
+      depositOwner: parsedEvent.depositOwner,
+      sender: parsedEvent.sender,
+      fundingOutputIndex: parsedEvent.reveal.fundingOutputIndex,
+      chainName: this.config.chainName,
+      status: deposit.status,
+      fundingTxHash: deposit.fundingTxHash,
+      outputIndex: deposit.outputIndex,
+    });
+
+    return deposit;
+  }
+
+  private async shouldSkipExistingDeposit(depositId: string): Promise<boolean> {
+    const existingDeposit = await DepositStore.getById(depositId);
+    if (existingDeposit) {
+      logger.debug(
+        `Deposit ${depositId} already exists for ${this.config.chainName}. Skipping creation.`,
+      );
+      return true;
+    }
+    return false;
+  }
+
+  private async persistSuiDeposit(deposit: Deposit): Promise<void> {
+    await DepositStore.create(deposit);
+
+    logger.info(`SUI deposit successfully created and saved: ${deposit.id}`, {
+      depositOwner: deposit.L1OutputEvent.l2DepositOwner,
+      sender: deposit.L1OutputEvent.l2Sender,
+      fundingOutputIndex: deposit.outputIndex,
+      chainName: this.config.chainName,
+      status: deposit.status,
+      fundingTxHash: deposit.fundingTxHash,
+    });
   }
 
   /**

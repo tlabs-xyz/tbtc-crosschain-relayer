@@ -47,5 +47,4 @@ export class ChainHandlerFactory {
         throw new Error(`Unsupported chain type: ${config.chainType}`);
     }
   }
-
 }

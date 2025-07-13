@@ -26,7 +26,9 @@ export const EvmChainConfigSchema = EvmChainBaseSchema.merge(CommonChainConfigSc
     {
       message: (() => {
         const pattern = getPrivateKeyPattern(CHAIN_TYPE.EVM);
-        return pattern ? `EVM private key must be: ${pattern.description}` : 'Invalid EVM private key format.';
+        return pattern
+          ? `EVM private key must be: ${pattern.description}`
+          : 'Invalid EVM private key format.';
       })(),
       path: ['privateKey'],
     },

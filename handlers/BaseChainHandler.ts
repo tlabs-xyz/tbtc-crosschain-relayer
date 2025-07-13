@@ -108,7 +108,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   }
 
   private async initializeL1Signer(): Promise<void> {
-
     if (!this.hasPrivateKey()) {
       logger.warn(
         `L1 Signer and transaction-capable contracts not initialized for ${this.config.chainName}. This might be expected in read-only setups.`,
@@ -119,9 +118,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     const privateKey = this.getPrivateKey();
     this.l1Signer = new ethers.Wallet(privateKey, this.l1Provider);
     this.nonceManagerL1 = new NonceManager(this.l1Signer);
-    
+
     logger.info(`L1 signer initialized for ${this.config.chainName}`);
-    
+
     // Initialize transaction-capable contracts
     this.initializeTransactionContracts();
   }
@@ -151,16 +150,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
 
     // Only EVM chains need the TBTC Vault for transactions
     if (this.config.chainType === CHAIN_TYPE.EVM) {
-      this.tbtcVault = new ethers.Contract(
-        this.config.vaultAddress,
-        TBTCVaultABI,
-        this.l1Signer,
-      );
+      this.tbtcVault = new ethers.Contract(this.config.vaultAddress, TBTCVaultABI, this.l1Signer);
     }
   }
 
   private async initializeWormhole(): Promise<void> {
-
     const ethereumNetwork = this.getEthereumNetwork();
     const { platforms, chainConfigs } = this.buildWormholeConfig();
 
@@ -197,7 +191,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   }
 
   private initializeL1Contracts(): void {
-
     // L1 Contracts for reading/listening (do not require signer)
     this.l1BitcoinDepositorProvider = new ethers.Contract(
       this.config.l1ContractAddress,
@@ -236,12 +229,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     try {
       const depositId = BigNumber.from(depositKey).toString();
       const deposit = await DepositStore.getById(depositId);
-      
+
       if (deposit) {
         await this.handleKnownDeposit(deposit);
         return;
       }
-      
+
       // Handle unknown deposit - attempt recovery
       await this.recoverUnknownDeposit(depositId, depositKey);
     } catch (error: any) {
@@ -259,12 +252,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
 
   private async handleKnownDeposit(deposit: Deposit): Promise<void> {
     logger.debug(`Received OptimisticMintingFinalized event for Deposit ID: ${deposit.id}`);
-    
+
     if (deposit.status === DepositStatus.FINALIZED) {
       logger.debug(`Deposit ${deposit.id} already finalized locally. Ignoring event.`);
       return;
     }
-    
+
     logger.debug(`Finalizing deposit ${deposit.id}...`);
     this.finalizeDeposit(deposit);
   }
@@ -328,7 +321,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     return events[0];
   }
 
-  private async extractDepositDataFromEvent(requestEvent: any, depositId: string): Promise<{
+  private async extractDepositDataFromEvent(
+    requestEvent: any,
+    depositId: string,
+  ): Promise<{
     fundingTxHash: string;
     fundingOutputIndex: number;
     depositor: string;
@@ -409,14 +405,13 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
     if (!deposit.L1OutputEvent) {
       const errorMsg = 'Missing L1OutputEvent data for initialization';
-      logErrorContext(
-        `INITIALIZE | ERROR | Missing L1OutputEvent data | ID: ${deposit.id}`,
+      await this.logDepositErrorHelper(
+        deposit.id,
+        'INITIALIZE',
+        'Missing L1OutputEvent data',
         new Error(errorMsg),
+        { context: 'Missing L1OutputEvent data' },
       );
-      await logDepositError(deposit.id, errorMsg, {
-        error: errorMsg,
-        context: 'Missing L1OutputEvent data',
-      });
       await updateToInitializedDeposit(deposit, undefined, 'Missing L1OutputEvent data'); // Mark as error
       return;
     }
@@ -464,11 +459,13 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     } catch (error: any) {
       // Error Handling - Check if it's a specific revert reason or common issue
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
-      logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
-      await logDepositError(deposit.id, `Failed to initialize deposit: ${reason}`, {
-        error: reason,
-        originalError: error.message,
-      });
+      await this.logDepositErrorHelper(
+        deposit.id,
+        'INITIALIZE',
+        `Failed to initialize deposit: ${reason}`,
+        error,
+        { originalError: error.message },
+      );
       // Update status to reflect error, preventing immediate retries unless logic changes
       await updateToInitializedDeposit(deposit, undefined, `Error: ${reason}`);
     }
@@ -483,14 +480,13 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     // Ensure it was initialized or mark as error if called prematurely
     if (deposit.status !== DepositStatus.INITIALIZED) {
       const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
-      logErrorContext(
-        `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
+      await this.logDepositErrorHelper(
+        deposit.id,
+        'FINALIZE',
+        `Attempted to finalize non-initialized deposit | STATUS: ${DepositStatus[deposit.status]}`,
         new Error(errorMsg),
+        { context: 'Invalid status for finalize' },
       );
-      await logDepositError(deposit.id, errorMsg, {
-        error: errorMsg,
-        context: 'Invalid status for finalize',
-      });
       // Optionally mark with error? updateToFinalizedDeposit(deposit, null, 'Invalid status for finalize')? Or just let process loop retry?
       // For now, just return, assuming the process loop or event handler called this correctly.
       return;
@@ -543,11 +539,13 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         await updateLastActivity(deposit);
       } else {
         // Handle other errors
-        logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
-        await logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, {
-          error: reason,
-          originalError: error.message,
-        });
+        await this.logDepositErrorHelper(
+          deposit.id,
+          'FINALIZE',
+          `Failed to finalize deposit: ${reason}`,
+          error,
+          { originalError: error.message },
+        );
         // Mark as error to potentially prevent immediate retries depending on cleanup logic
         await updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
       }
@@ -838,7 +836,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       const timeSinceCreation = now - deposit.dates.createdAt;
       if (timeSinceCreation < BaseChainHandler.FRESH_DEPOSIT_THRESHOLD_MS) {
         // Process immediately if deposit is in early stages (QUEUED or INITIALIZED)
-        if (deposit.status === DepositStatus.QUEUED || deposit.status === DepositStatus.INITIALIZED) {
+        if (
+          deposit.status === DepositStatus.QUEUED ||
+          deposit.status === DepositStatus.INITIALIZED
+        ) {
           logger.debug(
             `FILTER | Deposit ${deposit.id} is in early stage (status: ${deposit.status}) and created recently (${timeSinceCreation}ms ago), processing immediately`,
           );
@@ -863,5 +864,51 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
    */
   protected sanitizeConfigurationForLogging(config: any): Record<string, unknown> {
     return sanitizeObjectForLogging(config);
+  }
+
+  /**
+   * Helper method to log deposit errors with consistent format
+   */
+  protected async logDepositErrorHelper(
+    depositId: string,
+    operation: string,
+    errorMessage: string,
+    error?: any,
+    additionalData?: any,
+  ): Promise<void> {
+    const logPrefix = `${operation} | ${this.config.chainName} | ${depositId}`;
+    logger.error(`[${this.config.chainName}] ${logPrefix} ${errorMessage}`);
+
+    if (error) {
+      logErrorContext(`${logPrefix} ${errorMessage}`, error, {
+        chainName: this.config.chainName,
+        ...additionalData,
+      });
+    }
+
+    await logDepositError(depositId, `${operation}: ${errorMessage}`, {
+      error: error?.message || errorMessage,
+      ...additionalData,
+    });
+  }
+
+  /**
+   * Helper method to log operation errors with consistent format
+   */
+  protected logOperationError(
+    operation: string,
+    errorMessage: string,
+    error?: any,
+    additionalData?: any,
+  ): void {
+    const logPrefix = `${operation} | ${this.config.chainName}`;
+    logger.error(`[${this.config.chainName}] ${logPrefix} ${errorMessage}`);
+
+    if (error) {
+      logErrorContext(`${logPrefix} ${errorMessage}`, error, {
+        chainName: this.config.chainName,
+        ...additionalData,
+      });
+    }
   }
 }

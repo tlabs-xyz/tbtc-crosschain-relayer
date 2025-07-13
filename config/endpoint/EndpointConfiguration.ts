@@ -25,7 +25,6 @@ export const EndpointConfigurationSchema = z.object({
    * This allows enabling the general endpoint mode while selectively disabling the reveal intake.
    */
   supportsRevealDepositAPI: z.coerce.boolean(),
-
 });
 
 export type EndpointConfiguration = z.infer<typeof EndpointConfigurationSchema>;
@@ -86,7 +85,6 @@ export class EndpointConfigurationFactory {
         `Chain ${chainName} has useEndpoint=true and supportsRevealDepositAPI=true but no endpointUrl configured`,
       );
     }
-
 
     return {
       isValid: errors.length === 0,

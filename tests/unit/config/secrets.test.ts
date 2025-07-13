@@ -246,5 +246,4 @@ describe('Secret Utilities', () => {
       expect(result.error).toContain('Private key is required');
     });
   });
-
 });

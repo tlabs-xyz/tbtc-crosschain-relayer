@@ -20,7 +20,9 @@ const SolanaChainBaseSchema = z.object({
       },
       () => {
         const pattern = getPrivateKeyPattern(CHAIN_TYPE.SOLANA);
-        return pattern ? `Solana private key must be: ${pattern.description}` : 'Invalid Solana private key format.';
+        return pattern
+          ? `Solana private key must be: ${pattern.description}`
+          : 'Invalid Solana private key format.';
       },
     ),
   solanaCommitment: z.enum(['processed', 'confirmed', 'finalized']).default('confirmed'),

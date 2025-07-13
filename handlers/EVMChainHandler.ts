@@ -20,6 +20,9 @@ export class EVMChainHandler
   extends BaseChainHandler<EvmChainConfig>
   implements ChainHandlerInterface
 {
+  // --- Constants ---
+  private static readonly DEFAULT_BLOCK_CHUNK_SIZE = 1000;
+
   protected l2Provider: ethers.providers.JsonRpcProvider | undefined;
   protected l2Signer: ethers.Wallet | undefined;
   protected nonceManagerL2: NonceManager | undefined;
@@ -280,22 +283,12 @@ export class EVMChainHandler
       logger.warn(
         `_getBlocksByTimestampEVM | L2 Provider not available for ${this.config.chainName}. Returning default range.`,
       );
-      return {
-        startBlock: this.config.l2StartBlock ?? 0,
-        endBlock: this.config.l2StartBlock ?? 0,
-      };
+      return this.getDefaultBlockRange();
     }
 
-    const START_BLOCK = (this.config.l2StartBlock as number | undefined) ?? 0;
-    let startBlock = -1;
-    let low = START_BLOCK;
-    let high = latestBlock;
-    let currentLatestBlock = latestBlock;
+    const { startBlock: START_BLOCK, low, high } = this.getBlockSearchRange(latestBlock);
 
-    if (high < low) {
-      logger.warn(
-        `_getBlocksByTimestampEVM | latestBlock (${high}) is less than START_BLOCK (${low}). Returning START_BLOCK for both range ends.`,
-      );
+    if (!this.isValidBlockRange(low, high, START_BLOCK)) {
       return { startBlock: START_BLOCK, endBlock: START_BLOCK };
     }
 
@@ -303,11 +296,58 @@ export class EVMChainHandler
       `_getBlocksByTimestampEVM | Starting binary search for timestamp ${timestamp} between blocks ${low} and ${high}`,
     );
 
+    const startBlock = await this.binarySearchBlockByTimestamp(timestamp, low, high, START_BLOCK);
+    const endBlock = Math.max(startBlock, latestBlock);
+
+    logger.debug(
+      `_getBlocksByTimestampEVM | Binary search result for ${this.config.chainName}: startBlock=${startBlock}, endBlock=${endBlock}`,
+    );
+    return { startBlock, endBlock };
+  }
+
+  private getDefaultBlockRange(): { startBlock: number; endBlock: number } {
+    const defaultBlock = this.config.l2StartBlock ?? 0;
+    return {
+      startBlock: defaultBlock,
+      endBlock: defaultBlock,
+    };
+  }
+
+  private getBlockSearchRange(latestBlock: number): {
+    startBlock: number;
+    low: number;
+    high: number;
+  } {
+    const START_BLOCK = (this.config.l2StartBlock as number | undefined) ?? 0;
+    return {
+      startBlock: START_BLOCK,
+      low: START_BLOCK,
+      high: latestBlock,
+    };
+  }
+
+  private isValidBlockRange(low: number, high: number, startBlock: number): boolean {
+    if (high < low) {
+      logger.warn(
+        `_getBlocksByTimestampEVM | latestBlock (${high}) is less than START_BLOCK (${low}). Returning START_BLOCK for both range ends.`,
+      );
+      return false;
+    }
+    return true;
+  }
+
+  private async binarySearchBlockByTimestamp(
+    timestamp: number,
+    low: number,
+    high: number,
+    fallbackBlock: number,
+  ): Promise<number> {
+    let startBlock = -1;
+
     try {
       while (low <= high) {
         const mid = Math.floor((low + high) / 2);
-
-        const blockData = await this.l2Provider.getBlock(mid);
+        const blockData = await this.l2Provider!.getBlock(mid);
 
         if (!blockData) {
           high = mid - 1;
@@ -325,27 +365,13 @@ export class EVMChainHandler
         }
       }
 
-      if (startBlock === -1) {
-        startBlock = START_BLOCK;
-      }
-
-      if (startBlock > currentLatestBlock) {
-        startBlock = currentLatestBlock;
-      }
+      return startBlock === -1 ? fallbackBlock : Math.min(startBlock, high);
     } catch (error) {
       logErrorContext(
         `_getBlocksByTimestampEVM | Error during binary search for ${this.config.chainName}: ${error}`,
         error,
       );
-      startBlock = START_BLOCK;
-      currentLatestBlock = latestBlock;
+      return fallbackBlock;
     }
-
-    const endBlock = Math.max(startBlock, currentLatestBlock);
-
-    logger.debug(
-      `_getBlocksByTimestampEVM | Binary search result for ${this.config.chainName}: startBlock=${startBlock}, endBlock=${endBlock}`,
-    );
-    return { startBlock, endBlock };
   }
 }
