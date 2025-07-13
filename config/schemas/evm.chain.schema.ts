@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CHAIN_TYPE, CommonChainConfigSchema } from './common.schema.js';
+import { getPrivateKeyPattern } from '../constants/privateKeyPatterns.js';
 
 const EvmChainBaseSchema = z.object({
   chainType: z.literal(CHAIN_TYPE.EVM).default(CHAIN_TYPE.EVM), // Fixed for EVM chains
@@ -15,14 +16,18 @@ export const EvmChainConfigSchema = EvmChainBaseSchema.merge(CommonChainConfigSc
   })
   .refine(
     (data) => {
-      // Validate privateKey format for EVM: 64 hex characters, optionally 0x-prefixed
+      // Validate privateKey format using shared pattern
       if (data.privateKey) {
-        return /^(0x)?[0-9a-fA-F]{64}$/.test(data.privateKey);
+        const pattern = getPrivateKeyPattern(CHAIN_TYPE.EVM);
+        return pattern ? pattern.pattern.test(data.privateKey) : false;
       }
       return false; // privateKey is required by CommonChainConfigSchema
     },
     {
-      message: 'EVM private key must be a 64-character hex string, optionally 0x-prefixed.',
+      message: (() => {
+        const pattern = getPrivateKeyPattern(CHAIN_TYPE.EVM);
+        return pattern ? `EVM private key must be: ${pattern.description}` : 'Invalid EVM private key format.';
+      })(),
       path: ['privateKey'],
     },
   );

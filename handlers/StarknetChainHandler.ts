@@ -309,7 +309,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
   }
 
   async getLatestBlock(): Promise<number> {
-    if (this.config.useEndpoint) return 0;
+    if (this.isEndpointModeEnabled()) return 0;
 
     logger.warn(
       `[${this.config.chainName}] StarkNet getLatestBlock NOT YET IMPLEMENTED. Returning 0.`,
@@ -329,7 +329,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     pastTimeInMinutes: number;
     latestBlock: number; // Represents block number
   }): Promise<void> {
-    if (this.config.useEndpoint) return;
+    if (this.isEndpointModeEnabled()) return;
 
     logger.warn(`[${this.config.chainName}] StarkNet checkForPastDeposits NOT YET IMPLEMENTED.`);
 

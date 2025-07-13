@@ -89,11 +89,11 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
   }
 
   /**
-   * Called by `setupListeners()` in BaseChainHandler (if !useEndpoint).
+   * Called by `setupListeners()` in BaseChainHandler (if !isEndpointModeEnabled()).
    * If you plan to do L2 event listening, implement it here.
    */
   protected async setupL2Listeners(): Promise<void> {
-    if (this.config.useEndpoint) {
+    if (this.isEndpointModeEnabled()) {
       logger.warn(`Solana L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`);
       return;
     }
@@ -104,7 +104,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
    * Get the latest Solana slot (block) if you need to do on-chain queries for missed deposits.
    */
   async getLatestBlock(): Promise<number> {
-    if (this.config.useEndpoint) return 0; // Skip if using endpoint mode
+    if (this.isEndpointModeEnabled()) return 0; // Skip if using endpoint mode
     if (!this.connection) {
       logger.warn(`No Solana connection established. Returning 0.`);
       return 0;
@@ -125,7 +125,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void> {
-    if (this.config.useEndpoint) return; // no direct chain scanning
+    if (this.isEndpointModeEnabled()) return; // no direct chain scanning
     logger.warn(`Solana checkForPastDeposits NOT YET IMPLEMENTED for ${this.config.chainName}.`);
   }
 
@@ -253,7 +253,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
         `Solana bridging success for deposit ${deposit.id}, txids=${destinationTransactionIds}`,
       );
 
-      updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid);
+      await updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid);
     } catch (error: any) {
       const reason = error.message || 'Unknown bridging error';
       logger.warn(`Wormhole bridging not ready for deposit ${deposit.id}: ${reason}`);

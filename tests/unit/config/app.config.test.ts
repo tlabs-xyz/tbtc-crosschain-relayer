@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import { AppConfig, AppConfigSchema, NodeEnv } from '../../../config/schemas/app.schema';
 import logger from '../../../utils/Logger';
 import { ZodError } from 'zod';

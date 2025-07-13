@@ -2,6 +2,7 @@ import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
 import { NETWORK } from '../schemas/common.schema.js';
 import { z } from 'zod';
 import { getEnv, getEnvBoolean } from '../../utils/Env.js';
+import { EndpointConfigurationFactory } from '../endpoint/EndpointConfiguration.js';
 // Re-export for convenience
 export type { CommonChainInput } from '../schemas/common.schema.js';
 
@@ -97,7 +98,6 @@ export const L1_CONFIRMATIONS = {
 
 // Common feature flags
 export const FEATURE_FLAGS = {
-  USE_ENDPOINT: getEnvBoolean('USE_ENDPOINT', true),
   ENABLE_L2_REDEMPTION_MAINNET: true,
   ENABLE_L2_REDEMPTION_TESTNET: true,
   ENABLE_L2_REDEMPTION_DEVNET: true,
@@ -108,14 +108,32 @@ export const FEATURE_FLAGS = {
  * Used to provide shared defaults and structure for EVM, Sui, and other chain configs.
  * Note: l1ContractAddress is not included here as each chain type should set it directly.
  * @param targetNetwork The network to generate config for (mainnet, testnet, devnet)
- * @returns Partial<CommonChainInput> with shared defaults
+ * @param chainName Chain name for endpoint configuration
+ * @param endpointOverrides Optional endpoint configuration overrides
+ * @returns Partial<CommonChainInput> with shared defaults and standardized endpoint config
  */
-export const getCommonChainInput = (targetNetwork: NETWORK): Partial<CommonChainInput> => {
+export const getCommonChainInput = (
+  targetNetwork: NETWORK,
+  chainName?: string,
+  endpointOverrides?: {
+    useEndpoint?: boolean;
+    endpointUrl?: string;
+    supportsRevealDepositAPI?: boolean;
+  },
+): Partial<CommonChainInput> => {
   const l1ConfValue = L1_CONFIRMATIONS[targetNetwork] ?? L1_CONFIRMATIONS[NETWORK.TESTNET];
+
+  // Create standardized endpoint configuration with migration support
+  const endpointConfig = EndpointConfigurationFactory.create(
+    chainName || 'unknown',
+    endpointOverrides,
+  );
 
   const commonInput: Partial<CommonChainInput> = {
     network: targetNetwork,
-    useEndpoint: FEATURE_FLAGS.USE_ENDPOINT,
+    useEndpoint: endpointConfig.useEndpoint,
+    endpointUrl: endpointConfig.endpointUrl,
+    supportsRevealDepositAPI: endpointConfig.supportsRevealDepositAPI,
     l1Rpc:
       targetNetwork === NETWORK.MAINNET
         ? getEnv('ETHEREUM_MAINNET_RPC', PUBLIC_RPCS['ethereum-mainnet'])

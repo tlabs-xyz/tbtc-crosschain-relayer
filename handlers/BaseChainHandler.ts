@@ -25,6 +25,11 @@ import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
 import type { AnyChainConfig } from '../config/index.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import { sanitizeObjectForLogging } from '../utils/SecretUtils.js';
+import {
+  EndpointConfigurationFactory,
+  type EndpointConfiguration,
+} from '../config/endpoint/EndpointConfiguration.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
 
@@ -39,13 +44,28 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   public config: T;
   protected wormhole: Wormhole<Network>;
 
+  // Simplified configuration system components
+  protected endpointConfiguration: EndpointConfiguration;
+
   constructor(config: T) {
     this.config = config;
+
+    // Initialize standardized endpoint configuration
+    this.endpointConfiguration = EndpointConfigurationFactory.create(this.config.chainName, {
+      useEndpoint: this.config.useEndpoint,
+      endpointUrl: this.config.endpointUrl,
+      supportsRevealDepositAPI: this.config.supportsRevealDepositAPI,
+    });
+
     logger.debug(`Constructing BaseChainHandler for ${this.config.chainName}`);
   }
 
   async initialize(): Promise<void> {
     logger.debug(`Initializing Base L1 components for ${this.config.chainName}`);
+
+    // --- Configuration System Setup ---
+    logger.debug(`Initializing configuration system for ${this.config.chainName}`);
+    // Configuration is already validated during loading from environment
 
     // --- L1 Setup ---
     // Common L1 configuration checks
@@ -209,7 +229,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
               logger.error(
                 `CRITICAL: Could not find OptimisticMintingRequested event for finalized deposit key ${depositId}. The deposit cannot be created. This may require manual intervention.`,
               );
-              logDepositError(
+              await logDepositError(
                 depositId,
                 'Could not find OptimisticMintingRequested event for finalized but unknown deposit.',
               );
@@ -227,7 +247,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
               logger.error(
                 `CRITICAL: OptimisticMintingRequested event for deposit key ${depositId} has no arguments. Cannot create deposit.`,
               );
-              logDepositError(
+              await logDepositError(
                 depositId,
                 'OptimisticMintingRequested event for finalized but unknown deposit has no arguments.',
               );
@@ -258,7 +278,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `Error in OptimisticMintingFinalized handler: ${error.message ?? error}`,
             error,
           );
-          logDepositError(
+          await logDepositError(
             'unknown',
             `Error processing OptimisticMintingFinalized event for key ${depositKey?.toString()}`,
             error,
@@ -333,11 +353,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         `INITIALIZE | ERROR | Missing L1OutputEvent data | ID: ${deposit.id}`,
         new Error(errorMsg),
       );
-      logDepositError(deposit.id, errorMsg, {
+      await logDepositError(deposit.id, errorMsg, {
         error: errorMsg,
         context: 'Missing L1OutputEvent data',
       });
-      updateToInitializedDeposit(deposit, undefined, 'Missing L1OutputEvent data'); // Mark as error
+      await updateToInitializedDeposit(deposit, undefined, 'Missing L1OutputEvent data'); // Mark as error
       return;
     }
 
@@ -378,19 +398,19 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       );
 
       // Update the deposit status in the JSON storage upon successful mining
-      updateToInitializedDeposit(deposit, receipt, undefined); // Pass receipt for txHash etc.
+      await updateToInitializedDeposit(deposit, receipt, undefined); // Pass receipt for txHash etc.
 
       return receipt; // Return the receipt for further processing if needed
     } catch (error: any) {
       // Error Handling - Check if it's a specific revert reason or common issue
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
       logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
-      logDepositError(deposit.id, `Failed to initialize deposit: ${reason}`, {
+      await logDepositError(deposit.id, `Failed to initialize deposit: ${reason}`, {
         error: reason,
         originalError: error.message,
       });
       // Update status to reflect error, preventing immediate retries unless logic changes
-      updateToInitializedDeposit(deposit, undefined, `Error: ${reason}`);
+      await updateToInitializedDeposit(deposit, undefined, `Error: ${reason}`);
     }
   }
 
@@ -407,7 +427,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
         new Error(errorMsg),
       );
-      logDepositError(deposit.id, errorMsg, {
+      await logDepositError(deposit.id, errorMsg, {
         error: errorMsg,
         context: 'Invalid status for finalize',
       });
@@ -450,7 +470,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       );
 
       // Update status upon successful mining
-      updateToFinalizedDeposit(deposit, receipt, undefined); // Pass only deposit and receipt on success
+      await updateToFinalizedDeposit(deposit, receipt, undefined); // Pass only deposit and receipt on success
 
       return receipt;
     } catch (error: any) {
@@ -464,12 +484,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       } else {
         // Handle other errors
         logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
-        logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, {
+        await logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, {
           error: reason,
           originalError: error.message,
         });
         // Mark as error to potentially prevent immediate retries depending on cleanup logic
-        updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
+        await updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
       }
     }
   }
@@ -539,7 +559,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `INITIALIZE | Deposit already initialized on L1 (local status was QUEUED) | ID: ${updatedDeposit.id}`,
           );
           // Update local status to match L1
-          updateToInitializedDeposit(updatedDeposit, undefined, 'Deposit found initialized on L1');
+          await updateToInitializedDeposit(
+            updatedDeposit,
+            undefined,
+            'Deposit found initialized on L1',
+          );
           break;
 
         case DepositStatus.QUEUED:
@@ -554,7 +578,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `INITIALIZE | Deposit already finalized on L1 (local status was QUEUED) | ID: ${updatedDeposit.id}`,
           );
           // Update local status to match L1
-          updateToFinalizedDeposit(updatedDeposit, undefined, 'Deposit found finalized on L1');
+          await updateToFinalizedDeposit(
+            updatedDeposit,
+            undefined,
+            'Deposit found finalized on L1',
+          );
           break;
 
         default:
@@ -602,7 +630,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `FINALIZE | Deposit already finalized on L1 (local status was INITIALIZED) | ID: ${updatedDeposit.id}`,
           );
           // Update local status to match L1
-          updateToFinalizedDeposit(updatedDeposit, undefined, 'Deposit found finalized on L1');
+          await updateToFinalizedDeposit(
+            updatedDeposit,
+            undefined,
+            'Deposit found finalized on L1',
+          );
           break;
 
         // Should not happen if local state is INITIALIZED, but handle defensively
@@ -678,7 +710,46 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   supportsPastDepositCheck(): boolean {
     // Past deposit checking is supported when not in endpoint mode
     // Endpoint mode relies on external API calls and doesn't maintain internal deposit state
-    return !this.config.useEndpoint;
+    return !this.endpointConfiguration.useEndpoint;
+  }
+
+  /**
+   * Get standardized endpoint configuration
+   * @returns Current endpoint configuration
+   */
+  getEndpointConfiguration(): EndpointConfiguration {
+    return this.endpointConfiguration;
+  }
+
+  /**
+   * Check if endpoint mode is enabled
+   * @returns true if endpoint mode is enabled
+   */
+  isEndpointModeEnabled(): boolean {
+    return this.endpointConfiguration.useEndpoint;
+  }
+
+  /**
+   * Check if reveal API is supported
+   * @returns true if reveal API is supported
+   */
+  supportsRevealAPI(): boolean {
+    return this.endpointConfiguration.supportsRevealDepositAPI;
+  }
+
+  /**
+   * Update endpoint configuration (for dynamic reconfiguration)
+   * @param updates Partial endpoint configuration updates
+   */
+  updateEndpointConfiguration(updates: Partial<EndpointConfiguration>): void {
+    this.endpointConfiguration = {
+      ...this.endpointConfiguration,
+      ...updates,
+    };
+    logger.info(`Endpoint configuration updated for ${this.config.chainName}:`, {
+      useEndpoint: this.endpointConfiguration.useEndpoint,
+      supportsRevealDepositAPI: this.endpointConfiguration.supportsRevealDepositAPI,
+    });
   }
 
   protected filterDepositsActivityTime(deposits: Array<Deposit>): Array<Deposit> {
@@ -725,5 +796,14 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       );
       return shouldProcess;
     });
+  }
+
+  // --- Configuration Management Methods ---
+
+  /**
+   * Sanitize configuration for logging
+   */
+  protected sanitizeConfigurationForLogging(config: any): Record<string, unknown> {
+    return sanitizeObjectForLogging(config);
   }
 }

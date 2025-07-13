@@ -1,0 +1,63 @@
+# tBTC Cross-Chain Relayer Configuration Refactoring PRD
+
+## Project Overview
+Refactor the configuration system of the tBTC Cross-Chain Relayer to eliminate redundancies, separate secrets from application configuration, improve type safety, and clean up duplicate environment variables.
+
+## Current Issues
+1. Configuration redundancies (USE_ENDPOINT vs useEndpoint patterns)
+2. Secrets mixed with application configuration
+3. Limited type safety in configuration loading
+4. Duplicate environment variables
+5. Complex test configuration setup
+
+## Goals
+1. Remove configuration redundancies and inconsistencies
+2. Separate secrets from application configuration
+3. Implement ConfigurationFactory pattern for type-safe loading
+4. Clean up duplicate environment variables
+5. Improve test configuration setup
+6. Maintain backward compatibility during migration
+
+## Technical Requirements
+
+### Phase 1: Setup and Analysis
+- Analyze current configuration patterns across the codebase
+- Design new configuration structure with proper separation of concerns
+- Create migration strategy to avoid breaking changes
+- Set up parallel implementation approach
+
+### Phase 2: Core Implementation
+- Implement ConfigurationFactory pattern with proper type safety
+- Create new configuration structure separating secrets from app config
+- Build validation layer for configuration
+- Implement environment-specific configuration loading
+
+### Phase 3: Migration
+- Remove USE_ENDPOINT vs useEndpoint redundancy
+- Fix Solana private key duplication issues
+- Update chain handlers to use new configuration system
+- Update core services to use new configuration pattern
+
+### Phase 4: Testing
+- Update test configuration to use new system
+- Create test configuration builders
+- Ensure all existing tests continue to pass
+- Add tests for new configuration validation
+
+### Phase 5: Cleanup
+- Remove old configuration patterns
+- Update documentation
+- Verify no breaking changes
+
+## Success Criteria
+- All configuration redundancies eliminated
+- Secrets properly separated from application config
+- Type-safe configuration loading implemented
+- All tests passing with new configuration system
+- Improved maintainability and developer experience
+
+## Out of Scope
+- Runtime configuration updates
+- Adding new configuration features
+- Changing existing business logic
+- Adding new chain support

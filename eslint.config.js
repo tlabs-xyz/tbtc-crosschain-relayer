@@ -136,4 +136,21 @@ export default [
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
+  // Configuration for script files
+  {
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    },
+  },
 ];

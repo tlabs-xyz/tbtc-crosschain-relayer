@@ -35,6 +35,7 @@ export class EVMChainHandler
     logger.debug(`Initializing EVM L2 components for ${this.config.chainName}`);
 
     if (this.config.l2Rpc) {
+      // Use simple configuration for provider setup
       this.l2Provider = new ethers.providers.JsonRpcProvider(this.config.l2Rpc);
       logger.debug(`EVM L2 Provider created for ${this.config.chainName}`);
 
@@ -75,8 +76,37 @@ export class EVMChainHandler
     logger.debug(`EVM L2 components initialization finished for ${this.config.chainName}`);
   }
 
+  /**
+   * Get gas configuration with enhanced settings
+   */
+  protected getGasConfiguration(): {
+    gasLimit?: number;
+    gasPrice?: string;
+    maxFeePerGas?: string;
+    maxPriorityFeePerGas?: string;
+  } {
+    return {}; // Return empty object for defaults
+  }
+
+  /**
+   * Get transaction configuration with enhanced settings
+   */
+  protected getTransactionConfiguration(): {
+    confirmations?: number;
+    timeoutMs?: number;
+    retryAttempts?: number;
+    retryDelayMs?: number;
+  } {
+    return {
+      confirmations: 1,
+      timeoutMs: 60000,
+      retryAttempts: 3,
+      retryDelayMs: 1000,
+    }; // Return sensible defaults
+  }
+
   protected async setupL2Listeners(): Promise<void> {
-    if (!this.config.useEndpoint && this.l2BitcoinDepositorProvider) {
+    if (!this.isEndpointModeEnabled() && this.l2BitcoinDepositorProvider) {
       logger.debug(`Setting up EVM L2 listeners for ${this.config.chainName}`);
 
       this.l2BitcoinDepositorProvider.on(
