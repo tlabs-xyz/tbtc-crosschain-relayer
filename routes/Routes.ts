@@ -97,35 +97,45 @@ router.get(
 );
 
 // Multi-chain endpoint routes (require chainName as path param)
-if (process.env.USE_ENDPOINT === 'true') {
-  // Endpoint for receiving reveal data
-  router.post('/api/:chainName/reveal', validateChainStrict, (req: Request, res: Response) => {
+// These routes are always available - per-chain configuration determines functionality
+
+// Endpoint for receiving reveal data
+router.post('/api/:chainName/reveal', validateChainStrict, (req: Request, res: Response) => {
+  const { chainHandler, chainName } = req as RequestWithChainInfo;
+  const chainConfig = chainHandler?.config;
+
+  // Check if this specific chain supports the reveal API
+  if (!chainConfig?.useEndpoint || !chainConfig?.supportsRevealDepositAPI) {
+    logger.warn(
+      `Reveal deposit API called for chain ${chainName}, but useEndpoint=${chainConfig?.useEndpoint} or supportsRevealDepositAPI=${chainConfig?.supportsRevealDepositAPI}`,
+    );
+    return res.status(405).json({
+      success: false,
+      error: `Reveal deposit API is not supported or enabled for chain: ${chainName}`,
+    });
+  }
+  const endpointController = new EndpointController(chainHandler!);
+  return endpointController.handleReveal(req, res);
+});
+
+// Endpoint for checking deposit status
+router.get(
+  '/api/:chainName/deposit/:depositId',
+  validateChainStrict,
+  (req: Request, res: Response) => {
     const { chainHandler, chainName } = req as RequestWithChainInfo;
     const chainConfig = chainHandler?.config;
 
-    if (!chainConfig?.supportsRevealDepositAPI) {
-      logger.warn(
-        `Reveal deposit API called for chain ${chainConfig}, but it's not supported/enabled in config.`,
-      );
+    // Check if this specific chain has endpoint mode enabled
+    if (!chainConfig?.useEndpoint) {
       return res.status(405).json({
         success: false,
-        error: `Reveal deposit API is not supported or enabled for chain: ${chainName}`,
+        error: `Endpoint mode is not enabled for chain: ${chainName}`,
       });
     }
     const endpointController = new EndpointController(chainHandler!);
-    return endpointController.handleReveal(req, res);
-  });
-
-  // Endpoint for checking deposit status
-  router.get(
-    '/api/:chainName/deposit/:depositId',
-    validateChainStrict,
-    (req: Request, res: Response) => {
-      const { chainHandler } = req as RequestWithChainInfo;
-      const endpointController = new EndpointController(chainHandler!);
-      return endpointController.getDepositStatus(req, res);
-    },
-  );
-}
+    return endpointController.getDepositStatus(req, res);
+  },
+);
 
 export default router;

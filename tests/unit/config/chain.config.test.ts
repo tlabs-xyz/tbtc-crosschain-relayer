@@ -1,18 +1,13 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+import { ZodError } from 'zod';
+// Import the actual chainRegistry to spy on its methods
+import * as actualChainRegistry from '../../../config/chainRegistry.js';
+
 // --- Variable declarations for mock functions ---
 let mockGetSepoliaTestnetChainInput: jest.Mock;
 let mockEvmChainConfigSchemaParse: jest.Mock;
 let mockStarknetChainConfigSchemaParse: jest.Mock;
 let mockGetStarknetTestnetChainInput: jest.Mock;
-
-// Initialize the mocks before the registry mock
-mockGetSepoliaTestnetChainInput = jest.fn();
-mockEvmChainConfigSchemaParse = jest.fn();
-mockStarknetChainConfigSchemaParse = jest.fn();
-mockGetStarknetTestnetChainInput = jest.fn();
-
-import { ZodError } from 'zod';
-// Import the actual chainRegistry to spy on its methods
-import * as actualChainRegistry from '../../../config/chainRegistry.js';
 
 // --- Mock process.exit ---
 const mockProcessExit = jest.spyOn(process, 'exit').mockImplementation((() => {
@@ -44,84 +39,87 @@ jest.mock('../../../config/app.config.js', () => ({
   appConfig: mockAppConfig,
 }));
 
-jest.mock('../../../config/chain/sepolia.chain.js', () => {
-  mockGetSepoliaTestnetChainInput = jest.fn();
-  return {
-    __esModule: true,
-    getSepoliaTestnetChainInput: mockGetSepoliaTestnetChainInput,
-  };
-});
-jest.mock('../../../config/schemas/evm.chain.schema.js', () => {
-  mockEvmChainConfigSchemaParse = jest.fn();
-  return {
-    __esModule: true,
-    EvmChainConfigSchema: { parse: mockEvmChainConfigSchemaParse },
-  };
-});
+// Initialize the mocks
+mockGetSepoliaTestnetChainInput = jest.fn();
+mockEvmChainConfigSchemaParse = jest.fn();
+mockStarknetChainConfigSchemaParse = jest.fn();
+mockGetStarknetTestnetChainInput = jest.fn();
 
-jest.mock('../../../config/chain/starknet.chain.js', () => {
-  mockGetStarknetTestnetChainInput = jest.fn();
-  return {
-    __esModule: true,
-    getStarknetTestnetChainInput: mockGetStarknetTestnetChainInput,
-  };
-});
-jest.mock('../../../config/schemas/starknet.chain.schema.js', () => {
-  mockStarknetChainConfigSchemaParse = jest.fn();
-  return {
-    __esModule: true,
-    StarknetChainConfigSchema: { parse: mockStarknetChainConfigSchemaParse },
-  };
-});
+jest.mock('../../../config/chain/sepolia.chain.js', () => ({
+  __esModule: true,
+  getSepoliaTestnetChainInput: jest.fn(),
+}));
+
+jest.mock('../../../config/schemas/evm.chain.schema.js', () => ({
+  __esModule: true,
+  EvmChainConfigSchema: { parse: jest.fn() },
+}));
+
+jest.mock('../../../config/chain/starknet.chain.js', () => ({
+  __esModule: true,
+  getStarknetTestnetChainInput: jest.fn(),
+}));
+
+jest.mock('../../../config/schemas/starknet.chain.schema.js', () => ({
+  __esModule: true,
+  StarknetChainConfigSchema: { parse: jest.fn() },
+}));
 
 // --- Mock chainRegistry ---
-jest.mock('../../../config/chainRegistry.js', () => ({
-  __esModule: true,
-  chainSchemaRegistry: {
-    sepoliaTestnet: {
-      getInputFunc: mockGetSepoliaTestnetChainInput,
-      schema: { parse: mockEvmChainConfigSchemaParse },
+jest.mock('../../../config/chainRegistry.js', () => {
+  const sepoliaModule = require('../../../config/chain/sepolia.chain.js');
+  const evmSchemaModule = require('../../../config/schemas/evm.chain.schema.js');
+  const starknetModule = require('../../../config/chain/starknet.chain.js');
+  const starknetSchemaModule = require('../../../config/schemas/starknet.chain.schema.js');
+
+  return {
+    __esModule: true,
+    chainSchemaRegistry: {
+      sepoliaTestnet: {
+        getInputFunc: sepoliaModule.getSepoliaTestnetChainInput,
+        schema: evmSchemaModule.EvmChainConfigSchema,
+      },
+      starknetTestnet: {
+        getInputFunc: starknetModule.getStarknetTestnetChainInput,
+        schema: starknetSchemaModule.StarknetChainConfigSchema,
+      },
+      solanaDevnet: {
+        getInputFunc: jest.fn(),
+        schema: { parse: jest.fn() },
+      },
+      suiTestnet: {
+        getInputFunc: jest.fn(),
+        schema: { parse: jest.fn() },
+      },
+      arbitrumMainnet: {
+        getInputFunc: jest.fn(),
+        schema: { parse: jest.fn() },
+      },
+      baseMainnet: {
+        getInputFunc: jest.fn(),
+        schema: { parse: jest.fn() },
+      },
+      solanaDevnetImported: {
+        getInputFunc: jest.fn(),
+        schema: { parse: jest.fn() },
+      },
+      baseSepoliaTestnet: {
+        getInputFunc: jest.fn(),
+        schema: { parse: jest.fn() },
+      },
     },
-    starknetTestnet: {
-      getInputFunc: mockGetStarknetTestnetChainInput,
-      schema: { parse: mockStarknetChainConfigSchemaParse },
-    },
-    solanaDevnet: {
-      getInputFunc: jest.fn(),
-      schema: { parse: jest.fn() },
-    },
-    suiTestnet: {
-      getInputFunc: jest.fn(),
-      schema: { parse: jest.fn() },
-    },
-    arbitrumMainnet: {
-      getInputFunc: jest.fn(),
-      schema: { parse: jest.fn() },
-    },
-    baseMainnet: {
-      getInputFunc: jest.fn(),
-      schema: { parse: jest.fn() },
-    },
-    solanaDevnetImported: {
-      getInputFunc: jest.fn(),
-      schema: { parse: jest.fn() },
-    },
-    baseSepoliaTestnet: {
-      getInputFunc: jest.fn(),
-      schema: { parse: jest.fn() },
-    },
-  },
-  getAvailableChainKeys: () => [
-    'sepoliaTestnet',
-    'starknetTestnet',
-    'solanaDevnet',
-    'suiTestnet',
-    'arbitrumMainnet',
-    'baseMainnet',
-    'solanaDevnetImported',
-    'baseSepoliaTestnet',
-  ],
-}));
+    getAvailableChainKeys: () => [
+      'sepoliaTestnet',
+      'starknetTestnet',
+      'solanaDevnet',
+      'suiTestnet',
+      'arbitrumMainnet',
+      'baseMainnet',
+      'solanaDevnetImported',
+      'baseSepoliaTestnet',
+    ],
+  };
+});
 
 // Import the module to be tested *after* all mocks are set up
 import {
@@ -154,11 +152,23 @@ beforeEach(() => {
   // Reset appConfig mock property for SUPPORTED_CHAINS
   mockAppConfig.SUPPORTED_CHAINS = undefined;
 
+  // Get references to the mocked functions
+  const sepoliaModule = require('../../../config/chain/sepolia.chain.js');
+  const evmSchemaModule = require('../../../config/schemas/evm.chain.schema.js');
+  const starknetModule = require('../../../config/chain/starknet.chain.js');
+  const starknetSchemaModule = require('../../../config/schemas/starknet.chain.schema.js');
+
+  mockGetSepoliaTestnetChainInput = sepoliaModule.getSepoliaTestnetChainInput;
+  mockEvmChainConfigSchemaParse = evmSchemaModule.EvmChainConfigSchema.parse;
+  mockGetStarknetTestnetChainInput = starknetModule.getStarknetTestnetChainInput;
+  mockStarknetChainConfigSchemaParse = starknetSchemaModule.StarknetChainConfigSchema.parse;
+
   // Reset mocks for chain inputs and schema parsers
   mockGetSepoliaTestnetChainInput.mockReset();
   mockEvmChainConfigSchemaParse.mockReset();
   mockGetStarknetTestnetChainInput.mockReset();
   mockStarknetChainConfigSchemaParse.mockReset();
+
   // Restore any spy that might have been set
   if (getAvailableChainsSpy) {
     getAvailableChainsSpy.mockRestore();

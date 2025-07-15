@@ -1,3 +1,9 @@
+// Mock AuditLog to prevent database connection issues in e2e tests
+jest.mock('../../utils/AuditLog.js', () => {
+  const { createAuditLogMock } = require('../mocks/AuditLog.mock');
+  return createAuditLogMock();
+});
+
 import request from 'supertest';
 import { ethers } from 'ethers';
 import { DepositStatus } from '../../types/DepositStatus.enum.js';

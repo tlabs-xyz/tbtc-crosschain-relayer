@@ -15,7 +15,11 @@ import { ethers } from 'ethers';
 jest.mock('../../../utils/DepositStore');
 jest.mock('../../../utils/Logger');
 jest.mock('../../../utils/Deposits');
-jest.mock('../../../utils/AuditLog');
+// Mock AuditLog to prevent database connection issues
+jest.mock('../../../utils/AuditLog.js', () => {
+  const { createAuditLogMock } = require('../../mocks/AuditLog.mock');
+  return createAuditLogMock();
+});
 jest.mock('../../../utils/BitcoinTransactionParser');
 jest.mock('../../../utils/SuiMoveEventParser');
 

@@ -14,7 +14,7 @@ import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schem
 import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
 
 /**
- * Factory class for creating appropriate chain handlers based on configuration
+ * Simplified factory class for creating appropriate chain handlers based on configuration
  */
 export class ChainHandlerFactory {
   /**
@@ -22,10 +22,11 @@ export class ChainHandlerFactory {
    * @param config Configuration for the chain
    * @returns An instance of a chain handler
    */
-  static createHandler(config: AnyChainConfig): ChainHandlerInterface | null {
-    logger.info(
-      `Attempting to create chain handler for type: ${config.chainType}, name: ${config.chainName}`,
-    );
+  static createHandler(config: AnyChainConfig): ChainHandlerInterface {
+    if (!config || !config.chainType) {
+      throw new Error('Invalid config: chainType is required');
+    }
+    logger.info(`Creating chain handler for type: ${config.chainType}, name: ${config.chainName}`);
 
     switch (config.chainType as CHAIN_TYPE) {
       case CHAIN_TYPE.EVM:

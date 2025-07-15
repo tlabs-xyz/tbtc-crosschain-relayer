@@ -1,5 +1,5 @@
 import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
-import { getCommonChainInput } from './common.chain.js';
+import { getCommonChainInput, SOLANA_L1_CONTRACT_ADDRESSES } from './common.chain.js';
 import type { PartialDeep } from 'type-fest';
 import type { SolanaChainConfig } from '../schemas/solana.chain.schema.js';
 
@@ -13,6 +13,7 @@ export const getSolanaCommonInput = (targetNetwork: NETWORK): PartialDeep<Solana
   return {
     ...commonInput,
     chainType: CHAIN_TYPE.SOLANA,
+    l1ContractAddress: SOLANA_L1_CONTRACT_ADDRESSES[targetNetwork],
     solanaCommitment: 'confirmed', // Default commitment level for Solana transactions
     // Other Solana-specific common defaults can be added here
   };

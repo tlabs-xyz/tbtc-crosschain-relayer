@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
-import { getCommonChainInput, PUBLIC_RPCS, PUBLIC_WS_RPCS } from './common.chain.js';
+import {
+  getCommonChainInput,
+  PUBLIC_RPCS,
+  PUBLIC_WS_RPCS,
+  EVM_L1_CONTRACT_ADDRESSES,
+} from './common.chain.js';
 import type { CommonChainInput } from '../schemas/common.schema.js';
 
 type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
@@ -17,7 +22,6 @@ export const getSepoliaTestnetChainInput = (): EvmChainInput => {
     'network',
     'l1Rpc',
     'vaultAddress',
-    'l1ContractAddress',
     'l1Confirmations',
     'enableL2Redemption',
     'useEndpoint',
@@ -34,7 +38,7 @@ export const getSepoliaTestnetChainInput = (): EvmChainInput => {
     network: commonTestnetInput.network,
     l1Rpc: commonTestnetInput.l1Rpc!,
     vaultAddress: commonTestnetInput.vaultAddress!,
-    l1ContractAddress: commonTestnetInput.l1ContractAddress!,
+    l1ContractAddress: EVM_L1_CONTRACT_ADDRESSES[NETWORK.TESTNET],
     l1Confirmations: commonTestnetInput.l1Confirmations!,
     enableL2Redemption: commonTestnetInput.enableL2Redemption as boolean,
     useEndpoint: commonTestnetInput.useEndpoint as boolean,

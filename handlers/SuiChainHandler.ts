@@ -4,7 +4,7 @@ import { fromBase64 } from '@mysten/bcs';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import type { SuiEvent, SuiEventFilter } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
-import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
+import type { Chain, ChainContext } from '@wormhole-foundation/sdk-connect';
 import { ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
 
@@ -82,12 +82,12 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
   protected async setupL2Listeners(): Promise<void> {
     logger.info(
-      `Setting up L2 listeners for ${this.config.chainName}, useEndpoint: ${this.config.useEndpoint}, suiClient: ${!!this.suiClient}`,
+      `Setting up L2 listeners for ${this.config.chainName}, useEndpoint: ${this.isEndpointModeEnabled()}, suiClient: ${!!this.suiClient}`,
     );
 
-    if (this.config.useEndpoint || !this.suiClient) {
+    if (this.isEndpointModeEnabled() || !this.suiClient) {
       logger.info(
-        `Sui L2 Listeners skipped for ${this.config.chainName} (using Endpoint: ${this.config.useEndpoint} or client not initialized: ${!this.suiClient}).`,
+        `Sui L2 Listeners skipped for ${this.config.chainName} (using Endpoint: ${this.isEndpointModeEnabled()} or client not initialized: ${!this.suiClient}).`,
       );
       return;
     }
@@ -175,7 +175,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   }
 
   async getLatestBlock(): Promise<number> {
-    if (this.config.useEndpoint || !this.suiClient) {
+    if (this.isEndpointModeEnabled() || !this.suiClient) {
       return 0;
     }
 
@@ -192,7 +192,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void> {
-    if (this.config.useEndpoint || !this.suiClient) {
+    if (this.isEndpointModeEnabled() || !this.suiClient) {
       return;
     }
 
@@ -248,7 +248,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   }
 
   supportsPastDepositCheck(): boolean {
-    return !!(this.config.l2Rpc && !this.config.useEndpoint);
+    return !!(this.config.l2Rpc && !this.isEndpointModeEnabled());
   }
 
   /**

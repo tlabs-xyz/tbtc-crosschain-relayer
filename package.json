@@ -38,7 +38,10 @@
     "db:backup": "pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -F c -b -v -f backup.dump",
     "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump",
     "db:reset": "npx prisma db push --force-reset --accept-data-loss",
-    "pretest": "docker-compose -f docker-compose.yml -f docker-compose.ci.yml down -v && docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres"
+    "pretest": "docker-compose -f docker-compose.yml -f docker-compose.ci.yml down -v && docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres",
+    "list": "node scripts/dev.js list",
+    "generate": "node scripts/dev.js generate",
+    "parse-prd": "node scripts/dev.js parse-prd"
   },
   "keywords": [],
   "author": "T-Labs",

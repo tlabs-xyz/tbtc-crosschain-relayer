@@ -10,6 +10,12 @@ import { prisma } from '../../../utils/prisma.js';
 // Mock DepositStore
 jest.mock('../../../utils/DepositStore.js');
 
+// Mock AuditLog to prevent database connection issues in integration tests
+jest.mock('../../../utils/AuditLog.js', () => {
+  const { createAuditLogMock } = require('../../mocks/AuditLog.mock');
+  return createAuditLogMock();
+});
+
 const createValidRevealRequestBody = () => ({
   fundingTx: {
     version: '0x01000000',

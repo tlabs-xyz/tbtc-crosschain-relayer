@@ -2,6 +2,7 @@ import type { CommonChainConfigSchema } from '../schemas/common.schema.js';
 import { NETWORK } from '../schemas/common.schema.js';
 import { z } from 'zod';
 import { getEnv, getEnvBoolean } from '../../utils/Env.js';
+import { EndpointConfigurationFactory } from '../endpoint/EndpointConfiguration.js';
 // Re-export for convenience
 export type { CommonChainInput } from '../schemas/common.schema.js';
 
@@ -32,6 +33,20 @@ export const SUI_L1_CONTRACT_ADDRESSES = {
   [NETWORK.MAINNET]: '0xb810AbD43d8FCFD812d6FEB14fefc236E92a341A', // Sui Mainnet L1 depositor (placeholder - update with actual address)
   [NETWORK.TESTNET]: '0x25b614064293A6B9012E82Bb31BC2B1Be34e36Cb', // Sui Testnet L1 depositor (placeholder - update with actual address)
   [NETWORK.DEVNET]: '0x25b614064293A6B9012E82Bb31BC2B1Be34e36Cb', // Sui Development environment L1 depositor (placeholder - update with actual address)
+} as const;
+
+// EVM-specific L1 Bitcoin depositor contract addresses (for standard Ethereum testnets)
+export const EVM_L1_CONTRACT_ADDRESSES = {
+  [NETWORK.MAINNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD', // Ethereum Mainnet L1 depositor
+  [NETWORK.TESTNET]: '0x59FAE614867b66421b44D1Ed3461e6B6a4B50106', // Ethereum Sepolia testnet L1 depositor (same as Base Sepolia)
+  [NETWORK.DEVNET]: '0x59FAE614867b66421b44D1Ed3461e6B6a4B50106', // Ethereum Development environment L1 depositor
+} as const;
+
+// Solana-specific L1 Bitcoin depositor contract addresses
+export const SOLANA_L1_CONTRACT_ADDRESSES = {
+  [NETWORK.MAINNET]: '0x9C070027cdC9dc8F82416B2e5314E11DFb4FE3CD', // Solana Mainnet L1 depositor (same as EVM mainnet)
+  [NETWORK.TESTNET]: '0x59FAE614867b66421b44D1Ed3461e6B6a4B50106', // Solana Testnet L1 depositor (same as EVM testnet)
+  [NETWORK.DEVNET]: '0x59FAE614867b66421b44D1Ed3461e6B6a4B50106', // Solana Development environment L1 depositor (same as EVM devnet)
 } as const;
 
 // =============================================================================
@@ -97,7 +112,6 @@ export const L1_CONFIRMATIONS = {
 
 // Common feature flags
 export const FEATURE_FLAGS = {
-  USE_ENDPOINT: getEnvBoolean('USE_ENDPOINT', true),
   ENABLE_L2_REDEMPTION_MAINNET: true,
   ENABLE_L2_REDEMPTION_TESTNET: true,
   ENABLE_L2_REDEMPTION_DEVNET: true,
@@ -108,14 +122,32 @@ export const FEATURE_FLAGS = {
  * Used to provide shared defaults and structure for EVM, Sui, and other chain configs.
  * Note: l1ContractAddress is not included here as each chain type should set it directly.
  * @param targetNetwork The network to generate config for (mainnet, testnet, devnet)
- * @returns Partial<CommonChainInput> with shared defaults
+ * @param chainName Chain name for endpoint configuration
+ * @param endpointOverrides Optional endpoint configuration overrides
+ * @returns Partial<CommonChainInput> with shared defaults and standardized endpoint config
  */
-export const getCommonChainInput = (targetNetwork: NETWORK): Partial<CommonChainInput> => {
+export const getCommonChainInput = (
+  targetNetwork: NETWORK,
+  chainName?: string,
+  endpointOverrides?: {
+    useEndpoint?: boolean;
+    endpointUrl?: string;
+    supportsRevealDepositAPI?: boolean;
+  },
+): Partial<CommonChainInput> => {
   const l1ConfValue = L1_CONFIRMATIONS[targetNetwork] ?? L1_CONFIRMATIONS[NETWORK.TESTNET];
+
+  // Create standardized endpoint configuration with migration support
+  const endpointConfig = EndpointConfigurationFactory.create(
+    chainName || 'unknown',
+    endpointOverrides,
+  );
 
   const commonInput: Partial<CommonChainInput> = {
     network: targetNetwork,
-    useEndpoint: FEATURE_FLAGS.USE_ENDPOINT,
+    useEndpoint: endpointConfig.useEndpoint,
+    endpointUrl: endpointConfig.endpointUrl,
+    supportsRevealDepositAPI: endpointConfig.supportsRevealDepositAPI,
     l1Rpc:
       targetNetwork === NETWORK.MAINNET
         ? getEnv('ETHEREUM_MAINNET_RPC', PUBLIC_RPCS['ethereum-mainnet'])

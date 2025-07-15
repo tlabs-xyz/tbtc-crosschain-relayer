@@ -1,4 +1,44 @@
+/**
+ * Simplified Configuration System Entry Point
+ * Replaces complex factory pattern with straightforward builders
+ */
+
+// Core builders
+export {
+  ChainConfigBuilder,
+  chainConfigBuilder,
+  type ChainConfig,
+  type ConfigBuildResult,
+} from './builders/chainConfigBuilder.js';
+
+// Secrets are now handled directly via environment variables
+// See utils/SecretUtils.ts for validation utilities
+
+// Chain registry (simplified)
+export {
+  chainSchemaRegistry,
+  getAvailableChainKeys,
+  type ChainSchemaRegistryEntry,
+  type EvmChainConfig,
+  type SolanaChainConfig,
+  type StarknetChainConfig,
+  type SuiChainConfig,
+} from './chainRegistry.js';
+
+// Schemas
+export { EvmChainConfigSchema } from './schemas/evm.chain.schema.js';
+export { SolanaChainConfigSchema } from './schemas/solana.chain.schema.js';
+export { StarknetChainConfigSchema } from './schemas/starknet.chain.schema.js';
+export { SuiChainConfigSchema } from './schemas/sui.chain.schema.js';
+export { CHAIN_TYPE, NETWORK } from './schemas/common.schema.js';
+
+// Secrets are now handled directly via environment variables
+
 import { z } from 'zod';
+import baseLogger from '../utils/Logger.js';
+import { writeFileSync } from 'fs';
+import { appConfig } from './app.config.js';
+import { chainConfigBuilder, type ConfigBuildResult } from './builders/chainConfigBuilder.js';
 import {
   chainSchemaRegistry,
   getAvailableChainKeys,
@@ -8,9 +48,6 @@ import {
   type StarknetChainConfig,
   type SuiChainConfig,
 } from './chainRegistry.js';
-import baseLogger from '../utils/Logger.js';
-import { writeFileSync } from 'fs';
-import { appConfig } from './app.config.js';
 
 export type AnyChainConfig =
   | EvmChainConfig
@@ -243,6 +280,79 @@ try {
 export const chainConfigs = mainChainConfigs;
 export const chainConfigErrors = mainChainConfigErrors;
 
-export { getAvailableChainKeys };
+/**
+ * Main configuration initialization function
+ * Replaces complex factory initialization
+ */
+export async function initializeConfiguration(): Promise<{
+  success: boolean;
+  error?: string;
+  chains?: Record<string, ConfigBuildResult>;
+}> {
+  try {
+    // Build all chain configurations
+    const chains = await chainConfigBuilder.buildAllConfigs();
+
+    // Check for any failures
+    const failures = Object.entries(chains)
+      .filter(([, result]) => !result.success)
+      .map(([chain, result]) => `${chain}: ${result.error}`);
+
+    if (failures.length > 0) {
+      return {
+        success: false,
+        error: `Configuration failures: ${failures.join(', ')}`,
+        chains,
+      };
+    }
+
+    return {
+      success: true,
+      chains,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Configuration initialization failed: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+/**
+ * Get configuration for a specific chain
+ */
+
+/**
+ * Validate configuration system
+ */
+export async function validateConfiguration(): Promise<{
+  success: boolean;
+  errors?: string[];
+  supportedChains?: string[];
+}> {
+  try {
+    const supportedChains = getAvailableChainKeys();
+    const errors: string[] = [];
+
+    // Validate each chain can be built
+    for (const chainKey of supportedChains) {
+      const result = await chainConfigBuilder.buildChainConfig(chainKey);
+      if (!result.success) {
+        errors.push(`${chainKey}: ${result.error}`);
+      }
+    }
+
+    return {
+      success: errors.length === 0,
+      errors: errors.length > 0 ? errors : undefined,
+      supportedChains,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      errors: [`Validation failed: ${error instanceof Error ? error.message : String(error)}`],
+    };
+  }
+}
 
 baseLogger.info('Chain configuration module initialized.');

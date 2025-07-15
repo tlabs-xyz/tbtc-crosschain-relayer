@@ -20,13 +20,14 @@ module.exports = {
   coverageDirectory: 'coverage',
   testTimeout: 30000,
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  clearMocks: true,
   moduleNameMapper: {
     // eslint-disable-next-line no-useless-escape
     '^(\.{1,2}/.+)\.js$': '$1',
     '^@/(.*)$': '<rootDir>/$1',
   },
-  globalSetup: '<rootDir>/jest.global-setup.js',
-  globalTeardown: '<rootDir>/jest.global-teardown.js',
+  globalSetup: '<rootDir>/jest.global-setup.cjs',
+  globalTeardown: '<rootDir>/jest.global-teardown.cjs',
   transformIgnorePatterns: [
     '/node_modules/(?!.*(p-limit|yocto-queue|@mysten))/',
     '\\.pnp\\.[^\\/]+$',
