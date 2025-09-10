@@ -1,5 +1,5 @@
 import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
-import { getCommonChainInput } from './common.chain.js';
+import { getCommonChainInput, SUI_L1_CONTRACT_ADDRESSES } from './common.chain.js';
 import { getEnv } from '../../utils/Env.js';
 import type { PartialDeep } from 'type-fest';
 import type { SuiChainConfig } from '../schemas/sui.chain.schema.js';
@@ -14,8 +14,13 @@ export const getSuiCommonInput = (targetNetwork: NETWORK): PartialDeep<SuiChainC
   return {
     ...commonInput,
     chainType: CHAIN_TYPE.SUI,
+    l1ContractAddress: SUI_L1_CONTRACT_ADDRESSES[targetNetwork],
+    // Disable L2 redemption for Sui chains - L2RedemptionService only supports EVM chains
+    enableL2Redemption: false,
     // Default Gas Object ID for Sui transactions, optional. Can be overridden by specific ENV or config.
     suiGasObjectId: getEnv('SUI_DEFAULT_GAS_OBJECT_ID', ''),
+    // Use polling for Sui chains
+    useEndpoint: false,
     // Other Sui-specific common defaults can be added here
   };
 };

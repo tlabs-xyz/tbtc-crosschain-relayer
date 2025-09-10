@@ -269,7 +269,7 @@ describe('StarknetChainHandler', () => {
   describe('Constructor and Initialization', () => {
     it('should construct and initialize L1 components successfully with valid config', async () => {
       expect(handler).toBeInstanceOf(StarknetChainHandler);
-      expect(ethers.Contract).toHaveBeenCalledTimes(2); // tbtcVaultProvider and starkGateBridgeContract
+      expect(ethers.Contract).toHaveBeenCalledTimes(1); // only tbtcVaultProvider in test setup - starkGateBridgeContract moved to initializeL2
       expect((handler as any).l1DepositorContract).toBeDefined();
       expect((handler as any).l1DepositorContractProvider).toBeDefined();
     });

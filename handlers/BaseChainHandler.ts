@@ -92,12 +92,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         }
       }
     } else {
-      // For other non-EVM chains, check if they need L1 signer for endpoint mode
-      // This logic might need to be adjusted for other future non-EVM chains
-      if ('privateKey' in this.config && this.config.privateKey && this.config.useEndpoint) {
-        logger.info(
-          `Setting up L1 signer for non-EVM chain ${this.config.chainName} in endpoint mode`,
-        );
+      // For other non-EVM chains, check if they need L1 signer
+      // The L1 Bitcoin Depositor is always on EVM (Ethereum), so we need an L1 signer
+      if ('privateKey' in this.config && this.config.privateKey) {
+        logger.info(`Setting up L1 signer for non-EVM chain ${this.config.chainName}`);
         this.l1Signer = new ethers.Wallet(this.config.privateKey as string, this.l1Provider);
         this.nonceManagerL1 = new NonceManager(this.l1Signer);
 
@@ -119,12 +117,33 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         ? NETWORK.TESTNET
         : (this.config.network as NETWORK);
 
-    this.wormhole = await wormhole(ethereumNetwork, [evm, solana, sui], {
-      chains: {
-        Solana: {
-          rpc: this.config.l2Rpc,
-        },
-      },
+    // Only include platforms that are actually needed
+    const platforms: any[] = [evm];
+    const chainConfigs: any = {};
+
+    // Always add Ethereum config since we need to parse L1 transactions
+    chainConfigs.Ethereum = {
+      rpc: this.config.l1Rpc,
+    };
+
+    // Only add Solana if this is a Solana chain
+    if (this.config.chainType === CHAIN_TYPE.SOLANA) {
+      platforms.push(solana);
+      chainConfigs.Solana = {
+        rpc: this.config.l2Rpc,
+      };
+    }
+
+    // Only add SUI if this is a SUI chain
+    if (this.config.chainType === CHAIN_TYPE.SUI) {
+      platforms.push(sui);
+      chainConfigs.Sui = {
+        rpc: this.config.l2Rpc,
+      };
+    }
+
+    this.wormhole = await wormhole(ethereumNetwork, platforms, {
+      chains: chainConfigs,
     });
     // this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc); // Moved up
 
@@ -253,6 +272,50 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   }
 
   // --- Core Deposit Logic (L1 Interactions) ---
+
+  /**
+   * Transform L1OutputEvent data for SUI chains to ensure proper 0x prefix formatting
+   * @param l1OutputEvent - The L1OutputEvent data to transform
+   * @param chainType - The chain type
+   * @returns Transformed L1OutputEvent data
+   */
+  private transformL1OutputEventForChain(l1OutputEvent: any, chainType: CHAIN_TYPE): any {
+    // Only transform for SUI chains
+    if (chainType !== CHAIN_TYPE.SUI) {
+      return l1OutputEvent;
+    }
+
+    // Helper function to ensure 0x prefix
+    const ensureHexPrefix = (value: string): string => {
+      if (typeof value !== 'string') return value;
+      return value.startsWith('0x') ? value : '0x' + value;
+    };
+
+    // Transform funding transaction fields
+    const transformedFundingTx = {
+      version: ensureHexPrefix(l1OutputEvent.fundingTx.version),
+      inputVector: ensureHexPrefix(l1OutputEvent.fundingTx.inputVector),
+      outputVector: ensureHexPrefix(l1OutputEvent.fundingTx.outputVector),
+      locktime: ensureHexPrefix(l1OutputEvent.fundingTx.locktime),
+    };
+
+    // Transform reveal fields
+    const transformedReveal = {
+      fundingOutputIndex: l1OutputEvent.reveal.fundingOutputIndex,
+      blindingFactor: ensureHexPrefix(l1OutputEvent.reveal.blindingFactor),
+      walletPubKeyHash: ensureHexPrefix(l1OutputEvent.reveal.walletPubKeyHash),
+      refundPubKeyHash: ensureHexPrefix(l1OutputEvent.reveal.refundPubKeyHash),
+      refundLocktime: l1OutputEvent.reveal.refundLocktime, // Already has 0x from SUI parser
+      vault: l1OutputEvent.reveal.vault,
+    };
+
+    return {
+      fundingTx: transformedFundingTx,
+      reveal: transformedReveal,
+      l2DepositOwner: l1OutputEvent.l2DepositOwner,
+    };
+  }
+
   async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     // Check if already processed locally to avoid redundant L1 calls
     if (
@@ -279,12 +342,18 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
 
     try {
+      // Transform the L1OutputEvent data for SUI chains to ensure proper formatting
+      const transformedL1OutputEvent = this.transformL1OutputEventForChain(
+        deposit.L1OutputEvent,
+        this.config.chainType,
+      );
+
       logger.debug(`INITIALIZE | Pre-call checking... | ID: ${deposit.id}`);
       // Pre-call check against L1BitcoinDepositor using the provider instance
       await this.l1BitcoinDepositorProvider.callStatic.initializeDeposit(
-        deposit.L1OutputEvent.fundingTx,
-        deposit.L1OutputEvent.reveal,
-        deposit.L1OutputEvent.l2DepositOwner,
+        transformedL1OutputEvent.fundingTx,
+        transformedL1OutputEvent.reveal,
+        transformedL1OutputEvent.l2DepositOwner,
       );
       logger.debug(`INITIALIZE | Pre-call successful | ID: ${deposit.id}`);
 
@@ -295,9 +364,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
 
       // Send transaction using L1BitcoinDepositor with nonce manager
       const tx = await this.l1BitcoinDepositor.initializeDeposit(
-        deposit.L1OutputEvent.fundingTx,
-        deposit.L1OutputEvent.reveal,
-        deposit.L1OutputEvent.l2DepositOwner,
+        transformedL1OutputEvent.fundingTx,
+        transformedL1OutputEvent.reveal,
+        transformedL1OutputEvent.l2DepositOwner,
         { nonce: currentNonce },
       );
 
@@ -435,9 +504,21 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       DepositStatus.QUEUED,
       this.config.chainName,
     );
+    logger.debug(
+      `PROCESS INITIALIZE | Found ${depositsToInitialize.length} QUEUED deposits for ${this.config.chainName}`,
+    );
+
     const filteredDeposits = this.filterDepositsActivityTime(depositsToInitialize);
+    logger.debug(
+      `PROCESS INITIALIZE | After filtering: ${filteredDeposits.length} deposits for ${this.config.chainName}`,
+    );
 
     if (filteredDeposits.length === 0) {
+      if (depositsToInitialize.length > 0) {
+        logger.debug(
+          `PROCESS INITIALIZE | ${depositsToInitialize.length} deposits were filtered out by activity time for ${this.config.chainName}`,
+        );
+      }
       return;
     }
 
@@ -604,16 +685,45 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     const now = Date.now();
     return deposits.filter((deposit) => {
       // If lastActivityAt doesn't exist yet (e.g., freshly created via listener/endpoint), process immediately
-      if (!deposit.dates.lastActivityAt || !deposit.dates.createdAt) return true;
-
-      // If the deposit was just created (last activity is the creation time), process immediately.
-      // We check if they are within a small threshold to account for ms differences during creation.
-      if (Math.abs(deposit.dates.lastActivityAt - deposit.dates.createdAt) < 1000) {
+      if (!deposit.dates.lastActivityAt || !deposit.dates.createdAt) {
+        logger.debug(
+          `FILTER | Deposit ${deposit.id} has no activity dates, processing immediately`,
+        );
         return true;
       }
 
+      // If the deposit was just created (last activity is the creation time), process immediately.
+      // We check if they are within a small threshold to account for ms differences during creation.
+      const timeDiff = Math.abs(deposit.dates.lastActivityAt - deposit.dates.createdAt);
+      if (timeDiff < 1000) {
+        logger.debug(
+          `FILTER | Deposit ${deposit.id} was just created (diff: ${timeDiff}ms), processing immediately`,
+        );
+        return true;
+      }
+
+      // For deposits that are freshly created but have been updated once (common with SUI deposits),
+      // allow immediate processing if they were created recently and are still in early stages
+      const timeSinceCreation = now - deposit.dates.createdAt;
+      if (timeSinceCreation < 10 * 60 * 1000) {
+        // 10 minutes
+        // Process immediately if deposit is in early stages (QUEUED or INITIALIZED)
+        if (deposit.status === 0 || deposit.status === 1) {
+          // QUEUED or INITIALIZED
+          logger.debug(
+            `FILTER | Deposit ${deposit.id} is in early stage (status: ${deposit.status}) and created recently (${timeSinceCreation}ms ago), processing immediately`,
+          );
+          return true;
+        }
+      }
+
       // Otherwise, process only if enough time has passed since last activity
-      return now - deposit.dates.lastActivityAt > DEFAULT_DEPOSIT_RETRY_MS;
+      const timeSinceLastActivity = now - deposit.dates.lastActivityAt;
+      const shouldProcess = timeSinceLastActivity > DEFAULT_DEPOSIT_RETRY_MS;
+      logger.debug(
+        `FILTER | Deposit ${deposit.id} time since last activity: ${timeSinceLastActivity}ms, retry threshold: ${DEFAULT_DEPOSIT_RETRY_MS}ms, should process: ${shouldProcess}`,
+      );
+      return shouldProcess;
     });
   }
 }

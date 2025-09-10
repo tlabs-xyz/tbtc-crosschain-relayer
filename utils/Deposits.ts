@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import { type Deposit } from '../types/Deposit.type.js';
 import { type FundingTransaction } from '../types/FundingTransaction.type.js';
-import { getFundingTxHash, getTransactionHash } from './GetTransactionHash.js';
+import { getTransactionHash } from './GetTransactionHash.js';
 import { DepositStore } from './DepositStore.js';
 import logger from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
@@ -36,6 +36,99 @@ interface TransactionWithHash {
  * @returns {Deposit} A structured deposit object containing detailed information for various uses in the system.
  */
 
+/**
+ * Reverses the byte order of a hex string (without the 0x prefix).
+ * Used for converting between big-endian and little-endian formats.
+ */
+function reverseHexString(hex: string): string {
+  if (typeof hex !== 'string') {
+    throw new Error('Input must be a string');
+  }
+  if (!hex.startsWith('0x')) {
+    throw new Error('Hex string must be 0x-prefixed');
+  }
+  if (hex.length < 4) {
+    throw new Error('Hex string must contain at least one byte after 0x');
+  }
+  if (hex.length % 2 !== 0) {
+    throw new Error('Hex string must have even length');
+  }
+  const hexBody = hex.slice(2);
+  const pairs = hexBody.match(/.{2}/g);
+  if (!pairs) {
+    throw new Error('Failed to parse hex string into byte pairs');
+  }
+  return '0x' + pairs.reverse().join('');
+}
+
+/**
+ * Generates a deposit key by hashing the Bitcoin funding transaction hash and output index
+ * using keccak256. This key is a `bytes32` value used for on-chain interactions.
+ * For EVM chains, pass reverse=true to match contract expectations.
+ * For StarkNet, always use reverse=false.
+ *
+ * @param {string} fundingTxHash - The 66-character hex string of the Bitcoin funding transaction hash (0x-prefixed, 32 bytes).
+ * @param {number} fundingOutputIndex - The index of the output in the funding transaction (must be >= 0 and <= 0xffffffff).
+ * @param {boolean} reverse - Whether to reverse the hash (EVM: true, StarkNet: false)
+ * @returns {string} The deposit key as a `bytes32` hex string.
+ */
+export const getDepositKey = (
+  fundingTxHash: string,
+  fundingOutputIndex: number,
+  reverse: boolean = true,
+): string => {
+  // Validate fundingTxHash
+  if (typeof fundingTxHash !== 'string') {
+    throw new Error('fundingTxHash must be a string');
+  }
+  if (!ethers.utils.isHexString(fundingTxHash) || fundingTxHash.length !== 66) {
+    throw new Error('fundingTxHash must be a 66-character hex string (e.g. 0x...)');
+  }
+  // Validate fundingOutputIndex
+  if (!Number.isInteger(fundingOutputIndex) || fundingOutputIndex < 0) {
+    throw new Error('fundingOutputIndex must be a non-negative integer');
+  }
+  if (fundingOutputIndex > 0xffffffff) {
+    throw new Error('fundingOutputIndex must fit in uint32 range');
+  }
+
+  let hashToUse = fundingTxHash;
+  if (reverse) {
+    hashToUse = reverseHexString(fundingTxHash);
+    logger.debug('getDepositKey reversal:', {
+      original: fundingTxHash,
+      reversed: hashToUse,
+      outputIndex: fundingOutputIndex,
+    });
+  }
+  // Use uint32 for output index to match on-chain contract
+  const types = ['bytes32', 'uint32'];
+  const values = [hashToUse, fundingOutputIndex];
+  return ethers.utils.solidityKeccak256(types, values);
+};
+
+/**
+ * Converts a deposit's keccak256 hash (deposit key) into a uint256 string representation,
+ * which serves as the unique deposit ID in the system. It calls `getDepositKey`
+ * to generate the underlying `bytes32` hash.
+ * This ID is used for tracking and storage.
+ *
+ * @param {string} fundingTxHash - The 66-character hex string of the Bitcoin funding transaction hash (0x-prefixed, 32 bytes).
+ *                                 Must be in big-endian; will be reversed for little-endian.
+ * @param {number} fundingOutputIndex - The index of the output in the funding transaction (must be >= 0 and <= 0xffffffff).
+ * @returns {string} A unique deposit ID as a uint256 string.
+ * @throws {Error} If the fundingTxHash is not a valid 66-character hex string or fundingOutputIndex is invalid.
+ *
+ * @example
+ * ```typescript
+ * getDepositId('0xabcdef...123456', 0)
+ * ```
+ */
+export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
+  const hashBytes32 = getDepositKey(fundingTxHash, fundingOutputIndex);
+  return ethers.BigNumber.from(hashBytes32).toString();
+};
+
 export const createDeposit = (
   fundingTx: FundingTransaction,
   reveal: Reveal,
@@ -43,16 +136,35 @@ export const createDeposit = (
   l2Sender: string,
   chainId: string,
 ): Deposit => {
-  const fundingTxHash = getFundingTxHash(fundingTx);
-  const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
+  // For deposit ID calculation, we need to match the reference script's behavior:
+  // 1. Use Bitcoin format hash (reversed)
+  // 2. getDepositId will reverse it back to big-endian for keccak256
+
+  // Calculate Bitcoin transaction hash (double SHA256 + reverse)
+  // This works for all chains including SUI
+  const bitcoinTxHash = getTransactionHash(fundingTx); // This returns reversed hash
+  const fundingTxHashHex = '0x' + bitcoinTxHash;
+
+  const depositId = getDepositId(fundingTxHashHex, reveal.fundingOutputIndex);
+
+  // Debug logging for hash transformations
+  logger.debug('Deposit hash transformations:', {
+    chainId,
+    bitcoinTxHash,
+    fundingTxHashHex,
+    outputIndex: reveal.fundingOutputIndex,
+    depositId,
+    depositIdHex: '0x' + ethers.BigNumber.from(depositId).toHexString().slice(2).padStart(64, '0'),
+  });
+
   const deposit: Deposit = {
     id: depositId,
     chainId: chainId,
-    fundingTxHash: fundingTxHash,
+    fundingTxHash: fundingTxHashHex,
     outputIndex: reveal.fundingOutputIndex,
     hashes: {
       btc: {
-        btcTxHash: getTransactionHash(fundingTx),
+        btcTxHash: bitcoinTxHash,
       },
       eth: {
         initializeTxHash: null,
@@ -275,6 +387,17 @@ export const updateToAwaitingWormholeVAA = async (
   logDepositAwaitingWormholeVAA(updatedDeposit);
 };
 
+const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'unknown' => {
+  const lowerChainId = chainId.toLowerCase();
+  if (lowerChainId.includes('sui')) {
+    return 'sui';
+  }
+  if (lowerChainId.includes('solana')) {
+    return 'solana';
+  }
+  return 'unknown';
+};
+
 /**
  * @name updateToBridgedDeposit
  * @description Updates the status of a deposit to `BRIDGED`
@@ -296,10 +419,44 @@ export const updateToBridgedDeposit = async (
   const oldStatus = deposit.status;
   const newStatus = DepositStatus.BRIDGED;
 
-  const newSolanaHashes = {
-    ...deposit.hashes?.solana,
-    bridgeTxHash: txSignature,
-  };
+  let updatedHashes;
+  const chainType = getChainTypeFromId(deposit.chainId);
+
+  switch (chainType) {
+    case 'sui':
+      // Update SUI-specific hash structure
+      updatedHashes = {
+        ...deposit.hashes,
+        sui: {
+          ...deposit.hashes?.sui,
+          l2BridgeTxHash: txSignature,
+        },
+      };
+      break;
+    case 'solana':
+      // Update Solana-specific hash structure
+      updatedHashes = {
+        ...deposit.hashes,
+        solana: {
+          ...deposit.hashes?.solana,
+          bridgeTxHash: txSignature,
+        },
+      };
+      break;
+    default:
+      logger.warn(
+        `[updateToBridgedDeposit] Unknown chainId: ${deposit.chainId}. Defaulting to Solana hash structure for backward compatibility.`,
+      );
+      // Default to Solana for backward compatibility
+      updatedHashes = {
+        ...deposit.hashes,
+        solana: {
+          ...deposit.hashes?.solana,
+          bridgeTxHash: txSignature,
+        },
+      };
+      break;
+  }
 
   const updatedDeposit: Deposit = {
     ...deposit,
@@ -308,10 +465,7 @@ export const updateToBridgedDeposit = async (
       ...deposit.wormholeInfo,
       bridgingAttempted: true,
     },
-    hashes: {
-      ...deposit.hashes,
-      solana: newSolanaHashes,
-    },
+    hashes: updatedHashes,
     error: null, // clear any previous error
     dates: {
       ...deposit.dates,
@@ -351,103 +505,6 @@ export const updateLastActivity = async (deposit: Deposit): Promise<Deposit> => 
 
   await DepositStore.update(updatedDeposit);
   return updatedDeposit;
-};
-
-/**
- * Utility to reverse a hex string (excluding the 0x prefix).
- * Used to convert Bitcoin transaction hashes from big-endian to little-endian format.
- *
- * @param hex The hex string to reverse (must be 0x-prefixed and even length, minimum 2 bytes)
- * @returns The reversed hex string
- * @throws {Error} If the hex string is invalid
- *
- * @example
- * ```typescript
- * reverseHexString('0xabcdef12') // Returns '0x12efcdab'
- * ```
- */
-function reverseHexString(hex: string): string {
-  if (typeof hex !== 'string') {
-    throw new Error('Input must be a string');
-  }
-  if (!hex.startsWith('0x')) {
-    throw new Error('Hex string must be 0x-prefixed');
-  }
-  if (hex.length < 4) {
-    throw new Error('Hex string must contain at least one byte after 0x');
-  }
-  if (hex.length % 2 !== 0) {
-    throw new Error('Hex string must have even length');
-  }
-  const hexBody = hex.slice(2);
-  const pairs = hexBody.match(/.{2}/g);
-  if (!pairs) {
-    throw new Error('Failed to parse hex string into byte pairs');
-  }
-  return '0x' + pairs.reverse().join('');
-}
-
-/**
- * Converts a deposit's keccak256 hash (deposit key) into a uint256 string representation,
- * which serves as the unique deposit ID in the system. It calls `getDepositKey`
- * to generate the underlying `bytes32` hash.
- * This ID is used for tracking and storage.
- *
- * @param {string} fundingTxHash - The 66-character hex string of the Bitcoin funding transaction hash (0x-prefixed, 32 bytes).
- *                                 Must be in big-endian; will be reversed for little-endian.
- * @param {number} fundingOutputIndex - The index of the output in the funding transaction (must be >= 0 and <= 0xffffffff).
- * @returns {string} A unique deposit ID as a uint256 string.
- * @throws {Error} If the fundingTxHash is not a valid 66-character hex string or fundingOutputIndex is invalid.
- *
- * @example
- * ```typescript
- * getDepositId('0xabcdef...123456', 0)
- * ```
- */
-export const getDepositId = (fundingTxHash: string, fundingOutputIndex: number): string => {
-  const hashBytes32 = getDepositKey(fundingTxHash, fundingOutputIndex);
-  return ethers.BigNumber.from(hashBytes32).toString();
-};
-
-/**
- * Generates a deposit key by hashing the Bitcoin funding transaction hash and output index
- * using keccak256. This key is a `bytes32` value used for on-chain interactions.
- * For EVM chains, pass reverse=true to match contract expectations.
- * For StarkNet, always use reverse=false.
- *
- * @param {string} fundingTxHash - The 66-character hex string of the Bitcoin funding transaction hash (0x-prefixed, 32 bytes).
- * @param {number} fundingOutputIndex - The index of the output in the funding transaction (must be >= 0 and <= 0xffffffff).
- * @param {boolean} reverse - Whether to reverse the hash (EVM: true, StarkNet: false)
- * @returns {string} The deposit key as a `bytes32` hex string.
- */
-export const getDepositKey = (
-  fundingTxHash: string,
-  fundingOutputIndex: number,
-  reverse: boolean = true,
-): string => {
-  // Validate fundingTxHash
-  if (typeof fundingTxHash !== 'string') {
-    throw new Error('fundingTxHash must be a string');
-  }
-  if (!ethers.utils.isHexString(fundingTxHash) || fundingTxHash.length !== 66) {
-    throw new Error('fundingTxHash must be a 66-character hex string (e.g. 0x...)');
-  }
-  // Validate fundingOutputIndex
-  if (!Number.isInteger(fundingOutputIndex) || fundingOutputIndex < 0) {
-    throw new Error('fundingOutputIndex must be a non-negative integer');
-  }
-  if (fundingOutputIndex > 0xffffffff) {
-    throw new Error('fundingOutputIndex must fit in uint32 range');
-  }
-
-  let hashToUse = fundingTxHash;
-  if (reverse) {
-    hashToUse = reverseHexString(fundingTxHash);
-  }
-  // Use uint32 for output index to match on-chain contract
-  const types = ['bytes32', 'uint32'];
-  const values = [hashToUse, fundingOutputIndex];
-  return ethers.utils.solidityKeccak256(types, values);
 };
 
 /**
