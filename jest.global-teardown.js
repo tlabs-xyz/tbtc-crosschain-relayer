@@ -1,6 +1,4 @@
-import prismaModule from './utils/prisma.js';
-
-const prisma = prismaModule.prisma || prismaModule.default?.prisma || prismaModule;
+import { prisma } from './utils/prisma';
 
 export default async () => {
   try {
