@@ -21,8 +21,8 @@ module.exports = {
   testTimeout: 30000,
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   moduleNameMapper: {
-    // eslint-disable-next-line no-useless-escape
-    '^(\.{1,2}/.+)\.js$': '$1',
+    // Do not rewrite zod's internal CJS imports (./v3/*, ./v4/*)
+    '^(\\.{1,2}/(?!v\\d+/).*?)\\.js$': '$1',
     '^@/(.*)$': '<rootDir>/$1',
   },
   globalSetup: '<rootDir>/jest.global-setup.js',

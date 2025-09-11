@@ -1,11 +1,13 @@
-const { prisma } = require('./utils/prisma');
+import prismaModule from './utils/prisma.js';
 
-module.exports = async () => {
+const prisma = prismaModule.prisma || prismaModule.default?.prisma || prismaModule;
+
+export default async () => {
   try {
-    // Disconnect Prisma client
-    await prisma.$disconnect();
+    if (prisma && prisma.$disconnect) {
+      await prisma.$disconnect();
+    }
 
-    // Force garbage collection if available
     if (global.gc) {
       global.gc();
     }

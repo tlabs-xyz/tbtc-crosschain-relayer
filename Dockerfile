@@ -52,6 +52,9 @@ WORKDIR /usr/app
 COPY package.json yarn.lock ./
 COPY prisma/ ./prisma/
 
+RUN apk add --no-cache git && \
+    git config --global url."https://".insteadOf git://
+
 RUN yarn install --frozen-lockfile --production=true
 
 COPY --from=development /usr/app/dist ./dist
