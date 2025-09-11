@@ -1,2 +1,18 @@
 # Temporarily ignoring Wormhole SDK -> bigint-buffer vulnerability
 GHSA-3gc7-fjrx-p6mg
+
+# Transitives via @keep-network/tbtc-v2.ts and its deps (web3/celo/openzeppelin/etc)
+GHSA-759h-5p5w-455r  # scrypt-shim
+GHSA-hj79-42mx-m4gr  # umpirski/country-list
+GHSA-qmm8-cpj5-59wq  # bls12377js
+GHSA-2j2x-2gpw-g8fm  # flat
+GHSA-cph5-m8f7-6c5x  # axios
+GHSA-jr5f-v2jv-69x6  # axios
+GHSA-74fj-2j2h-c42q  # follow-redirects
+GHSA-vh7m-p724-62c2  # elliptic
+GHSA-4g63-c64m-25w9  # openzeppelin contracts-upgradeable / contracts
+GHSA-xrc4-737v-9q75  # openzeppelin
+GHSA-qh9x-gcfh-pcrw  # openzeppelin
+GHSA-4h98-2769-gh6h  # openzeppelin
+GHSA-93hq-5wgc-jc82  # openzeppelin
+GHSA-88g8-f5mf-f5rj  # openzeppelin
