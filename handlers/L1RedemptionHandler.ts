@@ -86,9 +86,10 @@ export class L1RedemptionHandler {
     );
 
     try {
-      const result = await this.sdk.redemptions.relayRedemptionRequestToL1(
+      const redemptionsAny: any = this.sdk.redemptions as any;
+      const result = await redemptionsAny.relayRedemptionRequestToL1(
         amount,
-        signedVaa, // The SDK expects BytesLike, Uint8Array is compatible
+        signedVaa,
         l2ChainName as DestinationChainName,
       );
 
