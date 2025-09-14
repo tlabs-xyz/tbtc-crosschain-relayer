@@ -17,7 +17,7 @@ export const getSolanaDevnetChainInput = (): SolanaChainInput => {
     chainType: commonDevnetSolanaInput.chainType!,
     l1Rpc: commonDevnetSolanaInput.l1Rpc!,
     vaultAddress: commonDevnetSolanaInput.vaultAddress!,
-    l1ContractAddress: commonDevnetSolanaInput.l1ContractAddress!,
+    l1BitcoinDepositorAddress: commonDevnetSolanaInput.l1BitcoinDepositorAddress!,
     l1Confirmations: commonDevnetSolanaInput.l1Confirmations!,
     enableL2Redemption: commonDevnetSolanaInput.enableL2Redemption!,
     useEndpoint: commonDevnetSolanaInput.useEndpoint!,
@@ -30,17 +30,17 @@ export const getSolanaDevnetChainInput = (): SolanaChainInput => {
 
     // SolanaDevnet-specific overrides and additions
     chainName: 'SolanaDevnet',
-    l2Rpc: getEnv('CHAIN_SOLANADEVNET_L2_RPC', PUBLIC_RPCS['solana-devnet']),
-    l2WsRpc: getEnv('CHAIN_SOLANADEVNET_L2_WS_RPC', PUBLIC_WS_RPCS['solana-devnet']),
-    l2StartBlock: getEnvNumber('CHAIN_SOLANADEVNET_L2_START_BLOCK', 0),
-    l2ContractAddress: getEnv(
-      'CHAIN_SOLANADEVNET_L2_CONTRACT_ADDRESS',
+    l2Rpc: getEnv('CHAIN_SOLANA_DEVNET_L2_RPC', PUBLIC_RPCS['solana-devnet']),
+    l2WsRpc: getEnv('CHAIN_SOLANA_DEVNET_L2_WS_RPC', PUBLIC_WS_RPCS['solana-devnet']),
+    l2BitcoinDepositorStartBlock: getEnvNumber('CHAIN_SOLANA_DEVNET_L2_START_BLOCK', 0),
+    l2BitcoinDepositorAddress: getEnv(
+      'CHAIN_SOLANA_DEVNET_L2_CONTRACT_ADDRESS',
       '11111111111111111111111111111111', // Placeholder for Solana L2 contract
     ),
     l2WormholeGatewayAddress: 'MockSolanaWgway11111111111111111111111111',
     l2WormholeChainId: WORMHOLE_CHAIN_IDS.SOLANA,
-    solanaPrivateKey: getEnv('CHAIN_SOLANADEVNET_SOLANA_PRIVATE_KEY'),
-    solanaSignerKeyBase: getEnv('CHAIN_SOLANADEVNET_SOLANA_KEY_BASE'),
+    solanaPrivateKey: getEnv('CHAIN_SOLANA_DEVNET_SOLANA_PRIVATE_KEY'),
+    solanaSignerKeyBase: getEnv('CHAIN_SOLANA_DEVNET_SOLANA_KEY_BASE'),
   };
   return config;
 };

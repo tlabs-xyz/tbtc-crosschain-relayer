@@ -19,13 +19,13 @@ export type AnyChainConfig =
   | SuiChainConfig;
 
 export interface AllChainConfigs {
-  sepoliaTestnet?: EvmChainConfig;
   solanaDevnet?: SolanaChainConfig;
   starknetTestnet?: StarknetChainConfig;
   starknetMainnet?: StarknetChainConfig;
   suiTestnet?: SuiChainConfig;
   suiMainnet?: SuiChainConfig;
   arbitrumMainnet?: EvmChainConfig;
+  arbitrumSepolia?: EvmChainConfig;
   baseMainnet?: EvmChainConfig;
   baseSepoliaTestnet?: EvmChainConfig;
   solanaDevnetImported?: SolanaChainConfig;

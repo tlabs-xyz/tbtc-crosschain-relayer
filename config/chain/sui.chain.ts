@@ -16,7 +16,7 @@ export const getSuiMainnetChainInput = (): SuiChainInput => {
     'chainType',
     'l1Rpc',
     'vaultAddress',
-    'l1ContractAddress',
+    'l1BitcoinDepositorAddress',
     'l1Confirmations',
     'enableL2Redemption',
     'useEndpoint',
@@ -34,9 +34,9 @@ export const getSuiMainnetChainInput = (): SuiChainInput => {
     chainType: commonMainnetSuiInput.chainType!,
     l1Rpc: commonMainnetSuiInput.l1Rpc!,
     vaultAddress: commonMainnetSuiInput.vaultAddress!,
-    l1ContractAddress: getEnv(
+    l1BitcoinDepositorAddress: getEnv(
       'CHAIN_SUIMAINNET_L1_CONTRACT_ADDRESS',
-      commonMainnetSuiInput.l1ContractAddress!,
+      commonMainnetSuiInput.l1BitcoinDepositorAddress!,
     ),
     l1Confirmations: commonMainnetSuiInput.l1Confirmations!,
     enableL2Redemption: commonMainnetSuiInput.enableL2Redemption!,
@@ -55,9 +55,9 @@ export const getSuiMainnetChainInput = (): SuiChainInput => {
     chainName: 'SuiMainnet',
     l2Rpc: getEnv('CHAIN_SUIMAINNET_L2_RPC', 'https://fullnode.mainnet.sui.io'),
     l2WsRpc: getEnv('CHAIN_SUIMAINNET_L2_WS_RPC', 'wss://fullnode.mainnet.sui.io'),
-    l2StartBlock: getEnvNumber('CHAIN_SUIMAINNET_L2_START_BLOCK', 3776927722),
+    l2BitcoinDepositorStartBlock: getEnvNumber('CHAIN_SUIMAINNET_L2_START_BLOCK', 3776927722),
     // Mainnet BitcoinDepositor contract package and module
-    l2ContractAddress: getEnv(
+    l2BitcoinDepositorAddress: getEnv(
       'CHAIN_SUIMAINNET_L2_CONTRACT_ADDRESS',
       '0x77045f1b9f811a7a8fb9ebd085b5b0c55c5cb0d1520ff55f7037f89b5da9f5f1::bitcoin_depositor',
     ),

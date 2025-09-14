@@ -53,9 +53,10 @@ export const WORMHOLE_CHAIN_IDS = {
 
 // Wormhole Gateway Addresses (only verified ones)
 export const WORMHOLE_GATEWAYS = {
-  ARBITRUM_ONE: '0x0b2402144Bb366A632D14B83F244D2e0e21bD39c',
-  BASE: '0x8d2de8d2f73F1F4cAB472AC9A881C9b123C79627',
-  BASE_SEPOLIA: '0x86F55A04690fd7815A3D802bD587e83eA888B239',
+  ARBITRUM_ONE: '0x1293a54e160D1cd7075487898d65266081A15458',
+  ARBITRUM_SEPOLIA: '0xc3D46e0266d95215589DE639cC4E93b79f88fc6C',
+  BASE: '0x09959798B95d00a3183d20FaC298E4594E599eab',
+  BASE_SEPOLIA: '0xc3D46e0266d95215589DE639cC4E93b79f88fc6C',
 } as const;
 
 // =============================================================================
@@ -127,10 +128,7 @@ export const getCommonChainInput = (targetNetwork: NETWORK): Partial<CommonChain
         ? FEATURE_FLAGS.ENABLE_L2_REDEMPTION_MAINNET
         : targetNetwork === NETWORK.TESTNET
           ? FEATURE_FLAGS.ENABLE_L2_REDEMPTION_TESTNET
-          : FEATURE_FLAGS.ENABLE_L2_REDEMPTION_DEVNET,
-    l1StartBlock: Number(getEnv('L1_START_BLOCK', '0')),
-    l2StartBlock: Number(getEnv('L2_START_BLOCK', '0')),
-    useWormhole: getEnvBoolean('USE_WORMHOLE', false),
+          : FEATURE_FLAGS.ENABLE_L2_REDEMPTION_DEVNET,   
     depositApiEndpoint: process.env.DEPOSIT_API_ENDPOINT,
   };
 

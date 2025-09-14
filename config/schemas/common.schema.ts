@@ -62,9 +62,11 @@ export const CommonChainConfigSchema = z.object({
   // Contract Addresses in tBTC Protocol:
   // L1: Bitcoin depositor contracts on Ethereum
   // L2: Bitcoin depositor contracts on target network (Arbitrum, Base, etc.)
-  l1ContractAddress: EthereumAddressSchema, // L1BitcoinDepositor on Ethereum
-  l2ContractAddress: EthereumAddressSchema, // L2BitcoinDepositor on target network
+  l1BitcoinDepositorAddress: EthereumAddressSchema, // L1BitcoinDepositor on Ethereum
+  l2BitcoinDepositorAddress: EthereumAddressSchema, // L2BitcoinDepositor on target network
 
+  // L1: Bitcoin redeemer contracts on Ethereum
+  // L2: Bitcoin redeemer contracts on target network
   l1BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
   l2BitcoinRedeemerAddress: EthereumAddressSchema.optional(),
 
@@ -75,15 +77,19 @@ export const CommonChainConfigSchema = z.object({
   // Block Configuration:
   // L2 start block: Where to begin monitoring minter events on target network
   // L1 confirmations: How many Ethereum blocks to wait for transaction finality
-  l1StartBlock: z.coerce.number().int().nonnegative().default(0),
-  l2StartBlock: z.coerce.number().int().nonnegative(),
+  l1BitcoinDepositorStartBlock: z.coerce.number().int().nonnegative().default(0),
+  l2BitcoinDepositorStartBlock: z.coerce.number().int().nonnegative(),
+
+  // L1: Bitcoin redeemer start block on Ethereum
+  // L2: Bitcoin redeemer start block on target network
+  l1BitcoinRedeemerStartBlock: z.coerce.number().int().nonnegative().default(0).optional(),
+  l2BitcoinRedeemerStartBlock: z.coerce.number().int().nonnegative().optional(),
+
   vaultAddress: EthereumAddressSchema, // TBTCVault on Ethereum
 
   // Number of L1 (Ethereum) block confirmations to wait for transactions.
   l1Confirmations: z.coerce.number().int().positive().default(1),
 
-  // Wormhole specific flag
-  useWormhole: z.coerce.boolean().default(false),
   depositApiEndpoint: z.string().url().optional(),
 });
 

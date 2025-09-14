@@ -42,7 +42,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
    * Called by `initializeChain()` in Core.ts
    * Sets up Solana connection, Anchor provider, and loads your Wormhole Gateway program.
    */
-  protected initializeL2() {
+  protected override initializeL2() {
     logger.debug(`Initializing Solana L2 components for ${this.config.chainName}`);
 
     if (!this.config.l2Rpc) {
@@ -92,7 +92,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
    * Called by `setupListeners()` in BaseChainHandler (if !useEndpoint).
    * If you plan to do L2 event listening, implement it here.
    */
-  protected async setupL2Listeners(): Promise<void> {
+  protected override async setupL2Listeners(): Promise<void> {
     if (this.config.useEndpoint) {
       logger.warn(`Solana L2 Listeners skipped for ${this.config.chainName} (using Endpoint).`);
       return;
@@ -103,7 +103,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
   /**
    * Get the latest Solana slot (block) if you need to do on-chain queries for missed deposits.
    */
-  async getLatestBlock(): Promise<number> {
+  override async getLatestBlock(): Promise<number> {
     if (this.config.useEndpoint) return 0; // Skip if using endpoint mode
     if (!this.connection) {
       logger.warn(`No Solana connection established. Returning 0.`);
@@ -121,7 +121,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
    * Example "checkForPastDeposits" if you wanted to scan logs or transactions on Solana.
    * Not yet implemented in this skeleton.
    */
-  async checkForPastDeposits(_options: {
+  override async checkForPastDeposits(_options: {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void> {
@@ -135,7 +135,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
    *  2) parse Wormhole transferSequence from logs
    *  3) update deposit to AWAITING_WORMHOLE_VAA
    */
-  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+  override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     const finalizedDepositReceipt = await super.finalizeDeposit(deposit);
 
     if (!finalizedDepositReceipt) {

@@ -15,7 +15,7 @@ export const getStarknetCommonInput = (
   return {
     ...commonInput,
     chainType: CHAIN_TYPE.STARKNET,
-    l1ContractAddress: STARKNET_L1_CONTRACT_ADDRESSES[targetNetwork],
+    l1BitcoinDepositorAddress: STARKNET_L1_CONTRACT_ADDRESSES[targetNetwork],
     // Enable reveal deposit API for StarkNet
     supportsRevealDepositAPI: true,
     // Default L1 fee amount for StarkNet transactions, can be overridden by specific ENV or config.

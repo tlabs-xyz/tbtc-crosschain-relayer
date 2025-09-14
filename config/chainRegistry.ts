@@ -7,14 +7,13 @@ import {
 } from './schemas/starknet.chain.schema.js';
 import { SuiChainConfigSchema, type SuiChainConfig } from './schemas/sui.chain.schema.js';
 
-import { getSepoliaTestnetChainInput } from './chain/sepolia.chain.js';
 import { getSolanaDevnetChainInput } from './chain/solana.chain.js';
 import { getStarknetTestnetChainInput } from './chain/starknet.chain.js';
 import { getSuiMainnetChainInput } from './chain/sui.chain.js';
 import { getArbitrumMainnetChainInput } from './chain/arbitrumMainnet.chain.js';
 import { getBaseMainnetChainInput } from './chain/baseMainnet.chain.js';
 import { getSolanaDevnetImportedChainInput } from './chain/solanaDevnetImported.chain.js';
-import { getBaseSepoliaTestnetChainInput } from './chain/base-sepolia-testnet.chain.js'; // Assuming this path and export
+import { getBaseSepoliaChainInput } from './chain/baseSepolia.chain.js';
 import { getArbitrumSepoliaChainInput } from './chain/arbitrumSepolia.chain.js';
 import { getStarknetMainnetChainInput } from './chain/starknetMainnet.chain.js';
 import { getSuiTestnetChainInput } from './chain/suiTestnet.chain.js';
@@ -29,21 +28,20 @@ export interface ChainSchemaRegistryEntry<S extends z.ZodTypeAny> {
 }
 
 type ChainSchemaRegistry = {
-  sepoliaTestnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
   solanaDevnet: ChainSchemaRegistryEntry<typeof SolanaChainConfigSchema>;
   starknetTestnet: ChainSchemaRegistryEntry<typeof StarknetChainConfigSchema>;
   starknetMainnet: ChainSchemaRegistryEntry<typeof StarknetChainConfigSchema>;
   suiTestnet: ChainSchemaRegistryEntry<typeof SuiChainConfigSchema>;
   suiMainnet: ChainSchemaRegistryEntry<typeof SuiChainConfigSchema>;
   arbitrumMainnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  arbitrumSepolia: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
   baseMainnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
-  baseSepoliaTestnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  baseSepolia: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
   solanaDevnetImported: ChainSchemaRegistryEntry<typeof SolanaChainConfigSchema>;
   [key: string]: ChainSchemaRegistryEntry<z.ZodTypeAny>;
 };
 
 export const chainSchemaRegistry: ChainSchemaRegistry = {
-  sepoliaTestnet: { schema: EvmChainConfigSchema, getInputFunc: getSepoliaTestnetChainInput },
   solanaDevnet: { schema: SolanaChainConfigSchema, getInputFunc: getSolanaDevnetChainInput },
   starknetTestnet: {
     schema: StarknetChainConfigSchema,
@@ -56,14 +54,14 @@ export const chainSchemaRegistry: ChainSchemaRegistry = {
   suiTestnet: { schema: SuiChainConfigSchema, getInputFunc: getSuiTestnetChainInput },
   suiMainnet: { schema: SuiChainConfigSchema, getInputFunc: getSuiMainnetChainInput },
   arbitrumMainnet: { schema: EvmChainConfigSchema, getInputFunc: getArbitrumMainnetChainInput },
-  baseMainnet: { schema: EvmChainConfigSchema, getInputFunc: getBaseMainnetChainInput },
-  baseSepoliaTestnet: {
-    schema: EvmChainConfigSchema,
-    getInputFunc: getBaseSepoliaTestnetChainInput,
-  }, // Added baseSepoliaTestnet
   arbitrumSepolia: {
     schema: EvmChainConfigSchema,
     getInputFunc: getArbitrumSepoliaChainInput,
+  },
+  baseMainnet: { schema: EvmChainConfigSchema, getInputFunc: getBaseMainnetChainInput },
+  baseSepolia: {
+    schema: EvmChainConfigSchema,
+    getInputFunc: getBaseSepoliaChainInput,
   },
   solanaDevnetImported: {
     schema: SolanaChainConfigSchema,

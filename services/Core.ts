@@ -190,7 +190,7 @@ export const startCronJobs = () => {
     cron.schedule('*/60 * * * *', async () => {
       try {
         const now = Date.now();
-        const retentionMs = 7 * 24 * 60 * 60 * 1000; // 7 days
+        const retentionMs = 60 * 24 * 60 * 60 * 1000; // 60 days
         const allRedemptions = await RedemptionStore.getAll();
         for (const redemption of allRedemptions) {
           if (

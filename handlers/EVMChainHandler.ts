@@ -31,7 +31,7 @@ export class EVMChainHandler
     logger.debug(`Constructing EVMChainHandler for ${this.config.chainName}`);
   }
 
-  protected async initializeL2(): Promise<void> {
+  protected override async initializeL2(): Promise<void> {
     logger.debug(`Initializing EVM L2 components for ${this.config.chainName}`);
 
     if (this.config.l2Rpc) {
@@ -44,10 +44,10 @@ export class EVMChainHandler
         logger.debug(`EVM L2 Signer and NonceManager created for ${this.config.chainName}`);
       }
 
-      if (this.config.l2ContractAddress) {
+      if (this.config.l2BitcoinDepositorAddress) {
         if (this.nonceManagerL2) {
           this.l2BitcoinDepositor = new ethers.Contract(
-            this.config.l2ContractAddress,
+            this.config.l2BitcoinDepositorAddress,
             L2BitcoinDepositorABI,
             this.nonceManagerL2,
           );
@@ -57,7 +57,7 @@ export class EVMChainHandler
         }
 
         this.l2BitcoinDepositorProvider = new ethers.Contract(
-          this.config.l2ContractAddress,
+          this.config.l2BitcoinDepositorAddress,
           L2BitcoinDepositorABI,
           this.l2Provider,
         );
@@ -75,7 +75,7 @@ export class EVMChainHandler
     logger.debug(`EVM L2 components initialization finished for ${this.config.chainName}`);
   }
 
-  protected async setupL2Listeners(): Promise<void> {
+  protected override async setupL2Listeners(): Promise<void> {
     if (!this.config.useEndpoint && this.l2BitcoinDepositorProvider) {
       logger.debug(`Setting up EVM L2 listeners for ${this.config.chainName}`);
 
@@ -136,7 +136,7 @@ export class EVMChainHandler
     }
   }
 
-  async getLatestBlock(): Promise<number> {
+  override async getLatestBlock(): Promise<number> {
     if (!this.l2Provider) {
       return 0;
     }
@@ -152,7 +152,7 @@ export class EVMChainHandler
     }
   }
 
-  async checkForPastDeposits(options: {
+  override async checkForPastDeposits(options: {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void> {
@@ -251,12 +251,12 @@ export class EVMChainHandler
         `_getBlocksByTimestampEVM | L2 Provider not available for ${this.config.chainName}. Returning default range.`,
       );
       return {
-        startBlock: this.config.l2StartBlock ?? 0,
-        endBlock: this.config.l2StartBlock ?? 0,
+        startBlock: this.config.l2BitcoinDepositorStartBlock ?? 0,
+        endBlock: latestBlock ?? 0,
       };
     }
 
-    const START_BLOCK = (this.config.l2StartBlock as number | undefined) ?? 0;
+    const START_BLOCK = (this.config.l2BitcoinDepositorStartBlock as number | undefined) ?? 0;
     let startBlock = -1;
     let low = START_BLOCK;
     let high = latestBlock;
@@ -274,6 +274,7 @@ export class EVMChainHandler
     );
 
     try {
+      // Binary search for the block with the closest timestamp to the given timestamp
       while (low <= high) {
         const mid = Math.floor((low + high) / 2);
 

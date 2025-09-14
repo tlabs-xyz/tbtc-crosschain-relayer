@@ -63,6 +63,10 @@ export class L1RedemptionHandler {
             error,
           );
         }
+      } else {
+        logger.warn(
+          `Skipping cross-chain support for ${config.chainName} in L1RedemptionHandler as it is not enabled or missing configuration.`,
+        );
       }
     }
 

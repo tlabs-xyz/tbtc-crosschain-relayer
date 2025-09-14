@@ -51,7 +51,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     // Common L1 configuration checks
     if (
       !this.config.l1Rpc ||
-      !this.config.l1ContractAddress ||
+      !this.config.l1BitcoinDepositorAddress ||
       !this.config.vaultAddress ||
       !this.config.network
     ) {
@@ -80,7 +80,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         // L1 Contracts for transactions (require signer) - only for EVM standard flow
         if (this.config.chainType === CHAIN_TYPE.EVM) {
           this.l1BitcoinDepositor = new ethers.Contract(
-            this.config.l1ContractAddress,
+            this.config.l1BitcoinDepositorAddress,
             L1BitcoinDepositorABI,
             this.nonceManagerL1,
           );
@@ -101,7 +101,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
 
         // L1 Contracts for transactions (require signer)
         this.l1BitcoinDepositor = new ethers.Contract(
-          this.config.l1ContractAddress,
+          this.config.l1BitcoinDepositorAddress,
           L1BitcoinDepositorABI,
           this.nonceManagerL1,
         );
@@ -149,7 +149,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
 
     // L1 Contracts for reading/listening (do not require signer)
     this.l1BitcoinDepositorProvider = new ethers.Contract(
-      this.config.l1ContractAddress,
+      this.config.l1BitcoinDepositorAddress,
       L1BitcoinDepositorABI,
       this.l1Provider,
     );

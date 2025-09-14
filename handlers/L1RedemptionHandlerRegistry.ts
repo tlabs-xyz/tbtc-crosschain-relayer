@@ -2,7 +2,7 @@ import { L1RedemptionHandler } from './L1RedemptionHandler.js';
 import type { AnyChainConfig } from '../config/index.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
-import { NETWORK } from '../config/schemas/common.schema.js';
+import { CHAIN_TYPE, NETWORK } from '../config/schemas/common.schema.js';
 
 /**
  * Manages L1RedemptionHandler instances.
@@ -20,7 +20,7 @@ class L1RedemptionHandlerRegistry {
     }
 
     const evmChainConfigs = chainConfigs.filter(
-      (config): config is EvmChainConfig => config.enableL2Redemption,
+      (config): config is EvmChainConfig => config.enableL2Redemption && config.chainType === CHAIN_TYPE.EVM,
     );
 
     if (evmChainConfigs.length === 0) {
