@@ -1,11 +1,13 @@
 // --- Variable declarations for mock functions ---
-let mockGetSepoliaTestnetChainInput: jest.Mock;
+let mockGetArbitrumSepoliaChainInput: jest.Mock;
+let mockGetBaseSepoliaChainInput: jest.Mock;
 let mockEvmChainConfigSchemaParse: jest.Mock;
 let mockStarknetChainConfigSchemaParse: jest.Mock;
 let mockGetStarknetTestnetChainInput: jest.Mock;
 
 // Initialize the mocks before the registry mock
-mockGetSepoliaTestnetChainInput = jest.fn();
+mockGetArbitrumSepoliaChainInput = jest.fn();
+mockGetBaseSepoliaChainInput = jest.fn();
 mockEvmChainConfigSchemaParse = jest.fn();
 mockStarknetChainConfigSchemaParse = jest.fn();
 mockGetStarknetTestnetChainInput = jest.fn();
@@ -44,11 +46,19 @@ jest.mock('../../../config/app.config.js', () => ({
   appConfig: mockAppConfig,
 }));
 
-jest.mock('../../../config/chain/sepolia.chain.js', () => {
-  mockGetSepoliaTestnetChainInput = jest.fn();
+jest.mock('../../../config/chain/arbitrumSepolia.chain.js', () => {
+  mockGetArbitrumSepoliaChainInput = jest.fn();
   return {
     __esModule: true,
-    getSepoliaTestnetChainInput: mockGetSepoliaTestnetChainInput,
+    getArbitrumSepoliaChainInput: mockGetArbitrumSepoliaChainInput,
+  };
+});
+
+jest.mock('../../../config/chain/baseSepolia.chain.js', () => {
+  mockGetBaseSepoliaChainInput = jest.fn();
+  return {
+    __esModule: true,
+    getBaseSepoliaChainInput: mockGetBaseSepoliaChainInput,
   };
 });
 jest.mock('../../../config/schemas/evm.chain.schema.js', () => {
@@ -78,8 +88,12 @@ jest.mock('../../../config/schemas/starknet.chain.schema.js', () => {
 jest.mock('../../../config/chainRegistry.js', () => ({
   __esModule: true,
   chainSchemaRegistry: {
-    sepoliaTestnet: {
-      getInputFunc: mockGetSepoliaTestnetChainInput,
+    arbitrumSepolia: {
+      getInputFunc: mockGetArbitrumSepoliaChainInput,
+      schema: { parse: mockEvmChainConfigSchemaParse },
+    },
+    baseSepolia: {
+      getInputFunc: mockGetBaseSepoliaChainInput,
       schema: { parse: mockEvmChainConfigSchemaParse },
     },
     starknetTestnet: {
@@ -106,20 +120,16 @@ jest.mock('../../../config/chainRegistry.js', () => ({
       getInputFunc: jest.fn(),
       schema: { parse: jest.fn() },
     },
-    baseSepoliaTestnet: {
-      getInputFunc: jest.fn(),
-      schema: { parse: jest.fn() },
-    },
   },
   getAvailableChainKeys: () => [
-    'sepoliaTestnet',
+    'arbitrumSepolia',
+    'baseSepolia',
     'starknetTestnet',
     'solanaDevnet',
     'suiTestnet',
     'arbitrumMainnet',
     'baseMainnet',
     'solanaDevnetImported',
-    'baseSepoliaTestnet',
   ],
 }));
 
@@ -155,7 +165,8 @@ beforeEach(() => {
   mockAppConfig.SUPPORTED_CHAINS = undefined;
 
   // Reset mocks for chain inputs and schema parsers
-  mockGetSepoliaTestnetChainInput.mockReset();
+  mockGetArbitrumSepoliaChainInput.mockReset();
+  mockGetBaseSepoliaChainInput.mockReset();
   mockEvmChainConfigSchemaParse.mockReset();
   mockGetStarknetTestnetChainInput.mockReset();
   mockStarknetChainConfigSchemaParse.mockReset();
@@ -167,49 +178,55 @@ beforeEach(() => {
 });
 
 describe('loadAndValidateChainConfigs', () => {
-  const sepoliaInput = { chainName: 'SepoliaTestnetInput' };
-  const sepoliaOutput = { chainName: 'SepoliaTestnetOutput', chainType: 'EVM' };
+  const arbitrumSepoliaInput = { chainName: 'ArbitrumSepoliaInput' };
+  const arbitrumSepoliaOutput = { chainName: 'ArbitrumSepoliaOutput', chainType: 'EVM' };
+  const baseSepoliaInput = { chainName: 'BaseSepoliaInput' };
+  const baseSepoliaOutput = { chainName: 'BaseSepoliaOutput', chainType: 'EVM' };
   const starknetInput = { chainName: 'StarknetTestnetInput' };
   const starknetOutput = { chainName: 'StarknetTestnetOutput', chainType: 'Starknet' };
 
-  it('should load and validate a single valid chain (Sepolia EVM)', () => {
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+  it('should load and validate a single valid chain (ArbitrumSepolia EVM)', () => {
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockEvmChainConfigSchemaParse.mockReturnValue(arbitrumSepoliaOutput);
 
     const { configs, validationErrors } = loadAndValidateChainConfigs(
-      ['sepoliaTestnet'],
+      ['arbitrumSepolia'],
       loggerMock,
     );
 
     expect(validationErrors).toHaveLength(0);
-    expect(configs.sepoliaTestnet).toEqual(sepoliaOutput);
-    expect(mockGetSepoliaTestnetChainInput).toHaveBeenCalledTimes(1);
-    expect(mockEvmChainConfigSchemaParse).toHaveBeenCalledWith(sepoliaInput);
+    expect(configs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
+    expect(mockGetArbitrumSepoliaChainInput).toHaveBeenCalledTimes(1);
+    expect(mockEvmChainConfigSchemaParse).toHaveBeenCalledWith(arbitrumSepoliaInput);
     expect(loggerMock.info).toHaveBeenCalledWith(
       expect.stringContaining(
-        'Attempting to load and validate configuration for chain: sepoliaTestnet',
+        'Attempting to load and validate configuration for chain: arbitrumSepolia',
       ),
     );
     expect(loggerMock.info).toHaveBeenCalledWith(
-      expect.stringContaining('Successfully loaded configuration for chain: sepoliaTestnet'),
+      expect.stringContaining('Successfully loaded configuration for chain: arbitrumSepolia'),
     );
   });
 
-  it('should load and validate multiple valid chains (Sepolia EVM, Starknet)', () => {
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+  it('should load and validate multiple valid chains (ArbitrumSepolia, BaseSepolia, Starknet)', () => {
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockGetBaseSepoliaChainInput.mockReturnValue(baseSepoliaInput);
+    mockEvmChainConfigSchemaParse
+      .mockReturnValueOnce(arbitrumSepoliaOutput)
+      .mockReturnValueOnce(baseSepoliaOutput);
     mockGetStarknetTestnetChainInput.mockReturnValue(starknetInput);
     mockStarknetChainConfigSchemaParse.mockReturnValue(starknetOutput);
 
     const { configs, validationErrors } = loadAndValidateChainConfigs(
-      ['sepoliaTestnet', 'starknetTestnet'],
+      ['arbitrumSepolia', 'baseSepolia', 'starknetTestnet'],
       loggerMock,
     );
 
     expect(validationErrors).toHaveLength(0);
-    expect(configs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
+    expect(configs.baseSepolia).toEqual(baseSepoliaOutput);
     expect(configs.starknetTestnet).toEqual(starknetOutput);
-    expect(Object.keys(configs)).toHaveLength(2);
+    expect(Object.keys(configs)).toHaveLength(3);
   });
 
   it('should return a validation error if a chain is not in the registry', () => {
@@ -226,21 +243,21 @@ describe('loadAndValidateChainConfigs', () => {
 
   it('should return a validation error if chain input function throws', () => {
     const error = new Error('Failed to get input');
-    mockGetSepoliaTestnetChainInput.mockImplementation(() => {
+    mockGetArbitrumSepoliaChainInput.mockImplementation(() => {
       throw error;
     });
 
     const { configs, validationErrors } = loadAndValidateChainConfigs(
-      ['sepoliaTestnet'],
+      ['arbitrumSepolia'],
       loggerMock,
     );
 
     expect(validationErrors).toHaveLength(1);
-    expect(validationErrors[0].chainKey).toBe('sepoliaTestnet');
+    expect(validationErrors[0].chainKey).toBe('arbitrumSepolia');
     expect(validationErrors[0].error).toBe(error); // The original error object
     expect(validationErrors[0].input).toContain('Input data could not be retrieved');
     expect(loggerMock.error).toHaveBeenCalledWith(
-      expect.stringContaining("UNEXPECTED ERROR loading/validating chain 'sepoliaTestnet'"),
+      expect.stringContaining("UNEXPECTED ERROR loading/validating chain 'arbitrumSepolia'"),
     );
     expect(Object.keys(configs)).toHaveLength(0);
   });
@@ -253,24 +270,24 @@ describe('loadAndValidateChainConfigs', () => {
         message: 'Zod validation failed',
       },
     ]);
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
+    mockGetBaseSepoliaChainInput.mockReturnValue(baseSepoliaInput);
     mockEvmChainConfigSchemaParse.mockImplementation(() => {
       throw zodError;
     });
 
     const { configs, validationErrors } = loadAndValidateChainConfigs(
-      ['sepoliaTestnet'],
+      ['baseSepolia'],
       loggerMock,
     );
 
     expect(validationErrors).toHaveLength(1);
-    expect(validationErrors[0].chainKey).toBe('sepoliaTestnet');
+    expect(validationErrors[0].chainKey).toBe('baseSepolia');
     expect(validationErrors[0].isZodError).toBe(true);
-    expect(validationErrors[0].input).toEqual(sepoliaInput);
+    expect(validationErrors[0].input).toEqual(baseSepoliaInput);
     // Check that the logger received the flattened Zod error
     expect(loggerMock.error).toHaveBeenCalledWith(
       expect.stringContaining(
-        "Config validation failed for 'sepoliaTestnet'. Flattened Zod errors:",
+        "Config validation failed for 'baseSepolia'. Flattened Zod errors:",
       ),
     );
     expect(Object.keys(configs)).toHaveLength(0);
@@ -280,8 +297,8 @@ describe('loadAndValidateChainConfigs', () => {
     const zodError = new ZodError([
       { code: 'custom', path: ['field'], message: 'Zod validation failed' },
     ]);
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput); // Sepolia is valid
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockEvmChainConfigSchemaParse.mockReturnValue(arbitrumSepoliaOutput); // ArbitrumSepolia is valid
 
     mockGetStarknetTestnetChainInput.mockReturnValue(starknetInput);
     mockStarknetChainConfigSchemaParse.mockImplementation(() => {
@@ -289,12 +306,12 @@ describe('loadAndValidateChainConfigs', () => {
     }); // Starknet is invalid (Zod error)
 
     const { configs, validationErrors } = loadAndValidateChainConfigs(
-      ['sepoliaTestnet', 'starknetTestnet', 'unknownChain'],
+      ['arbitrumSepolia', 'starknetTestnet', 'unknownChain'],
       loggerMock,
     );
 
     expect(Object.keys(configs)).toHaveLength(1);
-    expect(configs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
     expect(configs.starknetTestnet).toBeUndefined();
     expect(configs.unknownChain).toBeUndefined();
 
@@ -349,16 +366,16 @@ describe('loadAndValidateChainConfigs', () => {
     ]);
     const flattenedError = zodError.flatten();
 
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
     mockEvmChainConfigSchemaParse.mockImplementation(() => {
       throw zodError;
     });
 
-    loadAndValidateChainConfigs(['sepoliaTestnet'], loggerMock);
+    loadAndValidateChainConfigs(['arbitrumSepolia'], loggerMock);
 
     expect(loggerMock.error).toHaveBeenCalledTimes(1);
     expect(loggerMock.error).toHaveBeenCalledWith(
-      `Config validation failed for 'sepoliaTestnet'. Flattened Zod errors: ${JSON.stringify(flattenedError, null, 2)}`,
+      `Config validation failed for 'arbitrumSepolia'. Flattened Zod errors: ${JSON.stringify(flattenedError, null, 2)}`,
     );
   });
 
@@ -366,8 +383,10 @@ describe('loadAndValidateChainConfigs', () => {
 });
 
 describe('chainConfigs Main Export and Initial Load', () => {
-  const sepoliaInput = { chainName: 'SepoliaTestnetInput' };
-  const sepoliaOutput = { chainName: 'SepoliaTestnetOutput', chainType: 'EVM' };
+  const arbitrumSepoliaInput = { chainName: 'ArbitrumSepoliaInput' };
+  const arbitrumSepoliaOutput = { chainName: 'ArbitrumSepoliaOutput', chainType: 'EVM' };
+  const baseSepoliaInput = { chainName: 'BaseSepoliaInput' };
+  const baseSepoliaOutput = { chainName: 'BaseSepoliaOutput', chainType: 'EVM' };
 
   // Helper to load config/index.ts within an isolated module scope
   const loadIsolatedConfigIndex = () => {
@@ -381,13 +400,13 @@ describe('chainConfigs Main Export and Initial Load', () => {
   };
 
   it('should load chains specified in appConfig.SUPPORTED_CHAINS', () => {
-    mockAppConfig.SUPPORTED_CHAINS = 'sepoliaTestnet';
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+    mockAppConfig.SUPPORTED_CHAINS = 'arbitrumSepolia';
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockEvmChainConfigSchemaParse.mockReturnValue(arbitrumSepoliaOutput);
 
     const configIndex = loadIsolatedConfigIndex();
 
-    expect(configIndex.chainConfigs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configIndex.chainConfigs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
     expect(configIndex.chainConfigs.starknetTestnet).toBeUndefined();
     expect(mockProcessExit).not.toHaveBeenCalled();
     expect(loggerMock.error).not.toHaveBeenCalled();
@@ -395,9 +414,13 @@ describe('chainConfigs Main Export and Initial Load', () => {
 
   it('should attempt to load all registered chains if SUPPORTED_CHAINS is undefined', () => {
     mockAppConfig.SUPPORTED_CHAINS = undefined; // Explicitly undefined
-    // Sepolia will be valid
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+    // ArbitrumSepolia will be valid
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    // BaseSepolia will be valid
+    mockGetBaseSepoliaChainInput.mockReturnValue(baseSepoliaInput);
+    mockEvmChainConfigSchemaParse
+      .mockReturnValueOnce(arbitrumSepoliaOutput)
+      .mockReturnValueOnce(baseSepoliaOutput);
     // Starknet will also be attempted (mock it as valid for this test)
     const starknetInput = { chainName: 'StarknetTestnetInput' };
     const starknetOutput = { chainName: 'StarknetTestnetOutput', chainType: 'Starknet' };
@@ -405,12 +428,13 @@ describe('chainConfigs Main Export and Initial Load', () => {
     mockStarknetChainConfigSchemaParse.mockReturnValue(starknetOutput);
 
     // We need to ensure our mocks for schemas/inputs cover all chains in the actual registry
-    // For this test, assume only sepoliaTestnet and starknetTestnet are in the mocked registry part of config/index
+    // For this test, assume only arbitrumSepolia, baseSepolia and starknetTestnet are in the mocked registry part of config/index
     // A more robust way would be to mock the actual chainSchemaRegistry if possible, or ensure all its keys have mocks.
 
     const configIndex = loadIsolatedConfigIndex();
 
-    expect(configIndex.chainConfigs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configIndex.chainConfigs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
+    expect(configIndex.chainConfigs.baseSepolia).toEqual(baseSepoliaOutput);
     // This expectation depends on starknetTestnet being in the actual registry inside config/index.ts
     // and its mocks being active.
     expect(configIndex.chainConfigs.starknetTestnet).toEqual(starknetOutput);
@@ -419,19 +443,23 @@ describe('chainConfigs Main Export and Initial Load', () => {
 
   it('should attempt to load all registered chains if SUPPORTED_CHAINS is an empty string', () => {
     mockAppConfig.SUPPORTED_CHAINS = ''; // Empty string
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
-    // For simplicity, assume only sepolia is attempted or successfully loaded
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockGetBaseSepoliaChainInput.mockReturnValue(baseSepoliaInput);
+    mockEvmChainConfigSchemaParse
+      .mockReturnValueOnce(arbitrumSepoliaOutput)
+      .mockReturnValueOnce(baseSepoliaOutput);
+    // For simplicity, assume only arbitrumSepolia and baseSepolia are attempted or successfully loaded
 
     const configIndex = loadIsolatedConfigIndex();
-    expect(configIndex.chainConfigs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configIndex.chainConfigs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
+    expect(configIndex.chainConfigs.baseSepolia).toEqual(baseSepoliaOutput);
     // Potentially other chains would be loaded too, depending on registry
     expect(mockProcessExit).not.toHaveBeenCalled();
   });
 
   it('should call process.exit if any chain fails to load during initial load (due to Zod error)', () => {
-    mockAppConfig.SUPPORTED_CHAINS = 'sepoliaTestnet';
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
+    mockAppConfig.SUPPORTED_CHAINS = 'arbitrumSepolia';
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
     const zodError = new ZodError([{ code: 'custom', path: [], message: 'Critical Zod Fail' }]);
     mockEvmChainConfigSchemaParse.mockImplementation(() => {
       throw zodError;
@@ -444,13 +472,13 @@ describe('chainConfigs Main Export and Initial Load', () => {
       expect.stringContaining('CHAIN CONFIGURATION ERRORS DETECTED DURING STARTUP'),
     );
     expect(loggerMock.error).toHaveBeenCalledWith(
-      expect.stringContaining("Chain 'sepoliaTestnet': Validation FAILED."),
+      expect.stringContaining("Chain 'arbitrumSepolia': Validation FAILED."),
     );
   });
 
   it('should call process.exit if input function throws during initial load', () => {
-    mockAppConfig.SUPPORTED_CHAINS = 'sepoliaTestnet';
-    mockGetSepoliaTestnetChainInput.mockImplementation(() => {
+    mockAppConfig.SUPPORTED_CHAINS = 'baseSepolia';
+    mockGetBaseSepoliaChainInput.mockImplementation(() => {
       throw new Error('Input Gen Fail');
     });
 
@@ -486,7 +514,8 @@ describe('getAvailableChainKeys', () => {
     // Based on our mocks and typical setup, we expect at least these.
     expect(keys).toEqual(
       expect.arrayContaining([
-        'sepoliaTestnet',
+        'arbitrumSepolia',
+        'baseSepolia',
         'solanaDevnet',
         'starknetTestnet',
         'suiTestnet',
@@ -501,14 +530,13 @@ describe('getAvailableChainKeys', () => {
   });
 });
 
-// TODO: Add tests for getAvailableChainKeys
-
-// TODO: Add tests for chainConfigs main export and getAvailableChainKeys
-// These will likely require jest.isolateModules for config/index.ts
+// Tests continue below
 
 describe('config/index.ts module initialization', () => {
-  const sepoliaInput = { chainName: 'SepoliaTestnetInputIsolated' };
-  const sepoliaOutput = { chainName: 'SepoliaTestnetOutputIsolated', chainType: 'EVM' };
+  const arbitrumSepoliaInput = { chainName: 'ArbitrumSepoliaInputIsolated' };
+  const arbitrumSepoliaOutput = { chainName: 'ArbitrumSepoliaOutputIsolated', chainType: 'EVM' };
+  const baseSepoliaInput = { chainName: 'BaseSepoliaInputIsolated' };
+  const baseSepoliaOutput = { chainName: 'BaseSepoliaOutputIsolated', chainType: 'EVM' };
   const starknetInput = { chainName: 'StarknetTestnetInputIsolated' };
   const starknetOutput = { chainName: 'StarknetTestnetOutputIsolated', chainType: 'Starknet' };
 
@@ -528,35 +556,39 @@ describe('config/index.ts module initialization', () => {
   });
 
   it('should load explicitly defined SUPPORTED_CHAINS and not exit on success', () => {
-    mockAppConfig.SUPPORTED_CHAINS = 'sepoliaTestnet,starknetTestnet';
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+    mockAppConfig.SUPPORTED_CHAINS = 'arbitrumSepolia,baseSepolia,starknetTestnet';
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockGetBaseSepoliaChainInput.mockReturnValue(baseSepoliaInput);
+    mockEvmChainConfigSchemaParse
+      .mockReturnValueOnce(arbitrumSepoliaOutput)
+      .mockReturnValueOnce(baseSepoliaOutput);
     mockGetStarknetTestnetChainInput.mockReturnValue(starknetInput);
     mockStarknetChainConfigSchemaParse.mockReturnValue(starknetOutput);
 
     const configIndex = loadIsolatedConfigIndex();
 
-    expect(configIndex.chainConfigs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configIndex.chainConfigs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
+    expect(configIndex.chainConfigs.baseSepolia).toEqual(baseSepoliaOutput);
     expect(configIndex.chainConfigs.starknetTestnet).toEqual(starknetOutput);
     expect(configIndex.chainConfigErrors).toHaveLength(0);
     expect(loggerMock.info).toHaveBeenCalledWith(
       expect.stringContaining(
-        'Attempting to load configurations for chains: sepoliaTestnet, starknetTestnet',
+        'Attempting to load configurations for chains: arbitrumSepolia, baseSepolia, starknetTestnet',
       ),
     );
     expect(mockProcessExit).not.toHaveBeenCalled();
   });
 
   it('should call process.exit(1) if explicitly defined SUPPORTED_CHAINS contains errors', () => {
-    mockAppConfig.SUPPORTED_CHAINS = 'sepoliaTestnet,unknownChain';
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+    mockAppConfig.SUPPORTED_CHAINS = 'arbitrumSepolia,unknownChain';
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockEvmChainConfigSchemaParse.mockReturnValue(arbitrumSepoliaOutput);
     mockGetStarknetTestnetChainInput.mockReturnValue(starknetInput);
     mockStarknetChainConfigSchemaParse.mockReturnValue(starknetOutput);
 
     const configIndex = loadIsolatedConfigIndex();
 
-    expect(configIndex.chainConfigs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configIndex.chainConfigs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
     expect(configIndex.chainConfigs.starknetTestnet).toBeUndefined();
     expect(
       configIndex.chainConfigErrors.some(
@@ -569,16 +601,20 @@ describe('config/index.ts module initialization', () => {
   it('should attempt to load all registered chains if SUPPORTED_CHAINS is undefined, and succeed if mocks are good', () => {
     mockAppConfig.SUPPORTED_CHAINS = undefined;
     getAvailableChainsSpy = jest.spyOn(actualChainRegistry, 'getAvailableChainKeys');
-    getAvailableChainsSpy.mockReturnValue(['sepoliaTestnet', 'starknetTestnet']);
+    getAvailableChainsSpy.mockReturnValue(['arbitrumSepolia', 'baseSepolia', 'starknetTestnet']);
 
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockGetBaseSepoliaChainInput.mockReturnValue(baseSepoliaInput);
+    mockEvmChainConfigSchemaParse
+      .mockReturnValueOnce(arbitrumSepoliaOutput)
+      .mockReturnValueOnce(baseSepoliaOutput);
     mockGetStarknetTestnetChainInput.mockReturnValue(starknetInput);
     mockStarknetChainConfigSchemaParse.mockReturnValue(starknetOutput);
 
     const configIndex = loadIsolatedConfigIndex();
 
-    expect(configIndex.chainConfigs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configIndex.chainConfigs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
+    expect(configIndex.chainConfigs.baseSepolia).toEqual(baseSepoliaOutput);
     expect(configIndex.chainConfigs.starknetTestnet).toEqual(starknetOutput);
     expect(configIndex.chainConfigErrors).toHaveLength(0);
     expect(loggerMock.info).toHaveBeenCalledWith(
@@ -592,16 +628,20 @@ describe('config/index.ts module initialization', () => {
   it('should attempt to load all registered chains if SUPPORTED_CHAINS is an empty string, and succeed if mocks are good', () => {
     mockAppConfig.SUPPORTED_CHAINS = '';
     getAvailableChainsSpy = jest.spyOn(actualChainRegistry, 'getAvailableChainKeys');
-    getAvailableChainsSpy.mockReturnValue(['sepoliaTestnet', 'starknetTestnet']);
+    getAvailableChainsSpy.mockReturnValue(['arbitrumSepolia', 'baseSepolia', 'starknetTestnet']);
 
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockGetBaseSepoliaChainInput.mockReturnValue(baseSepoliaInput);
+    mockEvmChainConfigSchemaParse
+      .mockReturnValueOnce(arbitrumSepoliaOutput)
+      .mockReturnValueOnce(baseSepoliaOutput);
     mockGetStarknetTestnetChainInput.mockReturnValue(starknetInput);
     mockStarknetChainConfigSchemaParse.mockReturnValue(starknetOutput);
 
     const configIndex = loadIsolatedConfigIndex();
 
-    expect(configIndex.chainConfigs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configIndex.chainConfigs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
+    expect(configIndex.chainConfigs.baseSepolia).toEqual(baseSepoliaOutput);
     expect(configIndex.chainConfigs.starknetTestnet).toEqual(starknetOutput);
     expect(configIndex.chainConfigErrors).toHaveLength(0);
     expect(loggerMock.info).toHaveBeenCalledWith(
@@ -615,14 +655,14 @@ describe('config/index.ts module initialization', () => {
   it('should call process.exit(1) if SUPPORTED_CHAINS is undefined and loading available chains results in errors', () => {
     mockAppConfig.SUPPORTED_CHAINS = undefined;
     getAvailableChainsSpy = jest.spyOn(actualChainRegistry, 'getAvailableChainKeys');
-    getAvailableChainsSpy.mockReturnValue(['sepoliaTestnet', 'unknownChain']);
+    getAvailableChainsSpy.mockReturnValue(['arbitrumSepolia', 'unknownChain']);
 
-    mockGetSepoliaTestnetChainInput.mockReturnValue(sepoliaInput);
-    mockEvmChainConfigSchemaParse.mockReturnValue(sepoliaOutput);
+    mockGetArbitrumSepoliaChainInput.mockReturnValue(arbitrumSepoliaInput);
+    mockEvmChainConfigSchemaParse.mockReturnValue(arbitrumSepoliaOutput);
 
     const configIndex = loadIsolatedConfigIndex();
 
-    expect(configIndex.chainConfigs.sepoliaTestnet).toEqual(sepoliaOutput);
+    expect(configIndex.chainConfigs.arbitrumSepolia).toEqual(arbitrumSepoliaOutput);
     expect(
       configIndex.chainConfigErrors.some(
         (e: ChainValidationError) => e.chainKey === 'unknownChain',

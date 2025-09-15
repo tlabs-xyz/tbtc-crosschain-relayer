@@ -15,7 +15,7 @@ type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
 export const getArbitrumMainnetChainInput = (): EvmChainInput => {
   const commonMainnetInput = getCommonChainInput(NETWORK.MAINNET);
 
-  // Validate required properties from commonTestnetInput
+  // Validate required properties from CommonChainInput
   const requiredFields: Array<keyof Partial<CommonChainInput>> = [
     'network',
     'l1Rpc',
@@ -30,7 +30,7 @@ export const getArbitrumMainnetChainInput = (): EvmChainInput => {
       (commonMainnetInput[field] === undefined || commonMainnetInput[field] === null)
     ) {
       throw new Error(
-        `getBaseSepoliaTestnetChainInput: Missing required field '${String(field)}' in commonTestnetInput.`,
+        `getArbitrumMainnetChainInput: Missing required field '${String(field)}' in CommonChainInput.`,
       );
     }
   }

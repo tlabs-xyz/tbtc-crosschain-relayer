@@ -24,7 +24,7 @@ export const getArbitrumSepoliaChainInput = (): EvmChainInput => {
       (commonTestnetInput[field] === undefined || commonTestnetInput[field] === null)
     ) {
       throw new Error(
-        `getBaseSepoliaTestnetChainInput: Missing required field '${String(field)}' in commonTestnetInput.`,
+        `getArbitrumSepoliaChainInput: Missing required field '${String(field)}' in commonTestnetInput.`,
       );
     }
   }

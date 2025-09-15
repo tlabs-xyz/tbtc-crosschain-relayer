@@ -127,7 +127,7 @@ describe('AppConfigSchema Direct Validation', () => {
       CLEAN_QUEUED_TIME: '24',
       CLEAN_FINALIZED_TIME: '6',
       CLEAN_BRIDGED_TIME: '6',
-      SUPPORTED_CHAINS: 'sepoliaTestnet, starknetTestnet ',
+      SUPPORTED_CHAINS: 'arbitrumSepolia, baseSepolia, starknetTestnet ',
     };
     const parsed = AppConfigSchema.parse(fullEnv);
     expect(parsed.NODE_ENV).toBe(NodeEnv.PRODUCTION);
@@ -141,7 +141,7 @@ describe('AppConfigSchema Direct Validation', () => {
     expect(parsed.CLEAN_QUEUED_TIME).toBe(24);
     expect(parsed.CLEAN_FINALIZED_TIME).toBe(6);
     expect(parsed.CLEAN_BRIDGED_TIME).toBe(6);
-    expect(parsed.SUPPORTED_CHAINS).toBe('sepoliaTestnet, starknetTestnet ');
+    expect(parsed.SUPPORTED_CHAINS).toBe('arbitrumSepolia, baseSepolia, starknetTestnet ');
   });
 
   it('should fail for invalid HOST_PORT format', () => {
@@ -194,13 +194,13 @@ describe('AppConfigSchema Direct Validation', () => {
   });
 
   it('should validate SUPPORTED_CHAINS with valid chains', () => {
-    const env = { ...MINIMAL_VALID_ENV, SUPPORTED_CHAINS: 'sepoliaTestnet, solanaDevnet' };
+    const env = { ...MINIMAL_VALID_ENV, SUPPORTED_CHAINS: 'arbitrumSepolia, baseSepolia, solanaDevnet' };
     const parsed = AppConfigSchema.parse(env);
-    expect(parsed.SUPPORTED_CHAINS).toBe('sepoliaTestnet, solanaDevnet');
+    expect(parsed.SUPPORTED_CHAINS).toBe('arbitrumSepolia, baseSepolia, solanaDevnet');
   });
 
   it('should fail SUPPORTED_CHAINS with an invalid chain name', () => {
-    const env = { ...MINIMAL_VALID_ENV, SUPPORTED_CHAINS: 'sepoliaTestnet, invalidChain' };
+    const env = { ...MINIMAL_VALID_ENV, SUPPORTED_CHAINS: 'arbitrumSepolia, baseSepolia, invalidChain' };
     try {
       AppConfigSchema.parse(env);
       throw new Error('Should have thrown ZodError');
@@ -330,7 +330,7 @@ describe('appConfig Loading (via config/app.config.ts)', () => {
       CLEAN_QUEUED_TIME: '24',
       CLEAN_FINALIZED_TIME: '6',
       CLEAN_BRIDGED_TIME: '6',
-      SUPPORTED_CHAINS: 'sepoliaTestnet, starknetTestnet',
+      SUPPORTED_CHAINS: 'arbitrumSepolia, baseSepolia, starknetTestnet',
     };
     let config: AppConfig | undefined;
     expect(() => {

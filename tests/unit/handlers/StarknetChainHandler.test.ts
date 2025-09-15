@@ -60,7 +60,6 @@ const mockStarknetConfig: StarknetChainConfig = StarknetChainConfigSchema.parse(
   chainId: 'SN_TEST',
   chainName: 'StarkNetTestnet',
   network: NETWORK.TESTNET,
-  l1ChainName: 'SepoliaTestnet',
   l1Confirmations: 3,
   l1Rpc: 'http://l1-rpc.test',
   l2Rpc: 'http://l2-rpc.test',

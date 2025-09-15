@@ -126,7 +126,6 @@ const mockSuiConfig: SuiChainConfig = {
     // CommonChainConfigSchema fields
     chainName: 'SuiTestnet',
     network: NETWORK.TESTNET,
-    l1ChainName: 'SepoliaTestnet',
     l1Confirmations: 3,
     l1Rpc: 'http://l1-rpc.test',
     l2Rpc: 'https://fullnode.testnet.sui.io',

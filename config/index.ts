@@ -27,7 +27,7 @@ export interface AllChainConfigs {
   arbitrumMainnet?: EvmChainConfig;
   arbitrumSepolia?: EvmChainConfig;
   baseMainnet?: EvmChainConfig;
-  baseSepoliaTestnet?: EvmChainConfig;
+  baseSepolia?: EvmChainConfig;
   solanaDevnetImported?: SolanaChainConfig;
   [key: string]: AnyChainConfig | undefined;
 }
