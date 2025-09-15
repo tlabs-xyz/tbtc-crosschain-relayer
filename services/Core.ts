@@ -89,11 +89,21 @@ export async function processDeposits(): Promise<void> {
 }
 
 export async function processRedemptions(): Promise<void> {
+  const evmChainConfigs = chainConfigsArray.filter(
+    (config) => config.chainType === CHAIN_TYPE.EVM,
+  ) as EvmChainConfig[];
+
+  if (evmChainConfigs.length === 0) {
+    logger.warn(
+      'No EVM chain configurations found, redemptions will not be processed for any chain.',
+    );
+    return;
+  }
+
   logger.info('Processing redemptions...');
   await Promise.all(
-    chainHandlerRegistry.list().map(async (handler) => {
-      const config = (handler as BaseChainHandler<AnyChainConfig>).config;
-      const chainName = config.chainName;
+    evmChainConfigs.map(async (evmConfig) => {
+      const chainName = evmConfig.chainName;
       try {
         const l2Service = l2RedemptionServices.get(chainName);
 
@@ -102,7 +112,7 @@ export async function processRedemptions(): Promise<void> {
           await l2Service.processVaaFetchedRedemptions();
         } else {
           // No L2 service, check if it was expected
-          if (config.enableL2Redemption) {
+          if (evmConfig.enableL2Redemption) {
             logger.error(
               `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized. This could be a misconfiguration or an unsupported chain type for L2 redemption.`,
             );
@@ -151,6 +161,57 @@ export async function checkForPastDepositsForAllChains(): Promise<void> {
   );
 }
 
+export async function checkForPastRedemptionsForAllChains(pastTimeInMinutes: number = 60): Promise<void> {
+  const evmChainConfigs = chainConfigsArray.filter(
+    (config) => config.chainType === CHAIN_TYPE.EVM,
+  ) as EvmChainConfig[];
+
+  if (evmChainConfigs.length === 0) {
+    logger.warn(
+      'No EVM chain configurations found, past redemptions will not be checked for any chain.',
+    );
+    return;
+  }
+
+  logger.info('Checking for past redemptions...');
+  await Promise.all(
+    evmChainConfigs.map(async (evmConfig) => {
+      const chainName = evmConfig.chainName;
+      try {
+        const l2Service = l2RedemptionServices.get(chainName);
+
+        if (l2Service) {
+          const latestBlock = await l2Service.getLatestBlock();
+          if (latestBlock > 0) {
+            logger.debug(
+              `Running checkForPastRedemptions for ${chainName} (Latest Block: ${latestBlock})`,
+            );
+            await l2Service.checkForPastRedemptions({
+              pastTimeInMinutes,
+              latestBlock: latestBlock,
+            });
+          } else {
+            logger.warn(
+              `Skipping checkForPastRedemptions for ${chainName} - Invalid latestBlock received: ${latestBlock}`,
+            );
+          }
+        } else {
+          // No L2 service, check if it was expected
+          if (evmConfig.enableL2Redemption) {
+            logger.error(
+              `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized for past redemption check.`,
+            );
+          } else {
+            logger.debug(`L2 redemption past check is disabled by configuration for ${chainName}.`);
+          }
+        }
+      } catch (error) {
+        logErrorContext(`Error in past redemptions check for ${chainName}:`, error);
+      }
+    }),
+  );
+}
+
 export const startCronJobs = () => {
   logger.debug('Starting multi-chain cron job setup...');
 
@@ -167,6 +228,11 @@ export const startCronJobs = () => {
   // Every 60 minutes - check for past deposits
   cron.schedule('*/60 * * * *', async () => {
     await checkForPastDepositsForAllChains();
+  });
+
+  // Every 60 minutes - check for past redemptions
+  cron.schedule('*/60 * * * *', async () => {
+    await checkForPastRedemptionsForAllChains(60);
   });
 
   // Every 60 minutes - recover stuck finalized deposits (for chains that support it)
@@ -279,6 +345,7 @@ export async function runStartupTasks(): Promise<void> {
     processDeposits(),
     processRedemptions(),
     checkForPastDepositsForAllChains(),
+    checkForPastRedemptionsForAllChains(4320), // 4320 minutes = 3 days
     recoverStuckFinalizedDeposits(),
   ]);
   logger.info('Startup tasks complete.');

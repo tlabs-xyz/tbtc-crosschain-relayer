@@ -250,4 +250,201 @@ export class L2RedemptionService {
       }
     }
   }
+
+  public async getLatestBlock(): Promise<number> {
+    try {
+      const blockNumber = await this.l2Provider.getBlockNumber();
+      return blockNumber;
+    } catch (error) {
+      logErrorContext(
+        `Error getting latest block for ${this.chainConfig.chainName}:`,
+        error,
+      );
+      return 0;
+    }
+  }
+
+  private async _getBlocksByTimestampEVM(
+    timestamp: number,
+    latestBlock: number,
+  ): Promise<{
+    startBlock: number;
+    endBlock: number;
+  }> {
+    if (!this.l2Provider) {
+      logger.warn(
+        `_getBlocksByTimestampEVM | L2 Provider not available for ${this.chainConfig.chainName}. Returning default range.`,
+      );
+      return {
+        startBlock: this.chainConfig.l2BitcoinRedeemerStartBlock ?? 0,
+        endBlock: latestBlock ?? 0,
+      };
+    }
+
+    const START_BLOCK = (this.chainConfig.l2BitcoinRedeemerStartBlock as number | undefined) ?? 0;
+    let startBlock = -1;
+    let low = START_BLOCK;
+    let high = latestBlock;
+    let currentLatestBlock = latestBlock;
+
+    if (high < low) {
+      logger.warn(
+        `_getBlocksByTimestampEVM | latestBlock (${high}) is less than START_BLOCK (${low}). Returning START_BLOCK for both range ends.`,
+      );
+      return { startBlock: START_BLOCK, endBlock: START_BLOCK };
+    }
+
+    logger.debug(
+      `_getBlocksByTimestampEVM | Starting binary search for timestamp ${timestamp} between blocks ${low} and ${high}`,
+    );
+
+    try {
+      // Binary search for the block with the closest timestamp to the given timestamp
+      while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+
+        const blockData = await this.l2Provider.getBlock(mid);
+
+        if (!blockData) {
+          high = mid - 1;
+          continue;
+        }
+
+        if (blockData.timestamp === timestamp) {
+          startBlock = mid;
+          break;
+        } else if (blockData.timestamp < timestamp) {
+          startBlock = mid;
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+
+      if (startBlock === -1) {
+        startBlock = START_BLOCK;
+      }
+
+      if (startBlock > currentLatestBlock) {
+        startBlock = currentLatestBlock;
+      }
+    } catch (error) {
+      logErrorContext(
+        `_getBlocksByTimestampEVM | Error during binary search for ${this.chainConfig.chainName}: ${error}`,
+        error,
+      );
+      startBlock = START_BLOCK;
+      currentLatestBlock = latestBlock;
+    }
+
+    const endBlock = Math.max(startBlock, currentLatestBlock);
+
+    logger.debug(
+      `_getBlocksByTimestampEVM | Binary search result for ${this.chainConfig.chainName}: startBlock=${startBlock}, endBlock=${endBlock}`,
+    );
+    return { startBlock, endBlock };
+  }
+
+  public async checkForPastRedemptions(options: {
+    pastTimeInMinutes: number;
+    latestBlock: number;
+  }): Promise<void> {
+    if (!this.l2BitcoinRedeemerContract) {
+      logger.info(
+        `Skipping checkForPastRedemptions for ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
+      );
+      return;
+    }
+
+    logger.debug(
+      `Checking for past redemptions for ${this.chainConfig.chainName} (last ${options.pastTimeInMinutes} min)`,
+    );
+
+    try {
+      const currentTime = Math.floor(Date.now() / 1000);
+      const pastTime = currentTime - options.pastTimeInMinutes * 60;
+
+      const { startBlock, endBlock } = await this._getBlocksByTimestampEVM(
+        pastTime,
+        options.latestBlock,
+      );
+
+      if (startBlock < 0 || endBlock < startBlock) {
+        logger.warn(
+          `checkForPastRedemptions | Invalid block range calculated: [${startBlock}, ${endBlock}]. Skipping check.`,
+        );
+        return;
+      }
+
+      logger.debug(
+        `checkForPastRedemptions | Querying RedemptionRequested events between blocks ${startBlock} and ${endBlock}`,
+      );
+
+      const events = await this.l2BitcoinRedeemerContract.queryFilter(
+        this.l2BitcoinRedeemerContract.filters.RedemptionRequested(),
+        startBlock,
+        endBlock,
+      );
+
+      if (events.length > 0) {
+        logger.debug(
+          `checkForPastRedemptions | Found ${events.length} past RedemptionRequested events for ${this.chainConfig.chainName}`,
+        );
+
+        for (const event of events) {
+          if (!event.args) {
+            logger.warn('checkForPastRedemptions | Event args are undefined, skipping event');
+            continue;
+          }
+
+          const { amount, redeemerOutputScript, nonce } = event.args;
+          const eventData: RedemptionRequestedEventData = {
+            redeemerOutputScript,
+            amount,
+            l2TransactionHash: event.transactionHash,
+          };
+
+          const redemptionId = eventData.l2TransactionHash;
+          const existing = await RedemptionStore.getById(redemptionId);
+          if (existing) {
+            logger.debug(`checkForPastRedemptions | Redemption already exists for L2 tx: ${redemptionId}, skipping.`);
+            continue;
+          }
+
+          logger.debug(`checkForPastRedemptions | Processing missed redemption event: ${redemptionId}`);
+
+          const now = Date.now();
+          const redemption: Redemption = {
+            id: redemptionId,
+            chainId: this.chainConfig.chainName,
+            event: eventData,
+            serializedVaaBytes: null,
+            vaaStatus: RedemptionStatus.PENDING,
+            l1SubmissionTxHash: null,
+            status: RedemptionStatus.PENDING,
+            error: null,
+            dates: {
+              createdAt: now,
+              vaaFetchedAt: null,
+              l1SubmittedAt: null,
+              completedAt: null,
+              lastActivityAt: now,
+            },
+            logs: [`Redemption created from past event check at ${new Date(now).toISOString()}`],
+          };
+          await RedemptionStore.create(redemption);
+          logger.info(`Past redemption request persisted for L2 tx: ${redemptionId}`);
+        }
+      } else {
+        logger.debug(
+          `checkForPastRedemptions | No missed redemption events found for ${this.chainConfig.chainName}`,
+        );
+      }
+    } catch (error: any) {
+      logErrorContext(
+        `checkForPastRedemptions | Error checking past redemptions for ${this.chainConfig.chainName}: ${error.message}`,
+        error,
+      );
+    }
+  }
 }
