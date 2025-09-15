@@ -131,10 +131,10 @@ const mockSuiConfig: SuiChainConfig = {
     l1Rpc: 'http://l1-rpc.test',
     l2Rpc: 'https://fullnode.testnet.sui.io',
     l2WsRpc: 'wss://fullnode.testnet.sui.io',
-    l1ContractAddress: '0x1234567890123456789012345678901234567890',
+    l1BitcoinDepositorAddress: '0x1234567890123456789012345678901234567890',
     vaultAddress: '0xabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde',
-    l1StartBlock: 1,
-    l2StartBlock: 0,
+    l1BitcoinDepositorStartBlock: 1,
+    l2BitcoinDepositorStartBlock: 0,
     enableL2Redemption: false,
     useEndpoint: false,
 
@@ -142,7 +142,7 @@ const mockSuiConfig: SuiChainConfig = {
     chainType: CHAIN_TYPE.SUI,
     suiPrivateKey: 'dGVzdC1zdWktcHJpdmF0ZS1rZXktZm9yLXRlc3Rpbmc=', // base64 encoded test key (longer)
     suiGasObjectId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-    l2ContractAddress:
+    l2BitcoinDepositorAddress:
       '0x3d78316ce8ee3fe48d7ff85cdc2d0df9d459f43d802d96f58f7b59984c2dd3ae::bitcoin_depositor',
     // l2WormholeGatewayAddress and l2WormholeChainId removed - not used in Sui chains
     // (replaced by gatewayStateId and native Wormhole SDK integration)

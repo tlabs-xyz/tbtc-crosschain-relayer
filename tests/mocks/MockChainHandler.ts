@@ -93,7 +93,7 @@ export class MockChainHandler implements ChainHandlerInterface {
             baseProperties.l2WormholeGatewayAddress,
           l2WormholeChainId:
             (config as EvmChainConfig).l2WormholeChainId || baseProperties.l2WormholeChainId,
-          l2StartBlock: (config as EvmChainConfig).l2BitcoinDepositorStartBlock,
+          l2BitcoinDepositorStartBlock: (config as EvmChainConfig).l2BitcoinDepositorStartBlock,
           endpointUrl: (config as EvmChainConfig).endpointUrl,
         };
         finalConfig = evmConfig as EvmChainConfig;

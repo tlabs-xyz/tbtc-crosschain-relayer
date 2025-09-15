@@ -159,7 +159,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     // TODO: Disable for now, investigate later
     // this.checkForPastL1DepositorEvents({
-    //   fromBlock: this.config.l1StartBlock,
+    //   fromBlock: this.config.l1BitcoinDepositorStartBlock,
     // }).catch((error) => {
     //   logger.error(
     //     `Error during initial scan for past L1 Depositor events for ${this.config.chainName}: ${error.message}`,

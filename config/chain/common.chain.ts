@@ -107,7 +107,7 @@ export const FEATURE_FLAGS = {
 /**
  * Returns a partial common chain input configuration for the given network.
  * Used to provide shared defaults and structure for EVM, Sui, and other chain configs.
- * Note: l1ContractAddress is not included here as each chain type should set it directly.
+ * Note: l1BitcoinDepositorAddress is not included here as each chain type should set it directly.
  * @param targetNetwork The network to generate config for (mainnet, testnet, devnet)
  * @returns Partial<CommonChainInput> with shared defaults
  */
