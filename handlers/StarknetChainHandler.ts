@@ -866,7 +866,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       }
       if (!fromBlock) {
         fromBlock =
-          this.config.l1BitcoinDepositorStartBlock > 0 ? Math.max(0, this.config.l1BitcoinDepositorStartBlock - 10) : undefined;
+          this.config.l1BitcoinDepositorStartBlock > 0
+            ? Math.max(0, this.config.l1BitcoinDepositorStartBlock - 10)
+            : undefined;
       }
 
       if (fromBlock) {

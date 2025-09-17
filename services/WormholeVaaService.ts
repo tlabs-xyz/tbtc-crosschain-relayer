@@ -53,7 +53,7 @@ export class WormholeVaaService {
    * Fetches and verifies a VAA for a given L2 transaction hash.
    *
    * @param l2TransactionHash - The hash of the L2 transaction to fetch the VAA for.
-   * @param emitterChainId - The ID of the L2 chain where the RedemptionRequested event occurred.
+   * @param emitterChainId - The ID of the L2 chain where the RedemptionRequestedOnL2 event occurred.
    * @param emitterAddress - The address of the emitter on the L2 chain.
    * @returns A tuple containing the VAA bytes and the parsed VAA object.
    */

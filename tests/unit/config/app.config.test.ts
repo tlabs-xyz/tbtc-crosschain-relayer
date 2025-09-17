@@ -194,13 +194,19 @@ describe('AppConfigSchema Direct Validation', () => {
   });
 
   it('should validate SUPPORTED_CHAINS with valid chains', () => {
-    const env = { ...MINIMAL_VALID_ENV, SUPPORTED_CHAINS: 'arbitrumSepolia, baseSepolia, solanaDevnet' };
+    const env = {
+      ...MINIMAL_VALID_ENV,
+      SUPPORTED_CHAINS: 'arbitrumSepolia, baseSepolia, solanaDevnet',
+    };
     const parsed = AppConfigSchema.parse(env);
     expect(parsed.SUPPORTED_CHAINS).toBe('arbitrumSepolia, baseSepolia, solanaDevnet');
   });
 
   it('should fail SUPPORTED_CHAINS with an invalid chain name', () => {
-    const env = { ...MINIMAL_VALID_ENV, SUPPORTED_CHAINS: 'arbitrumSepolia, baseSepolia, invalidChain' };
+    const env = {
+      ...MINIMAL_VALID_ENV,
+      SUPPORTED_CHAINS: 'arbitrumSepolia, baseSepolia, invalidChain',
+    };
     try {
       AppConfigSchema.parse(env);
       throw new Error('Should have thrown ZodError');

@@ -87,7 +87,8 @@ export class MockChainHandler implements ChainHandlerInterface {
             (config as EvmChainConfig).privateKey || ethers.Wallet.createRandom().privateKey,
           l2WsRpc: (config as EvmChainConfig).l2WsRpc || baseProperties.l2WsRpc,
           l2BitcoinDepositorAddress:
-            (config as EvmChainConfig).l2BitcoinDepositorAddress || baseProperties.l2BitcoinDepositorAddress,
+            (config as EvmChainConfig).l2BitcoinDepositorAddress ||
+            baseProperties.l2BitcoinDepositorAddress,
           l2WormholeGatewayAddress:
             (config as EvmChainConfig).l2WormholeGatewayAddress ||
             baseProperties.l2WormholeGatewayAddress,

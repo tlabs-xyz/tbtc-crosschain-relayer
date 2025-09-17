@@ -13,12 +13,13 @@ import {
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer.js';
+import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
 
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;
   private l2BitcoinRedeemerContract?: ethers.Contract;
   private wormholeVaaService!: WormholeVaaService;
-  private l1RedemptionHandler: L1RedemptionHandler | null;
+  private l1RedemptionHandler: L1RedemptionHandlerInterface | undefined;
 
   private l2WormholeChainId: number;
   private l2WormholeGatewayAddress: string; // Emitter address on L2 for VAA fetching
@@ -45,7 +46,7 @@ export class L2RedemptionService {
 
     this.l2WormholeChainId = chainConfig.l2WormholeChainId;
     this.l2WormholeGatewayAddress = chainConfig.l2WormholeGatewayAddress;
-    this.l1RedemptionHandler = l1RedemptionHandlerRegistry.get();
+    this.l1RedemptionHandler = l1RedemptionHandlerRegistry.get(chainConfig.chainName);
 
     logger.info(
       `Wormhole VAA Service will be configured for L2 Wormhole Gateway: ${chainConfig.l2WormholeGatewayAddress} on chain ID: ${chainConfig.l2WormholeChainId}.`,
@@ -66,16 +67,16 @@ export class L2RedemptionService {
   public async startListening(): Promise<void> {
     if (!this.l2BitcoinRedeemerContract) {
       logger.info(
-        `Skipping 'RedemptionRequested' event listening for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
+        `Skipping 'RedemptionRequestedOnL2' event listening for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
       );
       return;
     }
     logger.info(
-      `Starting to listen for 'RedemptionRequested' events from ${this.l2BitcoinRedeemerContract.address}`,
+      `Starting to listen for 'RedemptionRequestedOnL2' events from ${this.l2BitcoinRedeemerContract.address}`,
     );
 
     this.l2BitcoinRedeemerContract.on(
-      'RedemptionRequested',
+      'RedemptionRequestedOnL2',
       async (
         amount: ethers.BigNumber,
         redeemerOutputScript: string,
@@ -127,14 +128,14 @@ export class L2RedemptionService {
   public stopListening(): void {
     if (!this.l2BitcoinRedeemerContract) {
       logger.info(
-        `Skipping stopListening for 'RedemptionRequested' events for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
+        `Skipping stopListening for 'RedemptionRequestedOnL2' events for chain ${this.chainConfig.chainName} as l2BitcoinRedeemerAddress is not configured.`,
       );
       return;
     }
     logger.info(
-      `Stopping 'RedemptionRequested' event listener for ${this.l2BitcoinRedeemerContract.address}.`,
+      `Stopping 'RedemptionRequestedOnL2' event listener for ${this.l2BitcoinRedeemerContract.address}.`,
     );
-    this.l2BitcoinRedeemerContract.removeAllListeners('RedemptionRequested');
+    this.l2BitcoinRedeemerContract.removeAllListeners('RedemptionRequestedOnL2');
   }
 
   public async processPendingRedemptions(): Promise<void> {
@@ -146,7 +147,11 @@ export class L2RedemptionService {
       RedemptionStatus.VAA_FAILED,
       this.chainConfig.chainName,
     );
-    const toProcess = [...pending, ...vaaFailed];
+    const failed = await RedemptionStore.getByStatus(
+      RedemptionStatus.FAILED,
+      this.chainConfig.chainName,
+    );
+    const toProcess = [...pending, ...vaaFailed, ...failed];
     for (const redemption of toProcess) {
       try {
         const vaaResult = await this.wormholeVaaService.fetchVaaForRedemption(
@@ -210,8 +215,12 @@ export class L2RedemptionService {
           continue;
         }
         const vaaBytes = redemption.serializedVaaBytes;
+        // Re-hydrate amount to an ethers BigNumber (it may have been de-serialized from JSON)
+        const amountBn = ethers.BigNumber.from(
+          (redemption.event.amount as any)?._hex ?? (redemption.event.amount as any),
+        );
         const l1TxHash = await this.l1RedemptionHandler.relayRedemptionToL1(
-          redemption.event.amount,
+          amountBn,
           vaaBytes,
           this.chainConfig.chainName,
           redemption.id,
@@ -256,10 +265,7 @@ export class L2RedemptionService {
       const blockNumber = await this.l2Provider.getBlockNumber();
       return blockNumber;
     } catch (error) {
-      logErrorContext(
-        `Error getting latest block for ${this.chainConfig.chainName}:`,
-        error,
-      );
+      logErrorContext(`Error getting latest block for ${this.chainConfig.chainName}:`, error);
       return 0;
     }
   }
@@ -377,18 +383,18 @@ export class L2RedemptionService {
       }
 
       logger.debug(
-        `checkForPastRedemptions | Querying RedemptionRequested events between blocks ${startBlock} and ${endBlock}`,
+        `checkForPastRedemptions | Querying RedemptionRequestedOnL2 events between blocks ${startBlock} and ${endBlock}`,
       );
 
       const events = await this.l2BitcoinRedeemerContract.queryFilter(
-        this.l2BitcoinRedeemerContract.filters.RedemptionRequested(),
+        this.l2BitcoinRedeemerContract.filters.RedemptionRequestedOnL2(),
         startBlock,
         endBlock,
       );
 
       if (events.length > 0) {
         logger.debug(
-          `checkForPastRedemptions | Found ${events.length} past RedemptionRequested events for ${this.chainConfig.chainName}`,
+          `checkForPastRedemptions | Found ${events.length} past RedemptionRequestedOnL2 events for ${this.chainConfig.chainName}`,
         );
 
         for (const event of events) {
@@ -407,11 +413,15 @@ export class L2RedemptionService {
           const redemptionId = eventData.l2TransactionHash;
           const existing = await RedemptionStore.getById(redemptionId);
           if (existing) {
-            logger.debug(`checkForPastRedemptions | Redemption already exists for L2 tx: ${redemptionId}, skipping.`);
+            logger.debug(
+              `checkForPastRedemptions | Redemption already exists for L2 tx: ${redemptionId}, skipping.`,
+            );
             continue;
           }
 
-          logger.debug(`checkForPastRedemptions | Processing missed redemption event: ${redemptionId}`);
+          logger.debug(
+            `checkForPastRedemptions | Processing missed redemption event: ${redemptionId}`,
+          );
 
           const now = Date.now();
           const redemption: Redemption = {

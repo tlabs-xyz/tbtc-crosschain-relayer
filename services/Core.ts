@@ -161,7 +161,9 @@ export async function checkForPastDepositsForAllChains(): Promise<void> {
   );
 }
 
-export async function checkForPastRedemptionsForAllChains(pastTimeInMinutes: number = 60): Promise<void> {
+export async function checkForPastRedemptionsForAllChains(
+  pastTimeInMinutes: number = 60,
+): Promise<void> {
   const evmChainConfigs = chainConfigsArray.filter(
     (config) => config.chainType === CHAIN_TYPE.EVM,
   ) as EvmChainConfig[];
@@ -220,8 +222,8 @@ export const startCronJobs = () => {
     await processDeposits();
   });
 
-  // Every 2 minutes - process redemptions
-  cron.schedule('*/2 * * * *', async () => {
+  // Every 5 minutes - process redemptions
+  cron.schedule('*/5 * * * *', async () => {
     await processRedemptions();
   });
 
@@ -345,7 +347,7 @@ export async function runStartupTasks(): Promise<void> {
     processDeposits(),
     processRedemptions(),
     checkForPastDepositsForAllChains(),
-    checkForPastRedemptionsForAllChains(4320), // 4320 minutes = 3 days
+    checkForPastRedemptionsForAllChains(14400), // 14400 minutes = 10 days
     recoverStuckFinalizedDeposits(),
   ]);
   logger.info('Startup tasks complete.');

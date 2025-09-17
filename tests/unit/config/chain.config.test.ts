@@ -275,10 +275,7 @@ describe('loadAndValidateChainConfigs', () => {
       throw zodError;
     });
 
-    const { configs, validationErrors } = loadAndValidateChainConfigs(
-      ['baseSepolia'],
-      loggerMock,
-    );
+    const { configs, validationErrors } = loadAndValidateChainConfigs(['baseSepolia'], loggerMock);
 
     expect(validationErrors).toHaveLength(1);
     expect(validationErrors[0].chainKey).toBe('baseSepolia');
@@ -286,9 +283,7 @@ describe('loadAndValidateChainConfigs', () => {
     expect(validationErrors[0].input).toEqual(baseSepoliaInput);
     // Check that the logger received the flattened Zod error
     expect(loggerMock.error).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "Config validation failed for 'baseSepolia'. Flattened Zod errors:",
-      ),
+      expect.stringContaining("Config validation failed for 'baseSepolia'. Flattened Zod errors:"),
     );
     expect(Object.keys(configs)).toHaveLength(0);
   });

@@ -1,8 +1,7 @@
-import { L1RedemptionHandler } from './L1RedemptionHandler.js';
 import type { AnyChainConfig } from '../config/index.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
-import { CHAIN_TYPE, NETWORK } from '../config/schemas/common.schema.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import { L1RedemptionHandlerFactory } from './L1RedemptionHandlerFactory.js';
 
 /**
  * Manages L1RedemptionHandler instances.
@@ -10,72 +9,48 @@ import { CHAIN_TYPE, NETWORK } from '../config/schemas/common.schema.js';
  * to reuse handlers for chains sharing the same L1 configuration.
  */
 class L1RedemptionHandlerRegistry {
-  private handler: L1RedemptionHandler | null = null;
-  private isInitialized = false;
+  private handlers: Map<string, L1RedemptionHandlerInterface> = new Map();
 
-  public async initialize(chainConfigs: AnyChainConfig[]): Promise<void> {
-    if (this.isInitialized) {
-      logger.warn('L1RedemptionHandlerRegistry is already initialized.');
-      return;
-    }
-
-    const evmChainConfigs = chainConfigs.filter(
-      (config): config is EvmChainConfig => config.enableL2Redemption && config.chainType === CHAIN_TYPE.EVM,
-    );
-
-    if (evmChainConfigs.length === 0) {
-      logger.info(
-        'No EVM chains with L2 redemption enabled. L1RedemptionHandler will not be created.',
-      );
-      this.isInitialized = true;
-      return;
-    }
-
-    // All EVM chains share the same L1. We can pick the L1 RPC and private key from the first configured chain.
-    const referenceConfig = evmChainConfigs[0];
-    const l1RpcUrl = referenceConfig.l1Rpc;
-    const isTestnet = referenceConfig.network === NETWORK.TESTNET;
-    const relayerL1PrivateKey = referenceConfig.privateKey;
-
-    if (!relayerL1PrivateKey) {
-      // This should theoretically not be hit if schema validation is correct, but it's a good safeguard.
-      throw new Error(
-        `Private key is missing for EVM chain ${referenceConfig.chainName}. Cannot initialize L1RedemptionHandler.`,
-      );
-    }
-
-    try {
-      this.handler = await L1RedemptionHandler.create(
-        l1RpcUrl,
-        relayerL1PrivateKey,
-        evmChainConfigs,
-        isTestnet,
-      );
-      logger.info('L1RedemptionHandler singleton instance created successfully.');
-    } catch (error) {
-      logErrorContext('Failed to create L1RedemptionHandler singleton instance', error);
-      throw new Error('Could not initialize L1RedemptionHandler.');
-    }
-
-    this.isInitialized = true;
+  // Register a handler for a chainName
+  register(chainName: string, handler: L1RedemptionHandlerInterface): void {
+    this.handlers.set(chainName, handler);
   }
 
-  public get(): L1RedemptionHandler | null {
-    if (!this.isInitialized) {
-      const errorMsg = 'L1RedemptionHandlerRegistry has not been initialized yet.';
-      logger.error(errorMsg);
-      // Depending on strictness, you might want to throw an error
-      // For now, returning null to allow services to fail gracefully if they check the return value.
-      return null;
+  // Get a handler by chainName
+  get(chainName: string): L1RedemptionHandlerInterface | undefined {
+    return this.handlers.get(chainName);
+  }
+
+  // List all handlers
+  list(): L1RedemptionHandlerInterface[] {
+    return Array.from(this.handlers.values());
+  }
+
+  // Filter handlers by a predicate
+  filter(
+    predicate: (handler: L1RedemptionHandlerInterface) => boolean,
+  ): L1RedemptionHandlerInterface[] {
+    return this.list().filter(predicate);
+  }
+
+  public async initialize(configs: AnyChainConfig[]): Promise<void> {
+    for (const config of configs) {
+      if (!config.enableL2Redemption || config.chainType !== CHAIN_TYPE.EVM) {
+        continue;
+      }
+      const handler = L1RedemptionHandlerFactory.createHandler(config);
+      const handlerExists = this.get(config.chainName) !== undefined;
+      if (handler && !handlerExists) {
+        await handler.initialize();
+        this.register(config.chainName, handler);
+      }
     }
-    return this.handler;
   }
 
   public clear(): void {
-    this.handler = null;
-    this.isInitialized = false;
-    logger.info('L1RedemptionHandlerRegistry cleared and reset.');
+    this.handlers.clear();
   }
 }
 
 export const l1RedemptionHandlerRegistry = new L1RedemptionHandlerRegistry();
+export { L1RedemptionHandlerRegistry };

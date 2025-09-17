@@ -2,75 +2,73 @@ import { ethers, Wallet, providers } from 'ethers';
 import { TBTC, DestinationChainName } from '@keep-network/tbtc-v2.ts';
 import type { BigNumber } from 'ethers';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import { NETWORK } from '../config/schemas/common.schema.js';
+import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+
+const destinationChainName: Record<string, DestinationChainName> = {
+  ArbitrumMainnet: 'Arbitrum',
+  ArbitrumSepolia: 'Arbitrum',
+  BaseMainnet: 'Base',
+  BaseSepolia: 'Base',
+};
 
 const L1_TX_CONFIRMATION_TIMEOUT_MS = parseInt(
   process.env.L1_TX_CONFIRMATION_TIMEOUT_MS || '300000',
 );
 const DEFAULT_L1_CONFIRMATIONS = 1; // Default number of confirmations to wait for
 
-export class L1RedemptionHandler {
+export class L1RedemptionHandler implements L1RedemptionHandlerInterface {
   private l1Signer: Wallet;
   private sdk: TBTC;
-  private l2Signers: Map<string, Wallet> = new Map();
+  public config: EvmChainConfig;
 
-  private constructor(sdk: TBTC, l1Signer: Wallet) {
-    this.sdk = sdk;
-    this.l1Signer = l1Signer;
+  constructor(config: EvmChainConfig) {
+    this.config = config;
+    logger.debug(`Constructing L1RedemptionHandler for ${this.config.chainName}`);
   }
 
-  public static async create(
-    l1RpcUrl: string,
-    relayerL1PrivateKey: string,
-    l2ChainConfigs: EvmChainConfig[],
-    isTestnet: boolean,
-  ): Promise<L1RedemptionHandler> {
-    const provider = new providers.JsonRpcProvider(l1RpcUrl);
-    const l1Signer = new Wallet(relayerL1PrivateKey, provider);
+  public async initialize(): Promise<void> {
+    logger.debug(`Initializing L1RedemptionHandler for ${this.config.chainName}`);
+    // --- L1 Setup ---
+    // Common L1 configuration checks
+    if (!this.config.l1Rpc || !this.config.network || !this.config.privateKey) {
+      throw new Error(
+        `Missing required L1 RPC/Contract/Vault/Network configuration for ${this.config.chainName}`,
+      );
+    }
+    const provider = new providers.JsonRpcProvider(this.config.l1Rpc);
+    this.l1Signer = new Wallet(this.config.privateKey, provider);
 
-    // The SDK initialization needs a signer that adapts to ethers v5 or v6.
-    // The relayer uses ethers v5 style, so we can cast to `any`.
-    let sdk: TBTC;
-    if (isTestnet) {
+    if (this.config.network === NETWORK.TESTNET) {
       // On an Ethereum testnet, we connect to the Bitcoin testnet
-      sdk = await TBTC.initializeSepolia(l1Signer as any, true);
+      this.sdk = await TBTC.initializeSepolia(this.l1Signer as any, true);
     } else {
       // On Ethereum mainnet, we connect to the Bitcoin mainnet
-      sdk = await TBTC.initializeMainnet(l1Signer as any, false);
+      this.sdk = await TBTC.initializeMainnet(this.l1Signer as any, true);
     }
-
-    const handler = new L1RedemptionHandler(sdk, l1Signer);
 
     logger.info(
-      `L1RedemptionHandler created for L1 at ${l1RpcUrl}. Relayer L1 address: ${l1Signer.address}`,
+      `L1RedemptionHandler created for L1 at ${this.config.l1Rpc}. Relayer L1 address: ${this.l1Signer.address}`,
     );
 
-    // Initialize cross-chain support for all configured L2s
-    for (const config of l2ChainConfigs) {
-      if (config.l2Rpc && config.privateKey && config.enableL2Redemption) {
-        try {
-          const l2Provider = new providers.JsonRpcProvider(config.l2Rpc);
-          // Use the same private key for L2 as for L1, assuming it's the same relayer identity
-          const l2Signer = new Wallet(relayerL1PrivateKey, l2Provider);
-          await sdk.initializeCrossChain(config.chainName as DestinationChainName, l2Signer as any);
-          handler.l2Signers.set(config.chainName, l2Signer);
-          logger.info(
-            `Initialized cross-chain support for ${config.chainName} in L1RedemptionHandler`,
-          );
-        } catch (error) {
-          logErrorContext(
-            `Failed to initialize cross-chain support for ${config.chainName} in L1RedemptionHandler`,
-            error,
-          );
-        }
-      } else {
-        logger.warn(
-          `Skipping cross-chain support for ${config.chainName} in L1RedemptionHandler as it is not enabled or missing configuration.`,
-        );
-      }
+    try {
+      const l2Provider = new providers.JsonRpcProvider(this.config.l2Rpc);
+      // Use the same private key for L2 as for L1, assuming it's the same relayer identity
+      const l2Signer = new Wallet(this.config.privateKey, l2Provider);
+      await this.sdk.initializeCrossChain(
+        destinationChainName[this.config.chainName as keyof typeof destinationChainName],
+        l2Signer as any,
+      );
+      logger.info(
+        `Initialized cross-chain support for ${this.config.chainName} in L1RedemptionHandler`,
+      );
+    } catch (error) {
+      logErrorContext(
+        `Failed to initialize cross-chain support for ${this.config.chainName} in L1RedemptionHandler`,
+        error,
+      );
     }
-
-    return handler;
   }
 
   public async relayRedemptionToL1(
@@ -94,13 +92,26 @@ export class L1RedemptionHandler {
       const result = await redemptionsAny.relayRedemptionRequestToL1(
         amount,
         signedVaa,
-        l2ChainName as DestinationChainName,
+        destinationChainName[this.config.chainName as keyof typeof destinationChainName],
       );
+
+      // Normalize tx hash to 0x-prefixed string
+      let l1TxHashStr: string;
+      const rawTxHash: any = result?.targetChainTxHash;
+      if (rawTxHash && typeof rawTxHash.toPrefixedString === 'function') {
+        l1TxHashStr = rawTxHash.toPrefixedString();
+      } else if (rawTxHash && typeof rawTxHash.toString === 'function') {
+        const s = rawTxHash.toString();
+        l1TxHashStr = s.startsWith('0x') ? s : `0x${s}`;
+      } else {
+        const s = String(rawTxHash ?? '');
+        l1TxHashStr = s.startsWith('0x') ? s : `0x${s}`;
+      }
 
       logger.info(
         JSON.stringify({
           message: 'L1 Redemption relay transaction submitted, awaiting confirmation...',
-          l1TransactionHash: result.targetChainTxHash.toString(),
+          l1TransactionHash: l1TxHashStr,
           l2TransactionHash: l2TransactionHash,
         }),
       );
@@ -118,10 +129,7 @@ export class L1RedemptionHandler {
       );
 
       const receipt = (await Promise.race([
-        this.l1Signer.provider.waitForTransaction(
-          result.targetChainTxHash.toString(),
-          DEFAULT_L1_CONFIRMATIONS,
-        ),
+        this.l1Signer.provider.waitForTransaction(l1TxHashStr, DEFAULT_L1_CONFIRMATIONS),
         timeoutPromise,
       ])) as ethers.providers.TransactionReceipt;
 
@@ -129,22 +137,22 @@ export class L1RedemptionHandler {
         logger.info(
           JSON.stringify({
             message: 'L1 redemption relay transaction successful!',
-            l1TransactionHash: result.targetChainTxHash.toString(),
+            l1TransactionHash: l1TxHashStr,
             l2TransactionHash: l2TransactionHash,
             l1BlockNumber: receipt.blockNumber,
           }),
         );
-        return result.targetChainTxHash.toString();
+        return l1TxHashStr;
       } else {
         logErrorContext(
           JSON.stringify({
             message: 'L1 redemption relay transaction failed (reverted on-chain).',
-            l1TransactionHash: result.targetChainTxHash.toString(),
+            l1TransactionHash: l1TxHashStr,
             l2TransactionHash: l2TransactionHash,
             receiptStatus: receipt?.status,
             receipt,
           }),
-          new Error(`L1 tx ${result.targetChainTxHash.toString()} reverted`),
+          new Error(`L1 tx ${l1TxHashStr} reverted`),
         );
         return null;
       }

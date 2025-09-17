@@ -128,7 +128,7 @@ export const getCommonChainInput = (targetNetwork: NETWORK): Partial<CommonChain
         ? FEATURE_FLAGS.ENABLE_L2_REDEMPTION_MAINNET
         : targetNetwork === NETWORK.TESTNET
           ? FEATURE_FLAGS.ENABLE_L2_REDEMPTION_TESTNET
-          : FEATURE_FLAGS.ENABLE_L2_REDEMPTION_DEVNET,   
+          : FEATURE_FLAGS.ENABLE_L2_REDEMPTION_DEVNET,
     depositApiEndpoint: process.env.DEPOSIT_API_ENDPOINT,
   };
 

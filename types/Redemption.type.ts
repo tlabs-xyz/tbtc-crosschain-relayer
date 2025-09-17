@@ -20,7 +20,9 @@ export type BitcoinTxUtxo = {
 
 export type RedemptionRequestedEventData = {
   redeemerOutputScript: string;
-  amount: ethers.BigNumber; // uint64
+  // Store amount as a serializable shape to survive JSON persistence,
+  // then rehydrate to BigNumber at usage time.
+  amount: ethers.BigNumber | { _hex: string } | string; // uint64
   l2TransactionHash: string; // bytes32
 };
 

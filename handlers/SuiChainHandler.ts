@@ -327,7 +327,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       // Method 3: If still not found, filter logs by contract address
       if (!transferSequence) {
         const contractLogs = logs.filter(
-          (log) => log.address.toLowerCase() === this.config.l1BitcoinDepositorAddress.toLowerCase(),
+          (log) =>
+            log.address.toLowerCase() === this.config.l1BitcoinDepositorAddress.toLowerCase(),
         );
 
         for (const log of contractLogs) {
