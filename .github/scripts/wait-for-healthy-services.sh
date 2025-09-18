@@ -2,7 +2,7 @@
 set -e # Exit immediately if a command exits with a non-zero status.
 
 echo "Waiting for service(s) to become healthy..."
-TIMEOUT_SECONDS=120
+TIMEOUT_SECONDS=240
 INTERVAL_SECONDS=5
 ELAPSED_SECONDS=0
 
