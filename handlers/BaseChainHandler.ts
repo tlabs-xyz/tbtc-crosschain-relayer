@@ -20,7 +20,8 @@ import {
   createFinalizedDepositFromOnChainData,
 } from '../utils/Deposits.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { L1BitcoinDepositorABI } from '../interfaces/L1BitcoinDepositor.js';
+// Use the EVM L1BitcoinDepositor ABI which expects address l2DepositOwner (not bytes32)
+import { L1BitcoinDepositorABI } from '../interfaces/L1EVMBitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
 import type { AnyChainConfig } from '../config/index.js';
@@ -280,9 +281,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
    * @returns Transformed L1OutputEvent data
    */
   private transformL1OutputEventForChain(l1OutputEvent: any, chainType: CHAIN_TYPE): any {
-    // Only transform for SUI chains
+    // For non-SUI chains, just normalize to strict ABI sizes without extra prefixing
     if (chainType !== CHAIN_TYPE.SUI) {
-      return l1OutputEvent;
+      return this.normalizeL1OutputEventForAbi(l1OutputEvent);
     }
 
     // Helper function to ensure 0x prefix
@@ -309,11 +310,95 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       vault: l1OutputEvent.reveal.vault,
     };
 
-    return {
+    return this.normalizeL1OutputEventForAbi({
       fundingTx: transformedFundingTx,
       reveal: transformedReveal,
       l2DepositOwner: l1OutputEvent.l2DepositOwner,
+    });
+  }
+
+  /**
+   * Mirrors local deposit status to the status reported on L1 to avoid redundant actions.
+   */
+  protected async mirrorLocalStatusToL1(
+    deposit: Deposit,
+    l1Status: DepositStatus,
+    reason?: string,
+  ): Promise<void> {
+    try {
+      const now = Date.now();
+      const updated = {
+        ...deposit,
+        status: l1Status,
+        dates: {
+          ...deposit.dates,
+          initializationAt:
+            l1Status === DepositStatus.INITIALIZED
+              ? deposit.dates.initializationAt ?? now
+              : deposit.dates.initializationAt,
+          finalizationAt:
+            l1Status === DepositStatus.FINALIZED
+              ? deposit.dates.finalizationAt ?? now
+              : deposit.dates.finalizationAt,
+          lastActivityAt: now,
+        },
+        error: reason ?? null,
+      } as Deposit;
+      await DepositStore.update(updated);
+      logger.info(
+        `MIRROR | Local status -> ${DepositStatus[l1Status]} | ID: ${deposit.id} | Reason: ${reason ?? 'L1 status sync'}`,
+      );
+    } catch (e: any) {
+      logErrorContext(`Failed to mirror local status to L1 for ${deposit.id}`, e);
+    }
+  }
+
+  /**
+   * Ensures all fixed-size bytes fields strictly match the ABI sizes.
+   * Applies to all chains to avoid INVALID_ARGUMENT errors from ABI encoding.
+   */
+  private normalizeL1OutputEventForAbi(l1OutputEvent: any): any {
+    const zeroPad = (hex: string, sizeBytes: number): string => {
+      if (typeof hex !== 'string') return hex;
+      const prefixed = hex.startsWith('0x') ? hex : '0x' + hex;
+      // ethers pads left to the requested byte length
+      return ethers.utils.hexZeroPad(prefixed, sizeBytes);
     };
+
+    const ensureBytes = (hex: string): string => {
+      if (typeof hex !== 'string') return hex;
+      let out = hex.startsWith('0x') ? hex : '0x' + hex;
+      if (out.length % 2 !== 0) out = '0x0' + out.slice(2);
+      return out;
+    };
+
+    const fundingTx = {
+      version: zeroPad(l1OutputEvent.fundingTx.version, 4),
+      inputVector: ensureBytes(l1OutputEvent.fundingTx.inputVector),
+      outputVector: ensureBytes(l1OutputEvent.fundingTx.outputVector),
+      locktime: zeroPad(l1OutputEvent.fundingTx.locktime, 4),
+    };
+
+    const reveal = {
+      fundingOutputIndex: l1OutputEvent.reveal.fundingOutputIndex,
+      blindingFactor: zeroPad(l1OutputEvent.reveal.blindingFactor, 8),
+      walletPubKeyHash: zeroPad(l1OutputEvent.reveal.walletPubKeyHash, 20),
+      refundPubKeyHash: zeroPad(l1OutputEvent.reveal.refundPubKeyHash, 20),
+      refundLocktime: zeroPad(l1OutputEvent.reveal.refundLocktime, 4),
+      vault: l1OutputEvent.reveal.vault,
+    };
+
+    // For the EVM L1BitcoinDepositor ABI, owner is an address, keep as-is but normalize format
+    const l2DepositOwner = ((): string => {
+      try {
+        return ethers.utils.getAddress(l1OutputEvent.l2DepositOwner);
+      } catch {
+        // If it's not a valid address, keep original to let callStatic surface a clear error
+        return l1OutputEvent.l2DepositOwner;
+      }
+    })();
+
+    return { fundingTx, reveal, l2DepositOwner };
   }
 
   async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
@@ -342,6 +427,23 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
 
     try {
+      // Pre-check against L1 contract status to avoid unnecessary callStatic/init tx
+      const preStatus = await this.checkDepositStatus(deposit.id);
+      if (preStatus === DepositStatus.INITIALIZED) {
+        logger.warn(
+          `INITIALIZE | Deposit already initialized on L1 (pre-check) | ID: ${deposit.id}`,
+        );
+        await this.mirrorLocalStatusToL1(deposit, DepositStatus.INITIALIZED, 'Deposit found initialized on L1');
+        return;
+      }
+      if (preStatus === DepositStatus.FINALIZED) {
+        logger.warn(
+          `INITIALIZE | Deposit already finalized on L1 (pre-check) | ID: ${deposit.id}`,
+        );
+        await this.mirrorLocalStatusToL1(deposit, DepositStatus.FINALIZED, 'Deposit found finalized on L1');
+        return;
+      }
+
       // Transform the L1OutputEvent data for SUI chains to ensure proper formatting
       const transformedL1OutputEvent = this.transformL1OutputEventForChain(
         deposit.L1OutputEvent,
@@ -380,10 +482,23 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       // Update the deposit status in the JSON storage upon successful mining
       updateToInitializedDeposit(deposit, receipt, undefined); // Pass receipt for txHash etc.
 
+      // Explicit success log
+      logger.info(
+        `INITIALIZE | SUCCESS | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
+      );
+
       return receipt; // Return the receipt for further processing if needed
     } catch (error: any) {
       // Error Handling - Check if it's a specific revert reason or common issue
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
+      logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
+      // If the deposit was already revealed, mirror local status to avoid retries
+      if (reason.includes('Deposit already revealed')) {
+        await this.mirrorLocalStatusToL1(deposit, DepositStatus.INITIALIZED, reason);
+        return;
+      }
+  
+      // Log as error only if we confirmed L1 did not progress
       logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
       logDepositError(deposit.id, `Failed to initialize deposit: ${reason}`, {
         error: reason,
@@ -452,6 +567,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       // Update status upon successful mining
       updateToFinalizedDeposit(deposit, receipt, undefined); // Pass only deposit and receipt on success
 
+      // Explicit success log
+      logger.info(
+        `FINALIZE | SUCCESS | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
+      );
+
       return receipt;
     } catch (error: any) {
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
@@ -461,16 +581,29 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         logger.warn(`FINALIZE | WAITING (Bridge Delay) | ID: ${deposit.id} | Reason: ${reason}`);
         // Don't mark as error, just update activity to allow retry after TIME_TO_RETRY
         await updateLastActivity(deposit);
-      } else {
-        // Handle other errors
-        logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
-        logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, {
-          error: reason,
-          originalError: error.message,
-        });
-        // Mark as error to potentially prevent immediate retries depending on cleanup logic
-        updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
+        return;
       }
+
+      // If generic failure, re-check L1 status – it might have finalized already
+      try {
+        const postStatus = await this.checkDepositStatus(deposit.id);
+        if (postStatus === DepositStatus.FINALIZED) {
+          logger.warn(
+            `FINALIZE | Tx failed but L1 shows FINALIZED (race/duplicate) | ID: ${deposit.id}`,
+          );
+          await this.mirrorLocalStatusToL1(deposit, DepositStatus.FINALIZED, reason);
+          return;
+        }
+      } catch {}
+
+      // Handle other errors only if L1 did not progress
+      logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
+      logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, {
+        error: reason,
+        originalError: error.message,
+      });
+      // Mark as error to potentially prevent immediate retries depending on cleanup logic
+      updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
     }
   }
 
@@ -539,7 +672,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `INITIALIZE | Deposit already initialized on L1 (local status was QUEUED) | ID: ${updatedDeposit.id}`,
           );
           // Update local status to match L1
-          updateToInitializedDeposit(updatedDeposit, undefined, 'Deposit found initialized on L1');
+          await this.mirrorLocalStatusToL1(
+            updatedDeposit,
+            DepositStatus.INITIALIZED,
+            'Deposit found initialized on L1',
+          );
           break;
 
         case DepositStatus.QUEUED:
@@ -554,7 +691,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `INITIALIZE | Deposit already finalized on L1 (local status was QUEUED) | ID: ${updatedDeposit.id}`,
           );
           // Update local status to match L1
-          updateToFinalizedDeposit(updatedDeposit, undefined, 'Deposit found finalized on L1');
+          await this.mirrorLocalStatusToL1(
+            updatedDeposit,
+            DepositStatus.FINALIZED,
+            'Deposit found finalized on L1',
+          );
           break;
 
         default:

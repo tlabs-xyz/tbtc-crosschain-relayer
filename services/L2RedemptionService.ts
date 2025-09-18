@@ -147,11 +147,7 @@ export class L2RedemptionService {
       RedemptionStatus.VAA_FAILED,
       this.chainConfig.chainName,
     );
-    const failed = await RedemptionStore.getByStatus(
-      RedemptionStatus.FAILED,
-      this.chainConfig.chainName,
-    );
-    const toProcess = [...pending, ...vaaFailed, ...failed];
+    const toProcess = [...pending, ...vaaFailed];
     for (const redemption of toProcess) {
       try {
         const vaaResult = await this.wormholeVaaService.fetchVaaForRedemption(
@@ -204,7 +200,7 @@ export class L2RedemptionService {
           continue;
         }
         if (!redemption.serializedVaaBytes) {
-          redemption.status = RedemptionStatus.FAILED;
+          redemption.status = RedemptionStatus.VAA_FAILED;
           redemption.error = 'No VAA bytes present for L1 submission.';
           redemption.dates.lastActivityAt = Date.now();
           redemption.logs?.push(

@@ -138,10 +138,12 @@ export class EVMChainHandler
 
   override async getLatestBlock(): Promise<number> {
     if (!this.l2Provider) {
+      logger.warn(`Latest block for ${this.config.chainName}: 0`);
       return 0;
     }
     try {
       const block = await this.l2Provider.getBlock('latest');
+      logger.debug(`Latest block for ${this.config.chainName}: ${block.number}`);
       return block.number;
     } catch (error) {
       logErrorContext(
