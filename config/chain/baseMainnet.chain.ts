@@ -6,15 +6,12 @@ import {
   WORMHOLE_GATEWAYS,
   PUBLIC_RPCS,
   PUBLIC_WS_RPCS,
-  getCommonChainInput,
 } from './common.chain.js';
 import { buildEvmChainInput } from './evm-common.js';
 
 type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
 
 export const getBaseMainnetChainInput = (): EvmChainInput => {
-  getCommonChainInput(NETWORK.MAINNET);
-
   return buildEvmChainInput({
     chainName: 'BaseMainnet',
     targetNetwork: NETWORK.MAINNET,

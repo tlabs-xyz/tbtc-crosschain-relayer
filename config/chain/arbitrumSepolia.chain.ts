@@ -1,14 +1,12 @@
 import { z } from 'zod';
 import { NETWORK } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
-import { getCommonChainInput, WORMHOLE_CHAIN_IDS, WORMHOLE_GATEWAYS } from './common.chain.js';
+import { WORMHOLE_CHAIN_IDS, WORMHOLE_GATEWAYS } from './common.chain.js';
 import { buildEvmChainInput } from './evm-common.js';
 
 type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
 
 export const getArbitrumSepoliaChainInput = (): EvmChainInput => {
-  getCommonChainInput(NETWORK.TESTNET);
-
   return buildEvmChainInput({
     chainName: 'ArbitrumSepolia',
     targetNetwork: NETWORK.TESTNET,
