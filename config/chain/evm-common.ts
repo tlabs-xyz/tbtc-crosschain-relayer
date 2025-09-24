@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NETWORK, CHAIN_TYPE, type CommonChainInput } from '../schemas/common.schema.js';
+import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
 import { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { getCommonChainInput } from './common.chain.js';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
@@ -35,23 +35,6 @@ export interface EvmChainBuildParams {
 
 export function buildEvmChainInput(params: EvmChainBuildParams): EvmChainInput {
   const common = getCommonChainInput(params.targetNetwork);
-
-  // Validate required fields from CommonChainInput
-  const requiredFields: Array<keyof Partial<CommonChainInput>> = [
-    'network',
-    'l1Rpc',
-    'vaultAddress',
-    'l1Confirmations',
-    'enableL2Redemption',
-    'useEndpoint',
-  ];
-  for (const field of requiredFields) {
-    if (typeof field === 'string' && (common[field] === undefined || common[field] === null)) {
-      throw new Error(
-        `buildEvmChainInput(${params.chainName}): Missing required field '${String(field)}' in CommonChainInput.`,
-      );
-    }
-  }
 
   const config: EvmChainInput = {
     // from common
@@ -90,6 +73,14 @@ export function buildEvmChainInput(params: EvmChainBuildParams): EvmChainInput {
     l2WormholeGatewayAddress: params.wormholeGateway,
     l2WormholeChainId: params.wormholeChainId,
   };
+
+  // Validate the assembled config with Zod to ensure correctness
+  const validation = EvmChainConfigSchema.safeParse(config);
+  if (!validation.success) {
+    throw new Error(
+      `buildEvmChainInput(${params.chainName}): Invalid EVM config: ${validation.error.message}`,
+    );
+  }
 
   return config;
 }
