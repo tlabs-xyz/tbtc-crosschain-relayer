@@ -1,6 +1,7 @@
 import type { AnyChainConfig } from '../config/index.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import { logErrorContext } from '../utils/Logger.js';
 import { L1RedemptionHandlerFactory } from './L1RedemptionHandlerFactory.js';
 
 /**
@@ -38,11 +39,17 @@ class L1RedemptionHandlerRegistry {
       if (!config.enableL2Redemption || config.chainType !== CHAIN_TYPE.EVM) {
         continue;
       }
-      const handler = L1RedemptionHandlerFactory.createHandler(config);
-      const handlerExists = this.get(config.chainName) !== undefined;
-      if (handler && !handlerExists) {
-        await handler.initialize();
-        this.register(config.chainName, handler);
+      try {
+        const handler = L1RedemptionHandlerFactory.createHandler(config);
+        const handlerExists = this.get(config.chainName) !== undefined;
+        if (handler && !handlerExists) {
+          await handler.initialize();
+          this.register(config.chainName, handler);
+        }
+      } catch (error) {
+        logErrorContext(`Failed to initialize L1RedemptionHandler for ${config.chainName}`, error, {
+          chainName: config.chainName,
+        });
       }
     }
   }

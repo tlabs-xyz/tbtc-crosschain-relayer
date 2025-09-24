@@ -334,11 +334,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
           ...deposit.dates,
           initializationAt:
             l1Status === DepositStatus.INITIALIZED
-              ? deposit.dates.initializationAt ?? now
+              ? (deposit.dates.initializationAt ?? now)
               : deposit.dates.initializationAt,
           finalizationAt:
             l1Status === DepositStatus.FINALIZED
-              ? deposit.dates.finalizationAt ?? now
+              ? (deposit.dates.finalizationAt ?? now)
               : deposit.dates.finalizationAt,
           lastActivityAt: now,
         },
@@ -433,14 +433,20 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         logger.warn(
           `INITIALIZE | Deposit already initialized on L1 (pre-check) | ID: ${deposit.id}`,
         );
-        await this.mirrorLocalStatusToL1(deposit, DepositStatus.INITIALIZED, 'Deposit found initialized on L1');
+        await this.mirrorLocalStatusToL1(
+          deposit,
+          DepositStatus.INITIALIZED,
+          'Deposit found initialized on L1',
+        );
         return;
       }
       if (preStatus === DepositStatus.FINALIZED) {
-        logger.warn(
-          `INITIALIZE | Deposit already finalized on L1 (pre-check) | ID: ${deposit.id}`,
+        logger.warn(`INITIALIZE | Deposit already finalized on L1 (pre-check) | ID: ${deposit.id}`);
+        await this.mirrorLocalStatusToL1(
+          deposit,
+          DepositStatus.FINALIZED,
+          'Deposit found finalized on L1',
         );
-        await this.mirrorLocalStatusToL1(deposit, DepositStatus.FINALIZED, 'Deposit found finalized on L1');
         return;
       }
 
@@ -497,7 +503,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         await this.mirrorLocalStatusToL1(deposit, DepositStatus.INITIALIZED, reason);
         return;
       }
-  
+
       // Log as error only if we confirmed L1 did not progress
       logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
       logDepositError(deposit.id, `Failed to initialize deposit: ${reason}`, {
