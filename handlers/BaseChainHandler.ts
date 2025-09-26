@@ -20,8 +20,9 @@ import {
   createFinalizedDepositFromOnChainData,
 } from '../utils/Deposits.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-// Use the EVM L1BitcoinDepositor ABI which expects address l2DepositOwner (not bytes32)
-import { L1BitcoinDepositorABI } from '../interfaces/L1EVMBitcoinDepositor.js';
+// Import both ABIs - EVM version expects address, generic version expects bytes32
+import { L1BitcoinDepositorABI as L1BitcoinDepositorEVMABI } from '../interfaces/L1EVMBitcoinDepositor.js';
+import { L1BitcoinDepositorABI as L1BitcoinDepositorGenericABI } from '../interfaces/L1BitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
 import type { AnyChainConfig } from '../config/index.js';
@@ -82,7 +83,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         if (this.config.chainType === CHAIN_TYPE.EVM) {
           this.l1BitcoinDepositor = new ethers.Contract(
             this.config.l1BitcoinDepositorAddress,
-            L1BitcoinDepositorABI,
+            L1BitcoinDepositorEVMABI,
             this.nonceManagerL1,
           );
           this.tbtcVault = new ethers.Contract( // Keep for completeness, though not sending txs currently
@@ -100,10 +101,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         this.l1Signer = new ethers.Wallet(this.config.privateKey as string, this.l1Provider);
         this.nonceManagerL1 = new NonceManager(this.l1Signer);
 
-        // L1 Contracts for transactions (require signer)
+        // L1 Contracts for transactions (require signer) - use generic ABI for non-EVM chains
         this.l1BitcoinDepositor = new ethers.Contract(
           this.config.l1BitcoinDepositorAddress,
-          L1BitcoinDepositorABI,
+          L1BitcoinDepositorGenericABI,
           this.nonceManagerL1,
         );
       } else {
@@ -149,9 +150,15 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     // this.l1Provider = new ethers.providers.JsonRpcProvider(this.config.l1Rpc); // Moved up
 
     // L1 Contracts for reading/listening (do not require signer)
+    // Select ABI based on chain type
+    const l1BitcoinDepositorABI =
+      this.config.chainType === CHAIN_TYPE.EVM
+        ? L1BitcoinDepositorEVMABI
+        : L1BitcoinDepositorGenericABI;
+
     this.l1BitcoinDepositorProvider = new ethers.Contract(
       this.config.l1BitcoinDepositorAddress,
-      L1BitcoinDepositorABI,
+      l1BitcoinDepositorABI,
       this.l1Provider,
     );
     this.tbtcVaultProvider = new ethers.Contract(
@@ -310,11 +317,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       vault: l1OutputEvent.reveal.vault,
     };
 
-    return this.normalizeL1OutputEventForAbi({
+    return {
       fundingTx: transformedFundingTx,
       reveal: transformedReveal,
       l2DepositOwner: l1OutputEvent.l2DepositOwner,
-    });
+    };
   }
 
   /**
@@ -388,17 +395,23 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       vault: l1OutputEvent.reveal.vault,
     };
 
-    // For the EVM L1BitcoinDepositor ABI, owner is an address, keep as-is but normalize format
-    const l2DepositOwner = ((): string => {
-      try {
-        return ethers.utils.getAddress(l1OutputEvent.l2DepositOwner);
-      } catch {
-        // If it's not a valid address, keep original to let callStatic surface a clear error
-        return l1OutputEvent.l2DepositOwner;
-      }
-    })();
-
-    return { fundingTx, reveal, l2DepositOwner };
+    // Handle the deposit owner based on chain type
+    if (this.config.chainType === CHAIN_TYPE.EVM) {
+      // For EVM chains, normalize as address
+      const l2DepositOwner = ((): string => {
+        try {
+          return ethers.utils.getAddress(l1OutputEvent.l2DepositOwner);
+        } catch {
+          // If it's not a valid address, keep original to let callStatic surface a clear error
+          return l1OutputEvent.l2DepositOwner;
+        }
+      })();
+      return { fundingTx, reveal, l2DepositOwner };
+    } else {
+      // For non-EVM chains (Sui, Solana, StarkNet), use bytes32 destinationChainDepositOwner
+      const destinationChainDepositOwner = zeroPad(l1OutputEvent.l2DepositOwner, 32);
+      return { fundingTx, reveal, destinationChainDepositOwner };
+    }
   }
 
   async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
