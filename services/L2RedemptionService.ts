@@ -55,7 +55,10 @@ export class L2RedemptionService {
 
   // Async operations cannot be performed in the constructor, so we put them here
   private async initialize(chainConfig: EvmChainConfig): Promise<void> {
-    this.wormholeVaaService = await WormholeVaaService.create(chainConfig.l2Rpc);
+    this.wormholeVaaService = await WormholeVaaService.create(
+      chainConfig.l2Rpc,
+      chainConfig.network,
+    );
   }
 
   public static async create(chainConfig: EvmChainConfig): Promise<L2RedemptionService> {
