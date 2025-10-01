@@ -23,19 +23,19 @@ export const getStarknetMainnetChainInput = (): StarknetChainInput => {
     // StarkNet-specific overrides and additions
     chainName: 'StarknetMainnet',
     chainType: CHAIN_TYPE.STARKNET,
-    privateKey: getEnv('CHAIN_STARKNETMAINNET_PRIVATE_KEY'),
+    privateKey: getEnv('CHAIN_STARKNET_MAINNET_PRIVATE_KEY'),
     supportsRevealDepositAPI: true,
-    l1FeeAmountWei: getEnv('CHAIN_STARKNETMAINNET_L1_FEE_AMOUNT_WEI', '0'),
+    l1FeeAmountWei: getEnv('CHAIN_STARKNET_MAINNET_L1_FEE_AMOUNT_WEI', '0'),
     starkGateBridgeAddress: getEnv(
       'STARKNET_MAINNET_STARKGATE_BRIDGE_ADDRESS',
       '0x2111A49ebb717959059693a3698872a0aE9866b9',
     ),
     vaultAddress: getEnv('STARKNET_MAINNET_VAULT_ADDRESS', common.vaultAddress as string),
-    l1ContractAddress: getEnv(
+    l1BitcoinDepositorAddress: getEnv(
       'STARKNET_MAINNET_L1_CONTRACT_ADDRESS',
-      common.l1ContractAddress as string,
+      common.l1BitcoinDepositorAddress as string,
     ),
-    l1StartBlock: 22670140,
+    l1BitcoinDepositorStartBlock: 22670140,
   };
   return config;
 };

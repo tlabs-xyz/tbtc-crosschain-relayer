@@ -1,10 +1,6 @@
-const { execSync } = require('child_process');
+import { execSync } from 'child_process';
 
-module.exports = async () => {
-  // Ensure the Postgres schema is up to date before tests
-  // Using `db push` as a more direct way to ensure schema matches for tests.
-
-  // Use DATABASE_URL from environment if set, otherwise use fallback for local development
+export default async () => {
   const testDatabaseUrl =
     process.env.DATABASE_URL ||
     'postgresql://postgres:postgres@localhost:5432/tbtc_relayer?schema=public';
@@ -14,11 +10,10 @@ module.exports = async () => {
     testDatabaseUrl.replace(/\/\/[^@]+@/, '//***:***@'),
   );
 
-  // Set the test database URL and NODE_ENV for Prisma commands
   const prismaEnv = {
     ...process.env,
     DATABASE_URL: testDatabaseUrl,
-    NODE_ENV: 'test', // Ensure Prisma CLI operates in test mode if it has conditional logic
+    NODE_ENV: 'test',
   };
 
   try {
@@ -37,7 +32,7 @@ module.exports = async () => {
     console.log('Jest Global Setup: Prisma clients generated successfully.');
   } catch (error) {
     console.error('Jest Global Setup: Error during Prisma setup:', error);
-    throw error; // Rethrow to fail the setup if Prisma commands fail
+    throw error;
   }
 
   console.log('Jest Global Setup: Completed successfully.');

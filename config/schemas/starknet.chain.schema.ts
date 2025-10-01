@@ -3,11 +3,13 @@ import { CHAIN_TYPE, CommonChainConfigSchema } from './common.schema.js';
 import { EthereumAddressSchema } from './shared.js';
 
 const CommonConfigForStarknet = CommonChainConfigSchema.omit({
-  l2ContractAddress: true,
+  l2BitcoinDepositorAddress: true,
   l2WormholeGatewayAddress: true,
   l2WormholeChainId: true,
   l2WsRpc: true,
-  l2StartBlock: true,
+  l2BitcoinDepositorStartBlock: true,
+  l2BitcoinRedeemerStartBlock: true,
+  l2BitcoinRedeemerAddress: true,
 });
 
 export const StarknetChainConfigSchema = CommonConfigForStarknet.extend({
@@ -18,7 +20,7 @@ export const StarknetChainConfigSchema = CommonConfigForStarknet.extend({
     .string()
     .regex(/^\d+$/, 'l1FeeAmountWei must be a string of digits')
     .default('0'),
-  l1StartBlock: z.coerce.number().int().nonnegative().default(8489908),
+  l1BitcoinDepositorStartBlock: z.coerce.number().int().nonnegative().default(8489908),
   // L1 private key for chains using endpoint mode
   // This is the Ethereum private key used to pay for L1 transactions
   privateKey: z

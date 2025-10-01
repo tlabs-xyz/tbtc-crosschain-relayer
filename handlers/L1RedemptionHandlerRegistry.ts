@@ -1,9 +1,8 @@
-import { L1RedemptionHandler } from './L1RedemptionHandler.js';
 import type { AnyChainConfig } from '../config/index.js';
-import logger from '../utils/Logger.js';
-import { ethers } from 'ethers';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
-import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import { logErrorContext } from '../utils/Logger.js';
+import { L1RedemptionHandlerFactory } from './L1RedemptionHandlerFactory.js';
 
 /**
  * Manages L1RedemptionHandler instances.
@@ -11,56 +10,54 @@ import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
  * to reuse handlers for chains sharing the same L1 configuration.
  */
 class L1RedemptionHandlerRegistry {
-  private handlers: Map<string, L1RedemptionHandler> = new Map();
+  private handlers: Map<string, L1RedemptionHandlerInterface> = new Map();
 
-  private generateKey(
-    l1RpcUrl: string,
-    l1ContractAddress: string,
-    l1SignerAddress: string,
-  ): string {
-    return `${l1RpcUrl.toLowerCase()}-${l1ContractAddress.toLowerCase()}-${l1SignerAddress.toLowerCase()}`;
+  // Register a handler for a chainName
+  register(chainName: string, handler: L1RedemptionHandlerInterface): void {
+    this.handlers.set(chainName, handler);
   }
 
-  public get(chainConfig: AnyChainConfig): L1RedemptionHandler {
-    if (chainConfig.chainType !== CHAIN_TYPE.EVM) {
-      const errorMsg = `L1RedemptionHandler is only applicable to EVM chains. Chain ${chainConfig.chainName} is of type ${chainConfig.chainType}.`;
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-    // Now we know it's an EVM chain
-    const evmConfig = chainConfig as EvmChainConfig;
-
-    if (!evmConfig.privateKey) {
-      const errorMsg = `Private key is missing for EVM chain ${evmConfig.chainName} in L1RedemptionHandlerRegistry.`;
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    const l1SignerAddress = new ethers.Wallet(evmConfig.privateKey).address;
-    const key = this.generateKey(evmConfig.l1Rpc, evmConfig.l1ContractAddress, l1SignerAddress);
-
-    if (!this.handlers.has(key)) {
-      logger.info(`Creating new L1RedemptionHandler instance for key: ${key}`);
-      const handler = new L1RedemptionHandler(
-        evmConfig.l1Rpc,
-        evmConfig.l1ContractAddress,
-        evmConfig.privateKey,
-      );
-      this.handlers.set(key, handler);
-      return handler;
-    }
-    logger.debug(`Reusing existing L1RedemptionHandler instance for key: ${key}`);
-    return this.handlers.get(key)!;
+  // Get a handler by chainName
+  get(chainName: string): L1RedemptionHandlerInterface | undefined {
+    return this.handlers.get(chainName);
   }
 
-  public list(): L1RedemptionHandler[] {
+  // List all handlers
+  list(): L1RedemptionHandlerInterface[] {
     return Array.from(this.handlers.values());
+  }
+
+  // Filter handlers by a predicate
+  filter(
+    predicate: (handler: L1RedemptionHandlerInterface) => boolean,
+  ): L1RedemptionHandlerInterface[] {
+    return this.list().filter(predicate);
+  }
+
+  public async initialize(configs: AnyChainConfig[]): Promise<void> {
+    for (const config of configs) {
+      if (!config.enableL2Redemption || config.chainType !== CHAIN_TYPE.EVM) {
+        continue;
+      }
+      try {
+        const handler = L1RedemptionHandlerFactory.createHandler(config);
+        const handlerExists = this.get(config.chainName) !== undefined;
+        if (handler && !handlerExists) {
+          await handler.initialize();
+          this.register(config.chainName, handler);
+        }
+      } catch (error) {
+        logErrorContext(`Failed to initialize L1RedemptionHandler for ${config.chainName}`, error, {
+          chainName: config.chainName,
+        });
+      }
+    }
   }
 
   public clear(): void {
     this.handlers.clear();
-    logger.info('L1RedemptionHandlerRegistry cleared.');
   }
 }
 
 export const l1RedemptionHandlerRegistry = new L1RedemptionHandlerRegistry();
+export { L1RedemptionHandlerRegistry };

@@ -46,41 +46,41 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     logger.debug(`[${this.config.chainName}] StarknetChainHandler setup complete`);
   }
 
-  protected async initializeL2(): Promise<void> {
+  protected override async initializeL2(): Promise<void> {
     logger.info(`[${this.config.chainName}] Initializing StarkNet L1 components`);
 
     try {
       // For read-only operations and event listening:
       this.l1DepositorContractProvider = new ethers.Contract(
-        this.config.l1ContractAddress,
+        this.config.l1BitcoinDepositorAddress,
         StarkNetBitcoinDepositorABI,
         this.l1Provider,
       ) as StarkNetBitcoinDepositor;
       logger.info(
-        `[${this.config.chainName}] L1 Depositor contract provider instance created at ${this.config.l1ContractAddress}`,
+        `[${this.config.chainName}] L1 Depositor contract provider instance created at ${this.config.l1BitcoinDepositorAddress}`,
       );
 
       // For sending transactions (if signer is available via BaseChainHandler's init)
       if (this.nonceManagerL1) {
         this.l1DepositorContract = new ethers.Contract(
-          this.config.l1ContractAddress,
+          this.config.l1BitcoinDepositorAddress,
           StarkNetBitcoinDepositorABI,
           this.nonceManagerL1,
         ) as StarkNetBitcoinDepositor;
         logger.info(
-          `[${this.config.chainName}] L1 Depositor contract signer instance (with NonceManager) created at ${this.config.l1ContractAddress}`,
+          `[${this.config.chainName}] L1 Depositor contract signer instance (with NonceManager) created at ${this.config.l1BitcoinDepositorAddress}`,
         );
       } else if (this.l1Signer) {
         logger.warn(
           `[${this.config.chainName}] L1 NonceManager not available, but L1 Signer is. L1 Depositor contract will use signer directly. This might lead to nonce issues if not handled carefully.`,
         );
         this.l1DepositorContract = new ethers.Contract(
-          this.config.l1ContractAddress,
+          this.config.l1BitcoinDepositorAddress,
           StarkNetBitcoinDepositorABI,
           this.l1Signer,
         ) as StarkNetBitcoinDepositor;
         logger.info(
-          `[${this.config.chainName}] L1 Depositor contract signer instance (without NonceManager) created at ${this.config.l1ContractAddress}`,
+          `[${this.config.chainName}] L1 Depositor contract signer instance (without NonceManager) created at ${this.config.l1BitcoinDepositorAddress}`,
         );
       } else {
         logger.warn(
@@ -148,7 +148,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     logger.info(`[${this.config.chainName}] L1 event listener is active`);
 
     this.checkForPastL1DepositInitializedEvents({
-      fromBlock: this.config.l1StartBlock,
+      fromBlock: this.config.l1BitcoinDepositorStartBlock,
     }).catch((error) => {
       logger.error(
         `[${this.config.chainName}] Error during initial scan for past L1 DepositInitialized events: ${error.message}`,
@@ -159,7 +159,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
 
     // TODO: Disable for now, investigate later
     // this.checkForPastL1DepositorEvents({
-    //   fromBlock: this.config.l1StartBlock,
+    //   fromBlock: this.config.l1BitcoinDepositorStartBlock,
     // }).catch((error) => {
     //   logger.error(
     //     `Error during initial scan for past L1 Depositor events for ${this.config.chainName}: ${error.message}`,
@@ -308,7 +308,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     }
   }
 
-  async getLatestBlock(): Promise<number> {
+  override async getLatestBlock(): Promise<number> {
     if (this.config.useEndpoint) return 0;
 
     logger.warn(
@@ -325,7 +325,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
     return 0; // Placeholder - indicates L2 past deposit scanning not available
   }
 
-  async checkForPastDeposits(_options: {
+  override async checkForPastDeposits(_options: {
     pastTimeInMinutes: number;
     latestBlock: number; // Represents block number
   }): Promise<void> {
@@ -387,7 +387,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
    * @param depositOrId The deposit ID (string) or Deposit object.
    * @returns The current status as a numeric enum value, or null if not found.
    */
-  async checkDepositStatus(depositOrId: string | Deposit): Promise<number | null> {
+  override async checkDepositStatus(depositOrId: string | Deposit): Promise<number | null> {
     try {
       let deposit: Deposit | null;
       if (typeof depositOrId === 'string') {
@@ -429,7 +429,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
    * @param deposit The deposit object.
    * @returns A promise that resolves with the transaction receipt if successful, otherwise undefined.
    */
-  public async finalizeDeposit(
+  public override async finalizeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
     const depositKey = this._getOnChainDepositKey(deposit);
@@ -624,7 +624,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
    * @param deposit The deposit object containing all necessary L1 event data.
    * @returns A promise that resolves with the L1 transaction receipt if successful, otherwise undefined.
    */
-  public async initializeDeposit(
+  public override async initializeDeposit(
     deposit: Deposit,
   ): Promise<ethers.providers.TransactionReceipt | undefined> {
     // --- Constants & Helpers ---
@@ -866,7 +866,9 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
       }
       if (!fromBlock) {
         fromBlock =
-          this.config.l1StartBlock > 0 ? Math.max(0, this.config.l1StartBlock - 10) : undefined;
+          this.config.l1BitcoinDepositorStartBlock > 0
+            ? Math.max(0, this.config.l1BitcoinDepositorStartBlock - 10)
+            : undefined;
       }
 
       if (fromBlock) {

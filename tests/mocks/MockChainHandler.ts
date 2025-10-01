@@ -56,8 +56,8 @@ export class MockChainHandler implements ChainHandlerInterface {
       l1Rpc: 'http://localhost:8545',
       l2Rpc: 'http://localhost:8546',
       l2WsRpc: 'ws://localhost:8547',
-      l1ContractAddress: ethers.constants.AddressZero,
-      l2ContractAddress: ethers.constants.AddressZero,
+      l1BitcoinDepositorAddress: ethers.constants.AddressZero,
+      l2BitcoinDepositorAddress: ethers.constants.AddressZero,
       // Bitcoin Redeemer addresses removed - these contracts don't exist in tBTC v2
       l2WormholeGatewayAddress: ethers.constants.AddressZero,
       l2WormholeChainId: 0,
@@ -86,14 +86,15 @@ export class MockChainHandler implements ChainHandlerInterface {
           privateKey:
             (config as EvmChainConfig).privateKey || ethers.Wallet.createRandom().privateKey,
           l2WsRpc: (config as EvmChainConfig).l2WsRpc || baseProperties.l2WsRpc,
-          l2ContractAddress:
-            (config as EvmChainConfig).l2ContractAddress || baseProperties.l2ContractAddress,
+          l2BitcoinDepositorAddress:
+            (config as EvmChainConfig).l2BitcoinDepositorAddress ||
+            baseProperties.l2BitcoinDepositorAddress,
           l2WormholeGatewayAddress:
             (config as EvmChainConfig).l2WormholeGatewayAddress ||
             baseProperties.l2WormholeGatewayAddress,
           l2WormholeChainId:
             (config as EvmChainConfig).l2WormholeChainId || baseProperties.l2WormholeChainId,
-          l2StartBlock: (config as EvmChainConfig).l2StartBlock,
+          l2BitcoinDepositorStartBlock: (config as EvmChainConfig).l2BitcoinDepositorStartBlock,
           endpointUrl: (config as EvmChainConfig).endpointUrl,
         };
         finalConfig = evmConfig as EvmChainConfig;

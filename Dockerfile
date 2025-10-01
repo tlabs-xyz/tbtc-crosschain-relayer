@@ -7,7 +7,7 @@ RUN echo "Development stage cache buster: ${CACHE_BUSTER}"
 WORKDIR /usr/app
 
 # Combine RUN commands
-RUN apk add --no-cache git curl postgresql-client && \
+RUN apk add --no-cache bash git curl postgresql-client && \
     git config --global url."https://".insteadOf git://
 
 COPY package.json yarn.lock ./
@@ -51,6 +51,9 @@ WORKDIR /usr/app
 
 COPY package.json yarn.lock ./
 COPY prisma/ ./prisma/
+
+RUN apk add --no-cache bash git && \
+    git config --global url."https://".insteadOf git://
 
 RUN yarn install --frozen-lockfile --production=true
 

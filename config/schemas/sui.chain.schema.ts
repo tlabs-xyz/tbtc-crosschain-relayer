@@ -10,16 +10,18 @@ const CommonConfigForSui = CommonChainConfigSchema.omit({ privateKey: true });
 export const SuiChainConfigSchema = CommonConfigForSui.omit({
   l2WormholeGatewayAddress: true,
   l2WormholeChainId: true,
+  l2BitcoinRedeemerStartBlock: true,
+  l2BitcoinRedeemerAddress: true,
 })
   .extend({
     chainType: z.literal(CHAIN_TYPE.SUI),
 
     // Override l2ContractAddress to allow Sui contract format (package::module)
-    l2ContractAddress: z
+    l2BitcoinDepositorAddress: z
       .string()
       .regex(
         /^0x[a-fA-F0-9]{64}::[a-zA-Z_][a-zA-Z0-9_]*$/,
-        'l2ContractAddress must be in Sui format: 0x{package_id}::{module_name}',
+        'l2BitcoinDepositorAddress must be in Sui format: 0x{package_id}::{module_name}',
       ),
 
     // Sui-specific private key field
@@ -59,7 +61,7 @@ export const SuiChainConfigSchema = CommonConfigForSui.omit({
   .transform((data) => ({
     ...data,
     // Automatically derive l2PackageId from l2ContractAddress
-    l2PackageId: data.l2ContractAddress.split('::')[0],
+    l2PackageId: data.l2BitcoinDepositorAddress.split('::')[0],
   }));
 
 export type SuiChainConfig = z.infer<typeof SuiChainConfigSchema>;

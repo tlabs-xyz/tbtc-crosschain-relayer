@@ -9,6 +9,7 @@ import {
   type WormholeMessageId,
   type Chain,
   type VAA,
+  serialize,
 } from '@wormhole-foundation/sdk';
 import evm from '@wormhole-foundation/sdk/evm';
 import solana from '@wormhole-foundation/sdk/solana';
@@ -52,7 +53,7 @@ export class WormholeVaaService {
    * Fetches and verifies a VAA for a given L2 transaction hash.
    *
    * @param l2TransactionHash - The hash of the L2 transaction to fetch the VAA for.
-   * @param emitterChainId - The ID of the L2 chain where the RedemptionRequested event occurred.
+   * @param emitterChainId - The ID of the L2 chain where the RedemptionRequestedOnL2 event occurred.
    * @param emitterAddress - The address of the emitter on the L2 chain.
    * @returns A tuple containing the VAA bytes and the parsed VAA object.
    */
@@ -248,5 +249,80 @@ export class WormholeVaaService {
       `VAA verification passed for emitter: ${parsedVaa.emitterAddress.toString()}, chain: ${actualEmitterChainName}, sequence: ${parsedVaa.sequence}.`,
     );
     return true;
+  }
+
+  /**
+   * Fetches and serializes a VAA for redemption requests, following the exact flow
+   * from completeRedemptionRequest.ts
+   *
+   * @param l2TransactionHash - The hash of the L2 transaction containing the redemption request
+   * @param l2ChainId - The Wormhole chain ID of the L2 chain
+   * @param timeout - Timeout in milliseconds for VAA retrieval (default 15 minutes)
+   * @returns The serialized VAA bytes and parsed VAA, or null if failed
+   */
+  public async fetchVaaForRedemption(
+    l2TransactionHash: string,
+    l2ChainId: ChainId,
+    timeout: number = 900000, // 15 minutes default
+  ): Promise<{
+    serializedVaa: Uint8Array;
+    parsedVaa: VAA<'TokenBridge:TransferWithPayload'>;
+  } | null> {
+    try {
+      logger.info(`Parsing L2 transaction for redemption: ${l2TransactionHash}`);
+
+      // Get the chain context for the L2 chain
+      const l2ChainName = chainIdToChain(l2ChainId);
+      const sourceChain = this.wh.getChain(l2ChainName);
+
+      // Parse the transaction to get Wormhole messages
+      const messages = await sourceChain.parseTransaction(l2TransactionHash);
+      if (!messages || messages.length === 0) {
+        logErrorContext(
+          `No Wormhole messages found in transaction ${l2TransactionHash}`,
+          new Error('No Wormhole messages in transaction'),
+        );
+        return null;
+      }
+
+      const whm = messages[0];
+      logger.info(`Wormhole message found for redemption:`, {
+        chain: whm.chain,
+        emitter: whm.emitter.toString(),
+        sequence: whm.sequence.toString(),
+      });
+
+      // Wait for VAA with the specific discriminator for redemptions
+      logger.info(`Waiting for VAA to be signed (timeout: ${timeout}ms)...`);
+      const vaa = await this.wh.getVaa(whm, 'TokenBridge:TransferWithPayload', timeout);
+
+      if (!vaa) {
+        logErrorContext(
+          `Failed to obtain VAA for redemption after timeout`,
+          new Error('VAA timeout'),
+        );
+        return null;
+      }
+
+      logger.info('VAA obtained successfully for redemption!', {
+        emitterChain: vaa.emitterChain,
+        sequence: vaa.sequence.toString(),
+        tokenAmount: vaa.payload.token.amount.toString(),
+        payloadLength: vaa.payload.payload.length,
+      });
+
+      // Serialize the VAA
+      const serializedVaa = serialize(vaa);
+      logger.info(`VAA serialized for redemption, length: ${serializedVaa.length} bytes`);
+
+      return { serializedVaa, parsedVaa: vaa };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logErrorContext(
+        `Error fetching VAA for redemption from transaction ${l2TransactionHash}`,
+        err,
+      );
+      return null;
+    }
   }
 }

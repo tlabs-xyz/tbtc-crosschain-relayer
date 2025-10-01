@@ -10,20 +10,30 @@ function serializeRedemptionData(redemption: Redemption): any {
   delete dataBlob.chainId;
   delete dataBlob.status;
 
-  // Handle BigNumber serialization within the remaining dataBlob parts
-  const r = JSON.parse(JSON.stringify(dataBlob)); // Basic deep clone for further manipulation
-  if (r.event) {
-    if (r.event.amount && ethers.BigNumber.isBigNumber(r.event.amount)) {
-      r.event.amount = r.event.amount.toString();
+  // Normalize VAA bytes to a hex string for safe JSON storage
+  if ((dataBlob as any).serializedVaaBytes instanceof Uint8Array) {
+    (dataBlob as any).serializedVaaBytes = ethers.utils.hexlify(
+      (dataBlob as any).serializedVaaBytes,
+    );
+  }
+
+  // Proactively normalize BigNumbers to strings before JSON cloning
+  if ((dataBlob as any).event) {
+    const e: any = (dataBlob as any).event;
+    if (e.amount && ethers.BigNumber.isBigNumber(e.amount)) {
+      e.amount = e.amount.toString();
     }
     if (
-      r.event.mainUtxo &&
-      r.event.mainUtxo.txOutputValue &&
-      ethers.BigNumber.isBigNumber(r.event.mainUtxo.txOutputValue)
+      e.mainUtxo &&
+      e.mainUtxo.txOutputValue &&
+      ethers.BigNumber.isBigNumber(e.mainUtxo.txOutputValue)
     ) {
-      r.event.mainUtxo.txOutputValue = r.event.mainUtxo.txOutputValue.toString();
+      e.mainUtxo.txOutputValue = e.mainUtxo.txOutputValue.toString();
     }
   }
+
+  // Basic deep clone for storage
+  const r = JSON.parse(JSON.stringify(dataBlob));
   return r; // This is the object to be stored in the 'data' JSON field
 }
 
@@ -36,6 +46,20 @@ function deserializeRedemptionData(dataBlob: any): Omit<Redemption, 'id' | 'chai
     }
     // txOutputValue in mainUtxo is intended to be a string representing BigNumber,
     // so no further deserialization needed here for it.
+  }
+
+  // Rehydrate VAA bytes from stored representation
+  if (partial.serializedVaaBytes) {
+    if (typeof partial.serializedVaaBytes === 'string') {
+      // Expecting hex string (0x...)
+      partial.serializedVaaBytes = ethers.utils.arrayify(partial.serializedVaaBytes);
+    } else if (Array.isArray(partial.serializedVaaBytes)) {
+      partial.serializedVaaBytes = Uint8Array.from(partial.serializedVaaBytes as number[]);
+    } else if (typeof partial.serializedVaaBytes === 'object') {
+      // Handle object with numeric keys from JSON round-trip
+      const byteValues: number[] = Object.values(partial.serializedVaaBytes as any);
+      partial.serializedVaaBytes = Uint8Array.from(byteValues);
+    }
   }
   // id, chainId, status, are already top-level, so dataBlob doesn't contain them directly.
   return partial as Omit<Redemption, 'id' | 'chainId' | 'status'>;

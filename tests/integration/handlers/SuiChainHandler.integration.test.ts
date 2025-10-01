@@ -189,21 +189,20 @@ describe('SuiChainHandler Integration Tests', () => {
     mockConfig = SuiChainConfigSchema.parse({
       chainName: 'SuiTestnet',
       network: NETWORK.TESTNET,
-      l1ChainName: 'SepoliaTestnet',
       l1Confirmations: 3,
       l1Rpc: 'http://localhost:8545',
       l2Rpc: 'https://fullnode.testnet.sui.io',
       l2WsRpc: 'wss://fullnode.testnet.sui.io',
-      l1ContractAddress: MOCK_ADDRESSES.L1_CONTRACT,
+      l1BitcoinDepositorAddress: MOCK_ADDRESSES.L1_CONTRACT,
       vaultAddress: MOCK_ADDRESSES.VAULT,
-      l1StartBlock: 1,
-      l2StartBlock: 0,
+      l1BitcoinDepositorStartBlock: 1,
+      l2BitcoinDepositorStartBlock: 0,
       enableL2Redemption: false,
       useEndpoint: false,
       chainType: CHAIN_TYPE.SUI,
       suiPrivateKey: 'dGVzdC1zdWktcHJpdmF0ZS1rZXktZm9yLXRlc3Rpbmc=',
       suiGasObjectId: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-      l2ContractAddress: MOCK_ADDRESSES.SUI_CONTRACT,
+      l2BitcoinDepositorAddress: MOCK_ADDRESSES.SUI_CONTRACT,
       // l2WormholeGatewayAddress and l2WormholeChainId removed - not used in Sui chains
       // (replaced by gatewayStateId and native Wormhole SDK integration)
       // Required Sui-specific Wormhole and Bridge Object IDs

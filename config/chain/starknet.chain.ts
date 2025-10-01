@@ -16,7 +16,7 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     'chainType',
     'l1Rpc',
     'vaultAddress',
-    'l1ContractAddress',
+    'l1BitcoinDepositorAddress',
     'l1Confirmations',
     'useEndpoint',
   ];
@@ -40,9 +40,9 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
       'STARKNET_TESTNET_VAULT_ADDRESS',
       commonTestnetStarknetInput.vaultAddress as string,
     ),
-    l1ContractAddress: getEnv(
+    l1BitcoinDepositorAddress: getEnv(
       'STARKNET_TESTNET_L1_CONTRACT_ADDRESS',
-      commonTestnetStarknetInput.l1ContractAddress as string,
+      commonTestnetStarknetInput.l1BitcoinDepositorAddress as string,
     ),
     l1Confirmations: commonTestnetStarknetInput.l1Confirmations,
     useEndpoint: commonTestnetStarknetInput.useEndpoint,
@@ -50,7 +50,7 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
     supportsRevealDepositAPI: commonTestnetStarknetInput.supportsRevealDepositAPI,
     endpointUrl: commonTestnetStarknetInput.endpointUrl,
     l1FeeAmountWei: getEnv(
-      'CHAIN_STARKNETTESTNET_L1_FEE_AMOUNT_WEI',
+      'CHAIN_STARKNET_TESTNET_L1_FEE_AMOUNT_WEI',
       commonTestnetStarknetInput.l1FeeAmountWei as string,
     ),
     starkGateBridgeAddress: getEnv(
@@ -60,7 +60,7 @@ export const getStarknetTestnetChainInput = (): StarknetChainInput => {
 
     chainName: 'StarknetTestnet',
     // L1 private key for endpoint mode (to pay for L1 transactions)
-    privateKey: getEnv('CHAIN_STARKNETTESTNET_PRIVATE_KEY'),
+    privateKey: getEnv('CHAIN_STARKNET_TESTNET_PRIVATE_KEY'),
   };
   return config;
 };

@@ -25,8 +25,7 @@ module.exports = {
     '^(\\.{1,2}/(?!v\\d+/).*?)\\.js$': '$1',
     '^@/(.*)$': '<rootDir>/$1',
   },
-  globalSetup: '<rootDir>/jest.global-setup.js',
-  globalTeardown: '<rootDir>/jest.global-teardown.js',
+  // Remove globalSetup and globalTeardown for unit tests
   transformIgnorePatterns: [
     '/node_modules/(?!.*(p-limit|yocto-queue|@mysten))/',
     '\\.pnp\\.[^\\/]+$',

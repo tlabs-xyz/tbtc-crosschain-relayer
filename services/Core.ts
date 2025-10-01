@@ -15,9 +15,11 @@ import { RedemptionStore } from '../utils/RedemptionStore.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
 import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
 import { DepositStore } from '../utils/DepositStore.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { Deposit } from '../types/Deposit.type.js';
+import { DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES } from '../utils/Constants.js';
 
 let effectiveChainConfigs: AnyChainConfig[] = [];
 
@@ -88,11 +90,21 @@ export async function processDeposits(): Promise<void> {
 }
 
 export async function processRedemptions(): Promise<void> {
+  const evmChainConfigs = chainConfigsArray.filter(
+    (config) => config.chainType === CHAIN_TYPE.EVM,
+  ) as EvmChainConfig[];
+
+  if (evmChainConfigs.length === 0) {
+    logger.warn(
+      'No EVM chain configurations found, redemptions will not be processed for any chain.',
+    );
+    return;
+  }
+
   logger.info('Processing redemptions...');
   await Promise.all(
-    chainHandlerRegistry.list().map(async (handler) => {
-      const config = (handler as BaseChainHandler<AnyChainConfig>).config;
-      const chainName = config.chainName;
+    evmChainConfigs.map(async (evmConfig) => {
+      const chainName = evmConfig.chainName;
       try {
         const l2Service = l2RedemptionServices.get(chainName);
 
@@ -101,7 +113,7 @@ export async function processRedemptions(): Promise<void> {
           await l2Service.processVaaFetchedRedemptions();
         } else {
           // No L2 service, check if it was expected
-          if (config.enableL2Redemption) {
+          if (evmConfig.enableL2Redemption) {
             logger.error(
               `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized. This could be a misconfiguration or an unsupported chain type for L2 redemption.`,
             );
@@ -150,6 +162,59 @@ export async function checkForPastDepositsForAllChains(): Promise<void> {
   );
 }
 
+export async function checkForPastRedemptionsForAllChains(
+  pastTimeInMinutes: number = 60,
+): Promise<void> {
+  const evmChainConfigs = chainConfigsArray.filter(
+    (config) => config.chainType === CHAIN_TYPE.EVM,
+  ) as EvmChainConfig[];
+
+  if (evmChainConfigs.length === 0) {
+    logger.warn(
+      'No EVM chain configurations found, past redemptions will not be checked for any chain.',
+    );
+    return;
+  }
+
+  logger.info('Checking for past redemptions...');
+  await Promise.all(
+    evmChainConfigs.map(async (evmConfig) => {
+      const chainName = evmConfig.chainName;
+      try {
+        const l2Service = l2RedemptionServices.get(chainName);
+
+        if (l2Service) {
+          const latestBlock = await l2Service.getLatestBlock();
+          if (latestBlock > 0) {
+            logger.debug(
+              `Running checkForPastRedemptions for ${chainName} (Latest Block: ${latestBlock})`,
+            );
+            await l2Service.checkForPastRedemptions({
+              pastTimeInMinutes,
+              latestBlock: latestBlock,
+            });
+          } else {
+            logger.warn(
+              `Skipping checkForPastRedemptions for ${chainName} - Invalid latestBlock received: ${latestBlock}`,
+            );
+          }
+        } else {
+          // No L2 service, check if it was expected
+          if (evmConfig.enableL2Redemption) {
+            logger.error(
+              `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized for past redemption check.`,
+            );
+          } else {
+            logger.debug(`L2 redemption past check is disabled by configuration for ${chainName}.`);
+          }
+        }
+      } catch (error) {
+        logErrorContext(`Error in past redemptions check for ${chainName}:`, error);
+      }
+    }),
+  );
+}
+
 export const startCronJobs = () => {
   logger.debug('Starting multi-chain cron job setup...');
 
@@ -158,14 +223,19 @@ export const startCronJobs = () => {
     await processDeposits();
   });
 
-  // Every 2 minutes - process redemptions
-  cron.schedule('*/2 * * * *', async () => {
+  // Every 5 minutes - process redemptions
+  cron.schedule('*/5 * * * *', async () => {
     await processRedemptions();
   });
 
   // Every 60 minutes - check for past deposits
   cron.schedule('*/60 * * * *', async () => {
     await checkForPastDepositsForAllChains();
+  });
+
+  // Every 60 minutes - check for past redemptions
+  cron.schedule('*/60 * * * *', async () => {
+    await checkForPastRedemptionsForAllChains(60);
   });
 
   // Every 60 minutes - recover stuck finalized deposits (for chains that support it)
@@ -189,7 +259,7 @@ export const startCronJobs = () => {
     cron.schedule('*/60 * * * *', async () => {
       try {
         const now = Date.now();
-        const retentionMs = 7 * 24 * 60 * 60 * 1000; // 7 days
+        const retentionMs = 60 * 24 * 60 * 60 * 1000; // 60 days
         const allRedemptions = await RedemptionStore.getAll();
         for (const redemption of allRedemptions) {
           if (
@@ -278,6 +348,7 @@ export async function runStartupTasks(): Promise<void> {
     processDeposits(),
     processRedemptions(),
     checkForPastDepositsForAllChains(),
+    checkForPastRedemptionsForAllChains(DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES),
     recoverStuckFinalizedDeposits(),
   ]);
   logger.info('Startup tasks complete.');
@@ -296,6 +367,17 @@ export async function initializeAllChains(): Promise<void> {
 
   await chainHandlerRegistry.initialize(chainConfigsArray);
   logger.info('ChainHandlerRegistry initialized for all chains.');
+
+  // Initialize L1 Redemption Handler Registry
+  try {
+    await l1RedemptionHandlerRegistry.initialize(chainConfigsArray);
+    logger.info('L1RedemptionHandlerRegistry initialized.');
+  } catch (error) {
+    logErrorContext(
+      'Failed to initialize L1RedemptionHandlerRegistry. L2 redemptions may not be processed.',
+      error,
+    );
+  }
 
   // Initialize handlers and setup listeners concurrently
   const initLimit = pLimit(5); // Limit concurrency for initialization
@@ -338,6 +420,7 @@ export async function initializeAllL2RedemptionServices(): Promise<void> {
         logger.info(`Initializing L2RedemptionService for ${chainName}...`);
         try {
           const service = await L2RedemptionService.create(config);
+          await service.startListening(); // Start listening for events
           l2RedemptionServices.set(chainName, service);
           logger.info(`L2RedemptionService for ${chainName} initialized and listeners set up.`);
         } catch (error) {

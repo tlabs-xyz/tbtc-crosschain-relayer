@@ -37,7 +37,9 @@ export const SolanaChainConfigSchema = CommonConfigForSolana.merge(SolanaChainBa
     solanaSignerKeyBase: SolanaChainBaseSchema.shape.solanaSignerKeyBase,
 
     // Override inherited EthereumAddressSchema with a generic string for Solana addresses
-    l2ContractAddress: z.string().min(1, 'l2ContractAddress is required for Solana'),
+    l2BitcoinDepositorAddress: z
+      .string()
+      .min(1, 'l2BitcoinDepositorAddress is required for Solana'),
     l2WormholeGatewayAddress: z.string().min(1, 'l2WormholeGatewayAddress is required for Solana'),
   })
   .refine((data) => data.chainType === CHAIN_TYPE.SOLANA, {

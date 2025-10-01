@@ -43,7 +43,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
   }
 
-  protected async initializeL2(): Promise<void> {
+  protected override async initializeL2(): Promise<void> {
     logger.debug(`Initializing Sui L2 components for ${this.config.chainName}`);
 
     if (!this.config.l2Rpc) {
@@ -80,7 +80,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   private pollingInterval: NodeJS.Timeout | null = null;
   private lastEventCursor: string | null = null;
 
-  protected async setupL2Listeners(): Promise<void> {
+  protected override async setupL2Listeners(): Promise<void> {
     logger.info(
       `Setting up L2 listeners for ${this.config.chainName}, useEndpoint: ${this.config.useEndpoint}, suiClient: ${!!this.suiClient}`,
     );
@@ -111,7 +111,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             {
               eventFilter: eventFilter,
               l2PackageId: this.config.l2PackageId,
-              l2ContractAddress: this.config.l2ContractAddress,
+              l2ContractAddress: this.config.l2BitcoinDepositorAddress,
             },
           );
 
@@ -174,7 +174,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
   }
 
-  async getLatestBlock(): Promise<number> {
+  override async getLatestBlock(): Promise<number> {
     if (this.config.useEndpoint || !this.suiClient) {
       return 0;
     }
@@ -188,7 +188,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
   }
 
-  async checkForPastDeposits(options: {
+  override async checkForPastDeposits(options: {
     pastTimeInMinutes: number;
     latestBlock: number;
   }): Promise<void> {
@@ -247,7 +247,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
   }
 
-  supportsPastDepositCheck(): boolean {
+  override supportsPastDepositCheck(): boolean {
     return !!(this.config.l2Rpc && !this.config.useEndpoint);
   }
 
@@ -257,7 +257,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
    *  2) parse Wormhole transferSequence from logs
    *  3) update deposit to AWAITING_WORMHOLE_VAA
    */
-  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+  override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     const finalizedDepositReceipt = await super.finalizeDeposit(deposit);
 
     if (!finalizedDepositReceipt) {
@@ -327,7 +327,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       // Method 3: If still not found, filter logs by contract address
       if (!transferSequence) {
         const contractLogs = logs.filter(
-          (log) => log.address.toLowerCase() === this.config.l1ContractAddress.toLowerCase(),
+          (log) =>
+            log.address.toLowerCase() === this.config.l1BitcoinDepositorAddress.toLowerCase(),
         );
 
         for (const log of contractLogs) {
@@ -875,7 +876,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       });
 
       // Filter to find events from L1BitcoinDepositor
-      const l1BitcoinDepositorAddress = this.config.l1ContractAddress.toLowerCase();
+      const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
 
       for (const log of logs) {
         try {

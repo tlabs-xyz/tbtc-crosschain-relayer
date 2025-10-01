@@ -5,14 +5,14 @@ import type { AnyChainConfig } from '../config/index.js';
 class ChainHandlerRegistry {
   private handlers: Map<string, ChainHandlerInterface> = new Map();
 
-  // Register a handler for a chainId (or chainName)
-  register(chainId: string, handler: ChainHandlerInterface): void {
-    this.handlers.set(chainId, handler);
+  // Register a handler for a chainName
+  register(chainName: string, handler: ChainHandlerInterface): void {
+    this.handlers.set(chainName, handler);
   }
 
-  // Get a handler by chainId (or chainName)
-  get(chainId: string): ChainHandlerInterface | undefined {
-    return this.handlers.get(chainId);
+  // Get a handler by chainName
+  get(chainName: string): ChainHandlerInterface | undefined {
+    return this.handlers.get(chainName);
   }
 
   // List all handlers

@@ -19,10 +19,10 @@ export type BitcoinTxUtxo = {
 };
 
 export type RedemptionRequestedEventData = {
-  walletPubKeyHash: string; // bytes20
-  mainUtxo: BitcoinTxUtxo;
   redeemerOutputScript: string;
-  amount: ethers.BigNumber; // uint64
+  // Store amount as a serializable shape to survive JSON persistence,
+  // then rehydrate to BigNumber at usage time.
+  amount: ethers.BigNumber | { _hex: string } | string; // uint64
   l2TransactionHash: string; // bytes32
 };
 
@@ -30,7 +30,7 @@ export type Redemption = {
   id: string; // Unique identifier, e.g., l2TransactionHash
   chainId: string;
   event: RedemptionRequestedEventData;
-  vaaBytes: string | null; // Hex string or base64
+  serializedVaaBytes: Uint8Array | null; // The actual serialized VAA bytes from Wormhole SDK
   vaaStatus: RedemptionStatus;
   l1SubmissionTxHash: string | null;
   status: RedemptionStatus;
