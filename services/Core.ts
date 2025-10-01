@@ -19,6 +19,7 @@ import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegi
 import { DepositStore } from '../utils/DepositStore.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { Deposit } from '../types/Deposit.type.js';
+import { DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES } from '../utils/Constants.js';
 
 let effectiveChainConfigs: AnyChainConfig[] = [];
 
@@ -347,7 +348,7 @@ export async function runStartupTasks(): Promise<void> {
     processDeposits(),
     processRedemptions(),
     checkForPastDepositsForAllChains(),
-    checkForPastRedemptionsForAllChains(14400), // 14400 minutes = 10 days
+    checkForPastRedemptionsForAllChains(DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES),
     recoverStuckFinalizedDeposits(),
   ]);
   logger.info('Startup tasks complete.');
