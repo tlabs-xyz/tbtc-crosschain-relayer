@@ -300,7 +300,7 @@ describe('L1RedemptionHandlerFactory', () => {
 
       expect(handlers).toHaveLength(iterations);
       expect(L1RedemptionHandler).toHaveBeenCalledTimes(iterations);
-      
+
       // Verify each handler got unique config
       for (let i = 0; i < iterations; i++) {
         expect(L1RedemptionHandler).toHaveBeenNthCalledWith(
@@ -410,7 +410,8 @@ describe('L1RedemptionHandlerFactory', () => {
   describe('Error Recovery and Diagnostics', () => {
     it('should provide meaningful error context for constructor failures', () => {
       const constructorError = new Error('Missing required configuration');
-      constructorError.stack = 'Error: Missing required configuration\n    at new L1RedemptionHandler';
+      constructorError.stack =
+        'Error: Missing required configuration\n    at new L1RedemptionHandler';
       (L1RedemptionHandler as jest.MockedClass<typeof L1RedemptionHandler>).mockImplementationOnce(
         () => {
           throw constructorError;
@@ -420,7 +421,7 @@ describe('L1RedemptionHandlerFactory', () => {
       expect(() => L1RedemptionHandlerFactory.createHandler(mockEvmConfig)).toThrow(
         'Missing required configuration',
       );
-      
+
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining('Attempting to create chain handler'),
       );
@@ -446,7 +447,7 @@ describe('L1RedemptionHandlerFactory', () => {
 
       // Should still work as the factory doesn't serialize the config
       const handler = L1RedemptionHandlerFactory.createHandler(circularConfig);
-      
+
       expect(handler).toBeInstanceOf(L1RedemptionHandler);
       expect(L1RedemptionHandler).toHaveBeenCalledWith(circularConfig);
     });
@@ -486,7 +487,7 @@ describe('L1RedemptionHandlerFactory', () => {
         expect(() => L1RedemptionHandlerFactory.createHandler(config)).toThrow(
           `Unsupported chain type: ${chainType}`,
         );
-        
+
         expect(logger.error).toHaveBeenCalledWith(`Unsupported chain type: ${chainType}`);
       });
     });
@@ -529,7 +530,7 @@ describe('L1RedemptionHandlerFactory', () => {
       };
 
       const handler = L1RedemptionHandlerFactory.createHandler(longNameConfig);
-      
+
       expect(handler).toBeInstanceOf(L1RedemptionHandler);
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining('A'.repeat(50)), // Log should contain at least part of the name
@@ -543,11 +544,9 @@ describe('L1RedemptionHandlerFactory', () => {
       };
 
       const handler = L1RedemptionHandlerFactory.createHandler(noNameConfig);
-      
+
       expect(handler).toBeInstanceOf(L1RedemptionHandler);
-      expect(logger.info).toHaveBeenCalledWith(
-        expect.stringContaining('undefined'),
-      );
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('undefined'));
     });
   });
 
@@ -562,11 +561,11 @@ describe('L1RedemptionHandlerFactory', () => {
       ];
 
       errorTypes.forEach(({ error, name }) => {
-        (L1RedemptionHandler as jest.MockedClass<typeof L1RedemptionHandler>).mockImplementationOnce(
-          () => {
-            throw error;
-          },
-        );
+        (
+          L1RedemptionHandler as jest.MockedClass<typeof L1RedemptionHandler>
+        ).mockImplementationOnce(() => {
+          throw error;
+        });
 
         expect(() => L1RedemptionHandlerFactory.createHandler(mockEvmConfig)).toThrow(error);
       });
@@ -576,7 +575,7 @@ describe('L1RedemptionHandlerFactory', () => {
       // Note: Constructors can't be async, but they might trigger async operations
       const asyncError = new Error('Async initialization failed');
       (asyncError as any).isAsync = true;
-      
+
       (L1RedemptionHandler as jest.MockedClass<typeof L1RedemptionHandler>).mockImplementationOnce(
         () => {
           throw asyncError;
@@ -591,7 +590,7 @@ describe('L1RedemptionHandlerFactory', () => {
     it('should log appropriate messages for each chain type attempt', () => {
       // Test successful EVM creation
       L1RedemptionHandlerFactory.createHandler(mockEvmConfig);
-      
+
       expect(logger.info).toHaveBeenCalledWith(
         expect.stringContaining('Attempting to create chain handler for type: Evm'),
       );
@@ -615,12 +614,14 @@ describe('L1RedemptionHandlerFactory', () => {
 
     it('should handle logging failures gracefully', () => {
       // Mock logger to throw
-      logger.info.mockImplementationOnce(() => {
+      (logger.info as unknown as jest.Mock).mockImplementationOnce(() => {
         throw new Error('Logger failed');
       });
 
       // Factory should throw if logging fails
-      expect(() => L1RedemptionHandlerFactory.createHandler(mockEvmConfig)).toThrow('Logger failed');
+      expect(() => L1RedemptionHandlerFactory.createHandler(mockEvmConfig)).toThrow(
+        'Logger failed',
+      );
     });
   });
 
@@ -631,7 +632,7 @@ describe('L1RedemptionHandlerFactory', () => {
 
       // Each call should create a new instance
       expect(L1RedemptionHandler).toHaveBeenCalledTimes(2);
-      
+
       // The factory itself should not maintain any state
       expect(Object.keys(L1RedemptionHandlerFactory)).toHaveLength(0);
     });
@@ -639,11 +640,11 @@ describe('L1RedemptionHandlerFactory', () => {
     it('should handle property additions to factory', () => {
       // Try to add properties to the factory
       (L1RedemptionHandlerFactory as any).customProp = 'test';
-      
+
       // Factory should still work normally
       const handler = L1RedemptionHandlerFactory.createHandler(mockEvmConfig);
       expect(handler).toBeInstanceOf(L1RedemptionHandler);
-      
+
       // Clean up
       delete (L1RedemptionHandlerFactory as any).customProp;
     });

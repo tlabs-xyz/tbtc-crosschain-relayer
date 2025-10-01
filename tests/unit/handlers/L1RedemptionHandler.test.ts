@@ -80,7 +80,7 @@ describe('L1RedemptionHandler', () => {
     };
 
     // Setup provider and wallet mocks
-    (providers.JsonRpcProvider as jest.Mock).mockImplementation((url) => {
+    (providers.JsonRpcProvider as unknown as jest.Mock).mockImplementation((url) => {
       if (url === 'http://l1-rpc.test') {
         return mockProvider;
       } else if (url === 'http://l2-rpc.test') {
@@ -89,7 +89,7 @@ describe('L1RedemptionHandler', () => {
       return mockProvider;
     });
 
-    (Wallet as jest.Mock).mockImplementation((privateKey, provider) => {
+    (Wallet as unknown as jest.Mock).mockImplementation((privateKey, provider) => {
       if (provider === mockL2Provider) {
         return mockL2Signer;
       }
@@ -255,7 +255,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xL1TxHash123456',
         blockNumber: 12345,
-      };
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt;
 
       mockSdk.redemptions.relayRedemptionRequestToL1.mockResolvedValue({
         targetChainTxHash: mockTxHash,
@@ -286,7 +298,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xL1TxHash789',
         blockNumber: 12345,
-      };
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt;
 
       mockSdk.redemptions.relayRedemptionRequestToL1.mockResolvedValue({
         targetChainTxHash: {
@@ -310,7 +334,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xL1TxHashABC',
         blockNumber: 12345,
-      };
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt;
 
       mockSdk.redemptions.relayRedemptionRequestToL1.mockResolvedValue({
         targetChainTxHash: 'L1TxHashABC',
@@ -350,7 +386,19 @@ describe('L1RedemptionHandler', () => {
         status: 0, // Reverted
         transactionHash: '0xRevertedTxHash',
         blockNumber: 12345,
-      };
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt;
 
       mockSdk.redemptions.relayRedemptionRequestToL1.mockResolvedValue({
         targetChainTxHash: mockTxHash,
@@ -476,7 +524,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xLoggedTxHash',
         blockNumber: 67890,
-      };
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt;
 
       mockSdk.redemptions.relayRedemptionRequestToL1.mockResolvedValue({
         targetChainTxHash: mockTxHash,
@@ -567,7 +627,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xLargeTxHash',
         blockNumber: 12345,
-      });
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt);
 
       const result = await handler.relayRedemptionToL1(
         largeAmount,
@@ -706,7 +778,7 @@ describe('L1RedemptionHandler', () => {
       handler = new L1RedemptionHandler(mockConfig);
 
       // Mock network to be missing chainId which TBTC SDK needs
-      mockProvider.getNetwork.mockResolvedValue({ name: 'unknown' });
+      mockProvider.getNetwork.mockResolvedValue({ name: 'unknown', chainId: 0 } as any);
 
       // TBTC SDK might not throw for null network, just use default
       await handler.initialize();
@@ -746,7 +818,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xMaxVaaTxHash',
         blockNumber: 12345,
-      });
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt);
 
       await handler.relayRedemptionToL1(
         mockAmount,
@@ -792,7 +876,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xZeroAmountTxHash',
         blockNumber: 12345,
-      });
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt);
 
       await handler.relayRedemptionToL1(
         zeroAmount,
@@ -826,7 +922,7 @@ describe('L1RedemptionHandler', () => {
       handler = new L1RedemptionHandler(mockConfig);
 
       // Mock providers to fail during initialization
-      providers.JsonRpcProvider.mockImplementationOnce(() => {
+      (providers.JsonRpcProvider as unknown as jest.Mock).mockImplementationOnce(() => {
         throw new Error('Network error');
       });
 
@@ -854,7 +950,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xConcurrentTxHash',
         blockNumber: 12345,
-      });
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt);
 
       // Launch multiple concurrent requests
       const promises = Array(5)
@@ -880,10 +988,10 @@ describe('L1RedemptionHandler', () => {
     it('should handle config with minimal required fields', async () => {
       const minimalConfig: EvmChainConfig = {
         ...mockConfig,
-        l1BitcoinDepositorAddress: undefined,
-        l1BitcoinDepositorStartBlock: undefined,
-        l2BitcoinDepositorAddress: undefined,
-        l2BitcoinDepositorStartBlock: undefined,
+        l1BitcoinDepositorAddress: '0x0000000000000000000000000000000000000000' as any,
+        l1BitcoinDepositorStartBlock: 0 as any,
+        l2BitcoinDepositorAddress: '0x0000000000000000000000000000000000000000' as any,
+        l2BitcoinDepositorStartBlock: 0 as any,
       };
 
       handler = new L1RedemptionHandler(minimalConfig);
@@ -968,7 +1076,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xPendingTxHash',
         blockNumber: 12345,
-      });
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt);
     });
 
     it('should handle transaction replaced by another', async () => {
@@ -1033,7 +1153,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xOptimismTxHash',
         blockNumber: 12345,
-      });
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt);
 
       const result = await handler.relayRedemptionToL1(
         mockAmount,
@@ -1069,7 +1201,19 @@ describe('L1RedemptionHandler', () => {
         status: 1,
         transactionHash: '0xPolygonTxHash',
         blockNumber: 12345,
-      });
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt);
 
       const result = await handler.relayRedemptionToL1(
         mockAmount,

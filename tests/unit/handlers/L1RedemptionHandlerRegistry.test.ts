@@ -390,7 +390,18 @@ describe('L1RedemptionHandlerRegistry', () => {
           enableL2Redemption: false,
         },
         mockNonEvmConfig,
-        { ...mockNonEvmConfig, chainType: CHAIN_TYPE.SUI, chainName: 'SuiTestnet' },
+        {
+          ...(mockNonEvmConfig as any),
+          chainType: CHAIN_TYPE.SUI,
+          chainName: 'SuiTestnet',
+          l2PackageId: '0x1',
+          suiPrivateKey: '0x2',
+          wormholeCoreId: '0x3',
+          tokenBridgeId: '0x4',
+          suiBridgePackageId: '0x5',
+          suiCoinType: '0x6',
+          l1PeerEndpoint: 'https://example.com',
+        },
       ];
 
       const mockHandler3 = { ...mockHandler1 } as L1RedemptionHandlerInterface;
@@ -513,7 +524,7 @@ describe('L1RedemptionHandlerRegistry', () => {
       expect(results[2]).toContain(mockHandler2); // list
 
       // Filter results depend on timing, but should be an array
-      const filteredHandlers = results[3] as L1RedemptionHandler[];
+      const filteredHandlers = results[3] as unknown as Array<{ config: { network: NETWORK } }>;
       expect(Array.isArray(filteredHandlers)).toBe(true);
       // At least one of the existing handlers should have TESTNET
       expect(filteredHandlers.length).toBeGreaterThanOrEqual(0);
@@ -706,7 +717,7 @@ describe('L1RedemptionHandlerRegistry', () => {
     });
 
     it('should filter efficiently with complex predicates', () => {
-      const complexFilter = (handler: L1RedemptionHandler) => {
+      const complexFilter = (handler: { config: EvmChainConfig }) => {
         return (
           handler.config.network === NETWORK.TESTNET &&
           handler.config.l1Rpc?.includes('rpc-5') &&
@@ -714,7 +725,9 @@ describe('L1RedemptionHandlerRegistry', () => {
         );
       };
 
-      const filtered = registry.filter(complexFilter);
+      const filtered = registry.filter(
+        complexFilter as unknown as (h: L1RedemptionHandlerInterface) => boolean,
+      );
 
       // Should find handlers matching all criteria
       expect(filtered.length).toBeGreaterThan(0);
