@@ -110,6 +110,24 @@
     "skipLibCheck": true /* Skip type checking all .d.ts files. */,
     "resolveJsonModule": true /*  <--- Enable JSON imports */
   },
-  "include": ["src/**/*.ts", "./**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "index.ts",
+    "controllers/**/*.ts",
+    "handlers/**/*.ts",
+    "helpers/**/*.ts",
+    "interfaces/**/*.ts",
+    "routes/**/*.ts",
+    "services/**/*.ts",
+    "types/**/*.ts",
+    "utils/**/*.ts",
+    "config/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests",
+    "scripts",
+    "dist",
+    "prisma",
+    "target"
+  ]
 }

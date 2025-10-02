@@ -13,7 +13,9 @@ ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 
 # Minimal tools for fetching git-based dependencies
 RUN apk add --no-cache git && \
-    git config --global url."https://".insteadOf git://
+    git config --global url."https://".insteadOf git:// && \
+    git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
+    git config --global url."https://github.com/".insteadOf "git@github.com:"
 
 COPY package.json yarn.lock ./
 COPY prisma/ ./prisma/
@@ -40,8 +42,10 @@ COPY types/ ./types/
 COPY scripts/ ./scripts/
 COPY target/ ./target/
 
-# Build after sources are copied, then prune to production deps
-RUN yarn build && npm prune --production && yarn cache clean
+# Build after sources are copied, then prune to production deps and clean cache
+RUN yarn build \
+  && npm prune --omit=dev \
+  && yarn cache clean
 
 # Add entrypoint script for running migrations in development stage
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
@@ -56,14 +60,16 @@ ENV NODE_ENV=${NODE_ENV}
 
 WORKDIR /usr/app
 
-# Copy pruned production deps and built artifacts from builder stage
-COPY --from=development /usr/app/node_modules ./node_modules
+# Only need curl for healthcheck; no extra installs necessary
+RUN apk add --no-cache curl
+
+# Copy pruned production deps and built app from builder
 COPY --from=development /usr/app/package.json ./package.json
+COPY --from=development /usr/app/node_modules ./node_modules
 COPY --from=development /usr/app/prisma ./prisma
 COPY --from=development /usr/app/dist ./dist
 
-# curl is used for HEALTHCHECK. We rely on Prisma (npx) for DB connectivity.
-RUN apk add --no-cache curl
+# curl is used for HEALTHCHECK. Prisma CLI will be used via npx for DB checks.
 
 ARG APP_PORT=3000
 ENV APP_PORT=${APP_PORT}
