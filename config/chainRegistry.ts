@@ -17,6 +17,8 @@ import { getBaseMainnetChainInput } from './chain/baseMainnet.chain.js';
 import { getSolanaDevnetImportedChainInput } from './chain/solanaDevnetImported.chain.js';
 import { getBaseSepoliaTestnetChainInput } from './chain/base-sepolia-testnet.chain.js'; // Assuming this path and export
 import { getSuiTestnetChainInput } from './chain/suiTestnet.chain.js';
+import { getSeiMainnetChainInput } from './chain/seiMainnet.chain.js';
+import { getSeiTestnetChainInput } from './chain/seiTestnet.chain.js';
 
 // Re-exporting these types as they might be useful for consumers of the registry
 export type { EvmChainConfig, SolanaChainConfig, StarknetChainConfig, SuiChainConfig };
@@ -64,6 +66,9 @@ export const chainSchemaRegistry: ChainSchemaRegistry = {
     schema: SolanaChainConfigSchema,
     getInputFunc: getSolanaDevnetImportedChainInput,
   },
+  // Add Sei chains
+  seiMainnet: { schema: EvmChainConfigSchema, getInputFunc: getSeiMainnetChainInput },
+  seiTestnet: { schema: EvmChainConfigSchema, getInputFunc: getSeiTestnetChainInput },
   // Add other chains here if they become supported
 };
 

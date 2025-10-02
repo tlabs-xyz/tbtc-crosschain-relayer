@@ -29,6 +29,9 @@ export interface AllChainConfigs {
   baseMainnet?: EvmChainConfig;
   baseSepoliaTestnet?: EvmChainConfig;
   solanaDevnetImported?: SolanaChainConfig;
+  // Add Sei chains
+  seiMainnet?: EvmChainConfig;
+  seiTestnet?: EvmChainConfig;
   [key: string]: AnyChainConfig | undefined;
 }
 

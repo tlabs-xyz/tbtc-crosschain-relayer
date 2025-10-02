@@ -44,6 +44,7 @@ export const WORMHOLE_CHAIN_IDS = {
   // EVM
   ARBITRUM_ONE: 23,
   BASE: 30,
+  SEI_EVM: 40, // SeiEVM mainnet
   // EVM Testnets/Devnets
   BASE_SEPOLIA: 10004,
   ARBITRUM_SEPOLIA: 10003,
@@ -56,6 +57,20 @@ export const WORMHOLE_GATEWAYS = {
   ARBITRUM_ONE: '0x0b2402144Bb366A632D14B83F244D2e0e21bD39c',
   BASE: '0x8d2de8d2f73F1F4cAB472AC9A881C9b123C79627',
   BASE_SEPOLIA: '0x86F55A04690fd7815A3D802bD587e83eA888B239',
+} as const;
+
+// NttManager Addresses (Native Token Transfer managers)
+export const NTT_MANAGERS = {
+  ETHEREUM: '0x79eb9aF995a443A102A19b41EDbB58d66e2921c7', // Ethereum NttManager
+  SEPOLIA: '0x79AA1b04edA5b77265aFd1FDB9646eab065eadEc', // Sepolia NttManager
+  SEI_EVM: '0xc10a0886d4Fe06bD61f41ee2855a2215375B82f0', // SeiEVM NttManager
+  BASE_SEPOLIA: '0xABb0c4fAAE03D51821273657C26Dc7674F6329e2', // BaseSepolia NttManager
+} as const;
+
+// NttManagerWithExecutor Addresses (wrapper contracts for executor integration)
+export const NTT_MANAGER_WITH_EXECUTOR = {
+  ETHEREUM: '0xd2d9c936165a85f27a5a7e07afb974d022b89463', // Ethereum NttManagerWithExecutor
+  SEI_EVM: '0x3F2D6441C7a59Dfe80f8e14142F9E28F6D440445', // SeiEVM NttManagerWithExecutor
 } as const;
 
 // =============================================================================
@@ -71,6 +86,8 @@ export const PUBLIC_RPCS = {
   'ethereum-mainnet': 'https://mainnet.publicnode.com',
   'ethereum-sepolia': 'https://sepolia.publicnode.com',
   'solana-devnet': 'https://api.devnet.solana.com',
+  'sei-mainnet': 'https://evm-rpc.sei-apis.com',
+  'sei-testnet': 'https://evm-rpc-testnet.sei-apis.com',
 } as const;
 
 // Public WebSocket endpoints
@@ -82,6 +99,8 @@ export const PUBLIC_WS_RPCS = {
   'ethereum-mainnet': 'wss://mainnet.publicnode.com',
   'ethereum-sepolia': 'wss://sepolia.publicnode.com',
   'solana-devnet': 'wss://api.devnet.solana.com',
+  'sei-mainnet': 'wss://evm-rpc.sei-apis.com',
+  'sei-testnet': 'wss://evm-rpc-testnet.sei-apis.com',
 } as const;
 
 // =============================================================================

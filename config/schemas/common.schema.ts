@@ -74,6 +74,7 @@ export const CommonChainConfigSchema = z.object({
   // Wormhole Configuration for cross-chain messaging
   l2WormholeGatewayAddress: EthereumAddressSchema, // Wormhole Gateway on target network
   l2WormholeChainId: z.coerce.number().int().nonnegative(), // Wormhole Chain ID for target network
+  l2NttManagerWithExecutorAddress: EthereumAddressSchema.optional(), // NttManagerWithExecutor on target network
 
   // Block Configuration:
   // L2 start block: Where to begin monitoring minter events on target network

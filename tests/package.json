@@ -1,0 +1,19 @@
+{
+  "name": "tbtc-relayer-tests",
+  "version": "1.0.0",
+  "description": "Test configuration for TBTC Crosschain Relayer",
+  "scripts": {
+    "test": "jest --config=tests/jest.config.cjs",
+    "test:watch": "jest --config=tests/jest.config.cjs --watch",
+    "test:coverage": "jest --config=tests/jest.config.cjs --coverage",
+    "test:services": "jest --config=tests/jest.config.cjs tests/unit/services/",
+    "test:integration": "jest --config=tests/jest.config.cjs tests/integration/",
+    "test:e2e": "jest --config=tests/jest.config.cjs tests/e2e/",
+    "db:setup": "docker-compose -f tests/docker-compose.test.yml up -d postgres-test",
+    "db:teardown": "docker-compose -f tests/docker-compose.test.yml down -v",
+    "db:reset": "npm run db:teardown && npm run db:setup"
+  },
+  "devDependencies": {
+    "pg": "^8.11.3"
+  }
+}
