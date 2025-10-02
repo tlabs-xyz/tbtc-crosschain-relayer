@@ -1,3 +1,27 @@
+FROM node:20-alpine3.21 AS deps 
+
+# Add this for cache busting
+ARG CACHE_BUSTER
+RUN echo "Deps stage cache buster: ${CACHE_BUSTER}"
+
+WORKDIR /usr/app
+
+# Constrain Node's memory usage during build to avoid OOMs in CI builders
+ENV NODE_OPTIONS=--max-old-space-size=2048
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
+
+# Minimal tools for fetching git-based dependencies
+RUN apk add --no-cache git && \
+    git config --global url."https://".insteadOf git:// && \
+    git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
+    git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+COPY package.json yarn.lock ./
+
+# Install production dependencies only (no scripts)
+RUN yarn install --frozen-lockfile --production=true --network-concurrency 1 --prefer-offline --ignore-scripts
+
+
 FROM node:20-alpine3.21 AS development 
 
 # Add this for cache busting
@@ -20,7 +44,10 @@ RUN apk add --no-cache git && \
 COPY package.json yarn.lock ./
 COPY prisma/ ./prisma/
 
-# Install dependencies only (no scripts) to keep layer reusable
+# Seed with production node_modules then add devDependencies
+COPY --from=deps /usr/app/node_modules ./node_modules
+
+# Install devDependencies on top (no scripts)
 RUN yarn install --frozen-lockfile --production=false --network-concurrency 1 --prefer-offline --ignore-scripts
 
 # Be more specific with COPY for source files
@@ -42,9 +69,10 @@ COPY types/ ./types/
 COPY scripts/ ./scripts/
 COPY target/ ./target/
 
-# Build after sources are copied, then prune to production deps and clean cache
+# Build after sources are copied, then prune to production deps and autoclean
 RUN yarn build \
   && npm prune --omit=dev \
+  && yarn autoclean --force \
   && yarn cache clean
 
 # Add entrypoint script for running migrations in development stage
