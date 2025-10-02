@@ -6,14 +6,20 @@ RUN echo "Development stage cache buster: ${CACHE_BUSTER}"
 
 WORKDIR /usr/app
 
-# Combine RUN commands
-RUN apk add --no-cache bash git curl postgresql-client && \
+# Constrain Node's memory usage during build to avoid OOMs in CI builders
+ENV NODE_OPTIONS=--max-old-space-size=2048
+# Skip Prisma postinstall generate; we'll run generate during build instead
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
+
+# Minimal tools for fetching git-based dependencies
+RUN apk add --no-cache git && \
     git config --global url."https://".insteadOf git://
 
 COPY package.json yarn.lock ./
 COPY prisma/ ./prisma/
 
-RUN yarn install --frozen-lockfile --production=false
+# Install dependencies only (no scripts) to keep layer reusable
+RUN yarn install --frozen-lockfile --production=false --network-concurrency 1 --prefer-offline --ignore-scripts
 
 # Be more specific with COPY for source files
 # Adjust these paths if your source structure is different
@@ -34,7 +40,8 @@ COPY types/ ./types/
 COPY scripts/ ./scripts/
 COPY target/ ./target/
 
-RUN yarn build
+# Build after sources are copied, then prune to production deps
+RUN yarn build && npm prune --production && yarn cache clean
 
 # Add entrypoint script for running migrations in development stage
 COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
@@ -49,18 +56,14 @@ ENV NODE_ENV=${NODE_ENV}
 
 WORKDIR /usr/app
 
-COPY package.json yarn.lock ./
-COPY prisma/ ./prisma/
-
-RUN apk add --no-cache bash git && \
-    git config --global url."https://".insteadOf git://
-
-RUN yarn install --frozen-lockfile --production=true
-
+# Copy pruned production deps and built artifacts from builder stage
+COPY --from=development /usr/app/node_modules ./node_modules
+COPY --from=development /usr/app/package.json ./package.json
+COPY --from=development /usr/app/prisma ./prisma
 COPY --from=development /usr/app/dist ./dist
 
-# curl is used for HEALTHCHECK. postgresql-client for db connectivity testing.
-RUN apk add --no-cache curl postgresql-client
+# curl is used for HEALTHCHECK. We rely on Prisma (npx) for DB connectivity.
+RUN apk add --no-cache curl
 
 ARG APP_PORT=3000
 ENV APP_PORT=${APP_PORT}
