@@ -1,4 +1,4 @@
-FROM node:20-alpine3.21 AS deps 
+FROM node:20-alpine3.21 AS prod-deps 
 
 # Add this for cache busting
 ARG CACHE_BUSTER
@@ -7,7 +7,7 @@ RUN echo "Deps stage cache buster: ${CACHE_BUSTER}"
 WORKDIR /usr/app
 
 # Constrain Node's memory usage during build to avoid OOMs in CI builders
-ENV NODE_OPTIONS=--max-old-space-size=2048
+ENV NODE_OPTIONS=--max-old-space-size=1536
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 
 # Minimal tools for fetching git-based dependencies
@@ -22,7 +22,7 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production=true --network-concurrency 1 --prefer-offline --ignore-scripts
 
 
-FROM node:20-alpine3.21 AS development 
+FROM node:20-alpine3.21 AS builder 
 
 # Add this for cache busting
 ARG CACHE_BUSTER
@@ -31,7 +31,7 @@ RUN echo "Development stage cache buster: ${CACHE_BUSTER}"
 WORKDIR /usr/app
 
 # Constrain Node's memory usage during build to avoid OOMs in CI builders
-ENV NODE_OPTIONS=--max-old-space-size=2048
+ENV NODE_OPTIONS=--max-old-space-size=1536
 # Skip Prisma postinstall generate; we'll run generate during build instead
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 
@@ -45,7 +45,7 @@ COPY package.json yarn.lock ./
 COPY prisma/ ./prisma/
 
 # Seed with production node_modules then add devDependencies
-COPY --from=deps /usr/app/node_modules ./node_modules
+COPY --from=prod-deps /usr/app/node_modules ./node_modules
 
 # Install devDependencies on top (no scripts)
 RUN yarn install --frozen-lockfile --production=false --network-concurrency 1 --prefer-offline --ignore-scripts
@@ -69,19 +69,12 @@ COPY types/ ./types/
 COPY scripts/ ./scripts/
 COPY target/ ./target/
 
-# Build after sources are copied, then prune to production deps and autoclean
-RUN yarn build \
-  && npm prune --omit=dev \
-  && yarn autoclean --force \
-  && yarn cache clean
+# Build after sources are copied
+RUN yarn build
 
-# Add entrypoint script for running migrations in development stage
-COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["node", "dist/index.js"]
+ 
 
-FROM node:20-alpine3.21 AS production
+FROM node:20-alpine3.21 AS runner
 
 ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
@@ -91,11 +84,11 @@ WORKDIR /usr/app
 # Only need curl for healthcheck; no extra installs necessary
 RUN apk add --no-cache curl
 
-# Copy pruned production deps and built app from builder
-COPY --from=development /usr/app/package.json ./package.json
-COPY --from=development /usr/app/node_modules ./node_modules
-COPY --from=development /usr/app/prisma ./prisma
-COPY --from=development /usr/app/dist ./dist
+# Copy production deps and built app from prior stages
+COPY --from=builder /usr/app/package.json ./package.json
+COPY --from=prod-deps /usr/app/node_modules ./node_modules
+COPY --from=builder /usr/app/prisma ./prisma
+COPY --from=builder /usr/app/dist ./dist
 
 # curl is used for HEALTHCHECK. Prisma CLI will be used via npx for DB checks.
 
@@ -109,7 +102,7 @@ EXPOSE ${APP_PORT}
 
 # Add entrypoint script for running migrations and starting the app
 # This COPY should be specific to the final script needed, not the whole scripts/ dir if it contains other dev scripts.
-COPY --from=development /usr/app/scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
