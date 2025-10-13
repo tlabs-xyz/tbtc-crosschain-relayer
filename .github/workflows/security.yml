@@ -41,26 +41,20 @@ jobs:
           npm config set registry https://registry.npmjs.org/
           yarn config set registry https://registry.npmjs.org/
 
-      - name: Run Yarn audit (high severity only) with retries
+      - name: Run audit-ci (high severity, prod deps) with retries
         shell: bash
         run: |
           set -euo pipefail
-          if yarn audit --help | grep -q -- "--groups"; then
-            AUDIT_CMD="yarn audit --level high --groups dependencies --summary"
-          else
-            echo "'--groups' flag not supported by this Yarn version; auditing all groups."
-            AUDIT_CMD="yarn audit --level high --summary"
-          fi
-
+          AUDIT_CMD="npx --yes audit-ci --config .audit-ci.json"
           for attempt in 1 2 3; do
             echo "Running: $AUDIT_CMD (attempt $attempt)..."
             if eval "$AUDIT_CMD"; then
               exit 0
             fi
-            echo "yarn audit failed (attempt $attempt). Retrying in 10s..."
+            echo "audit-ci failed (attempt $attempt). Retrying in 10s..."
             sleep 10
           done
-          echo "yarn audit failed after 3 attempts."
+          echo "audit-ci failed after 3 attempts."
           exit 1
 
       - name: CodeQL Analysis
