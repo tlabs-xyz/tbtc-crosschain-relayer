@@ -11,7 +11,7 @@ ENV NODE_OPTIONS=--max-old-space-size=1024
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 
 # Minimal tools for fetching git-based dependencies and healthcheck
-RUN apk add --no-cache git curl && \
+RUN apk add --no-cache git curl postgresql16-client && \
     git config --global url."https://".insteadOf git:// && \
     git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
     git config --global url."https://github.com/".insteadOf "git@github.com:"
