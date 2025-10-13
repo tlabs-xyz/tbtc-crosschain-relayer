@@ -118,6 +118,7 @@
     "routes/**/*.ts",
     "services/**/*.ts",
     "types/**/*.ts",
+    "types/**/*.d.ts",
     "utils/**/*.ts",
     "config/**/*.ts"
   ],
