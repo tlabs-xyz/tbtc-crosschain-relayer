@@ -1,3 +1,14 @@
+{
+  "ignores": [
+    "@types/*",
+    "typescript",
+    "ts-jest",
+    "jest",
+    "ts-node",
+    "tsx"
+  ]
+}
+
 # Ignore false-positives
 ignores: [
     # Used in scripts/CI
