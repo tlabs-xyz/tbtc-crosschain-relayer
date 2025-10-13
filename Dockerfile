@@ -7,7 +7,7 @@ RUN echo "Deps stage cache buster: ${CACHE_BUSTER}"
 WORKDIR /usr/app
 
 # Constrain Node's memory usage during build to avoid OOMs in CI builders
-ENV NODE_OPTIONS=--max-old-space-size=1536
+ENV NODE_OPTIONS=--max-old-space-size=1024
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 
 # Minimal tools for fetching git-based dependencies
@@ -31,24 +31,17 @@ RUN echo "Development stage cache buster: ${CACHE_BUSTER}"
 WORKDIR /usr/app
 
 # Constrain Node's memory usage during build to avoid OOMs in CI builders
-ENV NODE_OPTIONS=--max-old-space-size=1536
+ENV NODE_OPTIONS=--max-old-space-size=1024
 # Skip Prisma postinstall generate; we'll run generate during build instead
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 
-# Minimal tools for fetching git-based dependencies
-RUN apk add --no-cache git && \
-    git config --global url."https://".insteadOf git:// && \
-    git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" && \
-    git config --global url."https://github.com/".insteadOf "git@github.com:"
+# No additional packages needed in builder; we don't install devDependencies here
 
 COPY package.json yarn.lock ./
 COPY prisma/ ./prisma/
 
-# Seed with production node_modules then add devDependencies
+# Seed with production node_modules only (skip devDependencies to save memory)
 COPY --from=prod-deps /usr/app/node_modules ./node_modules
-
-# Install devDependencies on top (no scripts)
-RUN yarn install --frozen-lockfile --production=false --network-concurrency 1 --prefer-offline --ignore-scripts
 
 # Be more specific with COPY for source files
 # Adjust these paths if your source structure is different
@@ -69,8 +62,13 @@ COPY types/ ./types/
 COPY scripts/ ./scripts/
 COPY target/ ./target/
 
-# Build after sources are copied
-RUN yarn build
+# Build after sources are copied (explicitly avoid installing full devDependencies)
+# 1) Clean build outputs
+# 2) Generate Prisma client using runtime dependency
+# 3) Compile TypeScript using a transient TypeScript via npx
+RUN yarn clean:build \
+  && yarn run prisma:generate \
+  && npx -y -p typescript@5.5.3 tsc
 
  
 
