@@ -24,6 +24,7 @@ RUN yarn install --frozen-lockfile --production=true --network-concurrency 1 --p
 
 COPY prisma/ ./prisma/
 COPY tsconfig.json ./
+COPY tsconfig.build.json ./
 COPY index.ts ./
 # Assuming your source code is in these folders or similar top-level folders/files
 COPY helpers/ ./helpers/
