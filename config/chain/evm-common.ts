@@ -11,7 +11,7 @@ export interface EvmChainBuildParams {
   targetNetwork: NETWORK;
   privateKeyEnv: string;
   l1ConfirmationsEnv: string;
-  useEndpoint: boolean;
+  useEndpoint?: boolean;
 
   // L1 config (Ethereum)
   l1BitcoinDepositorStartBlock: number;

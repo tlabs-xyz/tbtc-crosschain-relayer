@@ -597,7 +597,8 @@ describe('buildEvmChainInput', () => {
 
       const result = buildEvmChainInput(defaultParams);
 
-      expect(result.useEndpoint).toBe(true);
+      // EVM chains always use polling regardless of common.useEndpoint
+      expect(result.useEndpoint).toBe(false);
       expect(result.endpointUrl).toBe('https://api.endpoint.test');
     });
   });
@@ -675,7 +676,8 @@ describe('buildEvmChainInput', () => {
       // Verify all common fields are preserved
       expect(result.network).toBe(customCommonInput.network);
       expect(result.vaultAddress).toBe(customCommonInput.vaultAddress);
-      expect(result.useEndpoint).toBe(customCommonInput.useEndpoint);
+      // EVM chains override useEndpoint to false
+      expect(result.useEndpoint).toBe(false);
       expect(result.supportsRevealDepositAPI).toBe(customCommonInput.supportsRevealDepositAPI);
       expect(result.endpointUrl).toBe(customCommonInput.endpointUrl);
       expect(result.enableL2Redemption).toBe(customCommonInput.enableL2Redemption);
