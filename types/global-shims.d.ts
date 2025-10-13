@@ -3,6 +3,8 @@
 declare module 'express' {
   const exp: any;
   export default exp;
+  export type Express = any;
+  export type RequestHandler = any;
   export type Request = any;
   export type Response = any;
   export type NextFunction = any;
