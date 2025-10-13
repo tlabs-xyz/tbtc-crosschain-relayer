@@ -18,7 +18,7 @@
     "test:coverage": "jest --coverage",
     "test:watch": "jest --watchAll",
     "prebuild": "yarn clean:build && yarn run prisma:generate",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "clean:build": "rimraf ./dist ./generated",
     "clean:all": "rimraf ./dist ./generated ./coverage ./node_modules/@prisma/client ./node_modules/@prisma/client-test",
     "fix": "yarn run lint:fix && yarn run format:fix",

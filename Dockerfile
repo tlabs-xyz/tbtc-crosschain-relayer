@@ -40,7 +40,7 @@ COPY target/ ./target/
 # Build after sources are copied (avoid full devDependencies)
 RUN yarn clean:build \
   && yarn run prisma:generate \
-  && npx -y -p typescript@5.5.3 tsc
+  && npx -y -p typescript@5.5.3 tsc -p tsconfig.build.json
 
 ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
