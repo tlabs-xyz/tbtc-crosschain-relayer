@@ -1,26 +1,13 @@
-{
-  "ignores": [
-    "@types/*",
-    "typescript",
-    "ts-jest",
-    "jest",
-    "ts-node",
-    "tsx"
-  ]
-}
-
-# Ignore false-positives
-ignores: [
-    # Used in scripts/CI
-    "rimraf", 
-    "depcheck", 
-    "improved-yarn-audit",
-    "eslint-import-resolver-typescript",
-
-    # Used in tests
-    "ts-jest", 
-
-    # Used in sources
-    "pino-pretty", 
-]
+ignores:
+  - "@types/*"
+  - typescript
+  - ts-jest
+  - jest
+  - ts-node
+  - tsx
+  - rimraf
+  - depcheck
+  - improved-yarn-audit
+  - eslint-import-resolver-typescript
+  - pino-pretty
 skip-missing: true
