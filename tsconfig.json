@@ -122,12 +122,5 @@
     "utils/**/*.ts",
     "config/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "tests",
-    "scripts",
-    "dist",
-    "prisma",
-    "target"
-  ]
+  "exclude": ["node_modules", "tests", "scripts", "dist", "prisma", "target"]
 }

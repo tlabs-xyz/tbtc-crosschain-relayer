@@ -11,6 +11,7 @@ export interface EvmChainBuildParams {
   targetNetwork: NETWORK;
   privateKeyEnv: string;
   l1ConfirmationsEnv: string;
+  useEndpoint: boolean;
 
   // L1 config (Ethereum)
   l1BitcoinDepositorStartBlock: number;
@@ -40,7 +41,8 @@ export function buildEvmChainInput(params: EvmChainBuildParams): EvmChainInput {
     // from common
     network: common.network!,
     vaultAddress: common.vaultAddress as string,
-    useEndpoint: common.useEndpoint as boolean,
+    // Use polling for EVM chains
+    useEndpoint: false,
     supportsRevealDepositAPI:
       common.supportsRevealDepositAPI === undefined
         ? false
