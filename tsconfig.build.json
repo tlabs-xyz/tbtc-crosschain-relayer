@@ -5,5 +5,19 @@
     "outDir": "./dist",
     "noEmit": false
   },
-  "exclude": ["node_modules", "tests", "scripts", "dist", "prisma", "target"]
+  "include": [
+    "index.ts",
+    "controllers/**/*.ts",
+    "handlers/**/*.ts",
+    "helpers/**/*.ts",
+    "interfaces/**/*.ts",
+    "routes/**/*.ts",
+    "services/**/*.ts",
+    "types/**/*.ts",
+    "types/**/*.d.ts",
+    "utils/**/*.ts",
+    "config/**/*.ts",
+    "scripts/**/*.ts"
+  ],
+  "exclude": ["node_modules", "tests", "dist", "prisma", "target"]
 }

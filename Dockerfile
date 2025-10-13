@@ -37,6 +37,7 @@ COPY routes/ ./routes/
 COPY config/ ./config/
 COPY types/ ./types/
 COPY target/ ./target/
+COPY scripts/ ./scripts/
 
 # Build after sources are copied (avoid full devDependencies)
 RUN yarn clean:build \
