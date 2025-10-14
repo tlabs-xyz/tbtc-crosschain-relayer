@@ -1,7 +1,7 @@
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import logger, { logErrorContext } from './Logger.js';
-import { prisma } from '../utils/prisma.js';
+import { prisma, dbLimit } from '../utils/prisma.js';
 import { Prisma } from '@prisma/client';
 
 function serializeDeposit(deposit: Deposit): Prisma.DepositCreateInput {
@@ -21,9 +21,11 @@ function serializeDeposit(deposit: Deposit): Prisma.DepositCreateInput {
 export class DepositStore {
   static async create(deposit: Deposit): Promise<void> {
     try {
-      await prisma.deposit.create({
-        data: serializeDeposit(deposit),
-      });
+      await dbLimit(() =>
+        prisma.deposit.create({
+          data: serializeDeposit(deposit),
+        }),
+      );
       logger.info(`Deposit created: ${deposit.id}`);
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
@@ -37,10 +39,12 @@ export class DepositStore {
 
   static async update(deposit: Deposit): Promise<void> {
     try {
-      await prisma.deposit.update({
-        where: { id: deposit.id },
-        data: serializeDeposit(deposit),
-      });
+      await dbLimit(() =>
+        prisma.deposit.update({
+          where: { id: deposit.id },
+          data: serializeDeposit(deposit),
+        }),
+      );
       logger.info(`Deposit updated: ${deposit.id}`);
     } catch (err) {
       logErrorContext(`Failed to update deposit ${deposit.id}:`, err);
@@ -50,7 +54,7 @@ export class DepositStore {
 
   static async getById(id: string): Promise<Deposit | null> {
     try {
-      const record = await prisma.deposit.findUnique({ where: { id } });
+      const record = await dbLimit(() => prisma.deposit.findUnique({ where: { id } }));
       return record;
     } catch (err) {
       logErrorContext(`Failed to read deposit ${id}:`, err);
@@ -60,7 +64,7 @@ export class DepositStore {
 
   static async getAll(): Promise<Deposit[]> {
     try {
-      const records = await prisma.deposit.findMany();
+      const records = await dbLimit(() => prisma.deposit.findMany());
       return records;
     } catch (err) {
       logErrorContext(`Failed to fetch all deposits:`, err);
@@ -74,7 +78,7 @@ export class DepositStore {
       if (chainId) {
         whereClause.chainId = chainId;
       }
-      const records = await prisma.deposit.findMany({ where: whereClause });
+      const records = await dbLimit(() => prisma.deposit.findMany({ where: whereClause }));
       return records;
     } catch (err) {
       logErrorContext(
@@ -87,7 +91,7 @@ export class DepositStore {
 
   static async delete(id: string): Promise<void> {
     try {
-      await prisma.deposit.delete({ where: { id } });
+      await dbLimit(() => prisma.deposit.delete({ where: { id } }));
       logger.info(`Deposit deleted: ${id}`);
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2025') {

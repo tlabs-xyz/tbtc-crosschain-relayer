@@ -1,7 +1,7 @@
 import type { Redemption, RedemptionStatus } from '../types/Redemption.type.js';
 import logger, { logErrorContext } from './Logger.js';
 import { ethers } from 'ethers';
-import { prisma } from '../utils/prisma.js';
+import { prisma, dbLimit } from '../utils/prisma.js';
 
 function serializeRedemptionData(redemption: Redemption): any {
   // Clone the redemption object and remove top-level fields that are separate columns in Prisma
@@ -68,14 +68,16 @@ function deserializeRedemptionData(dataBlob: any): Omit<Redemption, 'id' | 'chai
 export class RedemptionStore {
   static async create(redemption: Redemption): Promise<void> {
     try {
-      await prisma.redemption.create({
-        data: {
-          id: redemption.id,
-          chainId: redemption.chainId,
-          status: redemption.status.toString(),
-          data: serializeRedemptionData(redemption as Redemption), // Pass the full object for serialization logic
-        },
-      });
+      await dbLimit(() =>
+        prisma.redemption.create({
+          data: {
+            id: redemption.id,
+            chainId: redemption.chainId,
+            status: redemption.status.toString(),
+            data: serializeRedemptionData(redemption as Redemption), // Pass the full object for serialization logic
+          },
+        }),
+      );
       logger.info(`Redemption created: ${redemption.id}`);
     } catch (err: any) {
       if (err.code === 'P2002') {
@@ -89,16 +91,18 @@ export class RedemptionStore {
 
   static async update(redemption: Redemption): Promise<void> {
     try {
-      const _result = await prisma.redemption.update({
-        where: {
-          id: redemption.id,
-        },
-        data: {
-          chainId: redemption.chainId,
-          status: redemption.status.toString(),
-          data: serializeRedemptionData(redemption),
-        },
-      });
+      const _result = await dbLimit(() =>
+        prisma.redemption.update({
+          where: {
+            id: redemption.id,
+          },
+          data: {
+            chainId: redemption.chainId,
+            status: redemption.status.toString(),
+            data: serializeRedemptionData(redemption),
+          },
+        }),
+      );
 
       logger.info(`Redemption updated: ${redemption.id}`);
     } catch (err: any) {
@@ -113,7 +117,7 @@ export class RedemptionStore {
 
   static async getById(id: string): Promise<Redemption | null> {
     try {
-      const record = await prisma.redemption.findUnique({ where: { id } });
+      const record = await dbLimit(() => prisma.redemption.findUnique({ where: { id } }));
       if (!record) return null;
 
       const deserializedBlobParts = deserializeRedemptionData(record.data);
@@ -132,7 +136,7 @@ export class RedemptionStore {
 
   static async getAll(): Promise<Redemption[]> {
     try {
-      const records = await prisma.redemption.findMany();
+      const records = await dbLimit(() => prisma.redemption.findMany());
       return records.map((record: any) => {
         const deserializedBlobParts = deserializeRedemptionData(record.data);
         return {
@@ -154,7 +158,7 @@ export class RedemptionStore {
       if (chainId) {
         whereClause.chainId = chainId;
       }
-      const records = await prisma.redemption.findMany({ where: whereClause });
+      const records = await dbLimit(() => prisma.redemption.findMany({ where: whereClause }));
       return records.map((record: any) => {
         const deserializedBlobParts = deserializeRedemptionData(record.data);
         return {
@@ -175,7 +179,7 @@ export class RedemptionStore {
 
   static async delete(id: string): Promise<void> {
     try {
-      await prisma.redemption.delete({ where: { id } });
+      await dbLimit(() => prisma.redemption.delete({ where: { id } }));
       logger.info(`Redemption deleted: ${id}`);
     } catch (err: any) {
       if (err.code === 'P2025') {

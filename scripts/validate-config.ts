@@ -73,7 +73,7 @@ async function importConfigModules() {
   ] = await Promise.all([
     import('zod'),
     import('../utils/Logger.js'),
-    import('../config/schemas/app.schema'),
+    import('../config/schemas/app.schema.js'),
     import('../config/index.js'),
     import('fs'),
   ]);

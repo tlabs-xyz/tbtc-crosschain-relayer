@@ -1,4 +1,4 @@
-import { prisma } from './prisma.js';
+import { prisma, dbLimit } from './prisma.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import { logErrorContext } from './Logger.js';
@@ -32,14 +32,16 @@ export const appendToAuditLog = async (
     const { code: _code, ...rest } = data;
     data = rest;
   }
-  await prisma.auditLog.create({
-    data: {
-      eventType,
-      depositId,
-      data,
-      errorCode,
-    },
-  });
+  await dbLimit(() =>
+    prisma.auditLog.create({
+      data: {
+        eventType,
+        depositId,
+        data,
+        errorCode,
+      },
+    }),
+  );
 };
 
 /**
@@ -47,7 +49,7 @@ export const appendToAuditLog = async (
  */
 export const getAuditLogs = async () => {
   try {
-    return await prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' } });
+    return await dbLimit(() => prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' } }));
   } catch (error) {
     logErrorContext('Failed to fetch audit logs', error);
     return [];
@@ -59,10 +61,12 @@ export const getAuditLogs = async () => {
  */
 export const getAuditLogsByDepositId = async (depositId: string) => {
   try {
-    return await prisma.auditLog.findMany({
-      where: { depositId },
-      orderBy: { timestamp: 'desc' },
-    });
+    return await dbLimit(() =>
+      prisma.auditLog.findMany({
+        where: { depositId },
+        orderBy: { timestamp: 'desc' },
+      }),
+    );
   } catch (error) {
     logErrorContext('Failed to fetch audit logs by depositId', error);
     return [];
