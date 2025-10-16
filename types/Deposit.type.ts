@@ -25,6 +25,10 @@ export type Deposit = {
       l1BridgeTxHash?: string | null;
       l2TxHash?: string | null;
     };
+    sei?: {
+      l1BridgeTxHash?: string | null;
+      wormholeSequence?: string | null;
+    };
   };
   receipt: {
     depositor: string;

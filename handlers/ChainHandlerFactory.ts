@@ -6,12 +6,14 @@ import { EVMChainHandler } from './EVMChainHandler.js';
 import { StarknetChainHandler } from './StarknetChainHandler.js';
 import { SuiChainHandler } from './SuiChainHandler.js';
 import { SolanaChainHandler } from './SolanaChainHandler.js';
+import { SeiChainHandler } from './SeiChainHandler.js';
 
 import type { AnyChainConfig } from '../config/index.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import type { SolanaChainConfig } from '../config/schemas/solana.chain.schema.js';
 import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
 import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
+import type { SeiChainConfig } from '../config/schemas/sei.chain.schema.js';
 
 /**
  * Factory class for creating appropriate chain handlers based on configuration
@@ -43,6 +45,10 @@ export class ChainHandlerFactory {
       case CHAIN_TYPE.SOLANA:
         logger.info('Creating SolanaChainHandler');
         return new SolanaChainHandler(config as SolanaChainConfig);
+
+      case CHAIN_TYPE.SEI:
+        logger.info('Creating SeiChainHandler');
+        return new SeiChainHandler(config as SeiChainConfig);
 
       default:
         logger.error(`Unsupported chain type: ${config.chainType}`);
