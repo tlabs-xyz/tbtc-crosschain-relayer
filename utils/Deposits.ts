@@ -233,6 +233,7 @@ export const createDeposit = (
  * @param reveal - Deposit reveal info
  * @param destinationChainDepositOwner - L2 deposit owner address
  * @param initTxHash - L1 initialization transaction hash (from backend)
+ * @param backendAddress - Backend wallet address (msg.sender on L1 initializeDeposit call)
  * @param chainId - Chain identifier
  * @returns Deposit object with status=INITIALIZED
  */
@@ -242,6 +243,7 @@ export const createDepositFromNotification = (
   reveal: Reveal,
   destinationChainDepositOwner: string,
   initTxHash: string,
+  backendAddress: string,
   chainId: string,
 ): Deposit => {
   const now = Date.now();
@@ -279,7 +281,7 @@ export const createDepositFromNotification = (
       },
     },
     receipt: {
-      depositor: chainId, // Backend/relayer address
+      depositor: backendAddress, // Backend wallet address (msg.sender on L1)
       blindingFactor: reveal.blindingFactor,
       walletPublicKeyHash: reveal.walletPubKeyHash,
       refundPublicKeyHash: reveal.refundPubKeyHash,
@@ -295,7 +297,7 @@ export const createDepositFromNotification = (
       },
       reveal: reveal,
       l2DepositOwner: destinationChainDepositOwner,
-      l2Sender: chainId, // Backend address
+      l2Sender: backendAddress, // Backend wallet address (msg.sender on L1)
     },
     owner: destinationChainDepositOwner,
     status: DepositStatus.INITIALIZED, // ALREADY initialized by backend

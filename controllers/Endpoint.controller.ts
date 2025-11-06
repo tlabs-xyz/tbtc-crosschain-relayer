@@ -268,7 +268,7 @@ export class EndpointController {
         return;
       }
 
-      const { depositKey: depositKeyRaw, fundingTx, reveal, destinationChainDepositOwner, initTxHash } =
+      const { depositKey: depositKeyRaw, fundingTx, reveal, destinationChainDepositOwner, initTxHash, backendAddress } =
         validationResult.data;
 
       // Normalize depositKey to decimal format (relayer's internal representation)
@@ -348,6 +348,7 @@ export class EndpointController {
         reveal,
         destinationChainDepositOwner,
         initTxHash,
+        backendAddress,
         this.chainHandler.config.chainName,
       );
 

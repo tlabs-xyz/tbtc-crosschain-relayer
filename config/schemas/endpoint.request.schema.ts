@@ -61,4 +61,7 @@ export const DepositNotificationSchema = z.object({
   initTxHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/, {
     message: 'initTxHash must be a transaction hash with 0x prefix',
   }),
+  backendAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/, {
+    message: 'backendAddress must be a valid Ethereum address (0x + 40 hex characters)',
+  }),
 });
