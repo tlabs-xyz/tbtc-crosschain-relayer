@@ -1,12 +1,15 @@
 import type { Request, Response } from 'express';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { createDeposit, getDepositId } from '../utils/Deposits.js';
+import { createDeposit, createDepositFromNotification, getDepositId } from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import { RevealRequestSchema } from '../config/schemas/endpoint.request.schema.js';
+import {
+  RevealRequestSchema,
+  DepositNotificationSchema,
+} from '../config/schemas/endpoint.request.schema.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -218,6 +221,164 @@ export class EndpointController {
         success: false,
         error: error.message || 'Unknown error getting deposit status',
         depositId,
+      });
+    }
+  }
+
+  /**
+   * Handle notification from backend that a deposit was already initialized.
+   * This is for the gasless flow where the backend initializes on L1,
+   * then notifies the relayer to track the deposit for finalization.
+   *
+   * POST /api/:chainName/deposit/notify
+   *
+   * Flow:
+   * 1. Validate request body schema
+   * 2. Verify depositKey matches fundingTx + reveal (prevent spoofing)
+   * 3. Check if deposit already exists (idempotency)
+   * 4. Verify deposit is initialized on-chain (security)
+   * 5. Create deposit record with status=INITIALIZED
+   * 6. Return success
+   *
+   * @param req Express request object containing depositKey, fundingTx, reveal, destinationChainDepositOwner, initTxHash
+   * @param res Express response object
+   */
+  async handleDepositNotification(req: Request, res: Response): Promise<void> {
+    const logApiData = {
+      depositKey: req.body.depositKey || 'unknown',
+      chainName: this.chainHandler.config.chainName,
+    };
+    logApiRequest('/api/deposit/notify', 'POST', req.body.depositKey, logApiData);
+
+    try {
+      // 1. Validate request body
+      const validationResult = DepositNotificationSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        logger.error(
+          `[${this.chainHandler.config.chainName}] Invalid deposit notification: ${validationResult.error.flatten()}`,
+        );
+        logApiRequest('/api/deposit/notify', 'POST', req.body.depositKey, logApiData, 400);
+
+        res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: validationResult.error.flatten(),
+        });
+        return;
+      }
+
+      const { depositKey, fundingTx, reveal, destinationChainDepositOwner, initTxHash } =
+        validationResult.data;
+
+      // 2. Verify depositKey matches fundingTx + reveal
+      const fundingTxHash = getFundingTxHash(fundingTx);
+      const calculatedDepositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
+
+      if (calculatedDepositId !== depositKey) {
+        logger.error(
+          `[${this.chainHandler.config.chainName}] depositKey mismatch: provided=${depositKey}, calculated=${calculatedDepositId}`,
+        );
+        res.status(400).json({
+          success: false,
+          error: 'depositKey does not match fundingTx and reveal',
+          providedKey: depositKey,
+          calculatedKey: calculatedDepositId,
+        });
+        return;
+      }
+
+      // 3. Check if deposit already exists
+      const existingDeposit = await DepositStore.getById(depositKey);
+      if (existingDeposit) {
+        logger.warn(
+          `[${this.chainHandler.config.chainName}] Deposit already exists | ID: ${depositKey} | Status: ${DepositStatus[existingDeposit.status]}`,
+        );
+        res.status(200).json({
+          success: true,
+          message: 'Deposit already registered',
+          depositId: depositKey,
+          status: DepositStatus[existingDeposit.status],
+        });
+        return;
+      }
+
+      // 4. Verify deposit is initialized on-chain
+      const onChainStatus = await this.chainHandler.checkDepositStatus(depositKey);
+
+      if (onChainStatus === null) {
+        logger.error(
+          `[${this.chainHandler.config.chainName}] Could not verify deposit on-chain | ID: ${depositKey}`,
+        );
+        res.status(503).json({
+          success: false,
+          error: 'Could not verify deposit status on-chain',
+          depositId: depositKey,
+          message: 'Relayer may be experiencing RPC issues. Please retry.',
+        });
+        return;
+      }
+
+      if (onChainStatus !== DepositStatus.INITIALIZED) {
+        logger.error(
+          `[${this.chainHandler.config.chainName}] Deposit not initialized on-chain | ID: ${depositKey} | Status: ${DepositStatus[onChainStatus]}`,
+        );
+        res.status(400).json({
+          success: false,
+          error: 'Deposit is not in INITIALIZED state on-chain',
+          depositId: depositKey,
+          onChainStatus: DepositStatus[onChainStatus],
+          message:
+            onChainStatus === DepositStatus.QUEUED
+              ? 'Deposit not found on-chain. Initialization transaction may not be mined yet.'
+              : `Deposit is already ${DepositStatus[onChainStatus]} on-chain.`,
+        });
+        return;
+      }
+
+      // 5. Create deposit record in database
+      const deposit = createDepositFromNotification(
+        depositKey,
+        fundingTx,
+        reveal,
+        destinationChainDepositOwner,
+        initTxHash,
+        this.chainHandler.config.chainName,
+      );
+
+      logger.info(
+        `[${this.chainHandler.config.chainName}] Creating deposit from backend notification | ID: ${depositKey}`,
+      );
+
+      await DepositStore.create(deposit);
+
+      logger.info(
+        `[${this.chainHandler.config.chainName}] Deposit created successfully from notification | ID: ${depositKey}`,
+      );
+      logApiRequest('/api/deposit/notify', 'POST', depositKey, logApiData, 200);
+
+      // 6. Return success
+      res.status(200).json({
+        success: true,
+        depositId: depositKey,
+        message: 'Deposit registered. Relayer will finalize in 5-60 minutes.',
+        onChainStatus: 'INITIALIZED',
+      });
+    } catch (error: any) {
+      logErrorContext(
+        `[${this.chainHandler.config.chainName}] Error handling deposit notification:`,
+        error,
+      );
+      logDepositError(
+        req.body.depositKey || 'unknown',
+        `Error handling deposit notification`,
+        error,
+      );
+      logApiRequest('/api/deposit/notify', 'POST', req.body.depositKey, {}, 500);
+
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Internal server error',
+        depositId: req.body.depositKey,
       });
     }
   }
