@@ -54,7 +54,10 @@ export const DepositNotificationSchema = z.object({
     refundLocktime: hexString(8),
     vault: hexString(40),
   }),
-  destinationChainDepositOwner: z.string(),
+  destinationChainDepositOwner: z.string().regex(/^0x[0-9a-fA-F]{40}$|^0x[0-9a-fA-F]{64}$/, {
+    message:
+      'destinationChainDepositOwner must be a 20-byte address (0x + 40 hex) or 32-byte hex (0x + 64 hex)',
+  }),
   initTxHash: z.string().regex(/^0x[0-9a-fA-F]{64}$/, {
     message: 'initTxHash must be a transaction hash with 0x prefix',
   }),
