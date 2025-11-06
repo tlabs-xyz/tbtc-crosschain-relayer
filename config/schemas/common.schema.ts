@@ -12,6 +12,7 @@ export enum CHAIN_TYPE {
   STARKNET = 'Starknet',
   SUI = 'Sui',
   SOLANA = 'Solana',
+  SEI = 'Sei',
 }
 
 // This schema defines fields that are common to all chain configurations and typically have defaults.

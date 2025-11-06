@@ -6,6 +6,7 @@ import {
   type StarknetChainConfig,
 } from './schemas/starknet.chain.schema.js';
 import { SuiChainConfigSchema, type SuiChainConfig } from './schemas/sui.chain.schema.js';
+import { SeiChainConfigSchema, type SeiChainConfig } from './schemas/sei.chain.schema.js';
 
 import { getSolanaDevnetChainInput } from './chain/solana.chain.js';
 import { getStarknetTestnetChainInput } from './chain/starknet.chain.js';
@@ -17,9 +18,11 @@ import { getBaseSepoliaChainInput } from './chain/baseSepolia.chain.js';
 import { getArbitrumSepoliaChainInput } from './chain/arbitrumSepolia.chain.js';
 import { getStarknetMainnetChainInput } from './chain/starknetMainnet.chain.js';
 import { getSuiTestnetChainInput } from './chain/suiTestnet.chain.js';
+import { getSeiMainnetChainInput } from './chain/seiMainnet.chain.js';
+import { getSeiTestnetChainInput } from './chain/seiTestnet.chain.js';
 
 // Re-exporting these types as they might be useful for consumers of the registry
-export type { EvmChainConfig, SolanaChainConfig, StarknetChainConfig, SuiChainConfig };
+export type { EvmChainConfig, SolanaChainConfig, StarknetChainConfig, SuiChainConfig, SeiChainConfig };
 
 export interface ChainSchemaRegistryEntry<S extends z.ZodTypeAny> {
   schema: S;
@@ -37,6 +40,8 @@ type ChainSchemaRegistry = {
   arbitrumSepolia: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
   baseMainnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
   baseSepolia: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  seiMainnet: ChainSchemaRegistryEntry<typeof SeiChainConfigSchema>;
+  seiTestnet: ChainSchemaRegistryEntry<typeof SeiChainConfigSchema>;
   solanaDevnetImported: ChainSchemaRegistryEntry<typeof SolanaChainConfigSchema>;
   [key: string]: ChainSchemaRegistryEntry<z.ZodTypeAny>;
 };
@@ -63,6 +68,8 @@ export const chainSchemaRegistry: ChainSchemaRegistry = {
     schema: EvmChainConfigSchema,
     getInputFunc: getBaseSepoliaChainInput,
   },
+  seiMainnet: { schema: SeiChainConfigSchema, getInputFunc: getSeiMainnetChainInput },
+  seiTestnet: { schema: SeiChainConfigSchema, getInputFunc: getSeiTestnetChainInput },
   solanaDevnetImported: {
     schema: SolanaChainConfigSchema,
     getInputFunc: getSolanaDevnetImportedChainInput,

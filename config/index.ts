@@ -7,6 +7,7 @@ import {
   type SolanaChainConfig,
   type StarknetChainConfig,
   type SuiChainConfig,
+  type SeiChainConfig,
 } from './chainRegistry.js';
 import baseLogger from '../utils/Logger.js';
 import { writeFileSync } from 'fs';
@@ -16,7 +17,8 @@ export type AnyChainConfig =
   | EvmChainConfig
   | SolanaChainConfig
   | StarknetChainConfig
-  | SuiChainConfig;
+  | SuiChainConfig
+  | SeiChainConfig;
 
 export interface AllChainConfigs {
   solanaDevnet?: SolanaChainConfig;
@@ -28,6 +30,8 @@ export interface AllChainConfigs {
   arbitrumSepolia?: EvmChainConfig;
   baseMainnet?: EvmChainConfig;
   baseSepolia?: EvmChainConfig;
+  seiMainnet?: SeiChainConfig;
+  seiTestnet?: SeiChainConfig;
   solanaDevnetImported?: SolanaChainConfig;
   [key: string]: AnyChainConfig | undefined;
 }
