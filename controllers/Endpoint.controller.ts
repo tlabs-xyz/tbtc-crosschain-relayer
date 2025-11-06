@@ -10,6 +10,7 @@ import {
   RevealRequestSchema,
   DepositNotificationSchema,
 } from '../config/schemas/endpoint.request.schema.js';
+import { BigNumber } from 'ethers';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -267,8 +268,13 @@ export class EndpointController {
         return;
       }
 
-      const { depositKey, fundingTx, reveal, destinationChainDepositOwner, initTxHash } =
+      const { depositKey: depositKeyRaw, fundingTx, reveal, destinationChainDepositOwner, initTxHash } =
         validationResult.data;
+
+      // Normalize depositKey to decimal format (relayer's internal representation)
+      // Backend sends hex string (0x...), but relayer stores deposits with decimal string IDs
+      // BigNumber.from() accepts both hex and decimal, .toString() normalizes to decimal
+      const depositKey = BigNumber.from(depositKeyRaw).toString();
 
       // 2. Verify depositKey matches fundingTx + reveal
       const fundingTxHash = getFundingTxHash(fundingTx);
