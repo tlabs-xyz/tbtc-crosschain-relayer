@@ -7,8 +7,16 @@
  * The plain NTT Manager does NOT support Sei Network.
  * 
  * L1 Contract: L1BTCDepositorNttWithExecutor (Manager with Executor)
- * - Ethereum Mainnet: 0xd2d9c936165a85f27a5a7e07afb974d022b89463 (Deployed)
- * - Sepolia: 0x54DD7080aE169DD923fE56d0C4f814a0a17B8f41 (Manager with Executor deployed, L1BTCDepositorNttWithExecutor pending)
+ * - Ethereum Mainnet: 0xd2d9c936165a85f27a5a7e07afb974d022b89463 (Block 23570676)
+ * - Sepolia: 0x54DD7080aE169DD923fE56d0C4f814a0a17B8f41 (Manager with Executor)
+ * 
+ * L2 Token (Sei EVM):
+ * - Sei Mainnet (Pacific-1, Chain ID 1329): 0xF9201c9192249066Aec049ae7951ae298BBec767
+ * - Sei Testnet (Atlantic-2): TBD
+ * 
+ * Wormhole Chain ID: 40 (same for mainnet and testnet)
+ * 
+ * SDK Version: Updated for bytes32 destinationChainDepositOwner and new workflow functions
  * 
  * This handler interacts with the L1 contract on Ethereum for deposit operations.
  * All deposit logic happens on L1; L2 (Sei EVM) only receives bridged tokens via Wormhole NTT.
@@ -115,23 +123,27 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
 
   protected async setupL2Listeners(): Promise<void> {
     logger.info(
-      `[${this.config.chainName}] Setting up L1 TBTCBridgedViaNTT event listener on contract ${this.l1DepositorContractProvider.address}`,
+      `[${this.config.chainName}] Setting up L1 TokensTransferredNttWithExecutor event listener on contract ${this.l1DepositorContractProvider.address}`,
     );
 
     this.l1DepositorContractProvider.on(
-      'TBTCBridgedViaNTT',
+      'TokensTransferredNttWithExecutor',
       async (
-        depositKey: string,
-        recipient: string,
+        sender: string,
+        nonce: string,
         amount: ethers.BigNumber,
-        sequence: ethers.BigNumber,
+        destinationChain: number,
+        actualRecipient: string,
+        transferSequence: ethers.BigNumber,
+        encodedReceiver: string,
+        executorCost: ethers.BigNumber,
         event: ethers.Event,
       ) => {
-        await this.processTBTCBridgedViaNTTEvent(
-          depositKey,
-          recipient,
+        await this.processTokensTransferredNttWithExecutorEvent(
+          nonce, // This is the deposit key
+          actualRecipient,
           amount,
-          sequence,
+          transferSequence,
           event.transactionHash,
           false,
         );
@@ -158,19 +170,19 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
   ): Promise<void> {
     if (events.length > 0) {
       logger.info(
-        `[${this.config.chainName}] Found ${events.length} past TBTCBridgedViaNTT L1 events in range [${fromBlock} - ${toBlock}]`,
+        `[${this.config.chainName}] Found ${events.length} past TokensTransferredNttWithExecutor L1 events in range [${fromBlock} - ${toBlock}]`,
       );
       for (const event of events) {
         if (event.args) {
-          const depositKey = event.args.depositKey as string;
-          const recipient = event.args.recipient as string;
+          const nonce = event.args.nonce as string; // This is the deposit key
+          const actualRecipient = event.args.actualRecipient as string;
           const amount = event.args.amount as ethers.BigNumber;
-          const sequence = event.args.sequence as ethers.BigNumber;
-          await this.processTBTCBridgedViaNTTEvent(
-            depositKey,
-            recipient,
+          const transferSequence = event.args.transferSequence as ethers.BigNumber;
+          await this.processTokensTransferredNttWithExecutorEvent(
+            nonce,
+            actualRecipient,
             amount,
-            sequence,
+            transferSequence,
             event.transactionHash,
             true, // isPastEvent
           );
@@ -182,7 +194,7 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
       }
     } else {
       logger.info(
-        `[${this.config.chainName}] No past TBTCBridgedViaNTT L1 events found in block range ${fromBlock}-${toBlock}.`,
+        `[${this.config.chainName}] No past TokensTransferredNttWithExecutor L1 events found in block range ${fromBlock}-${toBlock}.`,
       );
     }
   }
@@ -196,14 +208,14 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
     const toBlock = options.toBlock || latestBlock;
 
     logger.info(
-      `[${this.config.chainName}] Checking for past TBTCBridgedViaNTT L1 events from block ${options.fromBlock} to ${toBlock}`,
+      `[${this.config.chainName}] Checking for past TokensTransferredNttWithExecutor L1 events from block ${options.fromBlock} to ${toBlock}`,
     );
 
     try {
       for (let fromBlock = options.fromBlock; fromBlock <= toBlock; fromBlock += blockChunkSize) {
         const currentToBlock = Math.min(fromBlock + blockChunkSize - 1, toBlock);
         const events = await this.l1DepositorContractProvider.queryFilter(
-          this.l1DepositorContractProvider.filters.TBTCBridgedViaNTT(),
+          this.l1DepositorContractProvider.filters.TokensTransferredNttWithExecutor(),
           fromBlock,
           currentToBlock,
         );
@@ -211,14 +223,14 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
       }
     } catch (error: any) {
       logger.error(
-        `[${this.config.chainName}] Error querying past TBTCBridgedViaNTT L1 events: ${error.message}`,
+        `[${this.config.chainName}] Error querying past TokensTransferredNttWithExecutor L1 events: ${error.message}`,
         error,
         { chainName: this.config.chainName },
       );
     }
   }
 
-  protected async processTBTCBridgedViaNTTEvent(
+  protected async processTokensTransferredNttWithExecutorEvent(
     depositKeyOrId: string | BytesLike,
     recipient: string,
     amount: ethers.BigNumber,
@@ -227,8 +239,8 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
     isPastEvent: boolean = false,
   ): Promise<void> {
     const logPrefix = isPastEvent
-      ? `PastEvent | TBTCBridgedViaNTT:`
-      : `LiveEvent | TBTCBridgedViaNTT:`;
+      ? `PastEvent | TokensTransferredNttWithExecutor:`
+      : `LiveEvent | TokensTransferredNttWithExecutor:`;
 
     const depositId =
       typeof depositKeyOrId === 'string' ? depositKeyOrId : ethers.utils.hexlify(depositKeyOrId);
@@ -630,6 +642,13 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
       });
     }
 
+    // Convert address to bytes32 format for the updated contract
+    // The new contract expects bytes32, so we left-pad with zeros (EVM address = 20 bytes -> 32 bytes)
+    const l2DepositOwnerBytes32 = ethers.utils.hexZeroPad(l2DepositOwner, 32);
+    logger.info(
+      `[${this.config.chainName}] ${logPrefix} Converted deposit owner to bytes32: ${l2DepositOwnerBytes32}`,
+    );
+
     try {
       logger.info(
         `[${this.config.chainName}] ${logPrefix} Preparing to estimate gas and simulate initializeDeposit...`,
@@ -641,7 +660,7 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
         gasEstimate = await this.l1DepositorContract.estimateGas.initializeDeposit(
           fundingTx,
           reveal,
-          l2DepositOwner,
+          l2DepositOwnerBytes32,
         );
         logger.info(
           `[${this.config.chainName}] ${logPrefix} Gas estimate for initializeDeposit: ${gasEstimate.toString()}`,
@@ -690,7 +709,7 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
         await this.l1DepositorContract.callStatic.initializeDeposit(
           fundingTx,
           reveal,
-          l2DepositOwner,
+          l2DepositOwnerBytes32,
           txOverrides,
         );
         logger.info(
@@ -701,14 +720,14 @@ export class SeiChainHandler extends BaseChainHandler<SeiChainConfig> {
       }
 
       logger.info(
-        `[${this.config.chainName}] ${logPrefix} Calling L1 Depositor contract initializeDeposit for Sei recipient: ${l2DepositOwner} with gasLimit: ${txOverrides.gasLimit?.toString()}, gasPrice: ${ethers.utils.formatUnits(txOverrides.gasPrice as BigNumberish, 'gwei')} gwei.`,
+        `[${this.config.chainName}] ${logPrefix} Calling L1 Depositor contract initializeDeposit for Sei recipient: ${l2DepositOwner} (bytes32: ${l2DepositOwnerBytes32}) with gasLimit: ${txOverrides.gasLimit?.toString()}, gasPrice: ${ethers.utils.formatUnits(txOverrides.gasPrice as BigNumberish, 'gwei')} gwei.`,
       );
 
-      // Send transaction
+      // Send transaction with bytes32 deposit owner
       const txResponse = await this.l1DepositorContract.initializeDeposit(
         fundingTx,
         reveal,
-        l2DepositOwner,
+        l2DepositOwnerBytes32,
         txOverrides,
       );
 

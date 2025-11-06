@@ -1,6 +1,8 @@
 // This ABI is for the Sei Bitcoin Depositor contract (L1BTCDepositorNttWithExecutor)
 // deployed on Ethereum Mainnet for bridging to Sei Network via Wormhole NTT
 // Pattern: NTT Hub & Spoke with Wormhole Executor
+// 
+// SDK Version: Updated to match solidity changes (removed utility functions, updated signatures)
 export const SeiBitcoinDepositorABI = [
   {
     anonymous: false,
@@ -13,9 +15,9 @@ export const SeiBitcoinDepositorABI = [
       },
       {
         indexed: true,
-        internalType: 'address',
+        internalType: 'bytes32',
         name: 'destinationChainDepositOwner',
-        type: 'address',
+        type: 'bytes32',
       },
       {
         indexed: true,
@@ -50,9 +52,9 @@ export const SeiBitcoinDepositorABI = [
       },
       {
         indexed: true,
-        internalType: 'address',
+        internalType: 'bytes32',
         name: 'destinationChainDepositOwner',
-        type: 'address',
+        type: 'bytes32',
       },
       {
         indexed: true,
@@ -69,15 +71,15 @@ export const SeiBitcoinDepositorABI = [
     inputs: [
       {
         indexed: true,
-        internalType: 'bytes32',
-        name: 'depositKey',
-        type: 'bytes32',
+        internalType: 'address',
+        name: 'sender',
+        type: 'address',
       },
       {
         indexed: true,
-        internalType: 'address',
-        name: 'recipient',
-        type: 'address',
+        internalType: 'bytes32',
+        name: 'nonce',
+        type: 'bytes32',
       },
       {
         indexed: false,
@@ -87,12 +89,36 @@ export const SeiBitcoinDepositorABI = [
       },
       {
         indexed: false,
+        internalType: 'uint16',
+        name: 'destinationChain',
+        type: 'uint16',
+      },
+      {
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'actualRecipient',
+        type: 'bytes32',
+      },
+      {
+        indexed: false,
         internalType: 'uint64',
-        name: 'sequence',
+        name: 'transferSequence',
         type: 'uint64',
       },
+      {
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'encodedReceiver',
+        type: 'bytes32',
+      },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'executorCost',
+        type: 'uint256',
+      },
     ],
-    name: 'TBTCBridgedViaNTT',
+    name: 'TokensTransferredNttWithExecutor',
     type: 'event',
   },
   {
@@ -106,7 +132,7 @@ export const SeiBitcoinDepositorABI = [
     name: 'deposits',
     outputs: [
       {
-        internalType: 'enum AbstractTBTCDepositor.DepositState',
+        internalType: 'enum AbstractL1BTCDepositor.DepositState',
         name: '',
         type: 'uint8',
       },
@@ -194,9 +220,9 @@ export const SeiBitcoinDepositorABI = [
         type: 'tuple',
       },
       {
-        internalType: 'address',
+        internalType: 'bytes32',
         name: 'destinationChainDepositOwner',
-        type: 'address',
+        type: 'bytes32',
       },
     ],
     name: 'initializeDeposit',
@@ -245,7 +271,20 @@ export const SeiBitcoinDepositorABI = [
   },
   {
     inputs: [],
-    name: 'nttManager',
+    name: 'nttManagerWithExecutor',
+    outputs: [
+      {
+        internalType: 'contract INttManagerWithExecutor',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'underlyingNttManager',
     outputs: [
       {
         internalType: 'address',
@@ -258,12 +297,218 @@ export const SeiBitcoinDepositorABI = [
   },
   {
     inputs: [],
-    name: 'wormholeChainId',
+    name: 'defaultSupportedChain',
     outputs: [
       {
         internalType: 'uint16',
         name: '',
         type: 'uint16',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint16',
+        name: '',
+        type: 'uint16',
+      },
+    ],
+    name: 'supportedChains',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'parameterExpirationTime',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'user',
+        type: 'address',
+      },
+    ],
+    name: 'canUserStartNewWorkflow',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: 'canStart',
+        type: 'bool',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'user',
+        type: 'address',
+      },
+    ],
+    name: 'getUserWorkflowInfo',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: 'hasActiveWorkflow',
+        type: 'bool',
+      },
+      {
+        internalType: 'bytes32',
+        name: 'nonce',
+        type: 'bytes32',
+      },
+      {
+        internalType: 'uint256',
+        name: 'timestamp',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'timeRemaining',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'user',
+        type: 'address',
+      },
+    ],
+    name: 'getUserWorkflowStatus',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: 'hasActiveWorkflow',
+        type: 'bool',
+      },
+      {
+        internalType: 'bytes32',
+        name: 'nonce',
+        type: 'bytes32',
+      },
+      {
+        internalType: 'uint256',
+        name: 'timestamp',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'areExecutorParametersSet',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: 'isSet',
+        type: 'bool',
+      },
+      {
+        internalType: 'bytes32',
+        name: 'nonce',
+        type: 'bytes32',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'getStoredExecutorValue',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: 'value',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint16',
+        name: 'destinationChain',
+        type: 'uint16',
+      },
+    ],
+    name: 'quoteFinalizeDeposit',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: 'cost',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'quoteFinalizeDeposit',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: 'cost',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint16',
+        name: 'destinationChain',
+        type: 'uint16',
+      },
+    ],
+    name: 'quoteFinalizedDeposit',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: 'nttDeliveryPrice',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'executorCost',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'totalCost',
+        type: 'uint256',
       },
     ],
     stateMutability: 'view',

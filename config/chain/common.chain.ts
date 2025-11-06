@@ -37,17 +37,18 @@ export const SUI_L1_CONTRACT_ADDRESSES = {
 // Sei-specific L1 Bitcoin depositor contract addresses (NTT with Executor pattern)
 // These are ETHEREUM addresses (on Ethereum mainnet/Sepolia), NOT Sei addresses
 // IMPORTANT: Only "Manager with Executor" supports Sei - plain Manager does NOT support Sei
+// SDK Version: Updated to match L1BTCDepositorNttWithExecutor with bytes32 destinationChainDepositOwner
 export const SEI_L1_CONTRACT_ADDRESSES = {
-  [NETWORK.MAINNET]: '0xd2d9c936165a85f27a5a7e07afb974d022b89463', // Manager with Executor on Ethereum Mainnet (block 23570676)
-  [NETWORK.TESTNET]: '0x54DD7080aE169DD923fE56d0C4f814a0a17B8f41', // Manager with Executor on Sepolia (L1BTCDepositorNttWithExecutor deployment pending)
+  [NETWORK.MAINNET]: '0xd2d9c936165a85f27a5a7e07afb974d022b89463', // L1BTCDepositorNttWithExecutor on Ethereum Mainnet (deployed at block 23570676)
+  [NETWORK.TESTNET]: '0x54DD7080aE169DD923fE56d0C4f814a0a17B8f41', // L1BTCDepositorNttWithExecutor on Sepolia
   [NETWORK.DEVNET]: '0x0000000000000000000000000000000000000000', // Development environment - placeholder
 } as const;
 
 // Sei-specific L2 Token contract addresses (on Sei EVM)
-// These are SEI EVM addresses (Sei EVM Chain ID: 1329 for mainnet)
+// These are SEI EVM addresses (Sei EVM Chain ID: 1329 for mainnet, 1328 for testnet)
 export const SEI_L2_TOKEN_ADDRESSES = {
   [NETWORK.MAINNET]: '0xF9201c9192249066Aec049ae7951ae298BBec767', // L2 TBTC token on Sei Mainnet (Pacific-1, Chain ID 1329)
-  [NETWORK.TESTNET]: '0x0000000000000000000000000000000000000000', // L2 TBTC token on Sei Testnet (Atlantic-2) - placeholder, update when deployed
+  [NETWORK.TESTNET]: '0x0000000000000000000000000000000000000000', // L2 TBTC token on Sei Testnet (Atlantic-2, Chain ID 1328) - placeholder, update when deployed
   [NETWORK.DEVNET]: '0x0000000000000000000000000000000000000000', // Sei Development environment L2 token (placeholder)
 } as const;
 
@@ -58,16 +59,16 @@ export const SEI_L2_TOKEN_ADDRESSES = {
 // General Wormhole Chain IDs - these may or may not map 1:1 to our internal chain IDs
 // Ref: https://docs.wormhole.com/wormhole/reference/constants
 // NOTE: These are Wormhole Chain IDs used for cross-chain messaging, NOT native blockchain chain IDs!
-// Example: Sei has Wormhole Chain ID 40, but Sei EVM has native Chain ID 1329 (Pacific-1 mainnet)
+// Example: Sei has Wormhole Chain ID 40, but Sei EVM has native Chain ID 1329 (Pacific-1 mainnet) and 1328 (Atlantic-2 testnet)
 export const WORMHOLE_CHAIN_IDS = {
   // EVM
   ARBITRUM_ONE: 23,
   BASE: 30,
-  SEI: 40, // Wormhole Chain ID for Sei (NOT the same as Sei EVM Chain ID 1329)
+  SEI: 40, // Wormhole Chain ID for Sei (NOT the same as Sei EVM Chain IDs: 1329 mainnet, 1328 testnet)
   // EVM Testnets/Devnets
   BASE_SEPOLIA: 10004,
   ARBITRUM_SEPOLIA: 10003,
-  SEI_TESTNET: 40, // Sei uses same Wormhole ID (40) for mainnet and testnet (Wormhole ID ≠ native Chain ID)
+  SEI_TESTNET: 40, // Sei uses same Wormhole ID (40) for mainnet and testnet
   // Non-EVM
   SOLANA: 1,
 } as const;

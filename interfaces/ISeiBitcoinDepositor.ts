@@ -1,6 +1,16 @@
 import type { ethers } from 'ethers';
 import type { SeiBitcoinDepositorABI } from './SeiBitcoinDepositor.js';
 
+/**
+ * Sei Bitcoin Depositor Interface - Updated for SDK v2
+ * This interface matches the L1BTCDepositorNttWithExecutor contract
+ * with NTT Hub & Spoke pattern and Wormhole Executor support.
+ * 
+ * Key Updates:
+ * - destinationChainDepositOwner is now bytes32 (not address)
+ * - Added new workflow and executor management functions
+ * - Added TokensTransferredNttWithExecutor event
+ */
 export type SeiBitcoinDepositor = ethers.Contract & {
   interface: ethers.utils.Interface;
   
@@ -9,14 +19,41 @@ export type SeiBitcoinDepositor = ethers.Contract & {
   bridge(): Promise<string>;
   tbtcVault(): Promise<string>;
   tbtcToken(): Promise<string>;
-  nttManager(): Promise<string>;
-  wormholeChainId(): Promise<number>;
+  nttManagerWithExecutor(): Promise<string>;
+  underlyingNttManager(): Promise<string>;
+  defaultSupportedChain(): Promise<number>;
+  supportedChains(chainId: number): Promise<boolean>;
+  parameterExpirationTime(): Promise<ethers.BigNumber>;
+  
+  // Workflow management functions
+  canUserStartNewWorkflow(user: string): Promise<boolean>;
+  getUserWorkflowInfo(user: string): Promise<{
+    hasActiveWorkflow: boolean;
+    nonce: string;
+    timestamp: ethers.BigNumber;
+    timeRemaining: ethers.BigNumber;
+  }>;
+  getUserWorkflowStatus(user: string): Promise<{
+    hasActiveWorkflow: boolean;
+    nonce: string;
+    timestamp: ethers.BigNumber;
+  }>;
+  areExecutorParametersSet(): Promise<{ isSet: boolean; nonce: string }>;
+  getStoredExecutorValue(): Promise<ethers.BigNumber>;
+  
+  // Quote functions
+  quoteFinalizeDeposit(destinationChain?: number): Promise<ethers.BigNumber>;
+  quoteFinalizedDeposit(destinationChain: number): Promise<{
+    nttDeliveryPrice: ethers.BigNumber;
+    executorCost: ethers.BigNumber;
+    totalCost: ethers.BigNumber;
+  }>;
   
   // Write functions
   initializeDeposit(
     fundingTx: any,
     reveal: any,
-    destinationChainDepositOwner: string,
+    destinationChainDepositOwner: ethers.BytesLike,
     overrides?: ethers.PayableOverrides,
   ): Promise<ethers.ContractTransaction>;
   
@@ -29,19 +66,19 @@ export type SeiBitcoinDepositor = ethers.Contract & {
   filters: {
     DepositInitialized(
       depositKey?: ethers.BigNumberish | null,
-      destinationChainDepositOwner?: string | null,
+      destinationChainDepositOwner?: ethers.BytesLike | null,
       l1Sender?: string | null,
     ): ethers.EventFilter;
     
     DepositFinalized(
       depositKey?: ethers.BigNumberish | null,
-      destinationChainDepositOwner?: string | null,
+      destinationChainDepositOwner?: ethers.BytesLike | null,
       l1Sender?: string | null,
     ): ethers.EventFilter;
     
-    TBTCBridgedViaNTT(
-      depositKey?: ethers.BytesLike | null,
-      recipient?: string | null,
+    TokensTransferredNttWithExecutor(
+      sender?: string | null,
+      nonce?: ethers.BytesLike | null,
     ): ethers.EventFilter;
   };
   
@@ -69,12 +106,16 @@ export type SeiBitcoinDepositor = ethers.Contract & {
   ): SeiBitcoinDepositor;
   
   on(
-    eventName: 'TBTCBridgedViaNTT',
+    eventName: 'TokensTransferredNttWithExecutor',
     listener: (
-      depositKey: string,
-      recipient: string,
+      sender: string,
+      nonce: string,
       amount: ethers.BigNumber,
-      sequence: ethers.BigNumber,
+      destinationChain: number,
+      actualRecipient: string,
+      transferSequence: ethers.BigNumber,
+      encodedReceiver: string,
+      executorCost: ethers.BigNumber,
       event: ethers.Event,
     ) => void,
   ): SeiBitcoinDepositor;
@@ -91,7 +132,7 @@ export type SeiBitcoinDepositor = ethers.Contract & {
     initializeDeposit(
       fundingTx: any,
       reveal: any,
-      destinationChainDepositOwner: string,
+      destinationChainDepositOwner: ethers.BytesLike,
       overrides?: ethers.CallOverrides,
     ): Promise<void>;
     
@@ -106,7 +147,7 @@ export type SeiBitcoinDepositor = ethers.Contract & {
     initializeDeposit(
       fundingTx: any,
       reveal: any,
-      destinationChainDepositOwner: string,
+      destinationChainDepositOwner: ethers.BytesLike,
       overrides?: ethers.PayableOverrides,
     ): Promise<ethers.BigNumber>;
     

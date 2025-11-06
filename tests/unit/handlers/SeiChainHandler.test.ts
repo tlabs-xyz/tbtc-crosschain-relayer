@@ -30,7 +30,7 @@ const mockContractInstance = {
   initializeDeposit: jest.fn(),
   finalizeDeposit: jest.fn(),
   filters: {
-    TBTCBridgedViaNTT: jest.fn(() => ({})),
+    TokensTransferredNttWithExecutor: jest.fn(() => ({})),
     DepositInitialized: jest.fn(() => ({})),
     OptimisticMintingFinalized: jest.fn(() => ({})),
   },
@@ -292,6 +292,13 @@ describe('SeiChainHandler', () => {
       }
       expect(result?.transactionHash).toBe('0xInitTxHashSuccess');
       expect(mockContractInstance.initializeDeposit).toHaveBeenCalledTimes(1);
+      
+      // Verify the contract was called with bytes32 format (not address)
+      const callArgs = mockContractInstance.initializeDeposit.mock.calls[0];
+      const l2DepositOwnerBytes32Arg = callArgs[2];
+      // Should be a 32-byte hex string (66 chars including '0x')
+      expect(l2DepositOwnerBytes32Arg).toMatch(/^0x[0-9a-fA-F]{64}$/);
+      
       expect(mockDepositsUtil.updateToInitializedDeposit).toHaveBeenCalledTimes(1);
       expect(mockDeposit.hashes.eth.initializeTxHash).toBe('0xInitTxHashSuccess');
     });
@@ -430,7 +437,7 @@ describe('SeiChainHandler', () => {
     });
   });
 
-  describe('processTBTCBridgedViaNTTEvent', () => {
+  describe('processTokensTransferredNttWithExecutorEvent', () => {
     let mockEventDeposit: Deposit;
     const mockDepositKey = '0xDepositKeyFromEvent';
     const mockAmount = ethers.BigNumber.from('1000000000000000000');
@@ -479,7 +486,7 @@ describe('SeiChainHandler', () => {
       mockEventDeposit.dates.bridgedAt = null;
       mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
 
-      await (handler as any).processTBTCBridgedViaNTTEvent(
+      await (handler as any).processTokensTransferredNttWithExecutorEvent(
         mockDepositKey,
         mockRecipient,
         mockAmount,
@@ -499,7 +506,7 @@ describe('SeiChainHandler', () => {
 
     it('should log a warning and skip if deposit is not found', async () => {
       mockDepositStore.getById.mockResolvedValue(null);
-      await (handler as any).processTBTCBridgedViaNTTEvent(
+      await (handler as any).processTokensTransferredNttWithExecutorEvent(
         mockDepositKey,
         mockRecipient,
         mockAmount,
@@ -517,7 +524,7 @@ describe('SeiChainHandler', () => {
     it('should skip update if deposit is already BRIDGED', async () => {
       mockEventDeposit.status = DepositStatus.BRIDGED;
       mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
-      await (handler as any).processTBTCBridgedViaNTTEvent(
+      await (handler as any).processTokensTransferredNttWithExecutorEvent(
         mockDepositKey,
         mockRecipient,
         mockAmount,
@@ -533,7 +540,7 @@ describe('SeiChainHandler', () => {
     it('should log an error and skip if deposit chainId does not match handler chainId', async () => {
       mockEventDeposit.chainId = 'DIFFERENT_CHAIN';
       mockDepositStore.getById.mockResolvedValue(mockEventDeposit);
-      await (handler as any).processTBTCBridgedViaNTTEvent(
+      await (handler as any).processTokensTransferredNttWithExecutorEvent(
         mockDepositKey,
         mockRecipient,
         mockAmount,
