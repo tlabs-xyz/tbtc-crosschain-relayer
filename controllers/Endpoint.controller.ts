@@ -4,7 +4,7 @@ import { createDeposit, createDepositFromNotification, getDepositId } from '../u
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { getFundingTxHash } from '../utils/GetTransactionHash.js';
+import { getTransactionHash } from '../utils/GetTransactionHash.js';
 import { DepositStore } from '../utils/DepositStore.js';
 import {
   RevealRequestSchema,
@@ -41,7 +41,7 @@ export class EndpointController {
    */
   async handleReveal(req: Request, res: Response): Promise<void> {
     const logApiData = {
-      fundingTxHash: req.body.fundingTx ? getFundingTxHash(req.body.fundingTx) : 'unknown',
+      fundingTxHash: req.body.fundingTx ? '0x' + getTransactionHash(req.body.fundingTx) : 'unknown',
     };
     logApiRequest('/api/reveal', 'POST', null, logApiData);
 
@@ -66,7 +66,9 @@ export class EndpointController {
       // Use the validated data from now on
       const { fundingTx, reveal, l2DepositOwner, l2Sender } = validationResult.data;
 
-      const fundingTxHash = getFundingTxHash(fundingTx);
+      // Use getTransactionHash() which returns little-endian (Bitcoin display format)
+      // Then getDepositId() will reverse it to big-endian for keccak256 calculation
+      const fundingTxHash = '0x' + getTransactionHash(fundingTx);
       const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
       logger.info(
         `[${this.chainHandler.config.chainName}] Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
@@ -153,7 +155,7 @@ export class EndpointController {
       );
 
       // Log error to audit log
-      const depositId = req.body.fundingTx ? getFundingTxHash(req.body.fundingTx) : 'unknown';
+      const depositId = req.body.fundingTx ? '0x' + getTransactionHash(req.body.fundingTx) : 'unknown';
       logDepositError(
         depositId,
         `[${this.chainHandler.config.chainName}] Error handling reveal endpoint`,
@@ -277,7 +279,10 @@ export class EndpointController {
       const depositKey = BigNumber.from(depositKeyRaw).toString();
 
       // 2. Verify depositKey matches fundingTx + reveal
-      const fundingTxHash = getFundingTxHash(fundingTx);
+      // Use getTransactionHash() which returns little-endian (Bitcoin display format)
+      // Then getDepositId() will reverse it to big-endian for keccak256 calculation
+      // This matches the reference implementation and on-chain contract behavior
+      const fundingTxHash = '0x' + getTransactionHash(fundingTx);
       const calculatedDepositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
 
       if (calculatedDepositId !== depositKey) {

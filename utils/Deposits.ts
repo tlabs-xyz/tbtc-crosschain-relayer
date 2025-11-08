@@ -253,14 +253,13 @@ export const createDepositFromNotification = (
   const fundingTxHashHex = '0x' + bitcoinTxHash;
 
   // Verify depositKey matches (should have been verified by controller, but double-check)
+  // This is a critical validation - if it fails, we must halt execution to prevent
+  // creating a corrupted deposit record that will fail during finalization
   const calculatedDepositId = getDepositId(fundingTxHashHex, reveal.fundingOutputIndex);
   if (calculatedDepositId !== depositKey) {
-    logger.error('Deposit key mismatch in createDepositFromNotification:', {
-      provided: depositKey,
-      calculated: calculatedDepositId,
-      fundingTxHash: fundingTxHashHex,
-      outputIndex: reveal.fundingOutputIndex,
-    });
+    const errorMsg = `Deposit key mismatch in createDepositFromNotification: provided=${depositKey}, calculated=${calculatedDepositId}, fundingTxHash=${fundingTxHashHex}, outputIndex=${reveal.fundingOutputIndex}`;
+    logger.error(errorMsg);
+    throw new Error(errorMsg);
   }
 
   const deposit: Deposit = {
