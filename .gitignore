@@ -28,3 +28,5 @@ prisma/memory:
 *.diff
 
 *.log
+package-lock.json
+external/

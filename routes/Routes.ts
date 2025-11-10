@@ -128,4 +128,16 @@ if (process.env.USE_ENDPOINT === 'true') {
   );
 }
 
+// Gasless deposit notification endpoint (always enabled, independent of USE_ENDPOINT)
+// This endpoint allows the backend to notify the relayer when a deposit has been initialized
+router.post(
+  '/api/:chainName/deposit/notify',
+  validateChainStrict,
+  (req: Request, res: Response) => {
+    const { chainHandler } = req as RequestWithChainInfo;
+    const endpointController = new EndpointController(chainHandler!);
+    return endpointController.handleDepositNotification(req, res);
+  },
+);
+
 export default router;

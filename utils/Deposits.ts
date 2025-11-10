@@ -219,6 +219,110 @@ export const createDeposit = (
 };
 
 /**
+ * Creates a deposit record from backend notification (gasless flow).
+ * The deposit was ALREADY initialized on L1 by the backend.
+ *
+ * This function is used in the gasless deposit flow where:
+ * 1. Backend initializes deposit on L1 using its own keys
+ * 2. Backend notifies relayer via HTTP API
+ * 3. Relayer creates this deposit record with status=INITIALIZED
+ * 4. Relayer continues with normal finalization flow
+ *
+ * @param depositKey - Deposit key from backend (already calculated)
+ * @param fundingTx - Bitcoin funding transaction
+ * @param reveal - Deposit reveal info
+ * @param destinationChainDepositOwner - L2 deposit owner address
+ * @param initTxHash - L1 initialization transaction hash (from backend)
+ * @param backendAddress - Backend wallet address (msg.sender on L1 initializeDeposit call)
+ * @param chainId - Chain identifier
+ * @returns Deposit object with status=INITIALIZED
+ */
+export const createDepositFromNotification = (
+  depositKey: string,
+  fundingTx: FundingTransaction,
+  reveal: Reveal,
+  destinationChainDepositOwner: string,
+  initTxHash: string,
+  backendAddress: string,
+  chainId: string,
+): Deposit => {
+  const now = Date.now();
+
+  // Calculate Bitcoin transaction hash for consistency checking
+  const bitcoinTxHash = getTransactionHash(fundingTx);
+  const fundingTxHashHex = '0x' + bitcoinTxHash;
+
+  // Verify depositKey matches (should have been verified by controller, but double-check)
+  // This is a critical validation - if it fails, we must halt execution to prevent
+  // creating a corrupted deposit record that will fail during finalization
+  const calculatedDepositId = getDepositId(fundingTxHashHex, reveal.fundingOutputIndex);
+  if (calculatedDepositId !== depositKey) {
+    const errorMsg = `Deposit key mismatch in createDepositFromNotification: provided=${depositKey}, calculated=${calculatedDepositId}, fundingTxHash=${fundingTxHashHex}, outputIndex=${reveal.fundingOutputIndex}`;
+    logger.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  const deposit: Deposit = {
+    id: depositKey,
+    chainId: chainId,
+    fundingTxHash: fundingTxHashHex,
+    outputIndex: reveal.fundingOutputIndex,
+    hashes: {
+      btc: {
+        btcTxHash: bitcoinTxHash,
+      },
+      eth: {
+        initializeTxHash: initTxHash, // Backend's initialization tx
+        finalizeTxHash: null,
+      },
+      solana: {
+        bridgeTxHash: null,
+      },
+    },
+    receipt: {
+      depositor: backendAddress, // Backend wallet address (msg.sender on L1)
+      blindingFactor: reveal.blindingFactor,
+      walletPublicKeyHash: reveal.walletPubKeyHash,
+      refundPublicKeyHash: reveal.refundPubKeyHash,
+      refundLocktime: reveal.refundLocktime,
+      extraData: destinationChainDepositOwner,
+    },
+    L1OutputEvent: {
+      fundingTx: {
+        version: fundingTx.version,
+        inputVector: fundingTx.inputVector,
+        outputVector: fundingTx.outputVector,
+        locktime: fundingTx.locktime,
+      },
+      reveal: reveal,
+      l2DepositOwner: destinationChainDepositOwner,
+      l2Sender: backendAddress, // Backend wallet address (msg.sender on L1)
+    },
+    owner: destinationChainDepositOwner,
+    status: DepositStatus.INITIALIZED, // ALREADY initialized by backend
+    dates: {
+      createdAt: now,
+      initializationAt: now, // Just initialized by backend
+      finalizationAt: null,
+      lastActivityAt: now,
+      awaitingWormholeVAAMessageSince: null,
+      bridgedAt: null,
+    },
+    wormholeInfo: {
+      txHash: null,
+      transferSequence: null,
+      bridgingAttempted: false,
+    },
+    error: null,
+  };
+
+  logger.info(`Created deposit from backend notification: ${depositKey}`);
+  logDepositCreated(deposit);
+
+  return deposit;
+};
+
+/**
  * @name updateToFinalizedDeposit
  * @description Updates the status of a deposit to "FINALIZED" and records the finalization transaction hash.
  * This function takes a deposit object and a transaction object, updates the deposit status to "FINALIZED",

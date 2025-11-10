@@ -17,6 +17,8 @@ import { getBaseSepoliaChainInput } from './chain/baseSepolia.chain.js';
 import { getArbitrumSepoliaChainInput } from './chain/arbitrumSepolia.chain.js';
 import { getStarknetMainnetChainInput } from './chain/starknetMainnet.chain.js';
 import { getSuiTestnetChainInput } from './chain/suiTestnet.chain.js';
+import { getEthereumMainnetChainInput } from './chain/ethereumMainnet.chain.js';
+import { getEthereumSepoliaChainInput } from './chain/ethereumSepolia.chain.js';
 
 // Re-exporting these types as they might be useful for consumers of the registry
 export type { EvmChainConfig, SolanaChainConfig, StarknetChainConfig, SuiChainConfig };
@@ -37,6 +39,8 @@ type ChainSchemaRegistry = {
   arbitrumSepolia: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
   baseMainnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
   baseSepolia: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  ethereumMainnet: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
+  ethereumSepolia: ChainSchemaRegistryEntry<typeof EvmChainConfigSchema>;
   solanaDevnetImported: ChainSchemaRegistryEntry<typeof SolanaChainConfigSchema>;
   [key: string]: ChainSchemaRegistryEntry<z.ZodTypeAny>;
 };
@@ -62,6 +66,14 @@ export const chainSchemaRegistry: ChainSchemaRegistry = {
   baseSepolia: {
     schema: EvmChainConfigSchema,
     getInputFunc: getBaseSepoliaChainInput,
+  },
+  ethereumMainnet: {
+    schema: EvmChainConfigSchema,
+    getInputFunc: getEthereumMainnetChainInput,
+  },
+  ethereumSepolia: {
+    schema: EvmChainConfigSchema,
+    getInputFunc: getEthereumSepoliaChainInput,
   },
   solanaDevnetImported: {
     schema: SolanaChainConfigSchema,
