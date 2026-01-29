@@ -779,6 +779,24 @@ describe('L1RedemptionHandler', () => {
       expect((result as L1RelayResult).error).toContain('pending redemption');
     });
 
+    it('should log warn for collision error (pending redemption)', async () => {
+      const error = new Error('There is already a pending redemption for the given redeemer');
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockRejectedValue(error);
+
+      await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Pending redemption collision detected - will retry.',
+      );
+      expect(logger.error).not.toHaveBeenCalledWith(expect.stringContaining('collision'));
+    });
+
     it('should return isRetryable: false for VAA used error', async () => {
       const error = new Error('VAA was already executed');
       mockSdk.redemptions.relayRedemptionRequestToL1.mockRejectedValue(error);

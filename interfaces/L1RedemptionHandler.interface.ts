@@ -2,20 +2,32 @@ import type { AnyChainConfig } from '../config/index.js';
 import type { BigNumber } from 'ethers';
 
 /**
- * Result of an L1 relay operation for typed error propagation.
- * Enables intelligent retry decisions by preserving error context.
+ * Success case - L1 relay completed successfully.
+ * txHash is required and isRetryable is always false for success.
  *
  * @example
- * // Success case
- * const success: L1RelayResult = {
+ * const success: L1RelaySuccess = {
  *   success: true,
  *   txHash: '0xabc123...',
  *   isRetryable: false
  * };
+ */
+interface L1RelaySuccess {
+  /** Indicates the relay operation succeeded */
+  success: true;
+  /** L1 transaction hash - required on success */
+  txHash: string;
+  /** Always false for successful operations */
+  isRetryable: false;
+}
+
+/**
+ * Failure case - L1 relay failed.
+ * error is required, txHash is optional (present for on-chain reverts).
  *
  * @example
  * // Retryable error (pending redemption collision)
- * const retryable: L1RelayResult = {
+ * const retryable: L1RelayFailure = {
  *   success: false,
  *   error: 'pending redemption',
  *   isRetryable: true
@@ -23,22 +35,38 @@ import type { BigNumber } from 'ethers';
  *
  * @example
  * // Permanent error (VAA already used)
- * const permanent: L1RelayResult = {
+ * const permanent: L1RelayFailure = {
  *   success: false,
  *   error: 'VAA was already executed',
  *   isRetryable: false
  * };
  */
-export interface L1RelayResult {
-  /** Whether the relay operation succeeded */
-  success: boolean;
-  /** L1 transaction hash, present only on successful relay */
-  txHash?: string;
-  /** Error message describing the failure, present only on failed relay */
-  error?: string;
+interface L1RelayFailure {
+  /** Indicates the relay operation failed */
+  success: false;
+  /** Error message describing the failure - required on failure */
+  error: string;
   /** Indicates if the error is transient and the operation should be retried */
   isRetryable: boolean;
+  /** L1 transaction hash, may be present for on-chain reverts */
+  txHash?: string;
 }
+
+/**
+ * Result of an L1 relay operation for typed error propagation.
+ * Uses discriminated union to enforce field presence based on success value:
+ * - Success: txHash required, error not present, isRetryable always false
+ * - Failure: error required, txHash optional, isRetryable indicates retry eligibility
+ *
+ * Type narrowing allows direct field access after checking success:
+ * @example
+ * if (result.success) {
+ *   console.log(result.txHash); // TypeScript knows txHash is string
+ * } else {
+ *   console.log(result.error);  // TypeScript knows error is string
+ * }
+ */
+export type L1RelayResult = L1RelaySuccess | L1RelayFailure;
 
 /**
  * Interface for chain-specific handlers that define common functionality

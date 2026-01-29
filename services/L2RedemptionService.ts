@@ -266,7 +266,7 @@ export class L2RedemptionService {
             );
           } else {
             // Retry attempt recorded - status remains VAA_FETCHED for next processing cycle
-            redemption.error = l1Result.error ?? 'L1 relay failed (retryable)';
+            redemption.error = l1Result.error;
             redemption.logs?.push(
               `L1 relay attempt ${redemption.retryCount}/${MAX_RETRY_ATTEMPTS} failed at ${new Date().toISOString()}: ${l1Result.error}`,
             );
@@ -275,10 +275,11 @@ export class L2RedemptionService {
               `[L1Relay] Redemption ${redemption.id} failed with retryable error, attempt ${redemption.retryCount}/${MAX_RETRY_ATTEMPTS}. Error: ${l1Result.error}`,
             );
           }
-        } else {
+        } else if (!l1Result.success) {
+          // Permanent failure path: non-retryable error
           redemption.status = RedemptionStatus.FAILED;
           redemption.dates.lastActivityAt = Date.now();
-          redemption.error = l1Result.error ?? 'L1 submission failed (see logs for details)';
+          redemption.error = l1Result.error;
           redemption.logs?.push(
             `L1 submission failed at ${new Date().toISOString()}: ${l1Result.error}`,
           );

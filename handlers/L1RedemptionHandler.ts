@@ -184,17 +184,19 @@ export class L1RedemptionHandler implements L1RedemptionHandlerInterface {
         }),
         err,
       );
-      // Common issues from example script
-      if (err.message.includes('VAA was already executed')) {
-        logger.error('This VAA has already been redeemed.');
-      } else if (err.message.includes('insufficient funds')) {
-        logger.error('Insufficient funds for gas on L1.');
-      }
-
       // Error classification for retry logic
       const isCollision = err.message.includes('pending redemption');
       const isVaaUsed = err.message.includes('VAA was already executed');
       const isGasError = err.message.includes('insufficient funds');
+
+      // Common issues from example script
+      if (isVaaUsed) {
+        logger.error('This VAA has already been redeemed.');
+      } else if (isGasError) {
+        logger.error('Insufficient funds for gas on L1.');
+      } else if (isCollision) {
+        logger.warn('Pending redemption collision detected - will retry.');
+      }
 
       return {
         success: false,
