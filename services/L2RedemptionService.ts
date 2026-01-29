@@ -15,6 +15,12 @@ import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer.js';
 import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
 
+/**
+ * Maximum number of retry attempts for L1 relay operations before marking a redemption as failed.
+ * After this limit is reached, retryable errors will transition the redemption to FAILED status.
+ */
+const MAX_RETRY_ATTEMPTS = 10;
+
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;
   private l2BitcoinRedeemerContract?: ethers.Contract;
@@ -240,17 +246,35 @@ export class L2RedemptionService {
             `Redemption ${redemption.id} successfully submitted to L1 and marked COMPLETED. L1 tx: ${l1Result.txHash}`,
           );
         } else if (l1Result.isRetryable) {
-          // Collision detected - another redemption is pending, keep as VAA_FETCHED for retry
+          // Retryable error handling:
+          // - Increment retry counter to track attempt history
+          // - Check if max retries exceeded to prevent infinite retry loops
+          // - Keep status as VAA_FETCHED to allow retry on next cron cycle (unless max reached)
           redemption.retryCount = (redemption.retryCount ?? 0) + 1;
           redemption.dates.lastActivityAt = Date.now();
-          redemption.error = l1Result.error ?? 'L1 submission failed (retryable collision)';
-          redemption.logs?.push(
-            `L1 submission collision detected at ${new Date().toISOString()}: ${l1Result.error}. Retry count: ${redemption.retryCount}`,
-          );
-          await RedemptionStore.update(redemption);
-          logger.warn(
-            `Redemption ${redemption.id} collision detected, will retry. Retry count: ${redemption.retryCount}`,
-          );
+
+          if (redemption.retryCount >= MAX_RETRY_ATTEMPTS) {
+            // Max retries exceeded - transition to permanent failure to prevent infinite retry loops
+            redemption.status = RedemptionStatus.FAILED;
+            redemption.error = `Max retries (${MAX_RETRY_ATTEMPTS}) exceeded: ${l1Result.error}`;
+            redemption.logs?.push(
+              `L1 relay failed after ${redemption.retryCount} attempts at ${new Date().toISOString()}: ${l1Result.error}`,
+            );
+            await RedemptionStore.update(redemption);
+            logger.error(
+              `[L1Relay] Redemption ${redemption.id} exceeded max retry limit (${MAX_RETRY_ATTEMPTS}), status changed to FAILED. Last error: ${l1Result.error}`,
+            );
+          } else {
+            // Retry attempt recorded - status remains VAA_FETCHED for next processing cycle
+            redemption.error = l1Result.error ?? 'L1 relay failed (retryable)';
+            redemption.logs?.push(
+              `L1 relay attempt ${redemption.retryCount}/${MAX_RETRY_ATTEMPTS} failed at ${new Date().toISOString()}: ${l1Result.error}`,
+            );
+            await RedemptionStore.update(redemption);
+            logger.warn(
+              `[L1Relay] Redemption ${redemption.id} failed with retryable error, attempt ${redemption.retryCount}/${MAX_RETRY_ATTEMPTS}. Error: ${l1Result.error}`,
+            );
+          }
         } else {
           redemption.status = RedemptionStatus.FAILED;
           redemption.dates.lastActivityAt = Date.now();
