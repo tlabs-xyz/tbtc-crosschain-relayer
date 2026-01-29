@@ -43,4 +43,6 @@ export type Redemption = {
     lastActivityAt: number;
   };
   logs?: string[];
+  /** Number of retry attempts for collision errors */
+  retryCount?: number;
 };

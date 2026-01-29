@@ -155,7 +155,9 @@ export class EndpointController {
       );
 
       // Log error to audit log
-      const depositId = req.body.fundingTx ? '0x' + getTransactionHash(req.body.fundingTx) : 'unknown';
+      const depositId = req.body.fundingTx
+        ? '0x' + getTransactionHash(req.body.fundingTx)
+        : 'unknown';
       logDepositError(
         depositId,
         `[${this.chainHandler.config.chainName}] Error handling reveal endpoint`,
@@ -270,8 +272,14 @@ export class EndpointController {
         return;
       }
 
-      const { depositKey: depositKeyRaw, fundingTx, reveal, destinationChainDepositOwner, initTxHash, backendAddress } =
-        validationResult.data;
+      const {
+        depositKey: depositKeyRaw,
+        fundingTx,
+        reveal,
+        destinationChainDepositOwner,
+        initTxHash,
+        backendAddress,
+      } = validationResult.data;
 
       // Normalize depositKey to decimal format (relayer's internal representation)
       // Backend sends hex string (0x...), but relayer stores deposits with decimal string IDs

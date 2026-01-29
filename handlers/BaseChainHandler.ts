@@ -214,8 +214,8 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             // - Backend is properly retrying failed notifications
             logger.warn(
               `Received OptimisticMintingFinalized event for unknown Deposit Key: ${depositId}. ` +
-              `Skipping automatic recovery. Deposit should be created via L2 event listener or backend notification. ` +
-              `Chain: ${this.config.chainName}`,
+                `Skipping automatic recovery. Deposit should be created via L2 event listener or backend notification. ` +
+                `Chain: ${this.config.chainName}`,
             );
             logDepositError(
               depositId,
