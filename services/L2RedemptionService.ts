@@ -218,33 +218,48 @@ export class L2RedemptionService {
         const amountBn = ethers.BigNumber.from(
           (redemption.event.amount as any)?._hex ?? (redemption.event.amount as any),
         );
-        const l1TxHash = await this.l1RedemptionHandler.relayRedemptionToL1(
+        const l1Result = await this.l1RedemptionHandler.relayRedemptionToL1(
           amountBn,
           vaaBytes,
           this.chainConfig.chainName,
           redemption.id,
+          redemption.event.redeemerOutputScript,
         );
-        if (l1TxHash) {
+        if (l1Result.success && l1Result.txHash) {
           redemption.status = RedemptionStatus.COMPLETED;
-          redemption.l1SubmissionTxHash = l1TxHash;
+          redemption.l1SubmissionTxHash = l1Result.txHash;
           redemption.dates.completedAt = Date.now();
           redemption.dates.l1SubmittedAt = Date.now();
           redemption.dates.lastActivityAt = Date.now();
           redemption.error = null;
           redemption.logs?.push(
-            `L1 submission succeeded at ${new Date().toISOString()} (tx: ${l1TxHash})`,
+            `L1 submission succeeded at ${new Date().toISOString()} (tx: ${l1Result.txHash})`,
           );
           await RedemptionStore.update(redemption);
           logger.info(
-            `Redemption ${redemption.id} successfully submitted to L1 and marked COMPLETED. L1 tx: ${l1TxHash}`,
+            `Redemption ${redemption.id} successfully submitted to L1 and marked COMPLETED. L1 tx: ${l1Result.txHash}`,
+          );
+        } else if (l1Result.isRetryable) {
+          // Collision detected - another redemption is pending, keep as VAA_FETCHED for retry
+          redemption.retryCount = (redemption.retryCount ?? 0) + 1;
+          redemption.dates.lastActivityAt = Date.now();
+          redemption.error = l1Result.error ?? 'L1 submission failed (retryable collision)';
+          redemption.logs?.push(
+            `L1 submission collision detected at ${new Date().toISOString()}: ${l1Result.error}. Retry count: ${redemption.retryCount}`,
+          );
+          await RedemptionStore.update(redemption);
+          logger.warn(
+            `Redemption ${redemption.id} collision detected, will retry. Retry count: ${redemption.retryCount}`,
           );
         } else {
           redemption.status = RedemptionStatus.FAILED;
           redemption.dates.lastActivityAt = Date.now();
-          redemption.error = 'L1 submission failed (see logs for details)';
-          redemption.logs?.push(`L1 submission failed at ${new Date().toISOString()}`);
+          redemption.error = l1Result.error ?? 'L1 submission failed (see logs for details)';
+          redemption.logs?.push(
+            `L1 submission failed at ${new Date().toISOString()}: ${l1Result.error}`,
+          );
           await RedemptionStore.update(redemption);
-          logger.error(`Redemption ${redemption.id} failed L1 submission.`);
+          logger.error(`Redemption ${redemption.id} failed L1 submission: ${l1Result.error}`);
         }
       } catch (error: any) {
         redemption.status = RedemptionStatus.FAILED;

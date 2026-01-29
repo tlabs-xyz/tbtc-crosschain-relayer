@@ -3,7 +3,10 @@ import { TBTC, DestinationChainName } from '@keep-network/tbtc-v2.ts';
 import type { BigNumber } from 'ethers';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { NETWORK } from '../config/schemas/common.schema.js';
-import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import {
+  L1RedemptionHandlerInterface,
+  L1RelayResult,
+} from '../interfaces/L1RedemptionHandler.interface.js';
 import { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
 const destinationChainName: Record<string, DestinationChainName> = {
@@ -76,7 +79,8 @@ export class L1RedemptionHandler implements L1RedemptionHandlerInterface {
     signedVaa: Uint8Array,
     l2ChainName: string,
     l2TransactionHash: string,
-  ): Promise<string | null> {
+    redeemerOutputScript: string,
+  ): Promise<L1RelayResult> {
     logger.info(
       JSON.stringify({
         message: 'Attempting to relay L2 redemption to L1 using tBTC SDK',
@@ -93,6 +97,7 @@ export class L1RedemptionHandler implements L1RedemptionHandlerInterface {
         amount,
         signedVaa,
         destinationChainName[this.config.chainName as keyof typeof destinationChainName],
+        redeemerOutputScript,
       );
 
       // Normalize tx hash to 0x-prefixed string
@@ -142,7 +147,11 @@ export class L1RedemptionHandler implements L1RedemptionHandlerInterface {
             l1BlockNumber: receipt.blockNumber,
           }),
         );
-        return l1TxHashStr;
+        return {
+          success: true,
+          txHash: l1TxHashStr,
+          isRetryable: false,
+        };
       } else {
         logErrorContext(
           JSON.stringify({
@@ -154,7 +163,11 @@ export class L1RedemptionHandler implements L1RedemptionHandlerInterface {
           }),
           new Error(`L1 tx ${l1TxHashStr} reverted`),
         );
-        return null;
+        return {
+          success: false,
+          error: `L1 tx ${l1TxHashStr} reverted on-chain`,
+          isRetryable: false,
+        };
       }
     } catch (error: any) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -177,7 +190,17 @@ export class L1RedemptionHandler implements L1RedemptionHandlerInterface {
       } else if (err.message.includes('insufficient funds')) {
         logger.error('Insufficient funds for gas on L1.');
       }
-      return null;
+
+      // Error classification for retry logic
+      const isCollision = err.message.includes('pending redemption');
+      const isVaaUsed = err.message.includes('VAA was already executed');
+      const isGasError = err.message.includes('insufficient funds');
+
+      return {
+        success: false,
+        error: err.message,
+        isRetryable: isCollision && !isVaaUsed && !isGasError,
+      };
     }
   }
 }

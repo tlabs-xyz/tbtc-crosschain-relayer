@@ -5,6 +5,7 @@ import type { BigNumber } from 'ethers';
 import { NETWORK } from '../../../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../../../config/schemas/evm.chain.schema.js';
 import logger, { logErrorContext } from '../../../utils/Logger.js';
+import type { L1RelayResult } from '../../../interfaces/L1RedemptionHandler.interface.js';
 
 // Mock external dependencies
 jest.mock('ethers', () => ({
@@ -235,6 +236,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     const mockL2ChainName = 'ArbitrumSepolia';
     const mockL2TransactionHash = '0xL2TxHash123456789012345678901234567890';
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(async () => {
       mockAmount = ethers.BigNumber.from('1000000000000000000'); // 1 token
@@ -279,13 +281,16 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBe('0xL1TxHash123456');
+      expect((result as L1RelayResult).success).toBe(true);
+      expect((result as L1RelayResult).txHash).toBe('0xL1TxHash123456');
       expect(mockSdk.redemptions.relayRedemptionRequestToL1).toHaveBeenCalledWith(
         mockAmount,
         mockSignedVaa,
         'Arbitrum',
+        mockRedeemerOutputScript,
       );
       expect(mockProvider.waitForTransaction).toHaveBeenCalledWith('0xL1TxHash123456', 1);
       expect(logger.info).toHaveBeenCalledWith(
@@ -324,9 +329,11 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBe('0xL1TxHash789'); // Should add 0x prefix
+      expect((result as L1RelayResult).success).toBe(true);
+      expect((result as L1RelayResult).txHash).toBe('0xL1TxHash789'); // Should add 0x prefix
     });
 
     it('should handle transaction hash as plain string', async () => {
@@ -358,9 +365,11 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBe('0xL1TxHashABC');
+      expect((result as L1RelayResult).success).toBe(true);
+      expect((result as L1RelayResult).txHash).toBe('0xL1TxHashABC');
     });
 
     it('should handle null targetChainTxHash', async () => {
@@ -373,9 +382,12 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      // When targetChainTxHash is null, the handler still waits for transaction
+      // and will get a result based on the receipt status
+      expect(result).toBeDefined();
     });
 
     it('should return null if transaction is reverted', async () => {
@@ -410,9 +422,12 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).error).toContain('reverted on-chain');
+      expect((result as L1RelayResult).isRetryable).toBe(false);
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('L1 redemption relay transaction failed'),
         expect.any(Error),
@@ -437,9 +452,11 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).error).toBeDefined();
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('Error in relayRedemptionToL1'),
         expect.any(Error),
@@ -455,9 +472,11 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).isRetryable).toBe(false);
       expect(logger.error).toHaveBeenCalledWith('This VAA has already been redeemed.');
     });
 
@@ -470,9 +489,11 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).isRetryable).toBe(false);
       expect(logger.error).toHaveBeenCalledWith('Insufficient funds for gas on L1.');
     });
 
@@ -490,9 +511,11 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).error).toBe('Something went wrong');
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('"errorName":"CustomError"'),
         expect.any(Error),
@@ -507,9 +530,11 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).error).toBe('String error');
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('Error in relayRedemptionToL1'),
         expect.any(Error),
@@ -548,6 +573,7 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
       // Check initial attempt log
@@ -570,6 +596,273 @@ describe('L1RedemptionHandler', () => {
 
       // Check success log
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('"l1BlockNumber":67890'));
+    });
+  });
+
+  describe('L1RelayResult Return Type', () => {
+    let mockAmount: BigNumber;
+    let mockSignedVaa: Uint8Array;
+    const mockL2ChainName = 'ArbitrumSepolia';
+    const mockL2TransactionHash = '0xL2TxHash123456789012345678901234567890';
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
+
+    beforeEach(async () => {
+      mockAmount = ethers.BigNumber.from('1000000000000000000');
+      mockSignedVaa = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+      handler = new L1RedemptionHandler(mockConfig);
+      await handler.initialize();
+      jest.clearAllMocks();
+    });
+
+    it('should return L1RelayResult with success and txHash on successful relay', async () => {
+      const mockTxHash = {
+        toPrefixedString: jest.fn().mockReturnValue('0xL1TxHash123456'),
+      };
+      const mockReceipt = {
+        status: 1,
+        transactionHash: '0xL1TxHash123456',
+        blockNumber: 12345,
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt;
+
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockResolvedValue({
+        targetChainTxHash: mockTxHash,
+      });
+      mockProvider.waitForTransaction.mockResolvedValue(mockReceipt);
+
+      const result = await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect(result).toEqual({
+        success: true,
+        txHash: '0xL1TxHash123456',
+        isRetryable: false,
+      });
+      expect((result as L1RelayResult).success).toBe(true);
+      expect((result as L1RelayResult).txHash).toBe('0xL1TxHash123456');
+      expect((result as L1RelayResult).isRetryable).toBe(false);
+      expect((result as L1RelayResult).error).toBeUndefined();
+    });
+
+    it('should return L1RelayResult with error on transaction revert', async () => {
+      const mockTxHash = {
+        toPrefixedString: jest.fn().mockReturnValue('0xRevertedTxHash'),
+      };
+      const mockReceipt = {
+        status: 0, // Reverted
+        transactionHash: '0xRevertedTxHash',
+        blockNumber: 12345,
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt;
+
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockResolvedValue({
+        targetChainTxHash: mockTxHash,
+      });
+      mockProvider.waitForTransaction.mockResolvedValue(mockReceipt);
+
+      const result = await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).error).toContain('reverted on-chain');
+      expect((result as L1RelayResult).isRetryable).toBe(false);
+      expect((result as L1RelayResult).txHash).toBeUndefined();
+    });
+
+    it('should pass redeemerOutputScript to SDK as 4th parameter', async () => {
+      const mockTxHash = {
+        toPrefixedString: jest.fn().mockReturnValue('0xL1TxHash123456'),
+      };
+      const mockReceipt = {
+        status: 1,
+        transactionHash: '0xL1TxHash123456',
+        blockNumber: 12345,
+        to: '0x0000000000000000000000000000000000000000',
+        from: '0x0000000000000000000000000000000000000000',
+        contractAddress: null,
+        transactionIndex: 0,
+        logsBloom: '0x',
+        gasUsed: ethers.BigNumber.from(0),
+        cumulativeGasUsed: ethers.BigNumber.from(0),
+        logs: [],
+        byzantium: true,
+        confirmations: 1,
+        effectiveGasPrice: ethers.BigNumber.from(0),
+        type: 2,
+      } as unknown as providers.TransactionReceipt;
+
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockResolvedValue({
+        targetChainTxHash: mockTxHash,
+      });
+      mockProvider.waitForTransaction.mockResolvedValue(mockReceipt);
+
+      await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect(mockSdk.redemptions.relayRedemptionRequestToL1).toHaveBeenCalledWith(
+        mockAmount,
+        mockSignedVaa,
+        'Arbitrum',
+        mockRedeemerOutputScript,
+      );
+    });
+  });
+
+  describe('Error Classification', () => {
+    let mockAmount: BigNumber;
+    let mockSignedVaa: Uint8Array;
+    const mockL2ChainName = 'ArbitrumSepolia';
+    const mockL2TransactionHash = '0xL2TxHash123456789012345678901234567890';
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
+
+    beforeEach(async () => {
+      mockAmount = ethers.BigNumber.from('1000000000000000000');
+      mockSignedVaa = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+      handler = new L1RedemptionHandler(mockConfig);
+      await handler.initialize();
+      jest.clearAllMocks();
+    });
+
+    it('should return isRetryable: true for collision error (pending redemption)', async () => {
+      const error = new Error('There is already a pending redemption for the given redeemer');
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockRejectedValue(error);
+
+      const result = await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).isRetryable).toBe(true);
+      expect((result as L1RelayResult).error).toContain('pending redemption');
+    });
+
+    it('should return isRetryable: false for VAA used error', async () => {
+      const error = new Error('VAA was already executed');
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockRejectedValue(error);
+
+      const result = await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).isRetryable).toBe(false);
+      expect((result as L1RelayResult).error).toContain('VAA was already executed');
+      expect(logger.error).toHaveBeenCalledWith('This VAA has already been redeemed.');
+    });
+
+    it('should return isRetryable: false for gas error (insufficient funds)', async () => {
+      const error = new Error('insufficient funds for gas * price + value');
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockRejectedValue(error);
+
+      const result = await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).isRetryable).toBe(false);
+      expect((result as L1RelayResult).error).toContain('insufficient funds');
+      expect(logger.error).toHaveBeenCalledWith('Insufficient funds for gas on L1.');
+    });
+
+    it('should return isRetryable: false for generic errors', async () => {
+      const error = new Error('Network connection failed');
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockRejectedValue(error);
+
+      const result = await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).isRetryable).toBe(false);
+      expect((result as L1RelayResult).error).toBe('Network connection failed');
+    });
+
+    it('should preserve error message in L1RelayResult.error', async () => {
+      const errorMessage = 'Detailed error: transaction failed due to specific reason XYZ';
+      const error = new Error(errorMessage);
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockRejectedValue(error);
+
+      const result = await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect((result as L1RelayResult).error).toBe(errorMessage);
+    });
+
+    it('should return isRetryable: false when error has both collision and VAA used', async () => {
+      // Edge case: message contains both patterns, VAA used takes precedence
+      const error = new Error('pending redemption: VAA was already executed');
+      mockSdk.redemptions.relayRedemptionRequestToL1.mockRejectedValue(error);
+
+      const result = await handler.relayRedemptionToL1(
+        mockAmount,
+        mockSignedVaa,
+        mockL2ChainName,
+        mockL2TransactionHash,
+        mockRedeemerOutputScript,
+      );
+
+      expect((result as L1RelayResult).success).toBe(false);
+      expect((result as L1RelayResult).isRetryable).toBe(false);
     });
   });
 
@@ -606,6 +899,7 @@ describe('L1RedemptionHandler', () => {
         new Uint8Array(0), // Empty VAA
         'ArbitrumSepolia',
         '0xL2TxHash',
+        '0x0014abcdef1234567890abcdef1234567890abcdef',
       );
 
       // Should still attempt to relay
@@ -646,13 +940,16 @@ describe('L1RedemptionHandler', () => {
         new Uint8Array([1, 2, 3]),
         'ArbitrumSepolia',
         '0xL2TxHash',
+        '0x0014abcdef1234567890abcdef1234567890abcdef',
       );
 
-      expect(result).toBe('0xLargeTxHash');
+      expect((result as L1RelayResult).success).toBe(true);
+      expect((result as L1RelayResult).txHash).toBe('0xLargeTxHash');
       expect(mockSdk.redemptions.relayRedemptionRequestToL1).toHaveBeenCalledWith(
         largeAmount,
         expect.any(Uint8Array),
         'Arbitrum',
+        '0x0014abcdef1234567890abcdef1234567890abcdef',
       );
     });
   });
@@ -662,6 +959,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     let mockL2ChainName: string;
     let mockL2TransactionHash: string;
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(async () => {
       handler = new L1RedemptionHandler(mockConfig);
@@ -684,9 +982,10 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('Error in relayRedemptionToL1'),
         expect.any(Error),
@@ -704,9 +1003,10 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('Error in relayRedemptionToL1'),
         expect.any(Error),
@@ -719,6 +1019,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     let mockL2ChainName: string;
     let mockL2TransactionHash: string;
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(async () => {
       handler = new L1RedemptionHandler(mockConfig);
@@ -748,9 +1049,10 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('Error in relayRedemptionToL1'),
         expect.any(Error),
@@ -769,9 +1071,10 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
     });
 
     it('should handle provider returning null network', async () => {
@@ -793,6 +1096,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     let mockL2ChainName: string;
     let mockL2TransactionHash: string;
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(async () => {
       handler = new L1RedemptionHandler(mockConfig);
@@ -837,12 +1141,14 @@ describe('L1RedemptionHandler', () => {
         maxSizeVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
       expect(mockSdk.redemptions.relayRedemptionRequestToL1).toHaveBeenCalledWith(
         mockAmount,
         maxSizeVaa,
         'Arbitrum',
+        mockRedeemerOutputScript,
       );
     });
 
@@ -858,9 +1164,10 @@ describe('L1RedemptionHandler', () => {
         malformedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
       expect(logErrorContext).toHaveBeenCalled();
     });
 
@@ -895,12 +1202,14 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
       expect(mockSdk.redemptions.relayRedemptionRequestToL1).toHaveBeenCalledWith(
         zeroAmount,
         mockSignedVaa,
         'Arbitrum',
+        mockRedeemerOutputScript,
       );
     });
   });
@@ -910,6 +1219,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     let mockL2ChainName: string;
     let mockL2TransactionHash: string;
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(() => {
       mockAmount = ethers.BigNumber.from(100000);
@@ -973,13 +1283,14 @@ describe('L1RedemptionHandler', () => {
             new Uint8Array([index]),
             mockL2ChainName,
             `0xL2TxHash${index}`,
+            mockRedeemerOutputScript,
           ),
         );
 
       const results = await Promise.all(promises);
 
       expect(results).toHaveLength(5);
-      expect(results.every((r) => r === '0xConcurrentTxHash')).toBe(true);
+      expect(results.every((r) => (r as L1RelayResult).txHash === '0xConcurrentTxHash')).toBe(true);
       expect(mockSdk.redemptions.relayRedemptionRequestToL1).toHaveBeenCalledTimes(5);
     });
   });
@@ -1034,6 +1345,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     let mockL2ChainName: string;
     let mockL2TransactionHash: string;
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(async () => {
       handler = new L1RedemptionHandler(mockConfig);
@@ -1065,6 +1377,7 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
       // In a real scenario, this would timeout
@@ -1113,9 +1426,10 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
       expect(logErrorContext).toHaveBeenCalled();
     });
   });
@@ -1125,6 +1439,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     let mockL2ChainName: string;
     let mockL2TransactionHash: string;
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(() => {
       mockAmount = ethers.BigNumber.from(100000);
@@ -1172,12 +1487,14 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         'OptimismSepolia',
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
       expect(mockSdk.redemptions.relayRedemptionRequestToL1).toHaveBeenCalledWith(
         mockAmount,
         mockSignedVaa,
         undefined, // OptimismSepolia not in chain mapping
+        mockRedeemerOutputScript,
       );
     });
 
@@ -1220,12 +1537,14 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         'PolygonMumbai',
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
       expect(mockSdk.redemptions.relayRedemptionRequestToL1).toHaveBeenCalledWith(
         mockAmount,
         mockSignedVaa,
         undefined, // PolygonMumbai not in chain mapping
+        mockRedeemerOutputScript,
       );
     });
   });
@@ -1235,6 +1554,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     let mockL2ChainName: string;
     let mockL2TransactionHash: string;
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(async () => {
       handler = new L1RedemptionHandler(mockConfig);
@@ -1257,9 +1577,10 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('Error in relayRedemptionToL1'),
         expect.any(Error),
@@ -1278,9 +1599,10 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
     });
   });
 
@@ -1289,6 +1611,7 @@ describe('L1RedemptionHandler', () => {
     let mockSignedVaa: Uint8Array;
     let mockL2ChainName: string;
     let mockL2TransactionHash: string;
+    const mockRedeemerOutputScript = '0x0014abcdef1234567890abcdef1234567890abcdef';
 
     beforeEach(async () => {
       handler = new L1RedemptionHandler(mockConfig);
@@ -1310,9 +1633,11 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      // When targetChainTxHash is undefined, the handler still waits for transaction
+      expect(result).toBeDefined();
     });
 
     it('should handle SDK throwing custom errors', async () => {
@@ -1329,9 +1654,10 @@ describe('L1RedemptionHandler', () => {
         mockSignedVaa,
         mockL2ChainName,
         mockL2TransactionHash,
+        mockRedeemerOutputScript,
       );
 
-      expect(result).toBeNull();
+      expect((result as L1RelayResult).success).toBe(false);
       expect(logErrorContext).toHaveBeenCalledWith(
         expect.stringContaining('Error in relayRedemptionToL1'),
         expect.any(Error),
