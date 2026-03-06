@@ -83,7 +83,11 @@ export class RedemptionStore {
       if (err.code === 'P2002') {
         logger.warn(`Redemption already exists: ${redemption.id}`);
       } else {
-        logErrorContext(`Failed to create redemption ${redemption.id}:`, err);
+        logErrorContext(`Failed to create redemption ${redemption.id}:`, err, {
+          redemptionId: redemption.id,
+          chainName: redemption.chainId,
+          l2TxHash: redemption.event.l2TransactionHash,
+        });
         throw err;
       }
     }
@@ -110,7 +114,12 @@ export class RedemptionStore {
         logger.warn(`Redemption ${redemption.id} not found for update.`);
         throw new Error(`Redemption ${redemption.id} update failed. Record not found.`);
       }
-      logErrorContext(`Failed to update redemption ${redemption.id}:`, err);
+      logErrorContext(`Failed to update redemption ${redemption.id}:`, err, {
+        redemptionId: redemption.id,
+        chainName: redemption.chainId,
+        l2TxHash: redemption.event.l2TransactionHash,
+        l1TxHash: redemption.l1SubmissionTxHash ?? undefined,
+      });
       throw err;
     }
   }

@@ -6,6 +6,7 @@
     "noEmit": false
   },
   "include": [
+    "instrumentation.ts",
     "index.ts",
     "controllers/**/*.ts",
     "handlers/**/*.ts",

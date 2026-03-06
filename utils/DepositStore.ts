@@ -31,7 +31,11 @@ export class DepositStore {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         logger.warn(`Deposit already exists: ${deposit.id}`);
       } else {
-        logErrorContext(`Failed to create deposit ${deposit.id}:`, err);
+        logErrorContext(`Failed to create deposit ${deposit.id}:`, err, {
+          depositId: deposit.id,
+          chainName: deposit.chainId,
+          fundingTxHash: deposit.fundingTxHash ?? undefined,
+        });
         throw err;
       }
     }
@@ -47,7 +51,13 @@ export class DepositStore {
       );
       logger.info(`Deposit updated: ${deposit.id}`);
     } catch (err) {
-      logErrorContext(`Failed to update deposit ${deposit.id}:`, err);
+      logErrorContext(`Failed to update deposit ${deposit.id}:`, err, {
+        depositId: deposit.id,
+        chainName: deposit.chainId,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+        finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash ?? undefined,
+      });
       throw err;
     }
   }

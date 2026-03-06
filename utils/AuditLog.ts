@@ -1,7 +1,7 @@
 import { prisma, dbLimit } from './prisma.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { Deposit } from '../types/Deposit.type.js';
-import { logErrorContext } from './Logger.js';
+import { createLoggerWithCorrelation, logErrorContext } from './Logger.js';
 
 // Event types
 export enum AuditEventType {
@@ -41,6 +41,22 @@ export const appendToAuditLog = async (
         errorCode,
       },
     }),
+  );
+
+  // Also log to SigNoz via OTLP (when OTEL_LOGS_ENABLED) for correlation
+  const logCorrelation: Record<string, string> = {
+    auditEventType: eventType,
+    ...(depositId && depositId !== 'no-deposit-id' && { depositId }),
+  };
+  const depositData = data?.deposit as Record<string, unknown> | undefined;
+  if (depositData?.fundingTxHash) logCorrelation.fundingTxHash = String(depositData.fundingTxHash);
+  if (data?.chainName) logCorrelation.chainName = String(data.chainName);
+  if (data?.txHash) logCorrelation.txHash = String(data.txHash);
+  if (data?.initializeTxHash) logCorrelation.initializeTxHash = String(data.initializeTxHash);
+  if (data?.finalizeTxHash) logCorrelation.finalizeTxHash = String(data.finalizeTxHash);
+  createLoggerWithCorrelation(logCorrelation).info(
+    { depositId, eventType, data, errorCode },
+    `Audit: ${eventType}`,
   );
 };
 

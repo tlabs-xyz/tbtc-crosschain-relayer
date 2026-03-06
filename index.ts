@@ -1,6 +1,9 @@
 // -------------------------------------------------------------------------
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
+import 'dotenv/config';
+import './instrumentation.js';
+
 // Express Server
 import express from 'express';
 import type { Express, RequestHandler } from 'express';
@@ -25,8 +28,6 @@ import {
   startCronJobs,
 } from './services/Core.js';
 import { logErrorContext } from './utils/Logger.js';
-
-import 'dotenv/config';
 
 import { chainConfigs } from './config/index.js';
 import { appConfig } from './config/app.config.js';

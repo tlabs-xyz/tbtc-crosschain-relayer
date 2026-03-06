@@ -11,7 +11,7 @@ import { NonceManager } from '@ethersproject/experimental';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import { NETWORK, CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
+import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
 import { DepositStore } from '../utils/DepositStore.js';
 import {
   updateToInitializedDeposit,
@@ -317,8 +317,24 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       logger.info(
         `MIRROR | Local status -> ${DepositStatus[l1Status]} | ID: ${deposit.id} | Reason: ${reason ?? 'L1 status sync'}`,
       );
+      createLoggerWithCorrelation({
+        depositId: deposit.id,
+        chainName: this.config.chainName,
+        fromStatus: DepositStatus[deposit.status],
+        toStatus: DepositStatus[l1Status],
+        operation: 'deposit_mirrored_from_l1',
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+        finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash ?? undefined,
+      }).info(`Deposit state change: ${DepositStatus[deposit.status]} → ${DepositStatus[l1Status]} (mirrored from L1)`);
     } catch (e: any) {
-      logErrorContext(`Failed to mirror local status to L1 for ${deposit.id}`, e);
+      logErrorContext(`Failed to mirror local status to L1 for ${deposit.id}`, e, {
+        depositId: deposit.id,
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+        finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash ?? undefined,
+      });
     }
   }
 
@@ -396,6 +412,8 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       logDepositError(deposit.id, errorMsg, {
         error: errorMsg,
         context: 'Missing L1OutputEvent data',
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
       });
       updateToInitializedDeposit(deposit, undefined, 'Missing L1OutputEvent data'); // Mark as error
       return;
@@ -463,8 +481,15 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       // Update the deposit status in the JSON storage upon successful mining
       updateToInitializedDeposit(deposit, receipt, undefined); // Pass receipt for txHash etc.
 
-      // Explicit success log
-      logger.info(
+      // Explicit success log (with correlation IDs for SigNoz)
+      createLoggerWithCorrelation({
+        depositId: deposit.id,
+        chainName: this.config.chainName,
+        operation: 'initializeDeposit',
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: receipt.transactionHash,
+        blockNumber: String(receipt.blockNumber),
+      }).info(
         `INITIALIZE | SUCCESS | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
       );
 
@@ -480,10 +505,16 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       }
 
       // Log as error only if we confirmed L1 did not progress
-      logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
+      logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error, {
+        depositId: deposit.id,
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+      });
       logDepositError(deposit.id, `Failed to initialize deposit: ${reason}`, {
         error: reason,
         originalError: error.message,
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
       });
       // Update status to reflect error, preventing immediate retries unless logic changes
       updateToInitializedDeposit(deposit, undefined, `Error: ${reason}`);
@@ -506,6 +537,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       logDepositError(deposit.id, errorMsg, {
         error: errorMsg,
         context: 'Invalid status for finalize',
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
       });
       // Optionally mark with error? updateToFinalizedDeposit(deposit, null, 'Invalid status for finalize')? Or just let process loop retry?
       // For now, just return, assuming the process loop or event handler called this correctly.
@@ -548,8 +582,16 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       // Update status upon successful mining
       updateToFinalizedDeposit(deposit, receipt, undefined); // Pass only deposit and receipt on success
 
-      // Explicit success log
-      logger.info(
+      // Explicit success log (with correlation IDs for SigNoz)
+      createLoggerWithCorrelation({
+        depositId: deposit.id,
+        chainName: this.config.chainName,
+        operation: 'finalizeDeposit',
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+        finalizeTxHash: receipt.transactionHash,
+        blockNumber: String(receipt.blockNumber),
+      }).info(
         `FINALIZE | SUCCESS | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
       );
 
@@ -578,10 +620,18 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       } catch {}
 
       // Handle other errors only if L1 did not progress
-      logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
+      logErrorContext(`FINALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error, {
+        depositId: deposit.id,
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+      });
       logDepositError(deposit.id, `Failed to finalize deposit: ${reason}`, {
         error: reason,
         originalError: error.message,
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
       });
       // Mark as error to potentially prevent immediate retries depending on cleanup logic
       updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
