@@ -25,10 +25,14 @@ if (otelEnabled && otelEndpoint) {
     url: `${otelEndpoint.replace(/\/$/, '')}/v1/traces`,
     headers: process.env.OTEL_EXPORTER_OTLP_HEADERS
       ? Object.fromEntries(
-          process.env.OTEL_EXPORTER_OTLP_HEADERS.split(',').map((h) => {
-            const [k, v] = h.trim().split('=');
-            return [k, v?.trim() ?? ''];
-          }),
+          process.env.OTEL_EXPORTER_OTLP_HEADERS.split(',')
+            .map((h) => h.trim())
+            .filter((h) => h.includes('='))
+            .map((h) => {
+              const idx = h.indexOf('=');
+              return [h.slice(0, idx), h.slice(idx + 1).trim()];
+            })
+            .filter(([k, v]) => k && v),
         )
       : undefined,
   });
@@ -47,7 +51,7 @@ if (otelEnabled && otelEndpoint) {
   sdk.start();
 
   // Graceful shutdown
-  process.on('SIGTERM', () => {
+  const gracefulOTelShutdown = () => {
     sdk
       .shutdown()
       .then(() => process.exit(0))
@@ -55,5 +59,8 @@ if (otelEnabled && otelEndpoint) {
         console.error('Error shutting down OTel SDK', err);
         process.exit(1);
       });
-  });
+  };
+
+  process.on('SIGTERM', gracefulOTelShutdown);
+  process.on('SIGINT', gracefulOTelShutdown);
 }

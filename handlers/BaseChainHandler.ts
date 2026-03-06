@@ -497,7 +497,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     } catch (error: any) {
       // Error Handling - Check if it's a specific revert reason or common issue
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
-      logErrorContext(`INITIALIZE | ERROR | ID: ${deposit.id} | Reason: ${reason}`, error);
+
       // If the deposit was already revealed, mirror local status to avoid retries
       if (reason.includes('Deposit already revealed')) {
         await this.mirrorLocalStatusToL1(deposit, DepositStatus.INITIALIZED, reason);
