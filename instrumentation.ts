@@ -10,10 +10,13 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
+/** Enables tracing: OTel SDK bootstrap, trace export to OTLP. */
 const otelEnabled = process.env.OTEL_ENABLED === 'true';
 const otelEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 const serviceName = process.env.OTEL_SERVICE_NAME || process.env.APP_NAME || 'tbtc-crosschain-relayer';
 const serviceVersion = process.env.APP_VERSION || '1.0.0-pre';
+
+let sdk: NodeSDK | null = null;
 
 if (otelEnabled && otelEndpoint) {
   const resource = new Resource({
@@ -33,7 +36,7 @@ if (otelEnabled && otelEndpoint) {
       : undefined,
   });
 
-  const sdk = new NodeSDK({
+  sdk = new NodeSDK({
     resource,
     traceExporter,
     instrumentations: [
@@ -45,15 +48,11 @@ if (otelEnabled && otelEndpoint) {
   });
 
   sdk.start();
+}
 
-  // Graceful shutdown
-  process.on('SIGTERM', () => {
-    sdk
-      .shutdown()
-      .then(() => process.exit(0))
-      .catch((err) => {
-        console.error('Error shutting down OTel SDK', err);
-        process.exit(1);
-      });
-  });
+/** Shuts down the OTel SDK (flushes traces). No-op when OTel is disabled. Does not exit the process. */
+export async function shutdownOtel(): Promise<void> {
+  if (sdk) {
+    await sdk.shutdown();
+  }
 }

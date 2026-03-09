@@ -43,7 +43,7 @@ export const appendToAuditLog = async (
     }),
   );
 
-  // Also log to SigNoz via OTLP (when OTEL_LOGS_ENABLED) for correlation
+  // Also log to SigNoz via OTLP when OTEL_LOGS_ENABLED (log export)
   const logCorrelation: Record<string, string> = {
     auditEventType: eventType,
     ...(depositId && depositId !== 'no-deposit-id' && { depositId }),

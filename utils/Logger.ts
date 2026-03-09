@@ -2,7 +2,9 @@ import pino from 'pino';
 import { trace } from '@opentelemetry/api';
 
 const APP_NAME = (process.env.APP_NAME || 'tBTC Cross-Chain Relayer').toUpperCase();
+/** Enables log export to OTLP (pino-opentelemetry-transport sends logs to SigNoz). */
 const OTEL_LOGS_ENABLED = process.env.OTEL_LOGS_ENABLED === 'true';
+/** Enables tracing (instrumentation.ts); used here to inject trace_id/span_id into log records. */
 const OTEL_ENABLED = process.env.OTEL_ENABLED === 'true';
 
 /**
@@ -86,13 +88,15 @@ function getTransport(): pino.TransportMultiOptions | pino.TransportSingleOption
     });
   }
 
-  // Add OTLP transport when SigNoz logging is enabled
+  // Add OTLP log export when OTEL_LOGS_ENABLED
   if (OTEL_LOGS_ENABLED) {
+    const otelServiceName =
+      process.env.OTEL_SERVICE_NAME || process.env.APP_NAME || 'tbtc-crosschain-relayer';
     targets.push({
       target: 'pino-opentelemetry-transport',
       options: {
         resourceAttributes: {
-          'service.name': process.env.OTEL_SERVICE_NAME || APP_NAME,
+          'service.name': otelServiceName,
           'service.version': process.env.APP_VERSION || '1.0.0-pre',
         },
       },
@@ -161,17 +165,7 @@ export const logErrorContext = (
   } else {
     logDetails.errorData = error;
   }
-  if (context?.chainName) logDetails.chainName = context.chainName;
-  if (context?.depositId) logDetails.depositId = context.depositId;
-  if (context?.redemptionId) logDetails.redemptionId = context.redemptionId;
-  if (context?.fundingTxHash) logDetails.fundingTxHash = context.fundingTxHash;
-  if (context?.initializeTxHash) logDetails.initializeTxHash = context.initializeTxHash;
-  if (context?.finalizeTxHash) logDetails.finalizeTxHash = context.finalizeTxHash;
-  if (context?.l2TxHash) logDetails.l2TxHash = context.l2TxHash;
-  if (context?.l1TxHash) logDetails.l1TxHash = context.l1TxHash;
-  if (context?.txHash) logDetails.txHash = context.txHash;
 
-  // Use createLoggerWithCorrelation so errors go to SigNoz with correlation metadata
   const correlation: Record<string, string> = { operation: 'error' };
   if (context?.chainName) correlation.chainName = context.chainName;
   if (context?.depositId) correlation.depositId = context.depositId;
@@ -182,6 +176,7 @@ export const logErrorContext = (
   if (context?.l2TxHash) correlation.l2TxHash = context.l2TxHash;
   if (context?.l1TxHash) correlation.l1TxHash = context.l1TxHash;
   if (context?.txHash) correlation.txHash = context.txHash;
+
   createLoggerWithCorrelation(correlation).error(logDetails, message);
 };
 
