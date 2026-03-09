@@ -38,7 +38,8 @@
     "db:backup": "pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -F c -b -v -f backup.dump",
     "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump",
     "db:reset": "npx prisma db push --force-reset --accept-data-loss",
-    "pretest": "docker-compose -f docker-compose.yml -f docker-compose.ci.yml down -v && docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres"
+    "pretest": "docker-compose -f docker-compose.yml -f docker-compose.ci.yml down -v && docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres",
+    "depcheck": "depcheck --ignores @opentelemetry/sdk-trace-node,pino-opentelemetry-transport,pino-pretty,rimraf,@types/jest,eslint-import-resolver-typescript,improved-yarn-audit"
   },
   "keywords": [],
   "author": "T-Labs",
@@ -93,12 +94,12 @@
     "@types/supertest": "^6.0.2",
     "@typescript-eslint/eslint-plugin": "^8.35.0",
     "@typescript-eslint/parser": "^8.35.0",
-    "depcheck": "^1.4.7",
     "eslint": "^9.29.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-import-resolver-typescript": "^4.4.2",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-prettier": "^5.2.5",
+    "depcheck": "^1.4.7",
     "improved-yarn-audit": "^3.0.3",
     "jest": "^29.7.0",
     "prettier": "^3.5.3",
