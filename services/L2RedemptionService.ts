@@ -4,7 +4,7 @@ import { encoding, serialize } from '@wormhole-foundation/sdk';
 import { WormholeVaaService } from './WormholeVaaService.js';
 import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
 import type { L1RedemptionHandler } from '../handlers/L1RedemptionHandler.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
+import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
 import {
   RedemptionStatus,
   type Redemption,
@@ -119,7 +119,14 @@ export class L2RedemptionService {
           logs: [`Redemption created at ${new Date(now).toISOString()}`],
         };
         await RedemptionStore.create(redemption);
-        logger.info(`Redemption request persisted for L2 tx: ${redemptionId}`);
+        createLoggerWithCorrelation({
+          redemptionId,
+          chainName: this.chainConfig.chainName,
+          fromStatus: 'CREATED',
+          toStatus: 'PENDING',
+          operation: 'redemption_created',
+          l2TxHash: eventData.l2TransactionHash,
+        }).info('Redemption state change: CREATED → PENDING');
       },
     );
 
@@ -167,7 +174,14 @@ export class L2RedemptionService {
           redemption.error = null;
           redemption.logs?.push(`VAA fetched and serialized at ${new Date().toISOString()}`);
           await RedemptionStore.update(redemption);
-          logger.info(`VAA fetched and redemption updated: ${redemption.id}`);
+          createLoggerWithCorrelation({
+            redemptionId: redemption.id,
+            chainName: this.chainConfig.chainName,
+            fromStatus: 'PENDING',
+            toStatus: 'VAA_FETCHED',
+            operation: 'redemption_vaa_fetched',
+            l2TxHash: redemption.event.l2TransactionHash,
+          }).info('Redemption state change: PENDING → VAA_FETCHED');
         } else {
           redemption.vaaStatus = RedemptionStatus.VAA_FAILED;
           redemption.status = RedemptionStatus.VAA_FAILED;
@@ -176,6 +190,14 @@ export class L2RedemptionService {
           redemption.logs?.push(`VAA fetch failed at ${new Date().toISOString()}`);
           await RedemptionStore.update(redemption);
           logger.warn(`VAA fetch failed for redemption: ${redemption.id}`);
+          createLoggerWithCorrelation({
+            redemptionId: redemption.id,
+            chainName: this.chainConfig.chainName,
+            fromStatus: 'PENDING',
+            toStatus: 'VAA_FAILED',
+            operation: 'redemption_vaa_failed',
+            l2TxHash: redemption.event.l2TransactionHash,
+          }).info('Redemption state change: PENDING → VAA_FAILED');
         }
       } catch (error: any) {
         redemption.vaaStatus = RedemptionStatus.VAA_FAILED;
@@ -187,6 +209,14 @@ export class L2RedemptionService {
         );
         await RedemptionStore.update(redemption);
         logger.error(`Error fetching VAA for redemption ${redemption.id}: ${redemption.error}`);
+        createLoggerWithCorrelation({
+          redemptionId: redemption.id,
+          chainName: this.chainConfig.chainName,
+          fromStatus: 'PENDING',
+          toStatus: 'VAA_FAILED',
+          operation: 'redemption_vaa_failed',
+          l2TxHash: redemption.event.l2TransactionHash,
+        }).info('Redemption state change: PENDING → VAA_FAILED');
       }
     }
   }
@@ -211,6 +241,14 @@ export class L2RedemptionService {
           );
           await RedemptionStore.update(redemption);
           logger.error(`Redemption ${redemption.id} missing VAA bytes, cannot submit to L1.`);
+          createLoggerWithCorrelation({
+            redemptionId: redemption.id,
+            chainName: this.chainConfig.chainName,
+            fromStatus: 'VAA_FETCHED',
+            toStatus: 'VAA_FAILED',
+            operation: 'redemption_vaa_missing',
+            l2TxHash: redemption.event.l2TransactionHash,
+          }).info('Redemption state change: VAA_FETCHED → VAA_FAILED (no VAA bytes)');
           continue;
         }
         const vaaBytes = redemption.serializedVaaBytes;
@@ -235,9 +273,15 @@ export class L2RedemptionService {
             `L1 submission succeeded at ${new Date().toISOString()} (tx: ${l1TxHash})`,
           );
           await RedemptionStore.update(redemption);
-          logger.info(
-            `Redemption ${redemption.id} successfully submitted to L1 and marked COMPLETED. L1 tx: ${l1TxHash}`,
-          );
+          createLoggerWithCorrelation({
+            redemptionId: redemption.id,
+            chainName: this.chainConfig.chainName,
+            fromStatus: 'VAA_FETCHED',
+            toStatus: 'COMPLETED',
+            operation: 'redemption_completed',
+            l2TxHash: redemption.event.l2TransactionHash,
+            l1TxHash,
+          }).info('Redemption state change: VAA_FETCHED → COMPLETED');
         } else {
           redemption.status = RedemptionStatus.FAILED;
           redemption.dates.lastActivityAt = Date.now();
@@ -245,6 +289,14 @@ export class L2RedemptionService {
           redemption.logs?.push(`L1 submission failed at ${new Date().toISOString()}`);
           await RedemptionStore.update(redemption);
           logger.error(`Redemption ${redemption.id} failed L1 submission.`);
+          createLoggerWithCorrelation({
+            redemptionId: redemption.id,
+            chainName: this.chainConfig.chainName,
+            fromStatus: 'VAA_FETCHED',
+            toStatus: 'FAILED',
+            operation: 'redemption_failed',
+            l2TxHash: redemption.event.l2TransactionHash,
+          }).info('Redemption state change: VAA_FETCHED → FAILED');
         }
       } catch (error: any) {
         redemption.status = RedemptionStatus.FAILED;
@@ -255,6 +307,14 @@ export class L2RedemptionService {
         );
         await RedemptionStore.update(redemption);
         logger.error(`Error submitting redemption ${redemption.id} to L1: ${redemption.error}`);
+        createLoggerWithCorrelation({
+          redemptionId: redemption.id,
+          chainName: this.chainConfig.chainName,
+          fromStatus: 'VAA_FETCHED',
+          toStatus: 'FAILED',
+          operation: 'redemption_failed',
+          l2TxHash: redemption.event.l2TransactionHash,
+        }).info('Redemption state change: VAA_FETCHED → FAILED');
       }
     }
   }
@@ -442,7 +502,14 @@ export class L2RedemptionService {
             logs: [`Redemption created from past event check at ${new Date(now).toISOString()}`],
           };
           await RedemptionStore.create(redemption);
-          logger.info(`Past redemption request persisted for L2 tx: ${redemptionId}`);
+          createLoggerWithCorrelation({
+            redemptionId,
+            chainName: this.chainConfig.chainName,
+            fromStatus: 'RECOVERED',
+            toStatus: 'PENDING',
+            operation: 'redemption_created_from_past',
+            l2TxHash: eventData.l2TransactionHash,
+          }).info('Redemption state change: RECOVERED → PENDING (from past event check)');
         }
       } else {
         logger.debug(
@@ -453,6 +520,7 @@ export class L2RedemptionService {
       logErrorContext(
         `checkForPastRedemptions | Error checking past redemptions for ${this.chainConfig.chainName}: ${error.message}`,
         error,
+        { chainName: this.chainConfig.chainName },
       );
     }
   }

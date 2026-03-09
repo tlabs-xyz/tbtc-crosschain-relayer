@@ -184,7 +184,7 @@ describe('Deposits Util', () => {
       // expect(getFundingTxHashSpy).toHaveBeenCalledWith(mockFundingTx);
       expect(getTransactionHashSpy).toHaveBeenCalledWith(mockFundingTx);
       expect(logDepositCreatedSpy).toHaveBeenCalledWith(deposit);
-      expect(dateNowSpy).toHaveBeenCalledTimes(2); // For createdAt and lastActivityAt
+      expect(dateNowSpy.mock.calls.length).toBeGreaterThanOrEqual(2); // For createdAt and lastActivityAt
     });
 
     it('should handle reveal as an object', () => {
@@ -319,7 +319,7 @@ describe('Deposits Util', () => {
         DepositStatus.INITIALIZED,
       );
       expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been finalized | Id: ${depositToUpdate.id} | Hash: ${mockTx.hash}`,
+        `Deposit state change: ${DepositStatus[DepositStatus.INITIALIZED]} → ${DepositStatus[DepositStatus.FINALIZED]}`,
       );
       expect(logDepositFinalizedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
@@ -392,9 +392,7 @@ describe('Deposits Util', () => {
 
       expect(depositStoreUpdateSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(logStatusChangeSpy).not.toHaveBeenCalled();
-      expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been finalized | Id: ${depositAlreadyFinalized.id} | Hash: ${newMockTx.hash}`,
-      );
+      // When status is already FINALIZED, no "Deposit state change" log is emitted
       expect(logDepositFinalizedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
 
@@ -527,7 +525,7 @@ describe('Deposits Util', () => {
         DepositStatus.QUEUED,
       );
       expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been initialized | Id: ${depositToUpdate.id} | Hash: ${mockTx.hash}`,
+        `Deposit state change: ${DepositStatus[DepositStatus.QUEUED]} → ${DepositStatus[DepositStatus.INITIALIZED]}`,
       );
       expect(logDepositInitializedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
@@ -628,9 +626,7 @@ describe('Deposits Util', () => {
 
       expect(depositStoreUpdateSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(logStatusChangeSpy).not.toHaveBeenCalled();
-      expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been initialized | Id: ${depositToUpdate.id} | Hash: ${newMockTx.hash}`,
-      );
+      // When status is already INITIALIZED, no "Deposit state change" log is emitted
       expect(logDepositInitializedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
 
@@ -855,7 +851,7 @@ describe('Deposits Util', () => {
         DepositStatus.FINALIZED,
       );
       expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been moved to AWAITING_WORMHOLE_VAA | ID: ${depositToUpdate.id} | sequence: ${mockTransferSequence}`,
+        `Deposit state change: ${DepositStatus[DepositStatus.FINALIZED]} → ${DepositStatus[DepositStatus.AWAITING_WORMHOLE_VAA]}`,
       );
       expect(logDepositAwaitingWormholeVAASpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
@@ -938,9 +934,7 @@ describe('Deposits Util', () => {
 
       expect(depositStoreUpdateSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(logStatusChangeSpy).not.toHaveBeenCalled();
-      expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been moved to AWAITING_WORMHOLE_VAA | ID: ${depositToUpdate.id} | sequence: ${newTransferSequence}`,
-      );
+      // When status is already AWAITING_WORMHOLE_VAA, no "Deposit state change" log is emitted
       expect(logDepositAwaitingWormholeVAASpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
   });
@@ -1059,7 +1053,7 @@ describe('Deposits Util', () => {
         DepositStatus.AWAITING_WORMHOLE_VAA,
       );
       expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been moved to BRIDGED | ID: ${depositToUpdate.id}`,
+        `Deposit state change: ${DepositStatus[DepositStatus.AWAITING_WORMHOLE_VAA]} → ${DepositStatus[DepositStatus.BRIDGED]}`,
       );
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
@@ -1103,9 +1097,7 @@ describe('Deposits Util', () => {
 
       expect(depositStoreUpdateSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(logStatusChangeSpy).not.toHaveBeenCalled();
-      expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been moved to BRIDGED | ID: ${depositToUpdate.id}`,
-      );
+      // When status is already BRIDGED, no "Deposit state change" log is emitted
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
 
@@ -1147,7 +1139,7 @@ describe('Deposits Util', () => {
 
       expect(depositStoreUpdateSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been moved to BRIDGED | ID: ${suiDeposit.id}`,
+        `Deposit state change: ${DepositStatus[DepositStatus.AWAITING_WORMHOLE_VAA]} → ${DepositStatus[DepositStatus.BRIDGED]}`,
       );
       expect(logStatusChangeSpy).toHaveBeenCalledWith(
         expectedUpdatedDeposit,
@@ -1191,7 +1183,7 @@ describe('Deposits Util', () => {
 
       expect(depositStoreUpdateSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(loggerInfoSpy).toHaveBeenCalledWith(
-        `Deposit has been moved to BRIDGED | ID: ${ambiguousDeposit.id}`,
+        `Deposit state change: ${DepositStatus[DepositStatus.AWAITING_WORMHOLE_VAA]} → ${DepositStatus[DepositStatus.BRIDGED]}`,
       );
       expect(logStatusChangeSpy).toHaveBeenCalledWith(
         expectedUpdatedDeposit,

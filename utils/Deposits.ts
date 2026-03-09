@@ -3,7 +3,7 @@ import { type Deposit } from '../types/Deposit.type.js';
 import { type FundingTransaction } from '../types/FundingTransaction.type.js';
 import { getTransactionHash } from './GetTransactionHash.js';
 import { DepositStore } from './DepositStore.js';
-import logger from './Logger.js';
+import logger, { createLoggerWithCorrelation } from './Logger.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import {
   logDepositCreated,
@@ -213,6 +213,14 @@ export const createDeposit = (
 
   // --- Log Deposit Creation ---
   logDepositCreated(deposit);
+  createLoggerWithCorrelation({
+    depositId: deposit.id,
+    chainName: chainId,
+    fromStatus: 'CREATED',
+    toStatus: 'QUEUED',
+    operation: 'deposit_created',
+    fundingTxHash: fundingTxHashHex,
+  }).info('Deposit state change: CREATED → QUEUED');
   // --- End Log ---
 
   return deposit;
@@ -316,8 +324,16 @@ export const createDepositFromNotification = (
     error: null,
   };
 
-  logger.info(`Created deposit from backend notification: ${depositKey}`);
   logDepositCreated(deposit);
+  createLoggerWithCorrelation({
+    depositId: depositKey,
+    chainName: chainId,
+    fromStatus: 'CREATED',
+    toStatus: 'INITIALIZED',
+    operation: 'deposit_created_from_notification',
+    fundingTxHash: fundingTxHashHex,
+    initializeTxHash: initTxHash,
+  }).info('Deposit state change: CREATED → INITIALIZED (from backend notification)');
 
   return deposit;
 };
@@ -364,13 +380,21 @@ export const updateToFinalizedDeposit = async (
   // Log status change if it actually changed
   if (newStatus !== oldStatus) {
     logStatusChange(updatedDeposit, newStatus, oldStatus);
+    createLoggerWithCorrelation({
+      depositId: deposit.id,
+      chainName: deposit.chainId,
+      fromStatus: DepositStatus[oldStatus],
+      toStatus: DepositStatus[newStatus],
+      operation: 'deposit_finalized',
+      fundingTxHash: deposit.fundingTxHash ?? undefined,
+      initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+      finalizeTxHash: tx?.hash,
+    }).info(`Deposit state change: ${DepositStatus[oldStatus]} → ${DepositStatus[newStatus]}`);
   }
 
   await DepositStore.update(updatedDeposit);
 
   if (tx) {
-    logger.info(`Deposit has been finalized | Id: ${deposit.id} | Hash: ${tx.hash}`);
-    // --- Log Deposit Finalized ---
     logDepositFinalized(updatedDeposit);
     // --- End Log ---
   }
@@ -419,13 +443,20 @@ export const updateToInitializedDeposit = async (
   // Log status change if it actually changed
   if (newStatus !== oldStatus) {
     logStatusChange(updatedDeposit, newStatus, oldStatus);
+    createLoggerWithCorrelation({
+      depositId: deposit.id,
+      chainName: deposit.chainId,
+      fromStatus: DepositStatus[oldStatus],
+      toStatus: DepositStatus[newStatus],
+      operation: 'deposit_initialized',
+      fundingTxHash: deposit.fundingTxHash ?? undefined,
+      initializeTxHash: tx?.hash,
+    }).info(`Deposit state change: ${DepositStatus[oldStatus]} → ${DepositStatus[newStatus]}`);
   }
 
   await DepositStore.update(updatedDeposit);
 
   if (tx) {
-    logger.info(`Deposit has been initialized | Id: ${deposit.id} | Hash: ${tx.hash}`);
-    // --- Log Deposit Initialized ---
     logDepositInitialized(updatedDeposit);
     // --- End Log ---
   }
@@ -479,14 +510,22 @@ export const updateToAwaitingWormholeVAA = async (
   // Log status change if it actually changed
   if (newStatus !== oldStatus) {
     logStatusChange(updatedDeposit, newStatus, oldStatus);
+    createLoggerWithCorrelation({
+      depositId: deposit.id,
+      chainName: deposit.chainId,
+      fromStatus: DepositStatus[oldStatus],
+      toStatus: DepositStatus[newStatus],
+      operation: 'deposit_awaiting_wormhole_vaa',
+      fundingTxHash: deposit.fundingTxHash ?? undefined,
+      initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+      finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash ?? undefined,
+      wormholeTxHash: txHash,
+      transferSequence,
+    }).info(`Deposit state change: ${DepositStatus[oldStatus]} → ${DepositStatus[newStatus]}`);
   }
 
   // Write to JSON file
   await DepositStore.update(updatedDeposit);
-
-  logger.info(
-    `Deposit has been moved to AWAITING_WORMHOLE_VAA | ID: ${deposit.id} | sequence: ${transferSequence}`,
-  );
 
   logDepositAwaitingWormholeVAA(updatedDeposit);
 };
@@ -581,12 +620,23 @@ export const updateToBridgedDeposit = async (
   // Log status change if it actually changed
   if (newStatus !== oldStatus) {
     logStatusChange(updatedDeposit, newStatus, oldStatus);
+    createLoggerWithCorrelation({
+      depositId: deposit.id,
+      chainName: deposit.chainId,
+      fromStatus: DepositStatus[oldStatus],
+      toStatus: DepositStatus[newStatus],
+      operation: 'deposit_bridged',
+      fundingTxHash: deposit.fundingTxHash ?? undefined,
+      initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+      finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash ?? undefined,
+      wormholeTxHash: deposit.wormholeInfo?.txHash ?? undefined,
+      transferSequence: deposit.wormholeInfo?.transferSequence ?? undefined,
+      bridgeTxHash: txSignature,
+    }).info(`Deposit state change: ${DepositStatus[oldStatus]} → ${DepositStatus[newStatus]}`);
   }
 
   // Write to JSON file
   await DepositStore.update(updatedDeposit);
-
-  logger.info(`Deposit has been moved to BRIDGED | ID: ${deposit.id}`);
 
   logDepositBridged(updatedDeposit);
 };
@@ -700,6 +750,14 @@ export const createFinalizedDepositFromOnChainData = (
   logDepositCreated(deposit);
   logStatusChange(deposit, DepositStatus.FINALIZED, DepositStatus.QUEUED); // Log transition
   logDepositFinalized(deposit);
+  createLoggerWithCorrelation({
+    depositId: deposit.id,
+    chainName: chainId,
+    fromStatus: 'RECOVERED',
+    toStatus: 'FINALIZED',
+    operation: 'deposit_recovered_finalized',
+    fundingTxHash: fundingTxHash ?? undefined,
+  }).info('Deposit state change: RECOVERED → FINALIZED (from on-chain data)');
 
   return deposit;
 };
@@ -791,6 +849,15 @@ export const createInitializedDepositFromOnChainData = (
 
   logDepositCreated(deposit);
   logStatusChange(deposit, DepositStatus.INITIALIZED, DepositStatus.QUEUED);
+  createLoggerWithCorrelation({
+    depositId: depositId,
+    chainName: chainId,
+    fromStatus: 'RECOVERED',
+    toStatus: 'INITIALIZED',
+    operation: 'deposit_recovered_initialized',
+    fundingTxHash: fundingTxHash ?? undefined,
+    initializeTxHash: initializeTxHash,
+  }).info('Deposit state change: RECOVERED → INITIALIZED (from on-chain data)');
 
   return deposit;
 };
@@ -812,7 +879,7 @@ export const createPartialDepositFromOnChainData = (
   chainId: string,
   initializeTxHash: string,
 ): Deposit => {
-  return {
+  const deposit: Deposit = {
     id: depositKey,
     chainId,
     fundingTxHash: null, // This information is not available from the event
@@ -872,4 +939,15 @@ export const createPartialDepositFromOnChainData = (
     },
     error: null,
   };
+
+  createLoggerWithCorrelation({
+    depositId: depositKey,
+    chainName: chainId,
+    fromStatus: 'RECOVERED',
+    toStatus: 'INITIALIZED',
+    operation: 'deposit_partial_from_onchain',
+    initializeTxHash: initializeTxHash,
+  }).info('Deposit state change: RECOVERED → INITIALIZED (partial from on-chain data)');
+
+  return deposit;
 };

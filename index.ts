@@ -1,9 +1,13 @@
 // -------------------------------------------------------------------------
 // |                              IMPORTS                                  |
 // -------------------------------------------------------------------------
+import 'dotenv/config';
+import { shutdownOtel } from './instrumentation.js';
+
 // Express Server
 import express from 'express';
 import type { Express, RequestHandler } from 'express';
+import type { Server } from 'http';
 
 // Security
 import cors from 'cors';
@@ -26,16 +30,18 @@ import {
 } from './services/Core.js';
 import { logErrorContext } from './utils/Logger.js';
 
-import 'dotenv/config';
-
 import { chainConfigs } from './config/index.js';
 import { appConfig } from './config/app.config.js';
 import { NodeEnv } from './config/schemas/app.schema.js';
+import { prisma } from './utils/prisma.js';
 
 // -------------------------------------------------------------------------
 // |                            APP INSTANCE                               |
 // -------------------------------------------------------------------------
 const app: Express = express();
+
+/** HTTP server reference for graceful shutdown. */
+let server: Server | null = null;
 
 // -------------------------------------------------------------------------
 // |                        EXTRACTED SETUP FUNCTIONS                      |
@@ -179,9 +185,10 @@ const main = async () => {
   // |                              SERVER START                             |
   // -------------------------------------------------------------------------
   if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
-    app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
+    server = app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
       logger.info(`Server listening on port ${appConfig.APP_PORT}`);
     });
+    setupGracefulShutdown();
   } else {
     logger.info(
       'Server startup tasks are skipped in the test environment. Server has already started successfully.',
@@ -190,6 +197,37 @@ const main = async () => {
 
   logger.info('Application initialization sequence complete.');
 };
+
+/** Coordinated shutdown: stop server, disconnect Prisma, flush OTel, then exit. */
+function setupGracefulShutdown(): void {
+  let shuttingDown = false;
+
+  const shutdown = async (signal: string, exitCode: number) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info(`Received ${signal}, starting graceful shutdown...`);
+
+    try {
+      if (server) {
+        await new Promise<void>((resolve, reject) => {
+          server!.close((err: Error | undefined) => (err ? reject(err) : resolve()));
+        });
+        logger.info('HTTP server closed');
+      }
+      await prisma.$disconnect();
+      logger.info('Prisma disconnected');
+      await shutdownOtel();
+      logger.info('OTel SDK shut down');
+    } catch (error) {
+      logErrorContext('Error during graceful shutdown', error);
+      process.exit(1);
+    }
+    process.exit(exitCode);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM', 0));
+  process.on('SIGINT', () => shutdown('SIGINT', 0));
+}
 
 // Execute main and capture the promise for export (e.g., for tests to await readiness)
 const initializationPromise = main().catch((error) => {

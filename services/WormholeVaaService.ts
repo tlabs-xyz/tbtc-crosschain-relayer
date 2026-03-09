@@ -74,6 +74,7 @@ export class WormholeVaaService {
         logErrorContext(
           `Failed to get L2 transaction receipt for ${l2TransactionHash}.`,
           new Error('L2 tx receipt fetch failed'),
+          { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
         );
         return null;
       }
@@ -81,6 +82,7 @@ export class WormholeVaaService {
         logErrorContext(
           `L2 transaction ${l2TransactionHash} failed (reverted), cannot fetch VAA. Receipt: ${JSON.stringify(receipt)}`,
           new Error('L2 tx reverted'),
+          { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
         );
         return null;
       }
@@ -98,6 +100,7 @@ export class WormholeVaaService {
         logErrorContext(
           `No Wormhole messages found in L2 transaction ${l2TransactionHash}. Chain: ${emitterChainName}.`,
           new Error('parseTransaction returned no messages'),
+          { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
         );
         return null;
       }
@@ -111,6 +114,7 @@ export class WormholeVaaService {
         logErrorContext(
           `Could not find Wormhole message from emitter ${emitterAddress} on chain ${emitterChainName} in L2 transaction ${l2TransactionHash}. Found messages: ${JSON.stringify(wormholeMessageIds)}`,
           new Error('Relevant WormholeMessageId not found'),
+          { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
         );
         return null;
       }
@@ -131,6 +135,7 @@ export class WormholeVaaService {
         logErrorContext(
           `Error fetching VAA using this.wh.getVaa with discriminator: ${discriminator}: ${e.message}`,
           e,
+          { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
         );
         return null;
       }
@@ -139,6 +144,7 @@ export class WormholeVaaService {
         logErrorContext(
           `this.wh.getVaa did not return a VAA for message ID ${JSON.stringify(messageId)} (tried TokenBridge discriminators)`,
           new Error('this.wh.getVaa failed or returned null VAA'),
+          { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
         );
         return null;
       }
@@ -147,6 +153,7 @@ export class WormholeVaaService {
         logErrorContext(
           `Initial VAA verification (emitter check) failed for ${l2TransactionHash}.`,
           new Error('Initial VAA verification failed'),
+          { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
         );
         return null;
       }
@@ -165,6 +172,7 @@ export class WormholeVaaService {
             logErrorContext(
               `Token bridge transfer VAA not completed on L1 (${targetL1ChainName}) for ${l2TransactionHash}. VAA Seq: ${fetchedParsedVaa.sequence}, Type: ${fetchedParsedVaa.payloadName}`,
               new Error('VAA transfer not completed on L1'),
+              { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
             );
             return null;
           }
@@ -176,6 +184,7 @@ export class WormholeVaaService {
         logErrorContext(
           `Error checking VAA completion on L1 (${targetL1ChainName}): ${e.message}`,
           e,
+          { l2TxHash: l2TransactionHash, redemptionId: l2TransactionHash },
         );
         return null;
       }
