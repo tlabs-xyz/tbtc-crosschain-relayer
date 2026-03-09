@@ -52,20 +52,6 @@ if (otelEnabled && otelEndpoint) {
   });
 
   sdk.start();
-
-  // Graceful shutdown
-  const gracefulOTelShutdown = () => {
-    sdk!
-      .shutdown()
-      .then(() => process.exit(0))
-      .catch((err) => {
-        console.error('Error shutting down OTel SDK', err);
-        process.exit(1);
-      });
-  };
-
-  process.on('SIGTERM', gracefulOTelShutdown);
-  process.on('SIGINT', gracefulOTelShutdown);
 }
 
 /** Shuts down the OTel SDK (flushes traces). No-op when OTel is disabled. Does not exit the process. */
