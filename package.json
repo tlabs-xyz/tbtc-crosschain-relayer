@@ -109,6 +109,12 @@
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
   "resolutions": {
-    "@keep-network/random-beacon": "2.1.0-dev.18"
+    "@keep-network/random-beacon": "2.1.0-dev.18",
+    "@thesis/solidity-contracts": "https://github.com/thesis/solidity-contracts.git#4985bcfc28e36eed9838993b16710e1b500f9e85",
+    "@umpirsky/country-list": "https://github.com/umpirsky/country-list.git#05fda51",
+    "bip39": "https://github.com/bitcoinjs/bip39.git#d8ea080a18b40f301d4e2219a2991cd2417e83c2",
+    "bls12377js": "https://github.com/celo-org/bls12377js.git#400bcaeec9e7620b040bfad833268f5289699cac",
+    "scrypt-shim": "https://github.com/web3-js/scrypt-shim.git#aafdadda13e660e25e1c525d1f5b2443f5eb1ebb",
+    "websocket": "https://github.com/web3-js/WebSocket-Node.git#ef5ea2f41daf4a2113b80c9223df884b4d56c400"
   }
 }

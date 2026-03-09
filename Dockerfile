@@ -26,6 +26,7 @@ COPY prisma/ ./prisma/
 COPY tsconfig.json ./
 COPY tsconfig.build.json ./
 COPY index.ts ./
+COPY instrumentation.ts ./
 # Assuming your source code is in these folders or similar top-level folders/files
 COPY helpers/ ./helpers/
 COPY services/ ./services/
