@@ -2,9 +2,19 @@ import pino from 'pino';
 import { trace } from '@opentelemetry/api';
 
 const APP_NAME = (process.env.APP_NAME || 'tBTC Cross-Chain Relayer').toUpperCase();
-/** Enables log export to OTLP (pino-opentelemetry-transport sends logs to SigNoz). */
+
+/**
+ * Feature flag for OpenTelemetry log export via OTLP.
+ * When enabled, sends logs to SigNoz via pino-opentelemetry-transport.
+ * Requires OTEL_EXPORTER_OTLP_ENDPOINT to be configured.
+ */
 const OTEL_LOGS_ENABLED = process.env.OTEL_LOGS_ENABLED === 'true';
-/** Enables tracing (instrumentation.ts); used here to inject trace_id/span_id into log records. */
+
+/**
+ * Feature flag for OpenTelemetry tracing.
+ * When enabled, injects trace_id and span_id into all log records for log-to-trace correlation.
+ * Requires OTEL_EXPORTER_OTLP_ENDPOINT to be configured.
+ */
 const OTEL_ENABLED = process.env.OTEL_ENABLED === 'true';
 
 /**
