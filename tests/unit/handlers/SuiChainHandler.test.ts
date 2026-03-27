@@ -9,6 +9,7 @@ import logger from '../../../utils/Logger.js';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import * as depositUtils from '../../../utils/Deposits.js';
+import * as wormholeVAAModule from '../../../utils/WormholeVAA.js';
 import { ethers } from 'ethers';
 
 // Mock external dependencies
@@ -18,6 +19,7 @@ jest.mock('../../../utils/Deposits');
 jest.mock('../../../utils/AuditLog');
 jest.mock('../../../utils/BitcoinTransactionParser');
 jest.mock('../../../utils/SuiMoveEventParser');
+jest.mock('../../../utils/WormholeVAA');
 
 // Mock SUI SDK with more defensive mocking
 jest.mock('@mysten/sui/client', () => {
@@ -645,7 +647,7 @@ describe('SuiChainHandler', () => {
 
     it('should handle missing VAA gracefully', async () => {
       // Mock fetchVAAFromAPI to return null
-      jest.spyOn(handler as any, 'fetchVAAFromAPI').mockResolvedValueOnce(null);
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce(null);
 
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
@@ -654,7 +656,7 @@ describe('SuiChainHandler', () => {
 
     it('should successfully bridge deposit to Sui', async () => {
       // Mock fetchVAAFromAPI to return valid base64 VAA
-      jest.spyOn(handler as any, 'fetchVAAFromAPI').mockResolvedValueOnce('base64encodedvaa');
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
 
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
@@ -673,7 +675,7 @@ describe('SuiChainHandler', () => {
 
     it('should use all required object IDs from configuration', async () => {
       // Mock fetchVAAFromAPI to return valid base64 VAA
-      jest.spyOn(handler as any, 'fetchVAAFromAPI').mockResolvedValueOnce('base64encodedvaa');
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
 
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
@@ -689,7 +691,7 @@ describe('SuiChainHandler', () => {
 
     it('should call receiveWormholeMessages with correct target', async () => {
       // Mock fetchVAAFromAPI to return valid base64 VAA
-      jest.spyOn(handler as any, 'fetchVAAFromAPI').mockResolvedValueOnce('base64encodedvaa');
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
 
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
@@ -703,7 +705,7 @@ describe('SuiChainHandler', () => {
 
     it('should handle transaction failure gracefully', async () => {
       // Mock fetchVAAFromAPI to return valid base64 VAA
-      jest.spyOn(handler as any, 'fetchVAAFromAPI').mockResolvedValueOnce('base64encodedvaa');
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
 
       // Mock failed transaction
       (handler as any).suiClient.signAndExecuteTransaction.mockResolvedValueOnce({
@@ -724,7 +726,7 @@ describe('SuiChainHandler', () => {
 
     it('should handle missing transaction digest', async () => {
       // Mock fetchVAAFromAPI to return valid base64 VAA
-      jest.spyOn(handler as any, 'fetchVAAFromAPI').mockResolvedValueOnce('base64encodedvaa');
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
 
       // Mock transaction without digest
       (handler as any).suiClient.signAndExecuteTransaction.mockResolvedValueOnce({

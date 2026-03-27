@@ -93,6 +93,16 @@ export const L1BitcoinDepositorABI = [
     type: 'event',
   },
   {
+    anonymous: false,
+    inputs: [
+      { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
+      { indexed: false, internalType: 'address', name: 'l2Receiver', type: 'address' },
+      { indexed: false, internalType: 'uint64', name: 'transferSequence', type: 'uint64' },
+    ],
+    name: 'TokensTransferredWithPayload',
+    type: 'event',
+  },
+  {
     inputs: [],
     name: 'SATOSHI_MULTIPLIER',
     outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],

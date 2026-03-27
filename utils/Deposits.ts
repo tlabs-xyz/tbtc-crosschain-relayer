@@ -530,13 +530,16 @@ export const updateToAwaitingWormholeVAA = async (
   logDepositAwaitingWormholeVAA(updatedDeposit);
 };
 
-const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'unknown' => {
+const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'evm' | 'unknown' => {
   const lowerChainId = chainId.toLowerCase();
   if (lowerChainId.includes('sui')) {
     return 'sui';
   }
   if (lowerChainId.includes('solana')) {
     return 'solana';
+  }
+  if (lowerChainId.includes('base') || lowerChainId.includes('arbitrum')) {
+    return 'evm';
   }
   return 'unknown';
 };
@@ -583,6 +586,16 @@ export const updateToBridgedDeposit = async (
         solana: {
           ...deposit.hashes?.solana,
           bridgeTxHash: txSignature,
+        },
+      };
+      break;
+    case 'evm':
+      // Update EVM-specific hash structure (Base, Arbitrum)
+      updatedHashes = {
+        ...deposit.hashes,
+        evm: {
+          ...deposit.hashes?.evm,
+          l2BridgeTxHash: txSignature,
         },
       };
       break;
