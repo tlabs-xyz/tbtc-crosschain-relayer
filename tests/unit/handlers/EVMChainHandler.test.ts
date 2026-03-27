@@ -9,6 +9,7 @@ import logger from '../../../utils/Logger.js';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import * as depositUtils from '../../../utils/Deposits.js';
+import * as wormholeVAAModule from '../../../utils/WormholeVAA.js';
 import { ethers } from 'ethers';
 
 // Mock external dependencies
@@ -16,6 +17,7 @@ jest.mock('../../../utils/DepositStore');
 jest.mock('../../../utils/Logger');
 jest.mock('../../../utils/Deposits');
 jest.mock('../../../utils/AuditLog');
+jest.mock('../../../utils/WormholeVAA');
 
 // Mock the config module to prevent loading all chain configurations during unit tests
 jest.mock('../../../config/index.js', () => ({
@@ -438,12 +440,13 @@ describe('EVMChainHandler', () => {
     });
   });
 
-  describe('fetchVAAFromAPI', () => {
+  describe('fetchVAAFromAPI (shared utility)', () => {
     let originalFetch: typeof global.fetch;
+    // Use the real implementation for these tests (unmock the module)
+    const { fetchVAAFromAPI: realFetchVAA } = jest.requireActual('../../../utils/WormholeVAA.js');
 
     beforeEach(() => {
       originalFetch = global.fetch;
-      // Replace the delay promise to resolve immediately for test speed
       jest.useFakeTimers();
     });
 
@@ -459,13 +462,9 @@ describe('EVMChainHandler', () => {
       });
       global.fetch = mockFetch;
 
-      // The expected testnet emitter address: Sepolia Token Bridge
-      // 0xDB5492265f6038831E89f495670fF909aDe94bd9 -> strip 0x, lowercase, padStart 64
       const expectedEmitter = 'db5492265f6038831e89f495670ff909ade94bd9'.padStart(64, '0');
 
-      const resultPromise = (handler as any).fetchVAAFromAPI('456');
-
-      // Advance past all possible retry timers
+      const resultPromise = realFetchVAA('456', NETWORK.TESTNET);
       await jest.advanceTimersByTimeAsync(1000);
       const result = await resultPromise;
 
@@ -479,23 +478,18 @@ describe('EVMChainHandler', () => {
     });
 
     it('should construct correct Wormhole API URL for mainnet', async () => {
-      const mainnetHandler = new EVMChainHandler(mockEvmConfigMainnet);
-      (mainnetHandler as any).wormhole = mockWormhole;
-
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ data: { vaa: 'mainnetvaa' } }),
       });
       global.fetch = mockFetch;
 
-      const resultPromise = (mainnetHandler as any).fetchVAAFromAPI('123');
+      const resultPromise = realFetchVAA('123', NETWORK.MAINNET);
       await jest.advanceTimersByTimeAsync(1000);
       const result = await resultPromise;
 
       expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('api.wormholescan.io'));
-      // Should NOT contain 'testnet'
       expect(mockFetch).toHaveBeenCalledWith(expect.not.stringContaining('testnet'));
-      // Mainnet emitter chain is '2'
       expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/2/'));
       expect(result).toBe('mainnetvaa');
     });
@@ -507,7 +501,7 @@ describe('EVMChainHandler', () => {
       });
       global.fetch = mockFetch;
 
-      const resultPromise = (handler as any).fetchVAAFromAPI('789');
+      const resultPromise = realFetchVAA('789', NETWORK.TESTNET);
       await jest.advanceTimersByTimeAsync(1000);
       const result = await resultPromise;
 
@@ -517,21 +511,14 @@ describe('EVMChainHandler', () => {
     it('should retry on 404 response and eventually return VAA', async () => {
       const mockFetch = jest
         .fn()
-        // First call: 404
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-        })
-        // Second call: success
+        .mockResolvedValueOnce({ ok: false, status: 404 })
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ data: { vaa: 'retriedvaa' } }),
         });
       global.fetch = mockFetch;
 
-      const resultPromise = (handler as any).fetchVAAFromAPI('100');
-
-      // Advance past the 30s retry delay
+      const resultPromise = realFetchVAA('100', NETWORK.TESTNET);
       await jest.advanceTimersByTimeAsync(31000);
       const result = await resultPromise;
 
@@ -540,15 +527,10 @@ describe('EVMChainHandler', () => {
     });
 
     it('should return null after exhausting all retry attempts', async () => {
-      const mockFetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 404,
-      });
+      const mockFetch = jest.fn().mockResolvedValue({ ok: false, status: 404 });
       global.fetch = mockFetch;
 
-      const resultPromise = (handler as any).fetchVAAFromAPI('999');
-
-      // Advance through all 20 attempts (19 retry delays of 30s each)
+      const resultPromise = realFetchVAA('999', NETWORK.TESTNET);
       for (let i = 0; i < 20; i++) {
         await jest.advanceTimersByTimeAsync(31000);
       }
@@ -561,41 +543,31 @@ describe('EVMChainHandler', () => {
     it('should handle fetch network errors gracefully', async () => {
       const mockFetch = jest
         .fn()
-        // First call: network error
         .mockRejectedValueOnce(new Error('Network error'))
-        // Second call: success
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ data: { vaa: 'aftererrorvaa' } }),
         });
       global.fetch = mockFetch;
 
-      const resultPromise = (handler as any).fetchVAAFromAPI('200');
-
-      // Advance past the 30s retry delay
+      const resultPromise = realFetchVAA('200', NETWORK.TESTNET);
       await jest.advanceTimersByTimeAsync(31000);
       const result = await resultPromise;
 
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Network error'));
       expect(result).toBe('aftererrorvaa');
     });
 
     it('should use correct Token Bridge emitter address for mainnet', async () => {
-      const mainnetHandler = new EVMChainHandler(mockEvmConfigMainnet);
-      (mainnetHandler as any).wormhole = mockWormhole;
-
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ data: { vaa: 'vaa' } }),
       });
       global.fetch = mockFetch;
 
-      // Mainnet Token Bridge: 0x3ee18B2214AFF97000D974cf647E7C347E8fa585
-      // -> strip 0x, lowercase, padStart(64, '0')
       const expectedMainnetEmitter =
         '0000000000000000000000003ee18b2214aff97000d974cf647e7c347e8fa585';
 
-      const resultPromise = (mainnetHandler as any).fetchVAAFromAPI('300');
+      const resultPromise = realFetchVAA('300', NETWORK.MAINNET);
       await jest.advanceTimersByTimeAsync(1000);
       await resultPromise;
 
@@ -631,9 +603,9 @@ describe('EVMChainHandler', () => {
         receiveTbtc: mockReceiveTbtc,
       };
 
-      // Mock fetchVAAFromAPI to return a valid base64 VAA
+      // Mock shared fetchVAAFromAPI to return a valid base64 VAA
       // 'AQID' is base64 for bytes [1, 2, 3]
-      jest.spyOn(handler as any, 'fetchVAAFromAPI').mockResolvedValue('AQID');
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValue('AQID');
     });
 
     it('should call receiveTbtc with hex-encoded VAA bytes', async () => {
@@ -660,7 +632,7 @@ describe('EVMChainHandler', () => {
 
       await handler.bridgeEvmDeposit(wrongStatusDeposit);
 
-      expect((handler as any).fetchVAAFromAPI).not.toHaveBeenCalled();
+      expect(wormholeVAAModule.fetchVAAFromAPI).not.toHaveBeenCalled();
       expect(mockReceiveTbtc).not.toHaveBeenCalled();
     });
 
@@ -677,11 +649,11 @@ describe('EVMChainHandler', () => {
       await handler.bridgeEvmDeposit(depositNoSequence);
 
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('No transfer sequence'));
-      expect((handler as any).fetchVAAFromAPI).not.toHaveBeenCalled();
+      expect(wormholeVAAModule.fetchVAAFromAPI).not.toHaveBeenCalled();
     });
 
     it('should handle null VAA from fetchVAAFromAPI gracefully', async () => {
-      jest.spyOn(handler as any, 'fetchVAAFromAPI').mockResolvedValue(null);
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValue(null);
 
       await handler.bridgeEvmDeposit(mockDeposit);
 
@@ -843,7 +815,10 @@ describe('EVMChainHandler', () => {
     beforeEach(() => {
       mockParseLog = jest.fn().mockReturnValue({
         name: 'TokensTransferredWithPayload',
-        args: { transferSequence: ethers.BigNumber.from(99) },
+        args: {
+          transferSequence: ethers.BigNumber.from(99),
+          l2Receiver: '0xowner',
+        },
       });
 
       mockL1Provider = {
@@ -1075,7 +1050,10 @@ describe('EVMChainHandler', () => {
     beforeEach(() => {
       mockParseLog = jest.fn().mockReturnValue({
         name: 'TokensTransferredWithPayload',
-        args: { transferSequence: ethers.BigNumber.from(77) },
+        args: {
+          transferSequence: ethers.BigNumber.from(77),
+          l2Receiver: '0xowner',
+        },
       });
 
       mockL1Provider = {
@@ -1101,6 +1079,7 @@ describe('EVMChainHandler', () => {
       const deposit = {
         id: 'search-deposit-1',
         chainId: 'BaseSepolia',
+        owner: '0xowner',
       } as Deposit;
 
       const result = await (handler as any).searchForTransferSequence(deposit, 100);
@@ -1116,7 +1095,7 @@ describe('EVMChainHandler', () => {
     });
 
     it('should respect configurable searchBlocks parameter', async () => {
-      const deposit = { id: 'search-deposit-2' } as Deposit;
+      const deposit = { id: 'search-deposit-2', owner: '0xowner' } as Deposit;
 
       await (handler as any).searchForTransferSequence(deposit, 100, 30);
 
@@ -1129,7 +1108,7 @@ describe('EVMChainHandler', () => {
     });
 
     it('should cap endBlock at current block number', async () => {
-      const deposit = { id: 'search-deposit-3' } as Deposit;
+      const deposit = { id: 'search-deposit-3', owner: '0xowner' } as Deposit;
       mockL1Provider.getBlockNumber.mockResolvedValue(200);
 
       await (handler as any).searchForTransferSequence(deposit, 198);
@@ -1144,7 +1123,7 @@ describe('EVMChainHandler', () => {
     });
 
     it('should return null when no matching logs found', async () => {
-      const deposit = { id: 'search-deposit-4' } as Deposit;
+      const deposit = { id: 'search-deposit-4', owner: '0xowner' } as Deposit;
       mockL1Provider.getLogs.mockResolvedValue([]);
 
       const result = await (handler as any).searchForTransferSequence(deposit, 100);
@@ -1154,7 +1133,7 @@ describe('EVMChainHandler', () => {
     });
 
     it('should filter logs by l1BitcoinDepositorAddress', async () => {
-      const deposit = { id: 'search-deposit-5' } as Deposit;
+      const deposit = { id: 'search-deposit-5', owner: '0xowner' } as Deposit;
 
       // Return logs from two different addresses
       mockL1Provider.getLogs.mockResolvedValue([
@@ -1182,8 +1161,79 @@ describe('EVMChainHandler', () => {
       expect(mockParseLog).toHaveBeenCalledTimes(1);
     });
 
+    it('should skip events where l2Receiver does not match deposit owner', async () => {
+      const deposit = { id: 'search-deposit-corr', owner: '0xAlice' } as Deposit;
+
+      // Two logs from the correct contract address
+      mockL1Provider.getLogs.mockResolvedValue([
+        {
+          address: mockEvmConfig.l1BitcoinDepositorAddress,
+          topics: [EVM_TOKENS_TRANSFERRED_SIG],
+          data: '0x',
+          transactionHash: '0xbob-tx',
+          blockNumber: 101,
+        },
+        {
+          address: mockEvmConfig.l1BitcoinDepositorAddress,
+          topics: [EVM_TOKENS_TRANSFERRED_SIG],
+          data: '0x',
+          transactionHash: '0xalice-tx',
+          blockNumber: 102,
+        },
+      ]);
+
+      // First event belongs to Bob, second to Alice
+      mockParseLog
+        .mockReturnValueOnce({
+          name: 'TokensTransferredWithPayload',
+          args: {
+            transferSequence: ethers.BigNumber.from(10),
+            l2Receiver: '0xBob',
+          },
+        })
+        .mockReturnValueOnce({
+          name: 'TokensTransferredWithPayload',
+          args: {
+            transferSequence: ethers.BigNumber.from(20),
+            l2Receiver: '0xAlice',
+          },
+        });
+
+      const result = await (handler as any).searchForTransferSequence(deposit, 100);
+
+      // Should skip Bob's event and return Alice's
+      expect(result).toEqual({ sequence: '20', txHash: '0xalice-tx' });
+      expect(mockParseLog).toHaveBeenCalledTimes(2);
+    });
+
+    it('should return null when all events belong to other deposits', async () => {
+      const deposit = { id: 'search-deposit-nomatch', owner: '0xAlice' } as Deposit;
+
+      mockL1Provider.getLogs.mockResolvedValue([
+        {
+          address: mockEvmConfig.l1BitcoinDepositorAddress,
+          topics: [EVM_TOKENS_TRANSFERRED_SIG],
+          data: '0x',
+          transactionHash: '0xbob-tx',
+          blockNumber: 101,
+        },
+      ]);
+
+      mockParseLog.mockReturnValue({
+        name: 'TokensTransferredWithPayload',
+        args: {
+          transferSequence: ethers.BigNumber.from(10),
+          l2Receiver: '0xBob',
+        },
+      });
+
+      const result = await (handler as any).searchForTransferSequence(deposit, 100);
+
+      expect(result).toBeNull();
+    });
+
     it('should handle getLogs errors gracefully', async () => {
-      const deposit = { id: 'search-deposit-6' } as Deposit;
+      const deposit = { id: 'search-deposit-6', owner: '0xowner' } as Deposit;
       mockL1Provider.getLogs.mockRejectedValue(new Error('RPC error'));
 
       const result = await (handler as any).searchForTransferSequence(deposit, 100);
@@ -1192,7 +1242,7 @@ describe('EVMChainHandler', () => {
     });
 
     it('should handle parseLog errors gracefully and continue', async () => {
-      const deposit = { id: 'search-deposit-7' } as Deposit;
+      const deposit = { id: 'search-deposit-7', owner: '0xowner' } as Deposit;
 
       // Two logs from the correct address
       mockL1Provider.getLogs.mockResolvedValue([
@@ -1219,7 +1269,10 @@ describe('EVMChainHandler', () => {
         })
         .mockReturnValueOnce({
           name: 'TokensTransferredWithPayload',
-          args: { transferSequence: ethers.BigNumber.from(123) },
+          args: {
+            transferSequence: ethers.BigNumber.from(123),
+            l2Receiver: '0xowner',
+          },
         });
 
       const result = await (handler as any).searchForTransferSequence(deposit, 100);

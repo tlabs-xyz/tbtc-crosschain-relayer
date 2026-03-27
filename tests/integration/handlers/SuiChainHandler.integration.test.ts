@@ -140,6 +140,8 @@ jest.mock('../../../config/index.js', () => ({
   getAvailableChainKeys: () => ['suiTestnet'],
 }));
 
+jest.mock('../../../utils/WormholeVAA');
+
 // Mock the SuiMoveEventParser
 jest.mock('../../../utils/SuiMoveEventParser.js', () => ({
   parseDepositInitializedEvent: jest.fn().mockReturnValue({
@@ -652,8 +654,9 @@ describe('SuiChainHandler Integration Tests', () => {
 
       await (handler as any).initializeL2();
 
-      // Mock fetchVAAFromAPI to return a VAA
-      (handler as any).fetchVAAFromAPI = jest.fn().mockResolvedValue('base64-encoded-vaa-data');
+      // Mock shared fetchVAAFromAPI to return a VAA
+      const wormholeVAAModule = require('../../../utils/WormholeVAA.js');
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValue('base64-encoded-vaa-data');
 
       // Test the complete workflow
       const testDeposit = {
@@ -670,7 +673,7 @@ describe('SuiChainHandler Integration Tests', () => {
 
       // Verify Wormhole components were called
       expect((handler as any).wormhole.getChain).toHaveBeenCalledWith('Sui');
-      expect((handler as any).fetchVAAFromAPI).toHaveBeenCalledWith('999');
+      expect(wormholeVAAModule.fetchVAAFromAPI).toHaveBeenCalledWith('999', expect.any(String));
     });
   });
 });

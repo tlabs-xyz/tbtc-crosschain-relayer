@@ -8,10 +8,11 @@ import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-c
 import { ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
 
-import { CHAIN_TYPE, NETWORK } from '../config/schemas/common.schema.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
+import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
 import { type Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import {
@@ -502,73 +503,6 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     }
   }
 
-  /**
-   * Fetch VAA from Wormhole API using sequence number
-   * @param sequence - The transfer sequence number
-   * @returns Base64 encoded VAA bytes or null if not available
-   */
-  private async fetchVAAFromAPI(sequence: string): Promise<string | null> {
-    try {
-      // Get the correct emitter chain and address based on network
-      const emitterChain = this.config.network === NETWORK.MAINNET ? '2' : '10002'; // Ethereum mainnet or Sepolia
-
-      // The emitter is the Token Bridge contract on L1 (Ethereum)
-      // Wormhole Token Bridge addresses:
-      // Mainnet: 0x3ee18B2214AFF97000D974cf647E7C347E8fa585
-      // Sepolia: 0xDB5492265f6038831E89f495670fF909aDe94bd9
-      const tokenBridgeAddress =
-        this.config.network === NETWORK.MAINNET
-          ? '0x3ee18B2214AFF97000D974cf647E7C347E8fa585'
-          : '0xDB5492265f6038831E89f495670fF909aDe94bd9';
-      const emitterAddress = tokenBridgeAddress.slice(2).toLowerCase().padStart(64, '0');
-
-      const vaaId = `${emitterChain}/${emitterAddress}/${sequence}`;
-      logger.debug(`Fetching VAA with ID: ${vaaId}`);
-
-      // Wormhole API endpoint
-      const wormholeApi =
-        this.config.network === NETWORK.MAINNET
-          ? 'https://api.wormholescan.io'
-          : 'https://api.testnet.wormholescan.io';
-
-      const maxAttempts = 20; // 10 minutes with 30 second intervals
-      let attempts = 0;
-
-      while (attempts < maxAttempts) {
-        try {
-          const response = await fetch(`${wormholeApi}/api/v1/vaas/${vaaId}`);
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data && data.data && data.data.vaa) {
-              logger.info(`VAA found for sequence ${sequence}!`);
-              return data.data.vaa;
-            }
-          } else if (response.status === 404) {
-            logger.debug(
-              `VAA not ready yet for sequence ${sequence} (attempt ${attempts + 1}/${maxAttempts})`,
-            );
-          } else {
-            logger.warn(`Unexpected response status ${response.status} when fetching VAA`);
-          }
-        } catch (error: any) {
-          logger.warn(`Error fetching VAA: ${error.message}`);
-        }
-
-        attempts++;
-        if (attempts < maxAttempts) {
-          logger.debug(`Waiting 30 seconds before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, 30000));
-        }
-      }
-
-      return null;
-    } catch (error: any) {
-      logErrorContext(`Error in fetchVAAFromAPI for sequence ${sequence}`, error);
-      return null;
-    }
-  }
-
   public async bridgeSuiDeposit(deposit: Deposit): Promise<void> {
     if (!this.suiClient || !this.keypair) {
       logger.warn(`Sui connection not initialized. Cannot bridge deposit ${deposit.id}.`);
@@ -588,8 +522,11 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         `Using sequence ${deposit.wormholeInfo.transferSequence} from L1 tx ${deposit.wormholeInfo.txHash}`,
       );
 
-      // Fetch VAA using Wormhole API directly
-      const vaaBytes = await this.fetchVAAFromAPI(deposit.wormholeInfo.transferSequence);
+      // Fetch VAA using shared Wormhole API utility
+      const vaaBytes = await fetchVAAFromAPI(
+        deposit.wormholeInfo.transferSequence,
+        this.config.network,
+      );
 
       if (!vaaBytes) {
         logger.warn(
@@ -885,6 +822,15 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
 
             if (parsedLog.args.transferSequence) {
+              // Correlate event to the specific deposit by matching destinationChainReceiver
+              const eventReceiver = parsedLog.args.destinationChainReceiver;
+              if (eventReceiver && eventReceiver.toLowerCase() !== deposit.owner.toLowerCase()) {
+                logger.debug(
+                  `Event destinationChainReceiver ${eventReceiver} does not match deposit owner ${deposit.owner} for deposit ${deposit.id}, skipping`,
+                );
+                continue;
+              }
+
               logger.info(
                 `Found transfer sequence ${parsedLog.args.transferSequence} from L1BitcoinDepositor in tx ${log.transactionHash}`,
               );
