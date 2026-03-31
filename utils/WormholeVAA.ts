@@ -44,12 +44,18 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
 
     if (response.ok) {
       const MAX_RESPONSE_BYTES = 1_000_000; // 1 MB
-      const contentLength = response.headers.get('content-length');
-      if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_BYTES) {
-        logger.warn(`VAA response unexpectedly large (${contentLength} bytes) for sequence ${sequence} — skipping`);
+      const text = await response.text();
+      if (text.length > MAX_RESPONSE_BYTES) {
+        logger.warn(`VAA response unexpectedly large (${text.length} chars) for sequence ${sequence} — skipping`);
         return null;
       }
-      const data = await response.json();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        logger.warn(`Failed to parse VAA response as JSON for sequence ${sequence}`);
+        return null;
+      }
       if (data && data.data && data.data.vaa) {
         logger.info(`VAA found for sequence ${sequence}!`);
         return data.data.vaa;
