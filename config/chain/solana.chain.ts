@@ -1,8 +1,8 @@
-import { z } from 'zod';
+import type { z } from 'zod';
+import { getEnv, getEnvNumber } from '../../utils/Env.js';
 import { NETWORK } from '../schemas/common.schema.js';
 import type { SolanaChainConfigSchema } from '../schemas/solana.chain.schema.js';
-import { getEnv, getEnvNumber } from '../../utils/Env.js';
-import { WORMHOLE_CHAIN_IDS, PUBLIC_RPCS, PUBLIC_WS_RPCS } from './common.chain.js';
+import { PUBLIC_RPCS, PUBLIC_WS_RPCS, WORMHOLE_CHAIN_IDS } from './common.chain.js';
 import { getSolanaCommonInput } from './solana-common.js';
 
 type SolanaChainInput = z.input<typeof SolanaChainConfigSchema>;

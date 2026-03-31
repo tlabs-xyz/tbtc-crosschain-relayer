@@ -1,8 +1,8 @@
-import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
-import { getCommonChainInput, SUI_L1_CONTRACT_ADDRESSES } from './common.chain.js';
-import { getEnv } from '../../utils/Env.js';
 import type { PartialDeep } from 'type-fest';
+import { getEnv } from '../../utils/Env.js';
+import { CHAIN_TYPE, type NETWORK } from '../schemas/common.schema.js';
 import type { SuiChainConfig } from '../schemas/sui.chain.schema.js';
+import { getCommonChainInput, SUI_L1_CONTRACT_ADDRESSES } from './common.chain.js';
 
 // This function provides common defaults specifically for Sui chains,
 // building upon the universal getCommonChainInput.

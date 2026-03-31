@@ -1,6 +1,6 @@
-import { CallData } from 'starknet';
-import { ethers } from 'ethers';
 import * as bitcoin from 'bitcoinjs-lib';
+import { ethers } from 'ethers';
+import { CallData } from 'starknet';
 
 /**
  * Validates a StarkNet address.

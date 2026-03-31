@@ -1,16 +1,16 @@
-import { describe, test, expect } from '@jest/globals';
+import { describe, expect, test } from '@jest/globals';
 import {
-  parseFundingTransaction,
-  parseReveal,
+  BitcoinParsingError,
   bytesToHex,
   bytesToString,
-  hexToBytes,
-  normalizeInput,
   calculateTransactionHash,
-  validateBitcoinTransaction,
-  BitcoinParsingError,
-  InvalidTransactionFormatError,
+  hexToBytes,
   InvalidRevealFormatError,
+  InvalidTransactionFormatError,
+  normalizeInput,
+  parseFundingTransaction,
+  parseReveal,
+  validateBitcoinTransaction,
 } from '../../../utils/BitcoinTransactionParser.js';
 
 describe('BitcoinTransactionParser', () => {

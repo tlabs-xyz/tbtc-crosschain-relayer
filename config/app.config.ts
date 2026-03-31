@@ -1,6 +1,6 @@
-import logger from '../utils/Logger.js';
-import { AppConfigSchema, type AppConfig } from './schemas/app.schema.js';
 import fs from 'fs';
+import logger from '../utils/Logger.js';
+import { type AppConfig, AppConfigSchema } from './schemas/app.schema.js';
 
 export const appConfig: AppConfig = (() => {
   try {

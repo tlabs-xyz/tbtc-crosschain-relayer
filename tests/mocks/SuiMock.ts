@@ -1,6 +1,6 @@
 import type { SuiEvent } from '@mysten/sui/client';
-import { DepositStatus } from '../../types/DepositStatus.enum.js';
 import type { Deposit } from '../../types/Deposit.type.js';
+import { DepositStatus } from '../../types/DepositStatus.enum.js';
 import { createTestDeposit } from './BlockchainMock.js';
 
 /**

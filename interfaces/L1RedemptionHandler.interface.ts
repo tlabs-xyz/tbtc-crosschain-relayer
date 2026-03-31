@@ -1,5 +1,5 @@
+import type { BigNumber } from 'ethers';
 import type { AnyChainConfig } from '../config/index.js';
-import { BigNumber } from 'ethers';
 
 /**
  * Interface for chain-specific handlers that define common functionality

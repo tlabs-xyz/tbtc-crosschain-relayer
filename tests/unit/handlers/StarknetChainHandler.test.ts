@@ -1,20 +1,20 @@
-import { StarknetChainHandler } from '../../../handlers/StarknetChainHandler.js';
-import {
-  StarknetChainConfigSchema,
-  type StarknetChainConfig,
-} from '../../../config/schemas/starknet.chain.schema.js';
+import { type Contract as EthersContract, ethers } from 'ethers';
 import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
-import { DepositStore } from '../../../utils/DepositStore.js';
-import logger from '../../../utils/Logger.js';
-import { DepositStatus } from '../../../types/DepositStatus.enum.js';
+import {
+  type StarknetChainConfig,
+  StarknetChainConfigSchema,
+} from '../../../config/schemas/starknet.chain.schema.js';
+import { StarknetChainHandler } from '../../../handlers/StarknetChainHandler.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
+import { DepositStatus } from '../../../types/DepositStatus.enum.js';
+import type { FundingTransaction } from '../../../types/FundingTransaction.type.js';
 import type { Reveal } from '../../../types/Reveal.type.js';
-import * as starknetAddressUtils from '../../../utils/starknetAddress.js';
+import * as auditLog from '../../../utils/AuditLog.js';
+import { DepositStore } from '../../../utils/DepositStore.js';
 import * as depositUtils from '../../../utils/Deposits.js';
 import * as getTransactionHashUtils from '../../../utils/GetTransactionHash.js';
-import * as auditLog from '../../../utils/AuditLog.js';
-import { Contract as EthersContract, ethers } from 'ethers';
-import { type FundingTransaction } from '../../../types/FundingTransaction.type.js';
+import logger from '../../../utils/Logger.js';
+import * as starknetAddressUtils from '../../../utils/starknetAddress.js';
 
 // Mock external dependencies
 jest.mock('../../../utils/DepositStore');

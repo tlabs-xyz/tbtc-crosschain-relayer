@@ -1,8 +1,8 @@
-import request from 'supertest';
 import { ethers } from 'ethers';
-import { DepositStatus } from '../../types/DepositStatus.enum.js';
+import request from 'supertest';
+import { type AnyChainConfig, chainConfigs as loadedChainConfigs } from '../../config/index.js';
 import { app, initializationPromise } from '../../index.js';
-import { chainConfigs as loadedChainConfigs, type AnyChainConfig } from '../../config/index.js';
+import { DepositStatus } from '../../types/DepositStatus.enum.js';
 
 let testChainNames: string[] = [];
 let activeChainConfigsArray: AnyChainConfig[] = [];

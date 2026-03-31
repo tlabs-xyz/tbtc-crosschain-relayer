@@ -1,10 +1,9 @@
-import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
-import logger from '../utils/Logger.js';
-
 import type { AnyChainConfig } from '../config/index.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import type { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import logger from '../utils/Logger.js';
 import { L1RedemptionHandler } from './L1RedemptionHandler.js';
-import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
 
 /**
  * Factory class for creating appropriate chain handlers based on configuration

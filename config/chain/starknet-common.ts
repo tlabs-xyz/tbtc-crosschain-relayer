@@ -1,8 +1,8 @@
-import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
-import { getCommonChainInput, STARKNET_L1_CONTRACT_ADDRESSES } from './common.chain.js';
-import { getEnv } from '../../utils/Env.js';
 import type { PartialDeep } from 'type-fest';
+import { getEnv } from '../../utils/Env.js';
+import { CHAIN_TYPE, type NETWORK } from '../schemas/common.schema.js';
 import type { StarknetChainConfig } from '../schemas/starknet.chain.schema.js';
+import { getCommonChainInput, STARKNET_L1_CONTRACT_ADDRESSES } from './common.chain.js';
 
 // TODO: Get rid of this file and use the StarknetChainConfigSchema instead.
 

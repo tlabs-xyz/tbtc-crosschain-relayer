@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 import { NETWORK } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { WORMHOLE_CHAIN_IDS, WORMHOLE_GATEWAYS } from './common.chain.js';

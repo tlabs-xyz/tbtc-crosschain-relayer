@@ -1,15 +1,15 @@
-import { SuiChainHandler } from '../../../handlers/SuiChainHandler.js';
-import {
-  SuiChainConfigSchema,
-  type SuiChainConfig,
-} from '../../../config/schemas/sui.chain.schema.js';
-import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
-import { DepositStore } from '../../../utils/DepositStore.js';
-import logger from '../../../utils/Logger.js';
-import { DepositStatus } from '../../../types/DepositStatus.enum.js';
-import type { Deposit } from '../../../types/Deposit.type.js';
-import * as depositUtils from '../../../utils/Deposits.js';
 import { ethers } from 'ethers';
+import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
+import {
+  type SuiChainConfig,
+  SuiChainConfigSchema,
+} from '../../../config/schemas/sui.chain.schema.js';
+import { SuiChainHandler } from '../../../handlers/SuiChainHandler.js';
+import type { Deposit } from '../../../types/Deposit.type.js';
+import { DepositStatus } from '../../../types/DepositStatus.enum.js';
+import { DepositStore } from '../../../utils/DepositStore.js';
+import * as depositUtils from '../../../utils/Deposits.js';
+import logger from '../../../utils/Logger.js';
 
 // Mock external dependencies
 jest.mock('../../../utils/DepositStore');

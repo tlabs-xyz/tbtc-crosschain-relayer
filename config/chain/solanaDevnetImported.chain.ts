@@ -1,7 +1,7 @@
-import { z } from 'zod';
-import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
-import type { SolanaChainConfigSchema } from '../schemas/solana.chain.schema.js';
+import type { z } from 'zod';
 import { getEnv, getEnvNumber } from '../../utils/Env.js';
+import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
+import type { SolanaChainConfigSchema } from '../schemas/solana.chain.schema.js';
 import {
   PUBLIC_RPCS, // Used for default l1Rpc
 } from './common.chain.js';

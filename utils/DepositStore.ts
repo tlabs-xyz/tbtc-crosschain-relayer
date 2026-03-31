@@ -1,8 +1,8 @@
-import type { Deposit } from '../types/Deposit.type.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
-import logger, { logErrorContext } from './Logger.js';
-import { prisma, dbLimit } from '../utils/prisma.js';
 import { Prisma } from '@prisma/client';
+import type { Deposit } from '../types/Deposit.type.js';
+import type { DepositStatus } from '../types/DepositStatus.enum.js';
+import { dbLimit, prisma } from '../utils/prisma.js';
+import logger, { logErrorContext } from './Logger.js';
 
 function serializeDeposit(deposit: Deposit): Prisma.DepositCreateInput {
   // Only JSON fields need to be stringified for Prisma Json type
