@@ -485,9 +485,12 @@ export class EVMChainHandler
         const searchStartBlock = await this.resolveSearchStartBlock(deposit);
         if (searchStartBlock === null) continue;
 
+        // The wider search starts 10 blocks before the finalize block to account
+        // for off-by-one drift in the binary search timestamp estimation.
+        const widerSearchStart = Math.max(0, searchStartBlock - 10);
         const searchResult =
           (await this.searchForTransferSequence(deposit, searchStartBlock)) ??
-          (await this.searchForTransferSequence(deposit, searchStartBlock - 10, 30));
+          (await this.searchForTransferSequence(deposit, widerSearchStart, 30));
 
         if (searchResult) {
           await updateToAwaitingWormholeVAA(searchResult.txHash, deposit, searchResult.sequence);
