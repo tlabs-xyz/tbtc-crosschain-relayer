@@ -12,6 +12,8 @@ import {
   createDeposit,
   getDepositId,
   updateToAwaitingWormholeVAA,
+  updateToFinalizedDeposit,
+  updateToFinalizedAwaitingVAA,
   updateToBridgedDeposit,
 } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
@@ -310,17 +312,16 @@ export class EVMChainHandler
 
         const blockData = await this.l2Provider.getBlock(mid);
 
-        if (!blockData) {
-          high = mid - 1;
-          continue;
-        }
-
-        if (blockData.timestamp === timestamp) {
-          startBlock = mid;
-          break;
-        } else if (blockData.timestamp < timestamp) {
-          startBlock = mid;
-          low = mid + 1;
+        if (blockData) {
+          if (blockData.timestamp === timestamp) {
+            startBlock = mid;
+            break;
+          } else if (blockData.timestamp < timestamp) {
+            startBlock = mid;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
         } else {
           high = mid - 1;
         }
@@ -639,121 +640,63 @@ export class EVMChainHandler
   }
 
   override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    const finalizedDepositReceipt = await super.finalizeDeposit(deposit);
+    const receipt = await this.submitFinalizationTx(deposit);
 
-    if (!finalizedDepositReceipt) {
-      return;
+    if (receipt) {
+      logger.info(`Processing EVM deposit finalization for ${deposit.id}...`);
+
+      const { transferSequence, eventTxHash } = this.parseTransferSequenceFromReceipt(
+        receipt,
+        deposit.id,
+      );
+
+      if (transferSequence && eventTxHash) {
+        await updateToFinalizedAwaitingVAA(deposit, receipt.transactionHash, eventTxHash, transferSequence);
+        logger.info(
+          `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
+        );
+      } else {
+        await updateToFinalizedDeposit(deposit, receipt, 'transferSequence_not_found');
+        logger.error(
+          `Could not parse transferSequence for deposit ${deposit.id} — finalizeTxHash stored, manual intervention required`,
+        );
+      }
     }
 
-    logger.info(`Processing EVM deposit finalization for ${deposit.id}...`);
-
-    const { transferSequence, eventTxHash } = this.parseTransferSequenceFromReceipt(
-      finalizedDepositReceipt,
-      deposit.id,
-    );
-
-    if (transferSequence && eventTxHash) {
-      await updateToAwaitingWormholeVAA(eventTxHash, deposit, transferSequence);
-      logger.info(
-        `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
-      );
-    } else {
-      logger.warn(
-        `Could not find transfer sequence for deposit ${deposit.id}. It will be retried in the recovery task.`,
-      );
-    }
-
-    return finalizedDepositReceipt;
+    return receipt;
   }
 
   /**
-   * Searches receipt logs for the TokensTransferredWithPayload event using
-   * a three-method fallback strategy: direct parseLog, topic signature match,
-   * and contract address filtering. Returns the extracted transfer sequence
-   * and transaction hash, or nulls if not found.
+   * Searches receipt logs for the TokensTransferredWithPayload event emitted by
+   * the L1BitcoinDepositor contract. Returns the transfer sequence and transaction
+   * hash on success, or nulls if not found.
    */
   private parseTransferSequenceFromReceipt(
     receipt: TransactionReceipt,
     depositId: string,
   ): { transferSequence: string | null; eventTxHash: string | null } {
-    let transferSequence: string | null = null;
-    let eventTxHash: string | null = null;
-
     try {
-      const logs = receipt.logs || [];
-
-      // Method 1: Try parsing all logs regardless of topics
+      const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
+      const logs = (receipt.logs || []).filter(
+        (log) =>
+          log.address.toLowerCase() === l1BitcoinDepositorAddress &&
+          log.topics[0] === TOKENS_TRANSFERRED_SIG,
+      );
       for (const log of logs) {
         try {
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-
-          if (
-            parsedLog.name === 'TokensTransferredWithPayload' &&
-            parsedLog.args.transferSequence
-          ) {
-            transferSequence = parsedLog.args.transferSequence.toString();
-            eventTxHash = receipt.transactionHash;
-            logger.info(
-              `Found transfer sequence ${transferSequence} in parsed log for deposit ${depositId}`,
-            );
-            break;
+          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+            const transferSequence = parsedLog.args.transferSequence.toString();
+            logger.info(`Found transfer sequence ${transferSequence} in receipt for deposit ${depositId}`);
+            return { transferSequence, eventTxHash: receipt.transactionHash };
           }
-        } catch {
-          // This log doesn't match our interface, continue to next
-        }
-      }
-
-      // Method 2: If not found, check by event signature in any topic position
-      if (!transferSequence) {
-        for (const log of logs) {
-          if (log.topics.some((topic: string) => topic === TOKENS_TRANSFERRED_SIG)) {
-            try {
-              const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-              if (parsedLog.args.transferSequence) {
-                transferSequence = parsedLog.args.transferSequence.toString();
-                eventTxHash = receipt.transactionHash;
-                logger.info(
-                  `Found transfer sequence ${transferSequence} by signature search for deposit ${depositId}`,
-                );
-                break;
-              }
-            } catch (error) {
-              logger.debug(`Failed to parse log with matching signature: ${error}`);
-            }
-          }
-        }
-      }
-
-      // Method 3: If still not found, filter logs by contract address
-      if (!transferSequence) {
-        const contractLogs = logs.filter(
-          (log) =>
-            log.address.toLowerCase() === this.config.l1BitcoinDepositorAddress.toLowerCase(),
-        );
-
-        for (const log of contractLogs) {
-          try {
-            const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-            if (
-              parsedLog.name === 'TokensTransferredWithPayload' &&
-              parsedLog.args.transferSequence
-            ) {
-              transferSequence = parsedLog.args.transferSequence.toString();
-              eventTxHash = receipt.transactionHash;
-              logger.info(
-                `Found transfer sequence ${transferSequence} by contract address filter for deposit ${depositId}`,
-              );
-              break;
-            }
-          } catch {
-            // Skip logs that don't parse as TokensTransferredWithPayload
-          }
+        } catch (error) {
+          logger.warn(`Failed to parse TokensTransferredWithPayload log for deposit ${depositId}: ${error}`);
         }
       }
     } catch (error: any) {
       logErrorContext(`Error parsing L1 logs for deposit ${depositId}`, error);
     }
-
-    return { transferSequence, eventTxHash };
+    return { transferSequence: null, eventTxHash: null };
   }
 }
