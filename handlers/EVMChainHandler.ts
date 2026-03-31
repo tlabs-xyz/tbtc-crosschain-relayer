@@ -427,6 +427,15 @@ export class EVMChainHandler
       const tx = await this.l2WormholeGateway.receiveTbtc(vaaBytes);
       const receipt = await tx.wait();
 
+      if (!receipt || receipt.status !== 1) {
+        const msg = `receiveTbtc transaction reverted for deposit ${deposit.id} (status=${receipt?.status ?? 'null'})`;
+        logger.error(msg, { depositId: deposit.id, txHash: receipt?.transactionHash });
+        Sentry.captureException(new Error(msg), {
+          extra: { depositId: deposit.id, chainName: this.config.chainName, txHash: receipt?.transactionHash },
+        });
+        return;
+      }
+
       await updateToBridgedDeposit(deposit, receipt.transactionHash, CHAIN_TYPE.EVM);
 
       logger.info(`EVM bridging completed successfully for deposit ${deposit.id}`, {
