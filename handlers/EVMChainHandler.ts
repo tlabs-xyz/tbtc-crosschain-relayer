@@ -611,8 +611,7 @@ export class EVMChainHandler
                 continue;
               }
               if (
-                (parsedLog.args.l2Receiver as string).toLowerCase() !==
-                deposit.owner.toLowerCase()
+                (parsedLog.args.l2Receiver as string).toLowerCase() !== deposit.owner.toLowerCase()
               ) {
                 logger.debug(
                   `Event l2Receiver ${parsedLog.args.l2Receiver} does not match deposit owner ${deposit.owner} for deposit ${deposit.id}, skipping`,
@@ -695,7 +694,10 @@ export class EVMChainHandler
       for (const log of logs) {
         try {
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+          if (
+            parsedLog.name === 'TokensTransferredWithPayload' &&
+            parsedLog.args.transferSequence
+          ) {
             const transferSequence = parsedLog.args.transferSequence.toString();
             logger.info(
               `Found transfer sequence ${transferSequence} in receipt for deposit ${depositId}`,

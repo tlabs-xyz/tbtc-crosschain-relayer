@@ -24,7 +24,8 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
   try {
     const emitterChain = network === NETWORK.MAINNET ? '2' : '10002';
 
-    const tokenBridgeAddress = WORMHOLE_TOKEN_BRIDGE[network] ?? WORMHOLE_TOKEN_BRIDGE[NETWORK.TESTNET];
+    const tokenBridgeAddress =
+      WORMHOLE_TOKEN_BRIDGE[network] ?? WORMHOLE_TOKEN_BRIDGE[NETWORK.TESTNET];
     const emitterAddress = tokenBridgeAddress.slice(2).toLowerCase().padStart(64, '0');
     logger.debug(`Wormhole emitter address for ${network}: ${emitterAddress}`);
 

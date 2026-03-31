@@ -288,7 +288,10 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       for (const log of logs) {
         try {
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+          if (
+            parsedLog.name === 'TokensTransferredWithPayload' &&
+            parsedLog.args.transferSequence
+          ) {
             transferSequence = parsedLog.args.transferSequence.toString();
             eventTxHash = l1Receipt.transactionHash;
             logger.info(
@@ -297,7 +300,9 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             break;
           }
         } catch (error) {
-          logger.warn(`Failed to parse TokensTransferredWithPayload log for deposit ${deposit.id}: ${error}`);
+          logger.warn(
+            `Failed to parse TokensTransferredWithPayload log for deposit ${deposit.id}: ${error}`,
+          );
         }
       }
     } catch (error: any) {

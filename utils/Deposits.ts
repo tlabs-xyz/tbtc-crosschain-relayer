@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import {

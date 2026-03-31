@@ -85,7 +85,7 @@ jest.mock('@mysten/sui/transactions', () => {
 });
 
 jest.mock('@mysten/bcs', () => ({
-  fromBase64: jest.fn().mockReturnValue(Uint8Array.from({length: 32}, () => 0)),
+  fromBase64: jest.fn().mockReturnValue(Uint8Array.from({ length: 32 }, () => 0)),
   bcs: {
     vector: jest.fn().mockReturnValue({
       serialize: jest.fn(),
@@ -104,7 +104,7 @@ jest.mock('@mysten/bcs', () => ({
 jest.mock('@mysten/sui/cryptography', () => ({
   decodeSuiPrivateKey: jest.fn().mockReturnValue({
     schema: 'ED25519',
-    secretKey: Uint8Array.from({length: 32}, () => 0),
+    secretKey: Uint8Array.from({ length: 32 }, () => 0),
   }),
   __esModule: true,
 }));
@@ -808,14 +808,14 @@ describe('SuiChainHandler', () => {
 
     it('should process valid SUI deposit event with number array format', async () => {
       // Mock binary address data as number arrays (32 bytes each for SUI addresses)
-      const mockDepositOwner = [5, 6, 7, 8, ...Array.from({length: 28}, () => 0)]; // 32 bytes
-      const mockSender = [9, 10, 11, 12, ...Array.from({length: 28}, () => 0)]; // 32 bytes
+      const mockDepositOwner = [5, 6, 7, 8, ...Array.from({ length: 28 }, () => 0)]; // 32 bytes
+      const mockSender = [9, 10, 11, 12, ...Array.from({ length: 28 }, () => 0)]; // 32 bytes
 
       const mockEvent = {
         type: 'DepositInitialized',
         parsedJson: {
-          funding_tx: Array.from({length: 100}, () => 1),
-          deposit_reveal: Array.from({length: 56}, () => 0),
+          funding_tx: Array.from({ length: 100 }, () => 1),
+          deposit_reveal: Array.from({ length: 56 }, () => 0),
           deposit_owner: mockDepositOwner,
           sender: mockSender,
         },
