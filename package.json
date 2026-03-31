@@ -80,8 +80,7 @@
     "zod": "^3.25.16"
   },
   "optionalDependencies": {
-    "fsevents": "^2.3.2",
-    "globals": "^16.1.0"
+    "fsevents": "^2.3.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",

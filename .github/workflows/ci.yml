@@ -53,13 +53,11 @@ jobs:
       - name: Build (type-check + compile)
         run: yarn build
 
-      # TODO: Re-enable once lint errors are resolved
-      # - name: Lint
-      #   run: yarn lint
+      - name: Lint
+        run: yarn lint
 
-      # TODO: Re-enable once format errors are resolved
-      # - name: Format check
-      #   run: yarn format
+      - name: Format check
+        run: yarn format
 
   integration:
     name: Integration tests
