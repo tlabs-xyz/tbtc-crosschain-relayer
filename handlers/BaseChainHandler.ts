@@ -281,7 +281,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     return {
       fundingTx: transformedFundingTx,
       reveal: transformedReveal,
-      l2DepositOwner: l1OutputEvent.l2DepositOwner,
+      destinationChainDepositOwner: zeroPad(l1OutputEvent.l2DepositOwner, 32),
     };
   }
 
