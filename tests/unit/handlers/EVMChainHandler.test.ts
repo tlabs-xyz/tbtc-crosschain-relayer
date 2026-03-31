@@ -165,6 +165,7 @@ describe('EVMChainHandler', () => {
 
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
+          getEventTopic: jest.fn().mockReturnValue(EVM_TOKENS_TRANSFERRED_SIG),
           parseLog: jest.fn().mockReturnValue({
             name: 'TokensTransferredWithPayload',
             args: { transferSequence: ethers.BigNumber.from(42) },
@@ -234,6 +235,7 @@ describe('EVMChainHandler', () => {
       mockReceipt.logs[0].address = mockEvmConfig.l1BitcoinDepositorAddress;
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
+          getEventTopic: jest.fn().mockReturnValue(EVM_TOKENS_TRANSFERRED_SIG),
           parseLog: jest.fn().mockReturnValue({
             name: 'TokensTransferredWithPayload',
             args: { transferSequence: ethers.BigNumber.from(999999) },
@@ -356,6 +358,7 @@ describe('EVMChainHandler', () => {
     it('should construct correct Wormhole API URL for testnet', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
+        headers: { get: () => null },
         json: () => Promise.resolve({ data: { vaa: 'dGVzdHZhYQ==' } }),
       });
       global.fetch = mockFetch;
@@ -368,9 +371,11 @@ describe('EVMChainHandler', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('api.testnet.wormholescan.io'),
+        expect.objectContaining({ signal: expect.anything() }),
       );
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining(`/10002/${expectedEmitter}/456`),
+        expect.objectContaining({ signal: expect.anything() }),
       );
       expect(result).toBe('dGVzdHZhYQ==');
     });
@@ -378,6 +383,7 @@ describe('EVMChainHandler', () => {
     it('should construct correct Wormhole API URL for mainnet', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
+        headers: { get: () => null },
         json: () => Promise.resolve({ data: { vaa: 'mainnetvaa' } }),
       });
       global.fetch = mockFetch;
@@ -386,15 +392,25 @@ describe('EVMChainHandler', () => {
       await jest.advanceTimersByTimeAsync(1000);
       const result = await resultPromise;
 
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('api.wormholescan.io'));
-      expect(mockFetch).toHaveBeenCalledWith(expect.not.stringContaining('testnet'));
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/2/'));
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('api.wormholescan.io'),
+        expect.objectContaining({ signal: expect.anything() }),
+      );
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.not.stringContaining('testnet'),
+        expect.objectContaining({ signal: expect.anything() }),
+      );
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/2/'),
+        expect.objectContaining({ signal: expect.anything() }),
+      );
       expect(result).toBe('mainnetvaa');
     });
 
     it('should return base64 VAA on successful response', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
+        headers: { get: () => null },
         json: () => Promise.resolve({ data: { vaa: 'base64vaastring' } }),
       });
       global.fetch = mockFetch;
@@ -442,6 +458,7 @@ describe('EVMChainHandler', () => {
     it('should use correct Token Bridge emitter address for mainnet', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
+        headers: { get: () => null },
         json: () => Promise.resolve({ data: { vaa: 'vaa' } }),
       });
       global.fetch = mockFetch;
@@ -453,7 +470,10 @@ describe('EVMChainHandler', () => {
       await jest.advanceTimersByTimeAsync(1000);
       await resultPromise;
 
-      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(expectedMainnetEmitter));
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining(expectedMainnetEmitter),
+        expect.objectContaining({ signal: expect.anything() }),
+      );
     });
   });
 

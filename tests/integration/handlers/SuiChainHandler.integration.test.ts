@@ -181,6 +181,10 @@ jest.mock('../../../utils/Deposits.js', () => ({
       sui: { initializeTxHash: null, finalizeTxHash: null },
       starknet: { initializeTxHash: null, finalizeTxHash: null },
     },
+    L1OutputEvent: {
+      l2DepositOwner: '0xdeposit-owner',
+      l2Sender: '0xsender',
+    },
   })),
 }));
 
@@ -386,6 +390,7 @@ describe('SuiChainHandler Integration Tests', () => {
       // Mock L1 contract interface - need to ensure parseLog is called successfully
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
+          getEventTopic: jest.fn().mockReturnValue(TOKENS_TRANSFERRED_SIG),
           parseLog: jest.fn().mockReturnValue({
             name: 'TokensTransferredWithPayload',
             args: { transferSequence: { toString: () => '456' } },

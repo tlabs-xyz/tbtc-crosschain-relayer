@@ -484,6 +484,9 @@ describe('SuiChainHandler', () => {
       // Mock the l1BitcoinDepositorProvider interface (changed from l1BitcoinDepositor)
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
+          getEventTopic: jest.fn().mockReturnValue(
+            ethers.utils.id('TokensTransferredWithPayload(uint256,bytes32,uint64)'),
+          ),
           parseLog: jest.fn().mockReturnValue({
             name: 'TokensTransferredWithPayload',
             args: { transferSequence: ethers.BigNumber.from(123) },
