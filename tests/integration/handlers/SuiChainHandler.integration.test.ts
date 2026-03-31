@@ -93,7 +93,7 @@ jest.mock('@mysten/sui/transactions', () => ({
 
 // Mock @mysten/bcs to prevent deep loading and transform errors
 jest.mock('@mysten/bcs', () => ({
-  fromBase64: jest.fn().mockReturnValue(new Uint8Array(32)),
+  fromBase64: jest.fn().mockReturnValue(Uint8Array.from({length: 32}, () => 0)),
   toBase64: jest.fn().mockReturnValue('base64-string'),
   BCS: jest.fn(),
   bcs: {
@@ -129,7 +129,7 @@ jest.mock('@mysten/bcs', () => ({
 jest.mock('@mysten/sui/cryptography', () => ({
   decodeSuiPrivateKey: jest.fn().mockReturnValue({
     schema: 'ED25519',
-    secretKey: new Uint8Array(32),
+    secretKey: Uint8Array.from({length: 32}, () => 0),
   }),
   __esModule: true,
 }));
@@ -370,8 +370,10 @@ describe('SuiChainHandler Integration Tests', () => {
       // Mock parent finalizeDeposit
       const mockReceipt = {
         transactionHash: '0xfinalize-hash',
+        blockNumber: 12345,
         logs: [
           {
+            address: MOCK_ADDRESSES.L1_CONTRACT,
             topics: [TOKENS_TRANSFERRED_SIG], // Use the correct topic signature
             data: '0x' + '0'.repeat(128), // Mock log data
           },
@@ -386,6 +388,7 @@ describe('SuiChainHandler Integration Tests', () => {
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
+            name: 'TokensTransferredWithPayload',
             args: { transferSequence: { toString: () => '456' } },
           }),
         },
@@ -411,12 +414,12 @@ describe('SuiChainHandler Integration Tests', () => {
       const mockFundingTxBytes = [
         ...new Uint8Array([1, 0, 0, 0]), // version (4 bytes)
         1, // input count (1 byte)
-        ...new Uint8Array(32), // previous output hash (32 bytes)
+        ...Uint8Array.from({length: 32}, () => 0), // previous output hash (32 bytes)
         ...new Uint8Array([255, 255, 255, 255]), // previous output index (4 bytes)
         0, // script length (1 byte)
         ...new Uint8Array([255, 255, 255, 255]), // sequence (4 bytes)
         1, // output count (1 byte)
-        ...new Uint8Array(8), // value (8 bytes)
+        ...Uint8Array.from({length: 8}, () => 0), // value (8 bytes)
         25, // script length (1 byte)
         118,
         169,
@@ -424,16 +427,16 @@ describe('SuiChainHandler Integration Tests', () => {
         ...Array.from({ length: 20 }, (_, i) => (i % 10) + 1), // 20 bytes of address
         136,
         172, // OP_EQUALVERIFY OP_CHECKSIG
-        ...new Uint8Array(4), // locktime (4 bytes)
+        ...Uint8Array.from({length: 4}, () => 0), // locktime (4 bytes)
       ];
 
       // Mock Bitcoin reveal bytes (112 bytes total as expected by parseReveal)
       const mockRevealBytes = [
-        ...new Uint8Array(4), // funding output index (4 bytes)
+        ...Uint8Array.from({length: 4}, () => 0), // funding output index (4 bytes)
         ...Array.from({ length: 32 }, (_, i) => i + 1), // blindingFactor (32 bytes)
         ...Array.from({ length: 20 }, (_, i) => (i % 10) + 1), // wallet pubkey hash (20 bytes)
         ...Array.from({ length: 20 }, (_, i) => (i % 10) + 11), // refund pubkey hash (20 bytes)
-        ...new Uint8Array(4), // refund locktime (4 bytes)
+        ...Uint8Array.from({length: 4}, () => 0), // refund locktime (4 bytes)
         ...Array.from({ length: 32 }, (_, i) => i + 1), // vault (32 bytes)
       ];
 

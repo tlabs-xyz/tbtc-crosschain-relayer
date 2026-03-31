@@ -210,28 +210,15 @@ describe('EVMChainHandler', () => {
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(mockDeposit.id));
     });
 
-    it('should fall back to Method 2 (topic signature match) when Method 1 fails', async () => {
-      // parseLog throws on first call (Method 1 iterating all logs),
-      // but succeeds when the log has the matching topic signature (Method 2)
+    it('should not extract sequence when log has correct topic but wrong contract address', async () => {
+      // Logs are filtered by BOTH address AND topic before parsing.
+      // A log from a different contract (even with matching topic) is ignored.
       const parseLogMock = jest.fn();
-
-      // Method 1: throws for all logs (simulating unrecognized events)
-      parseLogMock.mockImplementationOnce(() => {
-        throw new Error('Cannot decode log');
-      });
-
-      // Method 2: when called again on the log with matching topic, it succeeds
-      parseLogMock.mockReturnValueOnce({
-        name: 'TokensTransferredWithPayload',
-        args: { transferSequence: ethers.BigNumber.from(77) },
-      });
-
       (handler as any).l1BitcoinDepositorProvider = {
         interface: { parseLog: parseLogMock },
       };
 
-      // Receipt has one log with the correct topic signature
-      const receiptWithTopicMatch = {
+      const receiptWithWrongAddress = {
         ...mockReceipt,
         logs: [
           {
@@ -250,39 +237,26 @@ describe('EVMChainHandler', () => {
 
       jest
         .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(receiptWithTopicMatch);
+        .mockResolvedValueOnce(receiptWithWrongAddress);
 
       const result = await handler.finalizeDeposit(mockDeposit);
 
-      expect(result).toBe(receiptWithTopicMatch);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        mockReceipt.transactionHash,
-        mockDeposit,
-        '77',
-      );
+      expect(result).toBe(receiptWithWrongAddress);
+      expect(parseLogMock).not.toHaveBeenCalled();
+      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(mockDeposit.id));
     });
 
-    it('should fall back to Method 3 (contract address filter) when Methods 1 and 2 fail', async () => {
+    it('should not extract sequence when log has correct address but wrong topic', async () => {
+      // Logs are filtered by BOTH address AND topic before parsing.
+      // A log from the correct contract with a non-matching topic is ignored.
       const parseLogMock = jest.fn();
-
-      // Method 1: throws for all logs
-      parseLogMock.mockImplementationOnce(() => {
-        throw new Error('Cannot decode log');
-      });
-      // Method 2: also throws (no topic match will be attempted on this log)
-      // Method 3: succeeds on the log from the correct contract address
-      parseLogMock.mockReturnValueOnce({
-        name: 'TokensTransferredWithPayload',
-        args: { transferSequence: ethers.BigNumber.from(555) },
-      });
-
       (handler as any).l1BitcoinDepositorProvider = {
         interface: { parseLog: parseLogMock },
       };
 
-      // Receipt has a log from the l1BitcoinDepositorAddress but NO matching topic
       const l1DepositorAddress = mockEvmConfig.l1BitcoinDepositorAddress;
-      const receiptWithContractLog = {
+      const receiptWithWrongTopic = {
         ...mockReceipt,
         logs: [
           {
@@ -301,16 +275,14 @@ describe('EVMChainHandler', () => {
 
       jest
         .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(receiptWithContractLog);
+        .mockResolvedValueOnce(receiptWithWrongTopic);
 
       const result = await handler.finalizeDeposit(mockDeposit);
 
-      expect(result).toBe(receiptWithContractLog);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        mockReceipt.transactionHash,
-        mockDeposit,
-        '555',
-      );
+      expect(result).toBe(receiptWithWrongTopic);
+      expect(parseLogMock).not.toHaveBeenCalled();
+      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(mockDeposit.id));
     });
 
     it('should convert transferSequence BigNumber to string correctly', async () => {
@@ -462,7 +434,7 @@ describe('EVMChainHandler', () => {
       });
       global.fetch = mockFetch;
 
-      const expectedEmitter = 'db5492265f6038831e89f495670ff909ade94bd9'.padStart(64, '0');
+      const expectedEmitter = '4a8bc80ed5a4067f1ccf107057b8270e0cc11a78'.padStart(64, '0');
 
       const resultPromise = realFetchVAA('456', NETWORK.TESTNET);
       await jest.advanceTimersByTimeAsync(1000);
@@ -508,53 +480,36 @@ describe('EVMChainHandler', () => {
       expect(result).toBe('base64vaastring');
     });
 
-    it('should retry on 404 response and eventually return VAA', async () => {
-      const mockFetch = jest
-        .fn()
-        .mockResolvedValueOnce({ ok: false, status: 404 })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ data: { vaa: 'retriedvaa' } }),
-        });
-      global.fetch = mockFetch;
-
-      const resultPromise = realFetchVAA('100', NETWORK.TESTNET);
-      await jest.advanceTimersByTimeAsync(31000);
-      const result = await resultPromise;
-
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(result).toBe('retriedvaa');
-    });
-
-    it('should return null after exhausting all retry attempts', async () => {
+    it('should return null on 404 response (single attempt, retry handled by caller)', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ ok: false, status: 404 });
       global.fetch = mockFetch;
 
-      const resultPromise = realFetchVAA('999', NETWORK.TESTNET);
-      for (let i = 0; i < 20; i++) {
-        await jest.advanceTimersByTimeAsync(31000);
-      }
+      const resultPromise = realFetchVAA('100', NETWORK.TESTNET);
+      await jest.advanceTimersByTimeAsync(1000);
       const result = await resultPromise;
 
+      expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(result).toBeNull();
-      expect(mockFetch).toHaveBeenCalledTimes(20);
     });
 
-    it('should handle fetch network errors gracefully', async () => {
-      const mockFetch = jest
-        .fn()
-        .mockRejectedValueOnce(new Error('Network error'))
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ data: { vaa: 'aftererrorvaa' } }),
-        });
+    it('should return null on repeated 404 responses (single attempt per call)', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({ ok: false, status: 404 });
       global.fetch = mockFetch;
 
-      const resultPromise = realFetchVAA('200', NETWORK.TESTNET);
-      await jest.advanceTimersByTimeAsync(31000);
-      const result = await resultPromise;
+      const result = await realFetchVAA('999', NETWORK.TESTNET);
 
-      expect(result).toBe('aftererrorvaa');
+      expect(result).toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle fetch network errors gracefully and return null', async () => {
+      const mockFetch = jest.fn().mockRejectedValue(new Error('Network error'));
+      global.fetch = mockFetch;
+
+      const result = await realFetchVAA('200', NETWORK.TESTNET);
+
+      expect(result).toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('should use correct Token Bridge emitter address for mainnet', async () => {
@@ -621,6 +576,7 @@ describe('EVMChainHandler', () => {
       expect(mockDepositsUtil.updateToBridgedDeposit).toHaveBeenCalledWith(
         mockDeposit,
         '0xreceipt-tx-hash',
+        'Evm',
       );
     });
 
