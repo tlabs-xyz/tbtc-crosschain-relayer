@@ -16,9 +16,6 @@ import { RedemptionStatus } from '../types/Redemption.type.js';
 import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
-import { DepositStore } from '../utils/DepositStore.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
-import type { Deposit } from '../types/Deposit.type.js';
 import { DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES } from '../utils/Constants.js';
 
 let effectiveChainConfigs: AnyChainConfig[] = [];
@@ -75,18 +72,22 @@ const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
 
 export async function processDeposits(): Promise<void> {
   logger.info('Processing deposits...');
-  await Promise.all(
-    chainHandlerRegistry.list().map(async (handler) => {
-      const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
-      try {
-        await handler.processWormholeBridging?.();
-        await handler.processFinalizeDeposits();
-        await handler.processInitializeDeposits();
-      } catch (error) {
-        logErrorContext(`Error in deposit processing for ${chainName}:`, error);
-      }
-    }),
-  );
+  try {
+    await Promise.allSettled(
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
+        try {
+          await handler.processWormholeBridging?.();
+          await handler.processFinalizeDeposits();
+          await handler.processInitializeDeposits();
+        } catch (error) {
+          logErrorContext(`Error in deposit processing for ${chainName}:`, error);
+        }
+      }),
+    );
+  } catch (error) {
+    logErrorContext('Error in processDeposits:', error);
+  }
 }
 
 export async function processRedemptions(): Promise<void> {
@@ -102,64 +103,72 @@ export async function processRedemptions(): Promise<void> {
   }
 
   logger.info('Processing redemptions...');
-  await Promise.all(
-    evmChainConfigs.map(async (evmConfig) => {
-      const chainName = evmConfig.chainName;
-      try {
-        const l2Service = l2RedemptionServices.get(chainName);
+  try {
+    await Promise.allSettled(
+      evmChainConfigs.map(async (evmConfig) => {
+        const chainName = evmConfig.chainName;
+        try {
+          const l2Service = l2RedemptionServices.get(chainName);
 
-        if (l2Service) {
-          await l2Service.processPendingRedemptions();
-          await l2Service.processVaaFetchedRedemptions();
-        } else {
-          // No L2 service, check if it was expected
-          if (evmConfig.enableL2Redemption) {
-            logger.error(
-              `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized. This could be a misconfiguration or an unsupported chain type for L2 redemption.`,
-            );
+          if (l2Service) {
+            await l2Service.processPendingRedemptions();
+            await l2Service.processVaaFetchedRedemptions();
           } else {
-            // This is the expected path for chains without L2 redemption enabled (like Starknet by default)
-            logger.info(`L2 redemption processing is disabled by configuration for ${chainName}.`);
+            // No L2 service, check if it was expected
+            if (evmConfig.enableL2Redemption) {
+              logger.error(
+                `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized. This could be a misconfiguration or an unsupported chain type for L2 redemption.`,
+              );
+            } else {
+              // This is the expected path for chains without L2 redemption enabled (like Starknet by default)
+              logger.info(`L2 redemption processing is disabled by configuration for ${chainName}.`);
+            }
           }
+        } catch (error) {
+          logErrorContext(`Error in redemption processing for ${chainName}:`, error);
         }
-      } catch (error) {
-        logErrorContext(`Error in redemption processing for ${chainName}:`, error);
-      }
-    }),
-  );
+      }),
+    );
+  } catch (error) {
+    logErrorContext('Error in processRedemptions:', error);
+  }
 }
 
 export async function checkForPastDepositsForAllChains(): Promise<void> {
   logger.info('Checking for past deposits...');
-  await Promise.all(
-    chainHandlerRegistry.list().map(async (handler) => {
-      const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
-      try {
-        if (handler.supportsPastDepositCheck()) {
-          const latestBlock = await handler.getLatestBlock();
-          if (latestBlock > 0) {
-            logger.debug(
-              `Running checkForPastDeposits for ${chainName} (Latest Block/Slot: ${latestBlock})`,
-            );
-            await handler.checkForPastDeposits({
-              pastTimeInMinutes: 60,
-              latestBlock: latestBlock,
-            });
+  try {
+    await Promise.allSettled(
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
+        try {
+          if (handler.supportsPastDepositCheck()) {
+            const latestBlock = await handler.getLatestBlock();
+            if (latestBlock > 0) {
+              logger.debug(
+                `Running checkForPastDeposits for ${chainName} (Latest Block/Slot: ${latestBlock})`,
+              );
+              await handler.checkForPastDeposits({
+                pastTimeInMinutes: 60,
+                latestBlock: latestBlock,
+              });
+            } else {
+              logger.warn(
+                `Skipping checkForPastDeposits for ${chainName} - Invalid latestBlock received: ${latestBlock}`,
+              );
+            }
           } else {
-            logger.warn(
-              `Skipping checkForPastDeposits for ${chainName} - Invalid latestBlock received: ${latestBlock}`,
+            logger.debug(
+              `Skipping checkForPastDeposits for ${chainName} - Handler does not support it (e.g., using endpoint).`,
             );
           }
-        } else {
-          logger.debug(
-            `Skipping checkForPastDeposits for ${chainName} - Handler does not support it (e.g., using endpoint).`,
-          );
+        } catch (error) {
+          logErrorContext(`Error in past deposits check for ${chainName}:`, error);
         }
-      } catch (error) {
-        logErrorContext(`Error in past deposits check for ${chainName}:`, error);
-      }
-    }),
-  );
+      }),
+    );
+  } catch (error) {
+    logErrorContext('Error in checkForPastDepositsForAllChains:', error);
+  }
 }
 
 export async function checkForPastRedemptionsForAllChains(
@@ -177,42 +186,46 @@ export async function checkForPastRedemptionsForAllChains(
   }
 
   logger.info('Checking for past redemptions...');
-  await Promise.all(
-    evmChainConfigs.map(async (evmConfig) => {
-      const chainName = evmConfig.chainName;
-      try {
-        const l2Service = l2RedemptionServices.get(chainName);
+  try {
+    await Promise.allSettled(
+      evmChainConfigs.map(async (evmConfig) => {
+        const chainName = evmConfig.chainName;
+        try {
+          const l2Service = l2RedemptionServices.get(chainName);
 
-        if (l2Service) {
-          const latestBlock = await l2Service.getLatestBlock();
-          if (latestBlock > 0) {
-            logger.debug(
-              `Running checkForPastRedemptions for ${chainName} (Latest Block: ${latestBlock})`,
-            );
-            await l2Service.checkForPastRedemptions({
-              pastTimeInMinutes,
-              latestBlock: latestBlock,
-            });
+          if (l2Service) {
+            const latestBlock = await l2Service.getLatestBlock();
+            if (latestBlock > 0) {
+              logger.debug(
+                `Running checkForPastRedemptions for ${chainName} (Latest Block: ${latestBlock})`,
+              );
+              await l2Service.checkForPastRedemptions({
+                pastTimeInMinutes,
+                latestBlock: latestBlock,
+              });
+            } else {
+              logger.warn(
+                `Skipping checkForPastRedemptions for ${chainName} - Invalid latestBlock received: ${latestBlock}`,
+              );
+            }
           } else {
-            logger.warn(
-              `Skipping checkForPastRedemptions for ${chainName} - Invalid latestBlock received: ${latestBlock}`,
-            );
+            // No L2 service, check if it was expected
+            if (evmConfig.enableL2Redemption) {
+              logger.error(
+                `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized for past redemption check.`,
+              );
+            } else {
+              logger.debug(`L2 redemption past check is disabled by configuration for ${chainName}.`);
+            }
           }
-        } else {
-          // No L2 service, check if it was expected
-          if (evmConfig.enableL2Redemption) {
-            logger.error(
-              `L2 redemption is enabled for ${chainName}, but no L2RedemptionService was initialized for past redemption check.`,
-            );
-          } else {
-            logger.debug(`L2 redemption past check is disabled by configuration for ${chainName}.`);
-          }
+        } catch (error) {
+          logErrorContext(`Error in past redemptions check for ${chainName}:`, error);
         }
-      } catch (error) {
-        logErrorContext(`Error in past redemptions check for ${chainName}:`, error);
-      }
-    }),
-  );
+      }),
+    );
+  } catch (error) {
+    logErrorContext('Error in checkForPastRedemptionsForAllChains:', error);
+  }
 }
 
 export const startCronJobs = () => {
@@ -285,58 +298,26 @@ export const startCronJobs = () => {
 };
 
 export async function recoverStuckFinalizedDeposits(): Promise<void> {
-  logger.info('Recovering stuck finalized deposits...');
+  logger.info('Recovering stuck AWAITING_WORMHOLE_VAA deposits...');
 
   try {
-    // Get all finalized deposits across all chains
-    const finalizedDeposits = await DepositStore.getByStatus(DepositStatus.FINALIZED);
-
-    if (finalizedDeposits.length === 0) {
-      logger.debug('No stuck finalized deposits found');
-      return;
-    }
-
-    logger.info(`Found ${finalizedDeposits.length} finalized deposits to check`);
-
-    // Group deposits by chain
-    const depositsByChain = new Map<string, Deposit[]>();
-    for (const deposit of finalizedDeposits) {
-      const chainDeposits = depositsByChain.get(deposit.chainId) || [];
-      chainDeposits.push(deposit);
-      depositsByChain.set(deposit.chainId, chainDeposits);
-    }
-
-    // Process each chain's deposits
-    await Promise.all(
-      Array.from(depositsByChain.entries()).map(async ([chainName, deposits]) => {
+    await Promise.allSettled(
+      chainHandlerRegistry.list().map(async (handler) => {
+        const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
         try {
-          // Get the handler for this chain
-          const handler = chainHandlerRegistry
-            .list()
-            .find((h) => (h as BaseChainHandler<AnyChainConfig>).config.chainName === chainName);
-
-          if (!handler) {
-            logger.warn(`No handler found for chain ${chainName}, skipping recovery`);
-            return;
-          }
-
-          // Check if handler supports recovery (currently only SUI)
           if (
             'recoverStuckFinalizedDeposits' in handler &&
             typeof (handler as any).recoverStuckFinalizedDeposits === 'function'
           ) {
-            logger.info(`Running recovery for ${deposits.length} deposits on ${chainName}`);
-            await (handler as any).recoverStuckFinalizedDeposits(deposits);
-          } else {
-            logger.debug(`Chain ${chainName} does not support finalized deposit recovery`);
+            await (handler as any).recoverStuckFinalizedDeposits();
           }
         } catch (error) {
-          logErrorContext(`Error recovering stuck deposits for ${chainName}:`, error);
+          logErrorContext(`Error in AWAITING recovery for ${chainName}:`, error);
         }
       }),
     );
 
-    logger.info('Stuck finalized deposits recovery complete');
+    logger.info('AWAITING_WORMHOLE_VAA recovery complete');
   } catch (error) {
     logErrorContext('Error in recoverStuckFinalizedDeposits:', error);
   }
@@ -344,13 +325,17 @@ export async function recoverStuckFinalizedDeposits(): Promise<void> {
 
 export async function runStartupTasks(): Promise<void> {
   logger.info('Running startup tasks...');
-  await Promise.all([
-    processDeposits(),
-    processRedemptions(),
-    checkForPastDepositsForAllChains(),
-    checkForPastRedemptionsForAllChains(DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES),
-    recoverStuckFinalizedDeposits(),
-  ]);
+  try {
+    await Promise.allSettled([
+      processDeposits(),
+      processRedemptions(),
+      checkForPastDepositsForAllChains(),
+      checkForPastRedemptionsForAllChains(DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES),
+      recoverStuckFinalizedDeposits(),
+    ]);
+  } catch (error) {
+    logErrorContext('Error in runStartupTasks:', error);
+  }
   logger.info('Startup tasks complete.');
 }
 
@@ -396,7 +381,11 @@ export async function initializeAllChains(): Promise<void> {
       }
     }),
   );
-  await Promise.all(initializationPromises);
+  try {
+    await Promise.allSettled(initializationPromises);
+  } catch (error) {
+    logErrorContext('Error during chain handler initialization:', error);
+  }
   logger.info('All available chain handlers initialized and listeners set up.');
 }
 
