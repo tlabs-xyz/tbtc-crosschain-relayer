@@ -526,8 +526,9 @@ export class EVMChainHandler
 
     logger.info(`Deposit ${deposit.id} missing finalization tx hash, estimating search block...`);
 
-    const currentBlock = await this.l1Provider.getBlockNumber();
-    const currentTimestamp = (await this.l1Provider.getBlock(currentBlock)).timestamp;
+    const latestBlock = await this.l1Provider.getBlock('latest');
+    const currentBlock = latestBlock.number;
+    const currentTimestamp = latestBlock.timestamp;
 
     const finalizationTimestamp = Math.floor(deposit.dates.finalizationAt! / 1000);
     const secondsAgo = currentTimestamp - finalizationTimestamp;
