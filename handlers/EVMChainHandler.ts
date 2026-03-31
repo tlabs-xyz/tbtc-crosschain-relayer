@@ -133,7 +133,7 @@ export class EVMChainHandler
               l2Sender,
               this.config.chainName,
             );
-            DepositStore.create(deposit);
+            await DepositStore.create(deposit);
 
             logger.debug(`L2 Listener | Triggering L1 initializeDeposit | ID: ${deposit.id}`);
             await this.initializeDeposit(deposit);
@@ -242,7 +242,7 @@ export class EVMChainHandler
               l2Sender,
               this.config.chainName,
             );
-            DepositStore.create(newDeposit);
+            await DepositStore.create(newDeposit);
 
             await this.initializeDeposit(newDeposit);
           }
