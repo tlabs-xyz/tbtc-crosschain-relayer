@@ -19,8 +19,7 @@ README*
 **/*.mdx
 **/*.markdown
 
-# Types and bins not needed at runtime
-**/@types
+# Bins not needed at runtime
 **/bin/*.cmd
 
 # Common bulky folders
