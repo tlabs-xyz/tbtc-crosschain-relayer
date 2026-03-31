@@ -373,23 +373,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       vault: l1OutputEvent.reveal.vault,
     };
 
-    // Handle the deposit owner based on chain type
-    if (this.config.chainType === CHAIN_TYPE.EVM) {
-      // For EVM chains, normalize as address
-      const l2DepositOwner = ((): string => {
-        try {
-          return ethers.utils.getAddress(l1OutputEvent.l2DepositOwner);
-        } catch {
-          // If it's not a valid address, keep original to let callStatic surface a clear error
-          return l1OutputEvent.l2DepositOwner;
-        }
-      })();
-      return { fundingTx, reveal, l2DepositOwner };
-    } else {
-      // For non-EVM chains (Sui, Solana, StarkNet), use bytes32 destinationChainDepositOwner
-      const destinationChainDepositOwner = zeroPad(l1OutputEvent.l2DepositOwner, 32);
-      return { fundingTx, reveal, destinationChainDepositOwner };
-    }
+    // All chain types use bytes32 destinationChainDepositOwner (V2 contract ABI)
+    const destinationChainDepositOwner = zeroPad(l1OutputEvent.l2DepositOwner, 32);
+    return { fundingTx, reveal, destinationChainDepositOwner };
   }
 
   async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
@@ -454,7 +440,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       await this.l1BitcoinDepositorProvider.callStatic.initializeDeposit(
         transformedL1OutputEvent.fundingTx,
         transformedL1OutputEvent.reveal,
-        transformedL1OutputEvent.l2DepositOwner,
+        transformedL1OutputEvent.destinationChainDepositOwner,
       );
       logger.debug(`INITIALIZE | Pre-call successful | ID: ${deposit.id}`);
 
@@ -467,7 +453,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       const tx = await this.l1BitcoinDepositor.initializeDeposit(
         transformedL1OutputEvent.fundingTx,
         transformedL1OutputEvent.reveal,
-        transformedL1OutputEvent.l2DepositOwner,
+        transformedL1OutputEvent.destinationChainDepositOwner,
         { nonce: currentNonce },
       );
 
