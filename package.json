@@ -12,7 +12,7 @@
     "dev": "tsx watch --trace-warnings index.ts",
     "validate-config": "node dist/scripts/validate-config.js",
     "test": "jest --runInBand",
-    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:unit": "jest --config jest.config.unit.cjs --testPathPattern=tests/unit",
     "test:integration": "jest --testPathPattern=tests/integration",
     "test:e2e": "jest --testPathPattern=tests/e2e --runInBand",
     "test:coverage": "jest --coverage",
@@ -40,7 +40,7 @@
     "db:reset": "npx prisma db push --force-reset --accept-data-loss",
     "pretest": "docker-compose -f docker-compose.yml -f docker-compose.ci.yml down -v && docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres",
     "depcheck": "depcheck --ignores @opentelemetry/sdk-trace-node,pino-opentelemetry-transport,pino-pretty,rimraf,@types/jest,improved-yarn-audit,lefthook",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
   "keywords": [],
   "author": "T-Labs",

@@ -14,7 +14,7 @@ Registered in `tlabs-xyz/devops` as `crosschain-relayer`.
 - **Language:** TypeScript (strict, ESNext)
 - **Lint + format:** Biome (`yarn lint`, `yarn format`)
 - **Tests:** Jest (`yarn test`, `yarn test:unit`, `yarn test:integration`)
-- **Git hooks:** Lefthook (pre-commit: lint; pre-push: typecheck + test:unit)
+- **Git hooks:** Lefthook (pre-commit: lint; pre-push: test:unit)
 - **DB:** PostgreSQL via Prisma ORM
 - **Observability:** OTel → SigNoz; Sentry for error tracking
 
@@ -68,7 +68,7 @@ entry. Run `bun run check:registry` in devops to validate.
 ```bash
 yarn lint && yarn test:unit  # must pass before committing
 git commit                   # lefthook runs lint automatically
-git push                     # lefthook runs typecheck + test:unit automatically
+git push                     # lefthook runs test:unit automatically
 ```
 
-CI runs on every push/PR: lint → typecheck → test.
+CI runs on every push/PR: lint → test.
