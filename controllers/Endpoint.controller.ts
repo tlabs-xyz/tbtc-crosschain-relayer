@@ -13,14 +13,15 @@ import { getTransactionHash } from '../utils/GetTransactionHash.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 
 /**
- * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
- */
-/**
  * Controller for handling deposit-related API endpoints.
  * Provides functionality to initialize deposits through REST API calls.
+ *
+ * Requires express.json() body parsing middleware (configured in app).
+ * Request bodies are validated using zod schemas before processing.
  */
 export class EndpointController {
   private chainHandler: ChainHandlerInterface;
+  private readonly chainName: string;
 
   /**
    * Creates a new EndpointController instance.
@@ -28,6 +29,7 @@ export class EndpointController {
    */
   constructor(chainHandler: ChainHandlerInterface) {
     this.chainHandler = chainHandler;
+    this.chainName = chainHandler.config.chainName;
   }
 
   /**
@@ -41,7 +43,9 @@ export class EndpointController {
    */
   async handleReveal(req: Request, res: Response): Promise<void> {
     const logApiData = {
-      fundingTxHash: req.body.fundingTx ? '0x' + getTransactionHash(req.body.fundingTx) : 'unknown',
+      fundingTxHash: req.body?.fundingTx
+        ? '0x' + getTransactionHash(req.body.fundingTx)
+        : 'unknown',
     };
     logApiRequest('/api/reveal', 'POST', null, logApiData);
 
@@ -50,15 +54,13 @@ export class EndpointController {
       const validationResult = RevealRequestSchema.safeParse(req.body);
       if (!validationResult.success) {
         const error = 'Invalid request body';
-        logger.error(
-          `[${this.chainHandler.config.chainName}] ${error}: ${validationResult.error.flatten()}`,
-        );
+        logger.error(`[${this.chainName}] ${error}: ${validationResult.error?.flatten()}`);
         logApiRequest('/api/reveal', 'POST', null, logApiData, 400);
 
         res.status(400).json({
           success: false,
           error,
-          details: validationResult.error.flatten(),
+          details: validationResult.error?.flatten(),
         });
         return;
       }
@@ -71,13 +73,13 @@ export class EndpointController {
       const fundingTxHash = '0x' + getTransactionHash(fundingTx);
       const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
       logger.info(
-        `[${this.chainHandler.config.chainName}] Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
+        `[${this.chainName}] Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
       );
 
       const existingDeposit = await DepositStore.getById(depositId);
       if (existingDeposit) {
         logger.warn(
-          `[${this.chainHandler.config.chainName}] L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
+          `[${this.chainName}] L2 Listener | Deposit already exists locally | ID: ${depositId}. Ignoring event.`,
         );
         res.status(409).json({
           success: false,
@@ -88,32 +90,16 @@ export class EndpointController {
       }
 
       // Create deposit object
-      const deposit = createDeposit(
-        fundingTx,
-        reveal,
-        l2DepositOwner,
-        l2Sender,
-        this.chainHandler.config.chainName,
-      );
-      logger.debug(
-        `[${this.chainHandler.config.chainName}] Created deposit with ID: ${deposit.id}`,
-      );
+      const deposit = createDeposit(fundingTx, reveal, l2DepositOwner, l2Sender, this.chainName);
+      logger.debug(`[${this.chainName}] Created deposit with ID: ${deposit.id}`);
 
       // Save deposit to database before initializing
       try {
         await DepositStore.create(deposit);
-        logger.info(
-          `[${this.chainHandler.config.chainName}] Deposit saved to database with ID: ${deposit.id}`,
-        );
+        logger.info(`[${this.chainName}] Deposit saved to database with ID: ${deposit.id}`);
       } catch (error: any) {
-        logger.error(
-          `[${this.chainHandler.config.chainName}] Failed to save deposit to database: ${error.message}`,
-        );
-        logDepositError(
-          depositId,
-          `[${this.chainHandler.config.chainName}] Failed to save deposit to database`,
-          error,
-        );
+        logger.error(`[${this.chainName}] Failed to save deposit to database: ${error.message}`);
+        logDepositError(depositId, `[${this.chainName}] Failed to save deposit to database`, error);
 
         res.status(500).json({
           success: false,
@@ -137,9 +123,7 @@ export class EndpointController {
         });
       } else {
         // Initialization failed
-        logger.error(
-          `[${this.chainHandler.config.chainName}] Deposit initialization failed for ID: ${deposit.id}`,
-        );
+        logger.error(`[${this.chainName}] Deposit initialization failed for ID: ${deposit.id}`);
         res.status(500).json({
           success: false,
           error: 'Deposit initialization failed',
@@ -148,21 +132,15 @@ export class EndpointController {
         });
       }
     } catch (error: any) {
-      logErrorContext(
-        `[${this.chainHandler.config.chainName}] Error handling reveal endpoint:`,
-        error,
-        { chainName: this.chainHandler.config.chainName },
-      );
+      logErrorContext(`[${this.chainName}] Error handling reveal endpoint:`, error, {
+        chainName: this.chainName,
+      });
 
       // Log error to audit log
-      const depositId = req.body.fundingTx
+      const depositId = req.body?.fundingTx
         ? '0x' + getTransactionHash(req.body.fundingTx)
         : 'unknown';
-      logDepositError(
-        depositId,
-        `[${this.chainHandler.config.chainName}] Error handling reveal endpoint`,
-        error,
-      );
+      logDepositError(depositId, `[${this.chainName}] Error handling reveal endpoint`, error);
       logApiRequest('/api/reveal', 'POST', depositId, {}, 500);
 
       res.status(500).json({
@@ -207,19 +185,13 @@ export class EndpointController {
         status: numericStatus,
       });
     } catch (error: any) {
-      logErrorContext(
-        `[${this.chainHandler.config.chainName}] Error getting deposit status:`,
-        error,
-        { chainName: this.chainHandler.config.chainName },
-      );
+      logErrorContext(`[${this.chainName}] Error getting deposit status:`, error, {
+        chainName: this.chainName,
+      });
 
       // Log error to audit log
       const depositId = req.params.depositId || 'unknown';
-      logDepositError(
-        depositId,
-        `[${this.chainHandler.config.chainName}] Error getting deposit status`,
-        error,
-      );
+      logDepositError(depositId, `[${this.chainName}] Error getting deposit status`, error);
       logApiRequest('/api/deposit/:depositId', 'GET', depositId, {}, 500);
 
       res.status(500).json({
@@ -250,24 +222,24 @@ export class EndpointController {
    */
   async handleDepositNotification(req: Request, res: Response): Promise<void> {
     const logApiData = {
-      depositKey: req.body.depositKey || 'unknown',
-      chainName: this.chainHandler.config.chainName,
+      depositKey: req.body?.depositKey || 'unknown',
+      chainName: this.chainName,
     };
-    logApiRequest('/api/deposit/notify', 'POST', req.body.depositKey, logApiData);
+    logApiRequest('/api/deposit/notify', 'POST', req.body?.depositKey, logApiData);
 
     try {
       // 1. Validate request body
       const validationResult = DepositNotificationSchema.safeParse(req.body);
       if (!validationResult.success) {
         logger.error(
-          `[${this.chainHandler.config.chainName}] Invalid deposit notification: ${validationResult.error.flatten()}`,
+          `[${this.chainName}] Invalid deposit notification: ${validationResult.error?.flatten()}`,
         );
-        logApiRequest('/api/deposit/notify', 'POST', req.body.depositKey, logApiData, 400);
+        logApiRequest('/api/deposit/notify', 'POST', req.body?.depositKey, logApiData, 400);
 
         res.status(400).json({
           success: false,
           error: 'Invalid request body',
-          details: validationResult.error.flatten(),
+          details: validationResult.error?.flatten(),
         });
         return;
       }
@@ -295,7 +267,7 @@ export class EndpointController {
 
       if (calculatedDepositId !== depositKey) {
         logger.error(
-          `[${this.chainHandler.config.chainName}] depositKey mismatch: provided=${depositKey}, calculated=${calculatedDepositId}`,
+          `[${this.chainName}] depositKey mismatch: provided=${depositKey}, calculated=${calculatedDepositId}`,
         );
         res.status(400).json({
           success: false,
@@ -310,7 +282,7 @@ export class EndpointController {
       const existingDeposit = await DepositStore.getById(depositKey);
       if (existingDeposit) {
         logger.warn(
-          `[${this.chainHandler.config.chainName}] Deposit already exists | ID: ${depositKey} | Status: ${DepositStatus[existingDeposit.status]}`,
+          `[${this.chainName}] Deposit already exists | ID: ${depositKey} | Status: ${DepositStatus[existingDeposit.status]}`,
         );
         res.status(200).json({
           success: true,
@@ -325,9 +297,7 @@ export class EndpointController {
       const onChainStatus = await this.chainHandler.checkDepositStatus(depositKey);
 
       if (onChainStatus === null) {
-        logger.error(
-          `[${this.chainHandler.config.chainName}] Could not verify deposit on-chain | ID: ${depositKey}`,
-        );
+        logger.error(`[${this.chainName}] Could not verify deposit on-chain | ID: ${depositKey}`);
         res.status(503).json({
           success: false,
           error: 'Could not verify deposit status on-chain',
@@ -339,7 +309,7 @@ export class EndpointController {
 
       if (onChainStatus !== DepositStatus.INITIALIZED) {
         logger.error(
-          `[${this.chainHandler.config.chainName}] Deposit not initialized on-chain | ID: ${depositKey} | Status: ${DepositStatus[onChainStatus]}`,
+          `[${this.chainName}] Deposit not initialized on-chain | ID: ${depositKey} | Status: ${DepositStatus[onChainStatus]}`,
         );
         res.status(400).json({
           success: false,
@@ -362,17 +332,17 @@ export class EndpointController {
         destinationChainDepositOwner,
         initTxHash,
         backendAddress,
-        this.chainHandler.config.chainName,
+        this.chainName,
       );
 
       logger.info(
-        `[${this.chainHandler.config.chainName}] Creating deposit from backend notification | ID: ${depositKey}`,
+        `[${this.chainName}] Creating deposit from backend notification | ID: ${depositKey}`,
       );
 
       await DepositStore.create(deposit);
 
       logger.info(
-        `[${this.chainHandler.config.chainName}] Deposit created successfully from notification | ID: ${depositKey}`,
+        `[${this.chainName}] Deposit created successfully from notification | ID: ${depositKey}`,
       );
       logApiRequest('/api/deposit/notify', 'POST', depositKey, logApiData, 200);
 
@@ -384,21 +354,18 @@ export class EndpointController {
         onChainStatus: 'INITIALIZED',
       });
     } catch (error: any) {
-      logErrorContext(
-        `[${this.chainHandler.config.chainName}] Error handling deposit notification:`,
-        error,
-      );
+      logErrorContext(`[${this.chainName}] Error handling deposit notification:`, error);
       logDepositError(
-        req.body.depositKey || 'unknown',
+        req.body?.depositKey || 'unknown',
         `Error handling deposit notification`,
         error,
       );
-      logApiRequest('/api/deposit/notify', 'POST', req.body.depositKey, {}, 500);
+      logApiRequest('/api/deposit/notify', 'POST', req.body?.depositKey, {}, 500);
 
       res.status(500).json({
         success: false,
         error: error.message || 'Internal server error',
-        depositId: req.body.depositKey,
+        depositId: req.body?.depositKey,
       });
     }
   }
