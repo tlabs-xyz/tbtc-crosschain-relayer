@@ -406,14 +406,17 @@ export class EVMChainHandler
         return;
       }
 
-      // Convert base64 VAA to hex-encoded bytes for the EVM contract call
-      const vaaBytes = '0x' + Buffer.from(vaaBase64, 'base64').toString('hex');
-      if (vaaBytes.length < 200) {
+      // Convert base64 VAA to bytes; a signed Wormhole VAA with 19 guardians
+      // is ~500 bytes. Reject anything that looks implausibly small.
+      const MIN_VAA_BYTES = 100;
+      const vaaBuf = Buffer.from(vaaBase64, 'base64');
+      if (vaaBuf.length < MIN_VAA_BYTES) {
         logger.warn(
-          `VAA bytes suspiciously short (${vaaBytes.length} chars) for deposit ${deposit.id} — skipping`,
+          `VAA suspiciously short (${vaaBuf.length} bytes) for deposit ${deposit.id} — skipping`,
         );
         return;
       }
+      const vaaBytes = '0x' + vaaBuf.toString('hex');
 
       logger.debug(`Submitting receiveTbtc transaction for deposit ${deposit.id}`, {
         depositId: deposit.id,
