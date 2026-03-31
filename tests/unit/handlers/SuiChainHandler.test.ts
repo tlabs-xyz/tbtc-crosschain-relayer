@@ -469,24 +469,26 @@ describe('SuiChainHandler', () => {
 
       mockReceipt = {
         transactionHash: '0xtest-finalize-hash',
-        blockNumber: 12345,
         logs: [
           {
-            address: '0x1234567890123456789012345678901234567890',
+            // address must match config.l1BitcoinDepositorAddress for the filter to pass
+            address: mockSuiConfig.l1BitcoinDepositorAddress,
             topics: [ethers.utils.id('TokensTransferredWithPayload(uint256,bytes32,uint64)')],
-            data: '0x',
           },
         ],
       };
 
-      // Mock the parent finalizeDeposit call
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValue(mockReceipt);
+      // SuiChainHandler.finalizeDeposit calls submitFinalizationTx directly (not super.finalizeDeposit)
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(mockReceipt);
 
       // Mock the l1BitcoinDepositorProvider interface (changed from l1BitcoinDepositor)
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
+          getEventTopic: jest
+            .fn()
+            .mockReturnValue(
+              ethers.utils.id('TokensTransferredWithPayload(uint256,bytes32,uint64)'),
+            ),
           parseLog: jest.fn().mockReturnValue({
             name: 'TokensTransferredWithPayload',
             args: { transferSequence: ethers.BigNumber.from(123) },
@@ -499,22 +501,20 @@ describe('SuiChainHandler', () => {
       const result = await handler.finalizeDeposit(mockDeposit);
 
       expect(result).toBe(mockReceipt);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        '0xtest-finalize-hash',
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         mockDeposit,
+        '0xtest-finalize-hash',
         '123',
       );
     });
 
-    it('should return early if base finalization fails', async () => {
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(undefined);
+    it('should return early if submitFinalizationTx fails', async () => {
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValueOnce(undefined);
 
       const result = await handler.finalizeDeposit(mockDeposit);
 
       expect(result).toBeUndefined();
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).not.toHaveBeenCalled();
     });
 
     it('should handle missing transfer sequence gracefully', async () => {
@@ -523,17 +523,18 @@ describe('SuiChainHandler', () => {
         logs: [],
       };
 
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
+      (handler as any).submitFinalizationTx = jest
+        .fn()
         .mockResolvedValueOnce(receiptWithoutTransferSequence);
 
       const result = await handler.finalizeDeposit(mockDeposit);
 
       expect(result).toBe(receiptWithoutTransferSequence);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
-      // Check for either warning message since the implementation logs two warnings
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Could not find transfer sequence'),
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).not.toHaveBeenCalled();
+      expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
+        mockDeposit,
+        { hash: receiptWithoutTransferSequence.transactionHash },
+        'transferSequence_not_found',
       );
     });
   });
@@ -674,6 +675,7 @@ describe('SuiChainHandler', () => {
       expect(mockDepositsUtil.updateToBridgedDeposit).toHaveBeenCalledWith(
         mockDeposit,
         'mock-transaction-digest',
+        CHAIN_TYPE.SUI,
       );
     });
 

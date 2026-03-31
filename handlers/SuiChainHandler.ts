@@ -5,9 +5,8 @@ import { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
-import { ethers } from 'ethers';
-
+import * as Sentry from '@sentry/node';
+import type { Chain, ChainContext } from '@wormhole-foundation/sdk-connect';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
@@ -15,17 +14,13 @@ import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { DepositStore } from '../utils/DepositStore.js';
 import {
   createDeposit,
-  updateToAwaitingWormholeVAA,
   updateToBridgedDeposit,
+  updateToFinalizedAwaitingVAA,
 } from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { parseDepositInitializedEvent } from '../utils/SuiMoveEventParser.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
-
-const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
-  'TokensTransferredWithPayload(uint256,bytes32,uint64)',
-);
 
 /**
  * Chain handler for SUI blockchain integration.
@@ -116,7 +111,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             },
           );
 
-          const response = await this.suiClient!.queryEvents({
+          if (!this.suiClient) return;
+          const response = await this.suiClient.queryEvents({
             query: eventFilter,
             cursor: this.lastEventCursor as any,
             limit: 50,
@@ -259,90 +255,29 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
    *  3) update deposit to AWAITING_WORMHOLE_VAA
    */
   override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    const finalizedDepositReceipt = await super.finalizeDeposit(deposit);
+    if (!this.isDepositFinalizable(deposit)) return;
 
-    if (!finalizedDepositReceipt) {
-      return;
-    }
+    const receipt = await this.submitFinalizationTx(deposit);
 
-    logger.info(`Processing Sui deposit finalization for ${deposit.id}...`);
+    if (receipt) {
+      logger.info(`Processing Sui deposit finalization for ${deposit.id}...`);
 
-    const l1Receipt = finalizedDepositReceipt;
-    if (!l1Receipt) {
-      logger.warn(`No finalize receipt found for deposit ${deposit.id}; cannot parse logs.`);
-      return finalizedDepositReceipt;
-    }
-
-    // More robust event finding logic
-    let transferSequence: string | null = null;
-    let eventTxHash: string | null = null;
-
-    try {
-      const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
-      const logs = (l1Receipt.logs || []).filter(
-        (log) =>
-          log.address.toLowerCase() === l1BitcoinDepositorAddress &&
-          log.topics[0] === TOKENS_TRANSFERRED_SIG,
+      const { transferSequence, eventTxHash } = this.parseTransferSequenceFromReceipt(
+        receipt,
+        deposit.id,
       );
 
-      for (const log of logs) {
-        try {
-          const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          if (
-            parsedLog.name === 'TokensTransferredWithPayload' &&
-            parsedLog.args.transferSequence
-          ) {
-            transferSequence = parsedLog.args.transferSequence.toString();
-            eventTxHash = l1Receipt.transactionHash;
-            logger.info(
-              `Found transfer sequence ${transferSequence} in receipt for deposit ${deposit.id}`,
-            );
-            break;
-          }
-        } catch (error) {
-          logger.warn(
-            `Failed to parse TokensTransferredWithPayload log for deposit ${deposit.id}: ${error}`,
-          );
-        }
-      }
-    } catch (error: any) {
-      logErrorContext(`Error parsing L1 logs for deposit ${deposit.id}`, error);
-    }
-
-    // If still not found in the same transaction, implement the recovery logic
-    if (!transferSequence) {
-      logger.warn(
-        `Transfer sequence not found in finalization transaction for deposit ${deposit.id}`,
-      );
-
-      // Try to find it immediately in subsequent blocks
-      try {
-        const searchResult = await this.searchForTransferSequence(
-          deposit,
-          l1Receipt.blockNumber,
-          5,
+      if (transferSequence && eventTxHash) {
+        await updateToFinalizedAwaitingVAA(deposit, receipt.transactionHash, transferSequence);
+        logger.info(
+          `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
         );
-        if (searchResult) {
-          transferSequence = searchResult.sequence;
-          eventTxHash = searchResult.txHash;
-        }
-      } catch (searchError) {
-        logErrorContext(`Failed to search for transfer sequence`, searchError);
+      } else {
+        await this.handleMissingTransferSequence(deposit, receipt.transactionHash);
       }
     }
 
-    if (transferSequence && eventTxHash) {
-      await updateToAwaitingWormholeVAA(eventTxHash, deposit, transferSequence);
-      logger.info(
-        `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
-      );
-    } else {
-      logger.warn(
-        `Could not find transfer sequence for deposit ${deposit.id}. It will be retried in the hourly recovery task.`,
-      );
-    }
-
-    return finalizedDepositReceipt;
+    return receipt;
   }
 
   /**
@@ -581,7 +516,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         }
 
         // Update deposit status to BRIDGED
-        await updateToBridgedDeposit(deposit, result.digest);
+        await updateToBridgedDeposit(deposit, result.digest, CHAIN_TYPE.SUI);
 
         logger.info(`Sui bridging completed successfully for deposit ${deposit.id}`);
       } catch (transactionError: any) {
@@ -608,6 +543,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   /**
    * Process all deposits that are in the AWAITING_WORMHOLE_VAA status.
    * This function will attempt to bridge the deposits using the Wormhole protocol.
+   * Also surfaces any FINALIZED deposits with a transferSequence_not_found error
+   * via Sentry so operators are alerted to investigate.
    */
   public async processWormholeBridging(): Promise<void> {
     if (this.config.chainType !== CHAIN_TYPE.SUI) return; // Only for Sui chains
@@ -625,196 +562,36 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       }
       await this.bridgeSuiDeposit(deposit);
     }
-  }
 
-  /**
-   * Recover deposits that are stuck in FINALIZED status by searching for their
-   * TokensTransferredWithPayload events in recent blocks
-   */
-  public async recoverStuckFinalizedDeposits(deposits: Deposit[]): Promise<void> {
-    if (!deposits || deposits.length === 0) return;
-
-    logger.info(
-      `Attempting to recover ${deposits.length} stuck finalized deposits for ${this.config.chainName}`,
-    );
-
-    // Filter to only deposits that have been finalized for more than 5 minutes
+    // Alert on FINALIZED deposits whose transferSequence was never parsed.
+    // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
+    // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
+    // to prevent N × alerts-per-tick from exhausting Sentry quota.
+    const RECOVERY_DELAY_MS = 5 * 60 * 1000;
     const now = Date.now();
-    const RECOVERY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
-
-    const stuckDeposits = deposits.filter((deposit) => {
-      if (!deposit.dates.finalizationAt) return false;
-      const timeSinceFinalized = now - deposit.dates.finalizationAt;
-      return timeSinceFinalized > RECOVERY_DELAY_MS;
-    });
-
-    if (stuckDeposits.length === 0) {
-      logger.debug(`No deposits have been finalized long enough for recovery`);
-      return;
-    }
-
-    logger.info(`Found ${stuckDeposits.length} deposits finalized more than 5 minutes ago`);
-
-    for (const deposit of stuckDeposits) {
-      try {
-        logger.info(`Attempting recovery for deposit ${deposit.id}`);
-
-        // First, we need to find which block to start searching from
-        let searchStartBlock: number;
-
-        if (deposit.hashes?.eth?.finalizeTxHash) {
-          // If we have the finalization tx hash, use it to get the block number
-          const finalizeTxReceipt = await this.l1Provider.getTransactionReceipt(
-            deposit.hashes.eth.finalizeTxHash,
-          );
-          if (finalizeTxReceipt) {
-            searchStartBlock = finalizeTxReceipt.blockNumber;
-          } else {
-            logger.warn(`Could not get finalization receipt for deposit ${deposit.id}`);
-            continue;
-          }
-        } else {
-          // If no finalization tx hash, estimate the block based on finalization timestamp
-          logger.info(
-            `Deposit ${deposit.id} missing finalization tx hash, estimating search block...`,
-          );
-
-          const latestBlock = await this.l1Provider.getBlock('latest');
-          const currentBlock = latestBlock.number;
-          const currentTimestamp = latestBlock.timestamp;
-
-          // We know finalizationAt exists because we filtered for it earlier
-          const finalizationTimestamp = Math.floor(deposit.dates.finalizationAt! / 1000);
-          const secondsAgo = currentTimestamp - finalizationTimestamp;
-          const blocksAgo = Math.floor(secondsAgo / 12); // ~12 second block time on Ethereum
-          searchStartBlock = Math.max(1, currentBlock - blocksAgo);
-
-          logger.info(
-            `Estimated search start block: ${searchStartBlock} for deposit ${deposit.id}`,
-          );
-        }
-
-        // Search for transfer sequence starting from the determined block
-        const searchResult = await this.searchForTransferSequence(deposit, searchStartBlock);
-
-        if (searchResult) {
-          logger.info(
-            `Found transfer sequence ${searchResult.sequence} for deposit ${deposit.id} in recovery`,
-          );
-          await updateToAwaitingWormholeVAA(searchResult.txHash, deposit, searchResult.sequence);
-          logger.info(
-            `Successfully recovered deposit ${deposit.id} - updated to AWAITING_WORMHOLE_VAA`,
-          );
-        } else {
-          // Search a wider range if initial search failed
-          const widerSearchResult = await this.searchForTransferSequence(
-            deposit,
-            Math.max(0, searchStartBlock - 10),
-            30,
-          );
-          if (widerSearchResult) {
-            logger.info(
-              `Found transfer sequence ${widerSearchResult.sequence} for deposit ${deposit.id} in wider search`,
-            );
-            await updateToAwaitingWormholeVAA(
-              widerSearchResult.txHash,
-              deposit,
-              widerSearchResult.sequence,
-            );
-            logger.info(`Successfully recovered deposit ${deposit.id} with wider search`);
-          } else {
-            logger.warn(
-              `Could not find transfer sequence for deposit ${deposit.id} even with wider search`,
-            );
-          }
-        }
-      } catch (error) {
-        logErrorContext(`Error recovering deposit ${deposit.id}`, error);
-      }
-    }
-  }
-
-  /**
-   * Enhanced search for transfer sequence with configurable block range
-   */
-  private async searchForTransferSequence(
-    deposit: Deposit,
-    startBlock: number,
-    searchBlocks: number = 15,
-  ): Promise<{ sequence: string; txHash: string } | null> {
-    try {
-      const endBlock = Math.min(startBlock + searchBlocks, await this.l1Provider.getBlockNumber());
-
-      logger.debug(
-        `Searching for TokensTransferredWithPayload events in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`,
-      );
-
-      // Search for TokensTransferredWithPayload events by topic signature
-      // This catches events from any contract, not just L1BitcoinDepositor
-      const logs = await this.l1Provider.getLogs({
-        topics: [TOKENS_TRANSFERRED_SIG],
-        fromBlock: startBlock,
-        toBlock: endBlock,
+    const finalizedDeposits = await DepositStore.getByStatus(
+      DepositStatus.FINALIZED,
+      this.config.chainName,
+    );
+    for (const deposit of finalizedDeposits) {
+      if (deposit.error !== 'transferSequence_not_found') continue;
+      if (!deposit.dates.finalizationAt) continue;
+      if (now - deposit.dates.finalizationAt <= RECOVERY_DELAY_MS) continue;
+      const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found — manual intervention required`;
+      logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
+      Sentry.captureException(new Error(msg), {
+        extra: {
+          depositId: deposit.id,
+          chainName: this.config.chainName,
+          finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
+          finalizationAt: deposit.dates.finalizationAt,
+        },
       });
-
-      logger.info(
-        `Found ${logs.length} TokensTransferredWithPayload events in blocks ${startBlock}-${endBlock}`,
-      );
-
-      // Log each event found for debugging
-      logs.forEach((log, index) => {
-        logger.debug(
-          `Event ${index}: from ${log.address} in block ${log.blockNumber}, tx: ${log.transactionHash}`,
-        );
+      await DepositStore.update({
+        ...deposit,
+        error: 'transferSequence_not_found_alerted',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
       });
-
-      // Filter to find events from L1BitcoinDepositor
-      const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
-
-      for (const log of logs) {
-        try {
-          // Check if this event is from L1BitcoinDepositor
-          if (log.address.toLowerCase() === l1BitcoinDepositorAddress) {
-            const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-
-            if (parsedLog.args.transferSequence) {
-              // Correlate event to the specific deposit by matching destinationChainReceiver.
-              // The ABI type is bytes32, so ethers returns a 32-byte zero-padded hex string.
-              // Extract the rightmost 20 bytes and checksum before comparing to deposit.owner.
-              if (parsedLog.args.destinationChainReceiver) {
-                const receiverAddress = ethers.utils.getAddress(
-                  '0x' + (parsedLog.args.destinationChainReceiver as string).slice(-40),
-                );
-                if (receiverAddress.toLowerCase() !== deposit.owner.toLowerCase()) {
-                  logger.debug(
-                    `Event destinationChainReceiver ${receiverAddress} does not match deposit owner ${deposit.owner} for deposit ${deposit.id}, skipping`,
-                  );
-                  continue;
-                }
-              }
-
-              logger.info(
-                `Found transfer sequence ${parsedLog.args.transferSequence} from L1BitcoinDepositor in tx ${log.transactionHash}`,
-              );
-
-              return {
-                sequence: parsedLog.args.transferSequence.toString(),
-                txHash: log.transactionHash,
-              };
-            }
-          }
-        } catch (error) {
-          logger.debug(`Failed to parse log: ${error}`);
-        }
-      }
-
-      logger.debug(
-        `No transfer sequence found from L1BitcoinDepositor in blocks ${startBlock}-${endBlock} for deposit ${deposit.id}`,
-      );
-      return null;
-    } catch (error: any) {
-      logErrorContext(`Error searching for transfer sequence`, error);
-      return null;
     }
   }
 }

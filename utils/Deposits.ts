@@ -469,6 +469,10 @@ export const updateToInitializedDeposit = async (
  * @description Updates the status of a deposit to `AWAITING_WORMHOLE_VAA` and
  * stores the Wormhole transfer sequence (so we can fetch the VAA later).
  *
+ * **Solana path only.** Called after the L1 finalize + bridge tx is confirmed
+ * but the finalizeTxHash is recorded separately; use `updateToFinalizedAwaitingVAA`
+ * for EVM/Sui chains where finalization and bridging happen atomically.
+ *
  * - Sets deposit status to AWAITING_WORMHOLE_VAA
  * - Records lastActivityAt
  * - Clears error
@@ -531,15 +535,71 @@ export const updateToAwaitingWormholeVAA = async (
   logDepositAwaitingWormholeVAA(updatedDeposit);
 };
 
-// Fallback heuristic for callers that don't pass chainType explicitly.
-// Matches chain names used in existing deposits. New EVM chains (e.g. optimism,
-// linea) would fall through to 'unknown' without an explicit chainType param.
-const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'evm' | 'unknown' => {
-  const lowerChainId = chainId.toLowerCase();
-  if (lowerChainId.includes('sui')) return 'sui';
-  if (lowerChainId.includes('solana')) return 'solana';
-  if (lowerChainId.includes('base') || lowerChainId.includes('arbitrum')) return 'evm';
-  return 'unknown';
+/**
+ * @name updateToFinalizedAwaitingVAA
+ * @description Atomically transitions a deposit from INITIALIZED → AWAITING_WORMHOLE_VAA
+ * in a single DepositStore.update() call. Writes finalizeTxHash, wormholeInfo, and all
+ * relevant timestamps together so there is never an intermediate FINALIZED state.
+ *
+ * **EVM/Sui path only.** On these chains the L1 `finalizeDeposit` call emits
+ * `TokensTransferredWithPayload` in the same transaction, so finalization and
+ * the Wormhole sequence are captured atomically. For Solana, where they are
+ * separate steps, use `updateToAwaitingWormholeVAA` instead.
+ *
+ * @param deposit - The deposit object to update.
+ * @param txHash - The L1 finalization transaction hash (same tx that emits TokensTransferredWithPayload).
+ * @param transferSequence - The Wormhole transfer sequence number (as a string).
+ */
+export const updateToFinalizedAwaitingVAA = async (
+  deposit: Deposit,
+  txHash: string,
+  transferSequence: string,
+): Promise<void> => {
+  const oldStatus = deposit.status;
+  const newStatus = DepositStatus.AWAITING_WORMHOLE_VAA;
+  const now = Date.now();
+
+  const updatedDeposit: Deposit = {
+    ...deposit,
+    status: newStatus,
+    hashes: {
+      ...deposit.hashes,
+      eth: {
+        ...deposit.hashes.eth,
+        finalizeTxHash: txHash,
+      },
+    },
+    dates: {
+      ...deposit.dates,
+      finalizationAt: now,
+      awaitingWormholeVAAMessageSince: now,
+      lastActivityAt: now,
+    },
+    wormholeInfo: {
+      txHash,
+      transferSequence,
+      bridgingAttempted: false,
+    },
+    error: null,
+  };
+
+  logStatusChange(updatedDeposit, newStatus, oldStatus);
+  createLoggerWithCorrelation({
+    depositId: deposit.id,
+    chainName: deposit.chainId,
+    fromStatus: DepositStatus[oldStatus],
+    toStatus: DepositStatus[newStatus],
+    operation: 'deposit_finalized_awaiting_vaa',
+    fundingTxHash: deposit.fundingTxHash ?? undefined,
+    initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+    finalizeTxHash: txHash,
+    transferSequence,
+  }).info(`Deposit state change: ${DepositStatus[oldStatus]} → ${DepositStatus[newStatus]}`);
+
+  await DepositStore.update(updatedDeposit);
+
+  logDepositFinalized(updatedDeposit);
+  logDepositAwaitingWormholeVAA(updatedDeposit);
 };
 
 /**
@@ -553,33 +613,21 @@ const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'evm' | 'unknow
  * - Writes the updated deposit object to JSON storage
  *
  * @param deposit The deposit object to update
- * @param txSignature The bridge transaction hash / signature
- * @param chainType The chain type — pass this explicitly to avoid string-matching
- *   the chainId. Required for any EVM chain that isn't Base or Arbitrum.
+ * @param txSignature The transaction hash of the L2 bridge call
+ * @param chainType The chain type of the deposit (CHAIN_TYPE enum value)
  */
 export const updateToBridgedDeposit = async (
   deposit: Deposit,
   txSignature: string,
-  chainType?: CHAIN_TYPE,
+  chainType: CHAIN_TYPE,
 ): Promise<void> => {
   const oldStatus = deposit.status;
   const newStatus = DepositStatus.BRIDGED;
 
   let updatedHashes;
-  // If chainType is provided, map it directly; otherwise fall back to heuristic.
-  const resolvedType: 'sui' | 'solana' | 'evm' | 'unknown' = chainType
-    ? chainType === CHAIN_TYPE.SUI
-      ? 'sui'
-      : chainType === CHAIN_TYPE.SOLANA
-        ? 'solana'
-        : chainType === CHAIN_TYPE.EVM
-          ? 'evm'
-          : 'unknown'
-    : getChainTypeFromId(deposit.chainId);
 
-  switch (resolvedType) {
-    case 'sui':
-      // Update SUI-specific hash structure
+  switch (chainType) {
+    case CHAIN_TYPE.SUI:
       updatedHashes = {
         ...deposit.hashes,
         sui: {
@@ -588,8 +636,7 @@ export const updateToBridgedDeposit = async (
         },
       };
       break;
-    case 'solana':
-      // Update Solana-specific hash structure
+    case CHAIN_TYPE.SOLANA:
       updatedHashes = {
         ...deposit.hashes,
         solana: {
@@ -598,8 +645,7 @@ export const updateToBridgedDeposit = async (
         },
       };
       break;
-    case 'evm':
-      // Update EVM-specific hash structure (Base, Arbitrum)
+    case CHAIN_TYPE.EVM:
       updatedHashes = {
         ...deposit.hashes,
         evm: {
@@ -610,9 +656,8 @@ export const updateToBridgedDeposit = async (
       break;
     default:
       logger.warn(
-        `[updateToBridgedDeposit] Unknown chainId: ${deposit.chainId}. Defaulting to Solana hash structure for backward compatibility. Pass chainType explicitly to avoid this.`,
+        `[updateToBridgedDeposit] Unhandled chainType: ${chainType} for deposit ${deposit.id}. Defaulting to Solana hash structure.`,
       );
-      // Default to Solana for backward compatibility
       updatedHashes = {
         ...deposit.hashes,
         solana: {

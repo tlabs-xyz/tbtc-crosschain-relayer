@@ -1,17 +1,10 @@
-import { ethers } from 'ethers';
 import { NETWORK } from '../config/schemas/common.schema.js';
 import logger, { logErrorContext } from './Logger.js';
 
-// Wormhole Token Bridge addresses on Ethereum L1, validated at module load.
-const WORMHOLE_TOKEN_BRIDGE: Record<string, string> = {
-  [NETWORK.MAINNET]: ethers.utils.getAddress('0x3ee18B2214AFF97000D974cf647E7C347E8fa585'),
-  [NETWORK.TESTNET]: ethers.utils.getAddress('0x4a8bc80Ed5a4067f1CCf107057b8270E0cC11A78'),
-};
-
 /**
  * Fetches a signed VAA from the Wormhole API for a given transfer sequence.
- * Makes a single attempt and returns null if the VAA is not yet available (404)
- * or if any error occurs. Retry cadence is managed by the caller's scheduling loop.
+ * Makes a single attempt and returns null if not yet available.
+ * Retry cadence is handled by the caller (processWormholeBridging cron).
  *
  * This is an L1 Ethereum concern shared by all chain handlers — the emitter
  * is always the Wormhole Token Bridge on Ethereum regardless of destination chain.
@@ -24,10 +17,12 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
   try {
     const emitterChain = network === NETWORK.MAINNET ? '2' : '10002';
 
+    // Wormhole Token Bridge addresses on Ethereum L1
     const tokenBridgeAddress =
-      WORMHOLE_TOKEN_BRIDGE[network] ?? WORMHOLE_TOKEN_BRIDGE[NETWORK.TESTNET];
+      network === NETWORK.MAINNET
+        ? '0x3ee18B2214AFF97000D974cf647E7C347E8fa585'
+        : '0xDB5492265f6038831E89f495670fF909aDe94bd9';
     const emitterAddress = tokenBridgeAddress.slice(2).toLowerCase().padStart(64, '0');
-    logger.debug(`Wormhole emitter address for ${network}: ${emitterAddress}`);
 
     const vaaId = `${emitterChain}/${emitterAddress}/${sequence}`;
     logger.debug(`Fetching VAA with ID: ${vaaId}`);
@@ -37,22 +32,47 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
         ? 'https://api.wormholescan.io'
         : 'https://api.testnet.wormholescan.io';
 
-    try {
-      const response = await fetch(`${wormholeApi}/api/v1/vaas/${vaaId}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.data && data.data.vaa) {
-          logger.info(`VAA found for sequence ${sequence}!`);
-          return data.data.vaa;
-        }
-      } else if (response.status === 404) {
-        logger.debug(`VAA not ready yet for sequence ${sequence}`);
-      } else {
-        logger.warn(`Unexpected response status ${response.status} when fetching VAA`);
+    let response: Response;
+    try {
+      response = await fetch(`${wormholeApi}/api/v1/vaas/${vaaId}`, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (response.ok) {
+      const MAX_RESPONSE_BYTES = 1_000_000; // 1 MB
+      const text = await response.text();
+      if (text.length > MAX_RESPONSE_BYTES) {
+        logger.warn(
+          `VAA response unexpectedly large (${text.length} chars) for sequence ${sequence} — skipping`,
+        );
+        return null;
       }
-    } catch (error: any) {
-      logger.warn(`Error fetching VAA: ${error.message}`);
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        logger.warn(`Failed to parse VAA response as JSON for sequence ${sequence}`);
+        return null;
+      }
+      if (data && data.data && data.data.vaa) {
+        logger.info(`VAA found for sequence ${sequence}!`);
+        return data.data.vaa;
+      }
+    } else if (response.status === 404) {
+      logger.debug(`VAA not yet available for sequence ${sequence}`);
+    } else if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after');
+      logger.warn(
+        `Wormhole API rate-limited for sequence ${sequence}${retryAfter ? ` (retry-after: ${retryAfter}s)` : ''}`,
+      );
+    } else {
+      logger.warn(
+        `Unexpected response status ${response.status} when fetching VAA for sequence ${sequence}`,
+      );
     }
 
     return null;

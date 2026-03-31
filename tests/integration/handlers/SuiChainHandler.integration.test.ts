@@ -165,6 +165,8 @@ jest.mock('../../../utils/SuiMoveEventParser.js', () => ({
 // Mock the Deposits utility module
 jest.mock('../../../utils/Deposits.js', () => ({
   updateToAwaitingWormholeVAA: jest.fn().mockResolvedValue(undefined),
+  updateToFinalizedAwaitingVAA: jest.fn().mockResolvedValue(undefined),
+  updateToFinalizedDeposit: jest.fn().mockResolvedValue(undefined),
   updateToBridgedDeposit: jest.fn().mockResolvedValue(undefined),
   createDeposit: jest.fn().mockImplementation(() => ({
     id: `integration-test-deposit-${Date.now()}`,
@@ -178,6 +180,10 @@ jest.mock('../../../utils/Deposits.js', () => ({
       solana: { initializeTxHash: null, finalizeTxHash: null },
       sui: { initializeTxHash: null, finalizeTxHash: null },
       starknet: { initializeTxHash: null, finalizeTxHash: null },
+    },
+    L1OutputEvent: {
+      l2DepositOwner: '0xdeposit-owner',
+      l2Sender: '0xsender',
     },
   })),
 }));
@@ -311,7 +317,7 @@ describe('SuiChainHandler Integration Tests', () => {
 
     beforeEach(() => {
       testDeposit = createTestDeposit({
-        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        status: DepositStatus.INITIALIZED,
         chainId: 'SuiTestnet',
         wormholeInfo: {
           txHash: '0xtest-tx-hash',
@@ -367,26 +373,24 @@ describe('SuiChainHandler Integration Tests', () => {
         'TokensTransferredWithPayload(uint256,bytes32,uint64)',
       );
 
-      // Mock parent finalizeDeposit
+      // Mock submitFinalizationTx (SuiChainHandler.finalizeDeposit calls it directly)
       const mockReceipt = {
         transactionHash: '0xfinalize-hash',
-        blockNumber: 12345,
         logs: [
           {
-            address: MOCK_ADDRESSES.L1_CONTRACT,
-            topics: [TOKENS_TRANSFERRED_SIG], // Use the correct topic signature
-            data: '0x' + '0'.repeat(128), // Mock log data
+            address: MOCK_ADDRESSES.L1_CONTRACT, // must match l1BitcoinDepositorAddress
+            topics: [TOKENS_TRANSFERRED_SIG],
+            data: '0x' + '0'.repeat(128),
           },
         ],
       };
 
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValue(mockReceipt);
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(mockReceipt);
 
       // Mock L1 contract interface - need to ensure parseLog is called successfully
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
+          getEventTopic: jest.fn().mockReturnValue(TOKENS_TRANSFERRED_SIG),
           parseLog: jest.fn().mockReturnValue({
             name: 'TokensTransferredWithPayload',
             args: { transferSequence: { toString: () => '456' } },
@@ -399,10 +403,10 @@ describe('SuiChainHandler Integration Tests', () => {
       expect(result).toBe(mockReceipt);
 
       // Import the mocked module to access the mock function
-      const { updateToAwaitingWormholeVAA } = require('../../../utils/Deposits.js');
-      expect(updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        '0xfinalize-hash',
+      const { updateToFinalizedAwaitingVAA } = require('../../../utils/Deposits.js');
+      expect(updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         testDeposit,
+        '0xfinalize-hash',
         '456',
       );
     });
@@ -652,7 +656,7 @@ describe('SuiChainHandler Integration Tests', () => {
 
       // Mock complete Wormhole workflow
       (handler as any).wormhole.getVaa.mockResolvedValue({
-        binary: new Uint8Array([1, 2, 3, 4, 5]),
+        binary: Uint8Array.from([1, 2, 3, 4, 5]),
       });
 
       await (handler as any).initializeL2();

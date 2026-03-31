@@ -253,7 +253,7 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
         `Solana bridging success for deposit ${deposit.id}, txids=${destinationTransactionIds}`,
       );
 
-      updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid);
+      await updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid, CHAIN_TYPE.SOLANA);
     } catch (error: any) {
       const reason = error.message || 'Unknown bridging error';
       logger.warn(`Wormhole bridging not ready for deposit ${deposit.id}: ${reason}`);

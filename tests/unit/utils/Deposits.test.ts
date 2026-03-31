@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { CHAIN_TYPE } from '../../../config/schemas/common.schema.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import type { FundingTransaction } from '../../../types/FundingTransaction.type.js';
@@ -1022,7 +1023,7 @@ describe('Deposits Util', () => {
     it('should update deposit to BRIDGED, set Solana tx hash, update wormholeInfo, clear error, and log correctly', async () => {
       const depositToUpdate = structuredClone(mockInitialDeposit);
 
-      await updateToBridgedDeposit(depositToUpdate, mockSolanaTxSignature);
+      await updateToBridgedDeposit(depositToUpdate, mockSolanaTxSignature, CHAIN_TYPE.SOLANA);
 
       expect(dateNowSpy).toHaveBeenCalledTimes(2);
       const expectedUpdatedDeposit: Deposit = {
@@ -1074,7 +1075,7 @@ describe('Deposits Util', () => {
       const depositToUpdate = structuredClone(alreadyBridgedDeposit);
       const newSolanaTxSignature = 'new_solana_tx_signature_' + 'N'.repeat(48);
 
-      await updateToBridgedDeposit(depositToUpdate, newSolanaTxSignature);
+      await updateToBridgedDeposit(depositToUpdate, newSolanaTxSignature, CHAIN_TYPE.SOLANA);
 
       const expectedUpdatedDeposit: Deposit = {
         ...depositToUpdate,
@@ -1113,7 +1114,7 @@ describe('Deposits Util', () => {
       };
       const mockSuiTxSignature = 'sui_tx_digest_' + 'S'.repeat(50);
 
-      await updateToBridgedDeposit(suiDeposit, mockSuiTxSignature);
+      await updateToBridgedDeposit(suiDeposit, mockSuiTxSignature, CHAIN_TYPE.SUI);
 
       expect(dateNowSpy).toHaveBeenCalledTimes(2); // lastActivityAt and bridgedAt
       const expectedUpdatedDeposit: Deposit = {
@@ -1149,15 +1150,15 @@ describe('Deposits Util', () => {
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
 
-    it('should default to Solana when chain detection is ambiguous', async () => {
-      // Create a deposit with non-obvious chain ID
+    it('should default to Solana for unhandled chain types (e.g. Starknet)', async () => {
+      // Create a deposit with a chainType that has no specific hash branch
       const ambiguousDeposit: Deposit = {
         ...mockInitialDeposit,
-        chainId: 'CustomChain', // Non-SUI, non-Solana chain
+        chainId: 'starknet-testnet',
       };
       const mockTxSignature = 'ambiguous_tx_' + 'A'.repeat(50);
 
-      await updateToBridgedDeposit(ambiguousDeposit, mockTxSignature);
+      await updateToBridgedDeposit(ambiguousDeposit, mockTxSignature, CHAIN_TYPE.STARKNET);
 
       expect(dateNowSpy).toHaveBeenCalledTimes(2);
       const expectedUpdatedDeposit: Deposit = {
@@ -1192,7 +1193,7 @@ describe('Deposits Util', () => {
       );
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(loggerWarnSpy).toHaveBeenCalledWith(
-        `[updateToBridgedDeposit] Unknown chainId: ${ambiguousDeposit.chainId}. Defaulting to Solana hash structure for backward compatibility. Pass chainType explicitly to avoid this.`,
+        `[updateToBridgedDeposit] Unhandled chainType: ${CHAIN_TYPE.STARKNET} for deposit ${ambiguousDeposit.id}. Defaulting to Solana hash structure.`,
       );
     });
   });
