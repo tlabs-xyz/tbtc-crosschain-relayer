@@ -225,30 +225,29 @@ export class EVMChainHandler
         );
 
         for (const event of events) {
-          if (!event.args) {
+          if (event.args) {
+            const { fundingTx, reveal, l2DepositOwner, l2Sender } = event.args;
+            const fundingTxHash = getFundingTxHash(fundingTx as FundingTransaction);
+            const depositId = getDepositId(fundingTxHash, reveal[0]);
+
+            const existingDeposit = await DepositStore.getById(depositId);
+
+            if (!existingDeposit) {
+              logger.debug(`checkForPastDeposits | Processing missed deposit event: ${depositId}`);
+
+              const newDeposit = createDeposit(
+                fundingTx as FundingTransaction,
+                reveal,
+                l2DepositOwner,
+                l2Sender,
+                this.config.chainName,
+              );
+              DepositStore.create(newDeposit);
+
+              await this.initializeDeposit(newDeposit);
+            }
+          } else {
             logger.warn('checkForPastDeposits | Event args are undefined, skipping event');
-            continue;
-          }
-
-          const { fundingTx, reveal, l2DepositOwner, l2Sender } = event.args;
-          const fundingTxHash = getFundingTxHash(fundingTx as FundingTransaction);
-          const depositId = getDepositId(fundingTxHash, reveal[0]);
-
-          const existingDeposit = await DepositStore.getById(depositId);
-
-          if (!existingDeposit) {
-            logger.debug(`checkForPastDeposits | Processing missed deposit event: ${depositId}`);
-
-            const newDeposit = createDeposit(
-              fundingTx as FundingTransaction,
-              reveal,
-              l2DepositOwner,
-              l2Sender,
-              this.config.chainName,
-            );
-            DepositStore.create(newDeposit);
-
-            await this.initializeDeposit(newDeposit);
           }
         }
       } else {
@@ -310,17 +309,16 @@ export class EVMChainHandler
 
         const blockData = await this.l2Provider.getBlock(mid);
 
-        if (!blockData) {
-          high = mid - 1;
-          continue;
-        }
-
-        if (blockData.timestamp === timestamp) {
-          startBlock = mid;
-          break;
-        } else if (blockData.timestamp < timestamp) {
-          startBlock = mid;
-          low = mid + 1;
+        if (blockData) {
+          if (blockData.timestamp === timestamp) {
+            startBlock = mid;
+            break;
+          } else if (blockData.timestamp < timestamp) {
+            startBlock = mid;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
         } else {
           high = mid - 1;
         }
@@ -604,11 +602,21 @@ export class EVMChainHandler
             const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
 
             if (parsedLog.args.transferSequence) {
-              // Correlate event to the specific deposit by matching l2Receiver
-              const eventReceiver = parsedLog.args.l2Receiver;
-              if (eventReceiver && eventReceiver.toLowerCase() !== deposit.owner.toLowerCase()) {
+              // Correlate event to the specific deposit by matching l2Receiver.
+              // l2Receiver is a non-indexed ABI field decoded from log data.
+              // An undefined/empty value indicates an ABI mismatch — skip rather than silently accepting.
+              if (!parsedLog.args.l2Receiver) {
+                logger.warn(
+                  `parsedLog.args.l2Receiver is undefined for deposit ${deposit.id} — possible ABI mismatch, skipping log`,
+                );
+                continue;
+              }
+              if (
+                (parsedLog.args.l2Receiver as string).toLowerCase() !==
+                deposit.owner.toLowerCase()
+              ) {
                 logger.debug(
-                  `Event l2Receiver ${eventReceiver} does not match deposit owner ${deposit.owner} for deposit ${deposit.id}, skipping`,
+                  `Event l2Receiver ${parsedLog.args.l2Receiver} does not match deposit owner ${deposit.owner} for deposit ${deposit.id}, skipping`,
                 );
                 continue;
               }
@@ -667,93 +675,44 @@ export class EVMChainHandler
   }
 
   /**
-   * Searches receipt logs for the TokensTransferredWithPayload event using
-   * a three-method fallback strategy: direct parseLog, topic signature match,
-   * and contract address filtering. Returns the extracted transfer sequence
-   * and transaction hash, or nulls if not found.
+   * Searches receipt logs for the TokensTransferredWithPayload event emitted by
+   * the L1BitcoinDepositor contract. Filters by contract address and event
+   * signature before parsing to avoid masking ABI problems with silent fallbacks.
+   * Returns the extracted transfer sequence and transaction hash, or nulls if
+   * not found.
    */
   private parseTransferSequenceFromReceipt(
     receipt: TransactionReceipt,
     depositId: string,
   ): { transferSequence: string | null; eventTxHash: string | null } {
-    let transferSequence: string | null = null;
-    let eventTxHash: string | null = null;
-
     try {
-      const logs = receipt.logs || [];
+      const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
+      const logs = (receipt.logs || []).filter(
+        (log) =>
+          log.address.toLowerCase() === l1BitcoinDepositorAddress &&
+          log.topics[0] === TOKENS_TRANSFERRED_SIG,
+      );
 
-      // Method 1: Try parsing all logs regardless of topics
       for (const log of logs) {
         try {
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-
-          if (
-            parsedLog.name === 'TokensTransferredWithPayload' &&
-            parsedLog.args.transferSequence
-          ) {
-            transferSequence = parsedLog.args.transferSequence.toString();
-            eventTxHash = receipt.transactionHash;
+          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+            const transferSequence = parsedLog.args.transferSequence.toString();
             logger.info(
-              `Found transfer sequence ${transferSequence} in parsed log for deposit ${depositId}`,
+              `Found transfer sequence ${transferSequence} in receipt for deposit ${depositId}`,
             );
-            break;
+            return { transferSequence, eventTxHash: receipt.transactionHash };
           }
-        } catch {
-          // This log doesn't match our interface, continue to next
-        }
-      }
-
-      // Method 2: If not found, check by event signature in any topic position
-      if (!transferSequence) {
-        for (const log of logs) {
-          if (log.topics.some((topic: string) => topic === TOKENS_TRANSFERRED_SIG)) {
-            try {
-              const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-              if (parsedLog.args.transferSequence) {
-                transferSequence = parsedLog.args.transferSequence.toString();
-                eventTxHash = receipt.transactionHash;
-                logger.info(
-                  `Found transfer sequence ${transferSequence} by signature search for deposit ${depositId}`,
-                );
-                break;
-              }
-            } catch (error) {
-              logger.debug(`Failed to parse log with matching signature: ${error}`);
-            }
-          }
-        }
-      }
-
-      // Method 3: If still not found, filter logs by contract address
-      if (!transferSequence) {
-        const contractLogs = logs.filter(
-          (log) =>
-            log.address.toLowerCase() === this.config.l1BitcoinDepositorAddress.toLowerCase(),
-        );
-
-        for (const log of contractLogs) {
-          try {
-            const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-            if (
-              parsedLog.name === 'TokensTransferredWithPayload' &&
-              parsedLog.args.transferSequence
-            ) {
-              transferSequence = parsedLog.args.transferSequence.toString();
-              eventTxHash = receipt.transactionHash;
-              logger.info(
-                `Found transfer sequence ${transferSequence} by contract address filter for deposit ${depositId}`,
-              );
-              break;
-            }
-          } catch {
-            // Skip logs that don't parse as TokensTransferredWithPayload
-          }
+        } catch (error) {
+          logger.warn(
+            `Failed to parse TokensTransferredWithPayload log for deposit ${depositId}: ${error}`,
+          );
         }
       }
     } catch (error: any) {
       logErrorContext(`Error parsing L1 logs for deposit ${depositId}`, error);
     }
 
-    return { transferSequence, eventTxHash };
+    return { transferSequence: null, eventTxHash: null };
   }
 }
