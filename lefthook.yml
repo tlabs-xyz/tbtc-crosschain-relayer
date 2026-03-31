@@ -1,0 +1,12 @@
+pre-commit:
+  commands:
+    lint:
+      glob: "**/*.ts"
+      run: yarn lint
+
+pre-push:
+  commands:
+    typecheck:
+      run: yarn typecheck
+    test:
+      run: yarn test:unit
