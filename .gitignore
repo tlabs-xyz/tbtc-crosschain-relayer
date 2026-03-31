@@ -28,5 +28,7 @@ prisma/memory:
 *.diff
 
 *.log
+
+.worktrees/
 package-lock.json
 external/
