@@ -1,25 +1,24 @@
-import logger, { logErrorContext } from '../utils/Logger.js';
 import cron from 'node-cron';
 import pLimit from 'p-limit';
-
-import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
-import { chainConfigs, type AnyChainConfig } from '../config/index.js';
+import { type AnyChainConfig, chainConfigs } from '../config/index.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import type { BaseChainHandler } from '../handlers/BaseChainHandler.js';
+import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
+import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
+import type { Deposit } from '../types/Deposit.type.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { RedemptionStatus } from '../types/Redemption.type.js';
+import { DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES } from '../utils/Constants.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
+import { RedemptionStore } from '../utils/RedemptionStore.js';
 import {
-  cleanQueuedDeposits,
-  cleanFinalizedDeposits,
   cleanBridgedDeposits,
+  cleanFinalizedDeposits,
+  cleanQueuedDeposits,
 } from './CleanupDeposits.js';
 import { L2RedemptionService } from './L2RedemptionService.js';
-import { RedemptionStore } from '../utils/RedemptionStore.js';
-import { RedemptionStatus } from '../types/Redemption.type.js';
-import { BaseChainHandler } from '../handlers/BaseChainHandler.js';
-import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
-import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
-import { DepositStore } from '../utils/DepositStore.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
-import type { Deposit } from '../types/Deposit.type.js';
-import { DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES } from '../utils/Constants.js';
 
 let effectiveChainConfigs: AnyChainConfig[] = [];
 

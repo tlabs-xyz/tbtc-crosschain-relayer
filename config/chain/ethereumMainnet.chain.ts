@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 import { NETWORK } from '../schemas/common.schema.js';
 import type { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { PUBLIC_RPCS, PUBLIC_WS_RPCS } from './common.chain.js';

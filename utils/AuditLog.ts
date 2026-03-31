@@ -1,7 +1,7 @@
-import { prisma, dbLimit } from './prisma.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { Deposit } from '../types/Deposit.type.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { createLoggerWithCorrelation, logErrorContext } from './Logger.js';
+import { dbLimit, prisma } from './prisma.js';
 
 // Event types
 export enum AuditEventType {
@@ -25,7 +25,7 @@ export const appendToAuditLog = async (
   depositId: string | null,
   data: Record<string, unknown>,
 ): Promise<void> => {
-  let errorCode: number | undefined = undefined;
+  let errorCode: number | undefined;
   if (data && typeof data.code === 'number') {
     errorCode = data.code;
     // Remove code from data to avoid duplication

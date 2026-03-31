@@ -1,6 +1,6 @@
+import type { AnyChainConfig } from '../config/index.js';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import { ChainHandlerFactory } from './ChainHandlerFactory.js';
-import type { AnyChainConfig } from '../config/index.js';
 
 class ChainHandlerRegistry {
   private handlers: Map<string, ChainHandlerInterface> = new Map();

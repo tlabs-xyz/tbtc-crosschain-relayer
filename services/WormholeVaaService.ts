@@ -1,18 +1,18 @@
-import { ethers } from 'ethers';
 import {
-  wormhole,
-  Wormhole,
-  UniversalAddress,
-  type Network,
+  type Chain,
   type ChainId,
   chainIdToChain,
-  type WormholeMessageId,
-  type Chain,
-  type VAA,
+  type Network,
   serialize,
+  UniversalAddress,
+  type VAA,
+  type Wormhole,
+  type WormholeMessageId,
+  wormhole,
 } from '@wormhole-foundation/sdk';
 import evm from '@wormhole-foundation/sdk/evm';
 import solana from '@wormhole-foundation/sdk/solana';
+import { ethers } from 'ethers';
 import logger, { logErrorContext } from '../utils/Logger.js';
 
 type SignedVaa = Uint8Array;

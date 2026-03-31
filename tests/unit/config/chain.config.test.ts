@@ -133,14 +133,14 @@ jest.mock('../../../config/chainRegistry.js', () => ({
   ],
 }));
 
+import type { ChainValidationError } from '../../../config/index.js';
 // Import the module to be tested *after* all mocks are set up
 import {
   loadAndValidateChainConfigs,
   // chainConfigs, // We will test this later with jest.isolateModules
   // getAvailableChainKeys, // Can also be tested
 } from '../../../config/index.js';
-import type { ChainValidationError } from '../../../config/index.js';
-import { AppConfig } from '../../../config/schemas/app.schema';
+import type { AppConfig } from '../../../config/schemas/app.schema';
 
 let originalProcessEnv: NodeJS.ProcessEnv;
 let getAvailableChainsSpy: jest.SpyInstance | undefined;

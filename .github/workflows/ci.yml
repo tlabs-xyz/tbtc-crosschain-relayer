@@ -42,13 +42,8 @@ jobs:
           node --version
           yarn install --frozen-lockfile --ignore-optional
 
-      # TODO: Enable those after fixing the linting errors
-
-      # - name: Lint
-      # run: yarn lint
-
-      # - name: Format check
-      # run: yarn format
+      - name: Lint
+        run: yarn lint
 
       - name: Detect unused dependencies
         run: yarn depcheck

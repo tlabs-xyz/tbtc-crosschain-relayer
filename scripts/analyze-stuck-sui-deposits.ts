@@ -409,9 +409,9 @@ WHERE "id" IN (${successfulResults.map((d) => `'${d.id}'`).join(', ')});
   return sql;
 }
 
+import { dirname } from 'path';
 // Run the script if called directly
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

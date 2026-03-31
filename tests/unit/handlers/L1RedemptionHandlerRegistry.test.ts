@@ -1,11 +1,11 @@
+import type { AnyChainConfig } from '../../../config/index.js';
+import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
+import type { EvmChainConfig } from '../../../config/schemas/evm.chain.schema.js';
+import { L1RedemptionHandlerFactory } from '../../../handlers/L1RedemptionHandlerFactory.js';
 import {
   L1RedemptionHandlerRegistry,
   l1RedemptionHandlerRegistry,
 } from '../../../handlers/L1RedemptionHandlerRegistry.js';
-import { L1RedemptionHandlerFactory } from '../../../handlers/L1RedemptionHandlerFactory.js';
-import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
-import type { AnyChainConfig } from '../../../config/index.js';
-import type { EvmChainConfig } from '../../../config/schemas/evm.chain.schema.js';
 import type { L1RedemptionHandlerInterface } from '../../../interfaces/L1RedemptionHandler.interface.js';
 import { logErrorContext } from '../../../utils/Logger.js';
 

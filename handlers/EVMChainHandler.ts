@@ -1,20 +1,17 @@
-import { ethers } from 'ethers';
 import { NonceManager } from '@ethersproject/experimental';
-
-import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { ethers } from 'ethers';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
+import type { Reveal } from '../types/Reveal.type.js';
+import { logDepositError } from '../utils/AuditLog.js';
 import { DepositStore } from '../utils/DepositStore.js';
 import { createDeposit, getDepositId } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
-
-import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
-import { logDepositError } from '../utils/AuditLog.js';
-
+import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
-import type { Reveal } from '../types/Reveal.type.js';
 
 export class EVMChainHandler
   extends BaseChainHandler<EvmChainConfig>

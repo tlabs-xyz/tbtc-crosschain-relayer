@@ -1,25 +1,25 @@
+import { type BigNumberish, type BytesLike, ethers, type PayableOverrides } from 'ethers';
 import type { StarknetChainConfig } from '../config/schemas/starknet.chain.schema.js';
 import { StarknetChainConfigSchema } from '../config/schemas/starknet.chain.schema.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import { BaseChainHandler } from './BaseChainHandler.js';
-import { ethers, type PayableOverrides, type BigNumberish, type BytesLike } from 'ethers';
-import { StarkNetBitcoinDepositorABI } from '../interfaces/StarkNetBitcoinDepositor.js';
 import type { StarkNetBitcoinDepositor } from '../interfaces/IStarkNetBitcoinDepositor.js';
-import { DepositStore } from '../utils/DepositStore.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { toUint256StarknetAddress, validateStarkNetAddress } from '../utils/starknetAddress.js';
+import { StarkNetBitcoinDepositorABI } from '../interfaces/StarkNetBitcoinDepositor.js';
 import type { Deposit } from '../types/Deposit.type.js';
-import type { Reveal } from '../types/Reveal.type.js';
-import { getFundingTxHash } from '../utils/GetTransactionHash.js';
-import {
-  getDepositId,
-  updateToInitializedDeposit,
-  updateToFinalizedDeposit,
-  getDepositKey,
-  createPartialDepositFromOnChainData,
-} from '../utils/Deposits.js';
-import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
+import type { Reveal } from '../types/Reveal.type.js';
+import { logDepositError, logStatusChange } from '../utils/AuditLog.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import {
+  createPartialDepositFromOnChainData,
+  getDepositId,
+  getDepositKey,
+  updateToFinalizedDeposit,
+  updateToInitializedDeposit,
+} from '../utils/Deposits.js';
+import { getFundingTxHash } from '../utils/GetTransactionHash.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
+import { toUint256StarknetAddress, validateStarkNetAddress } from '../utils/starknetAddress.js';
+import { BaseChainHandler } from './BaseChainHandler.js';
 
 export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> {
   // --- L1 StarkGate Contract Instances ---
@@ -849,7 +849,7 @@ export class StarknetChainHandler extends BaseChainHandler<StarknetChainConfig> 
         `[${this.config.chainName}] hasDepositBeenMintedOnTBTC | Checking for OptimisticMintingFinalized event for depositKey ${deposit.id} (uint256: ${depositKeyUint256.toString()})`,
       );
 
-      let fromBlock: number | undefined = undefined;
+      let fromBlock: number | undefined;
       if (deposit.hashes.eth.initializeTxHash) {
         try {
           const txReceipt = await this.l1Provider.getTransactionReceipt(

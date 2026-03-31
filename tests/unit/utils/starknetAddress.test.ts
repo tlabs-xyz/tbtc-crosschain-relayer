@@ -1,9 +1,9 @@
+import * as bitcoin from 'bitcoinjs-lib';
 import {
-  validateStarkNetAddress,
   extractAddressFromBitcoinScript,
   toUint256StarknetAddress,
+  validateStarkNetAddress,
 } from '../../../utils/starknetAddress.js';
-import * as bitcoin from 'bitcoinjs-lib';
 
 // Mock starknet.js CallData.compile to avoid actual compilation during tests
 // We only care that it's called and doesn't throw for valid inputs.

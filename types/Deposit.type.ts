@@ -1,6 +1,6 @@
+import type { DepositStatus } from './DepositStatus.enum.js';
 import type { FundingTransaction } from './FundingTransaction.type.js';
 import type { Reveal } from './Reveal.type.js';
-import { DepositStatus } from './DepositStatus.enum.js';
 
 export type Deposit = {
   id: string;

@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import type { z } from 'zod';
+import { getEnv, getEnvNumber } from '../../utils/Env.js';
 import { NETWORK } from '../schemas/common.schema.js';
 import type { SuiChainConfigSchema } from '../schemas/sui.chain.schema.js';
-import { getEnv, getEnvNumber } from '../../utils/Env.js';
 import { getSuiCommonInput } from './sui-common.js';
 
 type SuiChainInput = z.input<typeof SuiChainConfigSchema>;
