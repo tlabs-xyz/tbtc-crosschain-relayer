@@ -18,7 +18,6 @@ import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
 import { type Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import {
-  updateToFinalizedDeposit,
   updateToFinalizedAwaitingVAA,
   updateToBridgedDeposit,
   createDeposit,
@@ -278,16 +277,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
         );
       } else {
-        await updateToFinalizedDeposit(deposit, { hash: receipt.transactionHash }, 'transferSequence_not_found');
-        const sentryErr = new Error(
-          `transferSequence_not_found for deposit ${deposit.id} on ${this.config.chainName} — manual intervention required`,
-        );
-        Sentry.captureException(sentryErr, {
-          extra: { depositId: deposit.id, chainName: this.config.chainName, txHash: receipt.transactionHash },
-        });
-        logger.error(
-          `Could not parse transferSequence for deposit ${deposit.id} — finalizeTxHash stored, manual intervention required`,
-        );
+        await this.handleMissingTransferSequence(deposit, receipt.transactionHash);
       }
     }
 

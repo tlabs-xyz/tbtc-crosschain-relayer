@@ -26,6 +26,7 @@ import { L1BitcoinDepositorABI as L1BitcoinDepositorGenericABI } from '../interf
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import { logDepositError } from '../utils/AuditLog.js';
 import type { AnyChainConfig } from '../config/index.js';
+import * as Sentry from '@sentry/node';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
@@ -680,6 +681,24 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       return false;
     }
     return true;
+  }
+
+  /**
+   * Called when the Wormhole transferSequence cannot be parsed from the
+   * finalization receipt. Stores the deposit as FINALIZED with an error tag
+   * and fires a Sentry alert for operator investigation.
+   */
+  protected async handleMissingTransferSequence(deposit: Deposit, txHash: string): Promise<void> {
+    await updateToFinalizedDeposit(deposit, { hash: txHash }, 'transferSequence_not_found');
+    const sentryErr = new Error(
+      `transferSequence_not_found for deposit ${deposit.id} on ${this.config.chainName} — manual intervention required`,
+    );
+    Sentry.captureException(sentryErr, {
+      extra: { depositId: deposit.id, chainName: this.config.chainName, txHash },
+    });
+    logger.error(
+      `Could not parse transferSequence for deposit ${deposit.id} — finalizeTxHash stored, manual intervention required`,
+    );
   }
 
   async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
