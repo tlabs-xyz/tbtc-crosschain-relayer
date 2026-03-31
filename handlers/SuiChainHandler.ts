@@ -20,7 +20,7 @@ import {
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { parseDepositInitializedEvent } from '../utils/SuiMoveEventParser.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
-import { BaseChainHandler } from './BaseChainHandler.js';
+import { BaseChainHandler, RECOVERY_DELAY_MS } from './BaseChainHandler.js';
 
 /**
  * Chain handler for SUI blockchain integration.
@@ -567,7 +567,6 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
     // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
     // to prevent N × alerts-per-tick from exhausting Sentry quota.
-    const RECOVERY_DELAY_MS = 5 * 60 * 1000;
     const now = Date.now();
     const finalizedDeposits = await DepositStore.getByStatus(
       DepositStatus.FINALIZED,

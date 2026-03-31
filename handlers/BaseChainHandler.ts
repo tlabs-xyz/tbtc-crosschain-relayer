@@ -26,6 +26,7 @@ import {
 import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
+export const RECOVERY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
 export abstract class BaseChainHandler<T extends AnyChainConfig> implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
