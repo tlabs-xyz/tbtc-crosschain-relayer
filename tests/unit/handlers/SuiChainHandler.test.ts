@@ -85,7 +85,7 @@ jest.mock('@mysten/sui/transactions', () => {
 });
 
 jest.mock('@mysten/bcs', () => ({
-  fromBase64: jest.fn().mockReturnValue(new Uint8Array(32)),
+  fromBase64: jest.fn().mockReturnValue(Uint8Array.from({length: 32}, () => 0)),
   bcs: {
     vector: jest.fn().mockReturnValue({
       serialize: jest.fn(),
@@ -104,7 +104,7 @@ jest.mock('@mysten/bcs', () => ({
 jest.mock('@mysten/sui/cryptography', () => ({
   decodeSuiPrivateKey: jest.fn().mockReturnValue({
     schema: 'ED25519',
-    secretKey: new Uint8Array(32),
+    secretKey: Uint8Array.from({length: 32}, () => 0),
   }),
   __esModule: true,
 }));
@@ -469,9 +469,12 @@ describe('SuiChainHandler', () => {
 
       mockReceipt = {
         transactionHash: '0xtest-finalize-hash',
+        blockNumber: 12345,
         logs: [
           {
+            address: '0x1234567890123456789012345678901234567890',
             topics: [ethers.utils.id('TokensTransferredWithPayload(uint256,bytes32,uint64)')],
+            data: '0x',
           },
         ],
       };
@@ -485,6 +488,7 @@ describe('SuiChainHandler', () => {
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
+            name: 'TokensTransferredWithPayload',
             args: { transferSequence: ethers.BigNumber.from(123) },
           }),
         },
@@ -804,14 +808,14 @@ describe('SuiChainHandler', () => {
 
     it('should process valid SUI deposit event with number array format', async () => {
       // Mock binary address data as number arrays (32 bytes each for SUI addresses)
-      const mockDepositOwner = [5, 6, 7, 8, ...Array(28).fill(0)]; // 32 bytes
-      const mockSender = [9, 10, 11, 12, ...Array(28).fill(0)]; // 32 bytes
+      const mockDepositOwner = [5, 6, 7, 8, ...Array.from({length: 28}, () => 0)]; // 32 bytes
+      const mockSender = [9, 10, 11, 12, ...Array.from({length: 28}, () => 0)]; // 32 bytes
 
       const mockEvent = {
         type: 'DepositInitialized',
         parsedJson: {
-          funding_tx: Array(100).fill(1),
-          deposit_reveal: Array(56).fill(0),
+          funding_tx: Array.from({length: 100}, () => 1),
+          deposit_reveal: Array.from({length: 56}, () => 0),
           deposit_owner: mockDepositOwner,
           sender: mockSender,
         },

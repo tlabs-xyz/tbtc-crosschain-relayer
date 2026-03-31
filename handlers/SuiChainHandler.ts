@@ -278,77 +278,26 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     let eventTxHash: string | null = null;
 
     try {
-      const logs = l1Receipt.logs || [];
+      const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
+      const logs = (l1Receipt.logs || []).filter(
+        (log) =>
+          log.address.toLowerCase() === l1BitcoinDepositorAddress &&
+          log.topics[0] === TOKENS_TRANSFERRED_SIG,
+      );
 
-      // Method 1: Try parsing all logs regardless of topics
       for (const log of logs) {
         try {
-          // Try to parse the log with our interface
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-
-          // Check if this is the TokensTransferredWithPayload event
-          if (
-            parsedLog.name === 'TokensTransferredWithPayload' &&
-            parsedLog.args.transferSequence
-          ) {
+          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
             transferSequence = parsedLog.args.transferSequence.toString();
             eventTxHash = l1Receipt.transactionHash;
             logger.info(
-              `Found transfer sequence ${transferSequence} in parsed log for deposit ${deposit.id}`,
+              `Found transfer sequence ${transferSequence} in receipt for deposit ${deposit.id}`,
             );
             break;
           }
-        } catch (parseError) {
-          // This log doesn't match our interface
-        }
-      }
-
-      // Method 2: If not found, check by event signature in any topic position
-      if (!transferSequence) {
-        for (const log of logs) {
-          // Check if any topic contains our event signature
-          if (log.topics.some((topic) => topic === TOKENS_TRANSFERRED_SIG)) {
-            try {
-              const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-              if (parsedLog.args.transferSequence) {
-                transferSequence = parsedLog.args.transferSequence.toString();
-                eventTxHash = l1Receipt.transactionHash;
-                logger.info(
-                  `Found transfer sequence ${transferSequence} by signature search for deposit ${deposit.id}`,
-                );
-                break;
-              }
-            } catch (error) {
-              logger.debug(`Failed to parse log with matching signature: ${error}`);
-            }
-          }
-        }
-      }
-
-      // Method 3: If still not found, filter logs by contract address
-      if (!transferSequence) {
-        const contractLogs = logs.filter(
-          (log) =>
-            log.address.toLowerCase() === this.config.l1BitcoinDepositorAddress.toLowerCase(),
-        );
-
-        for (const log of contractLogs) {
-          try {
-            const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-            if (
-              parsedLog.name === 'TokensTransferredWithPayload' &&
-              parsedLog.args.transferSequence
-            ) {
-              transferSequence = parsedLog.args.transferSequence.toString();
-              eventTxHash = l1Receipt.transactionHash;
-              logger.info(
-                `Found transfer sequence ${transferSequence} by contract address filter for deposit ${deposit.id}`,
-              );
-              break;
-            }
-          } catch (error) {
-            // Skip logs that don't parse as TokensTransferredWithPayload
-          }
+        } catch (error) {
+          logger.warn(`Failed to parse TokensTransferredWithPayload log for deposit ${deposit.id}: ${error}`);
         }
       }
     } catch (error: any) {
@@ -713,19 +662,21 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           const finalizeTxReceipt = await this.l1Provider.getTransactionReceipt(
             deposit.hashes.eth.finalizeTxHash,
           );
-          if (!finalizeTxReceipt) {
+          if (finalizeTxReceipt) {
+            searchStartBlock = finalizeTxReceipt.blockNumber;
+          } else {
             logger.warn(`Could not get finalization receipt for deposit ${deposit.id}`);
             continue;
           }
-          searchStartBlock = finalizeTxReceipt.blockNumber;
         } else {
           // If no finalization tx hash, estimate the block based on finalization timestamp
           logger.info(
             `Deposit ${deposit.id} missing finalization tx hash, estimating search block...`,
           );
 
-          const currentBlock = await this.l1Provider.getBlockNumber();
-          const currentTimestamp = (await this.l1Provider.getBlock(currentBlock)).timestamp;
+          const latestBlock = await this.l1Provider.getBlock('latest');
+          const currentBlock = latestBlock.number;
+          const currentTimestamp = latestBlock.timestamp;
 
           // We know finalizationAt exists because we filtered for it earlier
           const finalizationTimestamp = Math.floor(deposit.dates.finalizationAt! / 1000);
@@ -753,7 +704,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           // Search a wider range if initial search failed
           const widerSearchResult = await this.searchForTransferSequence(
             deposit,
-            searchStartBlock - 10,
+            Math.max(0, searchStartBlock - 10),
             30,
           );
           if (widerSearchResult) {
@@ -822,13 +773,19 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
 
             if (parsedLog.args.transferSequence) {
-              // Correlate event to the specific deposit by matching destinationChainReceiver
-              const eventReceiver = parsedLog.args.destinationChainReceiver;
-              if (eventReceiver && eventReceiver.toLowerCase() !== deposit.owner.toLowerCase()) {
-                logger.debug(
-                  `Event destinationChainReceiver ${eventReceiver} does not match deposit owner ${deposit.owner} for deposit ${deposit.id}, skipping`,
+              // Correlate event to the specific deposit by matching destinationChainReceiver.
+              // The ABI type is bytes32, so ethers returns a 32-byte zero-padded hex string.
+              // Extract the rightmost 20 bytes and checksum before comparing to deposit.owner.
+              if (parsedLog.args.destinationChainReceiver) {
+                const receiverAddress = ethers.utils.getAddress(
+                  '0x' + (parsedLog.args.destinationChainReceiver as string).slice(-40),
                 );
-                continue;
+                if (receiverAddress.toLowerCase() !== deposit.owner.toLowerCase()) {
+                  logger.debug(
+                    `Event destinationChainReceiver ${receiverAddress} does not match deposit owner ${deposit.owner} for deposit ${deposit.id}, skipping`,
+                  );
+                  continue;
+                }
               }
 
               logger.info(

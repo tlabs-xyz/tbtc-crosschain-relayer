@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import {
@@ -530,17 +531,14 @@ export const updateToAwaitingWormholeVAA = async (
   logDepositAwaitingWormholeVAA(updatedDeposit);
 };
 
+// Fallback heuristic for callers that don't pass chainType explicitly.
+// Matches chain names used in existing deposits. New EVM chains (e.g. optimism,
+// linea) would fall through to 'unknown' without an explicit chainType param.
 const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'evm' | 'unknown' => {
   const lowerChainId = chainId.toLowerCase();
-  if (lowerChainId.includes('sui')) {
-    return 'sui';
-  }
-  if (lowerChainId.includes('solana')) {
-    return 'solana';
-  }
-  if (lowerChainId.includes('base') || lowerChainId.includes('arbitrum')) {
-    return 'evm';
-  }
+  if (lowerChainId.includes('sui')) return 'sui';
+  if (lowerChainId.includes('solana')) return 'solana';
+  if (lowerChainId.includes('base') || lowerChainId.includes('arbitrum')) return 'evm';
   return 'unknown';
 };
 
@@ -555,20 +553,31 @@ const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'evm' | 'unknow
  * - Writes the updated deposit object to JSON storage
  *
  * @param deposit The deposit object to update
- * @param transferSequence The Wormhole transfer sequence ID
- * @param bridgingAttempted Whether bridging was already attempted (default: false)
+ * @param txSignature The bridge transaction hash / signature
+ * @param chainType The chain type — pass this explicitly to avoid string-matching
+ *   the chainId. Required for any EVM chain that isn't Base or Arbitrum.
  */
 export const updateToBridgedDeposit = async (
   deposit: Deposit,
   txSignature: string,
+  chainType?: CHAIN_TYPE,
 ): Promise<void> => {
   const oldStatus = deposit.status;
   const newStatus = DepositStatus.BRIDGED;
 
   let updatedHashes;
-  const chainType = getChainTypeFromId(deposit.chainId);
+  // If chainType is provided, map it directly; otherwise fall back to heuristic.
+  const resolvedType: 'sui' | 'solana' | 'evm' | 'unknown' = chainType
+    ? chainType === CHAIN_TYPE.SUI
+      ? 'sui'
+      : chainType === CHAIN_TYPE.SOLANA
+        ? 'solana'
+        : chainType === CHAIN_TYPE.EVM
+          ? 'evm'
+          : 'unknown'
+    : getChainTypeFromId(deposit.chainId);
 
-  switch (chainType) {
+  switch (resolvedType) {
     case 'sui':
       // Update SUI-specific hash structure
       updatedHashes = {
@@ -601,7 +610,7 @@ export const updateToBridgedDeposit = async (
       break;
     default:
       logger.warn(
-        `[updateToBridgedDeposit] Unknown chainId: ${deposit.chainId}. Defaulting to Solana hash structure for backward compatibility.`,
+        `[updateToBridgedDeposit] Unknown chainId: ${deposit.chainId}. Defaulting to Solana hash structure for backward compatibility. Pass chainType explicitly to avoid this.`,
       );
       // Default to Solana for backward compatibility
       updatedHashes = {
