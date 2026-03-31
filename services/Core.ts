@@ -305,14 +305,41 @@ export async function recoverStuckFinalizedDeposits(): Promise<void> {
 
 export async function runStartupTasks(): Promise<void> {
   logger.info('Running startup tasks...');
-  await Promise.allSettled([
+  const results = await Promise.allSettled([
     processDeposits(),
     processRedemptions(),
     checkForPastDepositsForAllChains(),
     checkForPastRedemptionsForAllChains(DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES),
     recoverStuckFinalizedDeposits(),
   ]);
-  logger.info('Startup tasks complete.');
+
+  const taskNames = [
+    'processDeposits',
+    'processRedemptions',
+    'checkForPastDepositsForAllChains',
+    'checkForPastRedemptionsForAllChains',
+    'recoverStuckFinalizedDeposits',
+  ];
+  const failed = results
+    .map((r, i) => ({
+      status: r.status,
+      name: taskNames[i],
+      reason: r.status === 'rejected' ? (r as PromiseRejectedResult).reason : null,
+    }))
+    .filter((r) => r.status === 'rejected');
+
+  if (failed.length > 0) {
+    for (const f of failed) {
+      logger.error(`Startup task failed: ${f.name}`, { error: f.reason?.message ?? f.reason });
+    }
+    if (failed.length === results.length) {
+      logger.error('All startup tasks failed — relayer may not operate correctly');
+    }
+  }
+
+  logger.info(
+    `Startup tasks complete. ${results.length - failed.length}/${results.length} succeeded.`,
+  );
 }
 
 export async function initializeAllChains(): Promise<void> {
