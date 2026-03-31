@@ -5,7 +5,7 @@ import logger, { logErrorContext } from './Logger.js';
 // Wormhole Token Bridge addresses on Ethereum L1, validated at module load.
 const WORMHOLE_TOKEN_BRIDGE: Record<string, string> = {
   [NETWORK.MAINNET]: ethers.utils.getAddress('0x3ee18B2214AFF97000D974cf647E7C347E8fa585'),
-  [NETWORK.TESTNET]: ethers.utils.getAddress('0xDB5492265f6038831E89f495670FF909aDe94bd9'),
+  [NETWORK.TESTNET]: ethers.utils.getAddress('0x4a8bc80Ed5a4067f1CCf107057b8270E0cC11A78'),
 };
 
 /**
