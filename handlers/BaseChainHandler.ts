@@ -521,31 +521,15 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
   }
 
-  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    // Check if already finalized locally
-    if (deposit.status === DepositStatus.FINALIZED) {
-      logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
-      return;
-    }
-    // Ensure it was initialized or mark as error if called prematurely
-    if (deposit.status !== DepositStatus.INITIALIZED) {
-      const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
-      logErrorContext(
-        `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
-        new Error(errorMsg),
-      );
-      logDepositError(deposit.id, errorMsg, {
-        error: errorMsg,
-        context: 'Invalid status for finalize',
-        chainName: this.config.chainName,
-        fundingTxHash: deposit.fundingTxHash ?? undefined,
-        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
-      });
-      // Optionally mark with error? updateToFinalizedDeposit(deposit, null, 'Invalid status for finalize')? Or just let process loop retry?
-      // For now, just return, assuming the process loop or event handler called this correctly.
-      return;
-    }
-
+  /**
+   * Submits the L1 finalizeDeposit transaction and waits for a receipt.
+   * Contains all error handling for the tx submission phase, but does NOT
+   * write to DepositStore on success — that is the caller's responsibility.
+   *
+   * Returns the TransactionReceipt on success, or undefined if the deposit
+   * should not be retried (bridge delay, race condition, or unrecoverable error).
+   */
+  protected async submitFinalizationTx(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     try {
       logger.debug(`FINALIZE | Quoting fee... | ID: ${deposit.id}`);
       // Use provider instance for read-only quote
@@ -579,22 +563,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         `FINALIZE | L1 finalize transaction mined | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
       );
 
-      // Update status upon successful mining
-      updateToFinalizedDeposit(deposit, receipt, undefined); // Pass only deposit and receipt on success
-
-      // Explicit success log (with correlation IDs for SigNoz)
-      createLoggerWithCorrelation({
-        depositId: deposit.id,
-        chainName: this.config.chainName,
-        operation: 'finalizeDeposit',
-        fundingTxHash: deposit.fundingTxHash ?? undefined,
-        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
-        finalizeTxHash: receipt.transactionHash,
-        blockNumber: String(receipt.blockNumber),
-      }).info(
-        `FINALIZE | SUCCESS | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
-      );
-
       return receipt;
     } catch (error: any) {
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
@@ -604,7 +572,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         logger.warn(`FINALIZE | WAITING (Bridge Delay) | ID: ${deposit.id} | Reason: ${reason}`);
         // Don't mark as error, just update activity to allow retry after TIME_TO_RETRY
         await updateLastActivity(deposit);
-        return;
+        return undefined;
       }
 
       // If generic failure, re-check L1 status – it might have finalized already
@@ -615,7 +583,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `FINALIZE | Tx failed but L1 shows FINALIZED (race/duplicate) | ID: ${deposit.id}`,
           );
           await this.mirrorLocalStatusToL1(deposit, DepositStatus.FINALIZED, reason);
-          return;
+          return undefined;
         }
       } catch {}
 
@@ -635,7 +603,55 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       });
       // Mark as error to potentially prevent immediate retries depending on cleanup logic
       updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
+      return undefined;
     }
+  }
+
+  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+    // Check if already finalized locally
+    if (deposit.status === DepositStatus.FINALIZED) {
+      logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
+      return;
+    }
+    // Ensure it was initialized or mark as error if called prematurely
+    if (deposit.status !== DepositStatus.INITIALIZED) {
+      const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
+      logErrorContext(
+        `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
+        new Error(errorMsg),
+      );
+      logDepositError(deposit.id, errorMsg, {
+        error: errorMsg,
+        context: 'Invalid status for finalize',
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+      });
+      // For now, just return, assuming the process loop or event handler called this correctly.
+      return;
+    }
+
+    const receipt = await this.submitFinalizationTx(deposit);
+
+    if (receipt) {
+      // Update status upon successful mining
+      updateToFinalizedDeposit(deposit, receipt, undefined);
+
+      // Explicit success log (with correlation IDs for SigNoz)
+      createLoggerWithCorrelation({
+        depositId: deposit.id,
+        chainName: this.config.chainName,
+        operation: 'finalizeDeposit',
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+        finalizeTxHash: receipt.transactionHash,
+        blockNumber: String(receipt.blockNumber),
+      }).info(
+        `FINALIZE | SUCCESS | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
+      );
+    }
+
+    return receipt;
   }
 
   async checkDepositStatus(depositOrId: string | Deposit): Promise<DepositStatus | null> {
