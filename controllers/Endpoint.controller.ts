@@ -42,10 +42,10 @@ export class EndpointController {
    * @param res Express response object
    */
   async handleReveal(req: Request, res: Response): Promise<void> {
+    // Initialize fundingTxHash safely before validation to avoid throwing outside try/catch
+    let fundingTxHash = 'unknown';
     const logApiData = {
-      fundingTxHash: req.body?.fundingTx
-        ? '0x' + getTransactionHash(req.body.fundingTx)
-        : 'unknown',
+      fundingTxHash: fundingTxHash,
     };
     logApiRequest('/api/reveal', 'POST', null, logApiData);
 
@@ -70,7 +70,7 @@ export class EndpointController {
 
       // Use getTransactionHash() which returns little-endian (Bitcoin display format)
       // Then getDepositId() will reverse it to big-endian for keccak256 calculation
-      const fundingTxHash = '0x' + getTransactionHash(fundingTx);
+      fundingTxHash = '0x' + getTransactionHash(fundingTx);
       const depositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
       logger.info(
         `[${this.chainName}] Received L2 DepositInitialized event | ID: ${depositId} | Owner: ${l2DepositOwner}`,
@@ -137,9 +137,8 @@ export class EndpointController {
       });
 
       // Log error to audit log
-      const depositId = req.body?.fundingTx
-        ? '0x' + getTransactionHash(req.body.fundingTx)
-        : 'unknown';
+      // Use fundingTxHash if it was computed successfully, otherwise 'unknown'
+      const depositId = fundingTxHash;
       logDepositError(depositId, `[${this.chainName}] Error handling reveal endpoint`, error);
       logApiRequest('/api/reveal', 'POST', depositId, {}, 500);
 
@@ -221,11 +220,13 @@ export class EndpointController {
    * @param res Express response object
    */
   async handleDepositNotification(req: Request, res: Response): Promise<void> {
+    // Extract and normalize depositKey once at the top
+    const depositKey = req.body?.depositKey ?? '';
     const logApiData = {
-      depositKey: req.body?.depositKey || 'unknown',
+      depositKey: depositKey || 'unknown',
       chainName: this.chainName,
     };
-    logApiRequest('/api/deposit/notify', 'POST', req.body?.depositKey, logApiData);
+    logApiRequest('/api/deposit/notify', 'POST', depositKey, logApiData);
 
     try {
       // 1. Validate request body
@@ -234,7 +235,7 @@ export class EndpointController {
         logger.error(
           `[${this.chainName}] Invalid deposit notification: ${validationResult.error?.flatten()}`,
         );
-        logApiRequest('/api/deposit/notify', 'POST', req.body?.depositKey, logApiData, 400);
+        logApiRequest('/api/deposit/notify', 'POST', depositKey, logApiData, 400);
 
         res.status(400).json({
           success: false,
@@ -256,7 +257,7 @@ export class EndpointController {
       // Normalize depositKey to decimal format (relayer's internal representation)
       // Backend sends hex string (0x...), but relayer stores deposits with decimal string IDs
       // BigNumber.from() accepts both hex and decimal, .toString() normalizes to decimal
-      const depositKey = BigNumber.from(depositKeyRaw).toString();
+      const normalizedDepositKey = BigNumber.from(depositKeyRaw).toString();
 
       // 2. Verify depositKey matches fundingTx + reveal
       // Use getTransactionHash() which returns little-endian (Bitcoin display format)
@@ -265,43 +266,43 @@ export class EndpointController {
       const fundingTxHash = '0x' + getTransactionHash(fundingTx);
       const calculatedDepositId = getDepositId(fundingTxHash, reveal.fundingOutputIndex);
 
-      if (calculatedDepositId !== depositKey) {
+      if (calculatedDepositId !== normalizedDepositKey) {
         logger.error(
-          `[${this.chainName}] depositKey mismatch: provided=${depositKey}, calculated=${calculatedDepositId}`,
+          `[${this.chainName}] depositKey mismatch: provided=${normalizedDepositKey}, calculated=${calculatedDepositId}`,
         );
         res.status(400).json({
           success: false,
           error: 'depositKey does not match fundingTx and reveal',
-          providedKey: depositKey,
+          providedKey: normalizedDepositKey,
           calculatedKey: calculatedDepositId,
         });
         return;
       }
 
       // 3. Check if deposit already exists
-      const existingDeposit = await DepositStore.getById(depositKey);
+      const existingDeposit = await DepositStore.getById(normalizedDepositKey);
       if (existingDeposit) {
         logger.warn(
-          `[${this.chainName}] Deposit already exists | ID: ${depositKey} | Status: ${DepositStatus[existingDeposit.status]}`,
+          `[${this.chainName}] Deposit already exists | ID: ${normalizedDepositKey} | Status: ${DepositStatus[existingDeposit.status]}`,
         );
         res.status(200).json({
           success: true,
           message: 'Deposit already registered',
-          depositId: depositKey,
+          depositId: normalizedDepositKey,
           status: DepositStatus[existingDeposit.status],
         });
         return;
       }
 
       // 4. Verify deposit is initialized on-chain
-      const onChainStatus = await this.chainHandler.checkDepositStatus(depositKey);
+      const onChainStatus = await this.chainHandler.checkDepositStatus(normalizedDepositKey);
 
       if (onChainStatus === null) {
-        logger.error(`[${this.chainName}] Could not verify deposit on-chain | ID: ${depositKey}`);
+        logger.error(`[${this.chainName}] Could not verify deposit on-chain | ID: ${normalizedDepositKey}`);
         res.status(503).json({
           success: false,
           error: 'Could not verify deposit status on-chain',
-          depositId: depositKey,
+          depositId: normalizedDepositKey,
           message: 'Relayer may be experiencing RPC issues. Please retry.',
         });
         return;
@@ -309,12 +310,12 @@ export class EndpointController {
 
       if (onChainStatus !== DepositStatus.INITIALIZED) {
         logger.error(
-          `[${this.chainName}] Deposit not initialized on-chain | ID: ${depositKey} | Status: ${DepositStatus[onChainStatus]}`,
+          `[${this.chainName}] Deposit not initialized on-chain | ID: ${normalizedDepositKey} | Status: ${DepositStatus[onChainStatus]}`,
         );
         res.status(400).json({
           success: false,
           error: 'Deposit is not in INITIALIZED state on-chain',
-          depositId: depositKey,
+          depositId: normalizedDepositKey,
           onChainStatus: DepositStatus[onChainStatus],
           message:
             onChainStatus === DepositStatus.QUEUED
@@ -326,7 +327,7 @@ export class EndpointController {
 
       // 5. Create deposit record in database
       const deposit = createDepositFromNotification(
-        depositKey,
+        normalizedDepositKey,
         fundingTx,
         reveal,
         destinationChainDepositOwner,
@@ -336,36 +337,36 @@ export class EndpointController {
       );
 
       logger.info(
-        `[${this.chainName}] Creating deposit from backend notification | ID: ${depositKey}`,
+        `[${this.chainName}] Creating deposit from backend notification | ID: ${normalizedDepositKey}`,
       );
 
       await DepositStore.create(deposit);
 
       logger.info(
-        `[${this.chainName}] Deposit created successfully from notification | ID: ${depositKey}`,
+        `[${this.chainName}] Deposit created successfully from notification | ID: ${normalizedDepositKey}`,
       );
-      logApiRequest('/api/deposit/notify', 'POST', depositKey, logApiData, 200);
+      logApiRequest('/api/deposit/notify', 'POST', normalizedDepositKey, logApiData, 200);
 
       // 6. Return success
       res.status(200).json({
         success: true,
-        depositId: depositKey,
+        depositId: normalizedDepositKey,
         message: 'Deposit registered. Relayer will finalize in 5-60 minutes.',
         onChainStatus: 'INITIALIZED',
       });
     } catch (error: any) {
       logErrorContext(`[${this.chainName}] Error handling deposit notification:`, error);
       logDepositError(
-        req.body?.depositKey || 'unknown',
+        depositKey || 'unknown',
         `Error handling deposit notification`,
         error,
       );
-      logApiRequest('/api/deposit/notify', 'POST', req.body?.depositKey, {}, 500);
+      logApiRequest('/api/deposit/notify', 'POST', depositKey, {}, 500);
 
       res.status(500).json({
         success: false,
         error: error.message || 'Internal server error',
-        depositId: req.body?.depositKey,
+        depositId: depositKey,
       });
     }
   }
