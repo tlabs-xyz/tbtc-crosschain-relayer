@@ -49,10 +49,7 @@ jobs:
         run: yarn depcheck
 
       - name: Build
-        run: |
-          # Avoid full TypeScript compile in CI to reduce flakiness and memory use
-          yarn clean:build
-          yarn run prisma:generate
+        run: yarn build
 
       - name: Setup .env file
         run: cp env.example .env
