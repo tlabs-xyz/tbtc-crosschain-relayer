@@ -14,8 +14,6 @@ README*
 
 # Source maps and sources
 **/*.map
-**/*.ts
-**/*.tsx
 **/*.flow
 **/*.coffee
 **/*.mdx
