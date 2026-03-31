@@ -420,7 +420,7 @@ export class EVMChainHandler
 
       logger.debug(`Submitting receiveTbtc transaction for deposit ${deposit.id}`, {
         depositId: deposit.id,
-        vaaLength: vaaBytes.length,
+        vaaLength: vaaBuf.length,
         transferSequence: deposit.wormholeInfo.transferSequence,
       });
 
