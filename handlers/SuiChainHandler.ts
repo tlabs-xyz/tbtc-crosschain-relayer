@@ -295,7 +295,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
         );
       } else {
-        await updateToFinalizedDeposit(deposit, receipt, 'transferSequence_not_found');
+        await updateToFinalizedDeposit(deposit, { hash: receipt.transactionHash }, 'transferSequence_not_found');
         logger.error(
           `Could not parse transferSequence for deposit ${deposit.id} — finalizeTxHash stored, manual intervention required`,
         );
