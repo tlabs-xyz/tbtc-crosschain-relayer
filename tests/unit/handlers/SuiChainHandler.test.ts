@@ -85,7 +85,7 @@ jest.mock('@mysten/sui/transactions', () => {
 });
 
 jest.mock('@mysten/bcs', () => ({
-  fromBase64: jest.fn().mockReturnValue(new Uint8Array(32)),
+  fromBase64: jest.fn().mockReturnValue(Uint8Array.from({length: 32}, () => 0)),
   bcs: {
     vector: jest.fn().mockReturnValue({
       serialize: jest.fn(),
@@ -104,7 +104,7 @@ jest.mock('@mysten/bcs', () => ({
 jest.mock('@mysten/sui/cryptography', () => ({
   decodeSuiPrivateKey: jest.fn().mockReturnValue({
     schema: 'ED25519',
-    secretKey: new Uint8Array(32),
+    secretKey: Uint8Array.from({length: 32}, () => 0),
   }),
   __esModule: true,
 }));
@@ -471,20 +471,21 @@ describe('SuiChainHandler', () => {
         transactionHash: '0xtest-finalize-hash',
         logs: [
           {
+            // address must match config.l1BitcoinDepositorAddress for the filter to pass
+            address: mockSuiConfig.l1BitcoinDepositorAddress,
             topics: [ethers.utils.id('TokensTransferredWithPayload(uint256,bytes32,uint64)')],
           },
         ],
       };
 
-      // Mock the parent finalizeDeposit call
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValue(mockReceipt);
+      // SuiChainHandler.finalizeDeposit calls submitFinalizationTx directly (not super.finalizeDeposit)
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(mockReceipt);
 
       // Mock the l1BitcoinDepositorProvider interface (changed from l1BitcoinDepositor)
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
+            name: 'TokensTransferredWithPayload',
             args: { transferSequence: ethers.BigNumber.from(123) },
           }),
         },
@@ -495,22 +496,21 @@ describe('SuiChainHandler', () => {
       const result = await handler.finalizeDeposit(mockDeposit);
 
       expect(result).toBe(mockReceipt);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        '0xtest-finalize-hash',
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         mockDeposit,
+        '0xtest-finalize-hash',
+        '0xtest-finalize-hash',
         '123',
       );
     });
 
-    it('should return early if base finalization fails', async () => {
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(undefined);
+    it('should return early if submitFinalizationTx fails', async () => {
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValueOnce(undefined);
 
       const result = await handler.finalizeDeposit(mockDeposit);
 
       expect(result).toBeUndefined();
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).not.toHaveBeenCalled();
     });
 
     it('should handle missing transfer sequence gracefully', async () => {
@@ -519,17 +519,16 @@ describe('SuiChainHandler', () => {
         logs: [],
       };
 
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(receiptWithoutTransferSequence);
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValueOnce(receiptWithoutTransferSequence);
 
       const result = await handler.finalizeDeposit(mockDeposit);
 
       expect(result).toBe(receiptWithoutTransferSequence);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
-      // Check for either warning message since the implementation logs two warnings
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Could not find transfer sequence'),
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).not.toHaveBeenCalled();
+      expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
+        mockDeposit,
+        { hash: receiptWithoutTransferSequence.transactionHash },
+        'transferSequence_not_found',
       );
     });
   });
@@ -804,14 +803,14 @@ describe('SuiChainHandler', () => {
 
     it('should process valid SUI deposit event with number array format', async () => {
       // Mock binary address data as number arrays (32 bytes each for SUI addresses)
-      const mockDepositOwner = [5, 6, 7, 8, ...Array(28).fill(0)]; // 32 bytes
-      const mockSender = [9, 10, 11, 12, ...Array(28).fill(0)]; // 32 bytes
+      const mockDepositOwner = [5, 6, 7, 8, ...Array.from({length: 28}, () => 0)]; // 32 bytes
+      const mockSender = [9, 10, 11, 12, ...Array.from({length: 28}, () => 0)]; // 32 bytes
 
       const mockEvent = {
         type: 'DepositInitialized',
         parsedJson: {
-          funding_tx: Array(100).fill(1),
-          deposit_reveal: Array(56).fill(0),
+          funding_tx: Array.from({length: 100}, () => 1),
+          deposit_reveal: Array.from({length: 56}, () => 0),
           deposit_owner: mockDepositOwner,
           sender: mockSender,
         },

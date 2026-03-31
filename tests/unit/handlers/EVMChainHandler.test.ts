@@ -34,7 +34,7 @@ jest.mock('@wormhole-foundation/sdk', () => ({
 
 // Compute the correct EVM event signature for topic matching
 const EVM_TOKENS_TRANSFERRED_SIG = ethers.utils.id(
-  'TokensTransferredWithPayload(uint256,address,uint64)',
+  'TokensTransferredWithPayload(uint256,bytes32,uint64)',
 );
 
 // Valid EVM config that passes EvmChainConfigSchema.parse()
@@ -160,6 +160,9 @@ describe('EVMChainHandler', () => {
       (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(mockReceipt);
 
       // Mock the l1BitcoinDepositorProvider interface for parseLog
+      // Note: the log address must match config.l1BitcoinDepositorAddress for the filter to pass
+      mockReceipt.logs[0].address = mockEvmConfig.l1BitcoinDepositorAddress;
+
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
@@ -206,7 +209,7 @@ describe('EVMChainHandler', () => {
       expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledTimes(1);
       expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
         mockDeposit,
-        receiptWithoutLogs,
+        { hash: receiptWithoutLogs.transactionHash },
         'transferSequence_not_found',
       );
       expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).not.toHaveBeenCalled();
@@ -229,6 +232,7 @@ describe('EVMChainHandler', () => {
     });
 
     it('should convert transferSequence BigNumber to string', async () => {
+      mockReceipt.logs[0].address = mockEvmConfig.l1BitcoinDepositorAddress;
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
@@ -404,53 +408,37 @@ describe('EVMChainHandler', () => {
       expect(result).toBe('base64vaastring');
     });
 
-    it('should retry on 404 response and eventually return VAA', async () => {
-      const mockFetch = jest
-        .fn()
-        .mockResolvedValueOnce({ ok: false, status: 404 })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ data: { vaa: 'retriedvaa' } }),
-        });
-      global.fetch = mockFetch;
-
-      const resultPromise = realFetchVAA('100', NETWORK.TESTNET);
-      await jest.advanceTimersByTimeAsync(31000);
-      const result = await resultPromise;
-
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      expect(result).toBe('retriedvaa');
-    });
-
-    it('should return null after exhausting all retry attempts', async () => {
+    it('should return null on 404 response (single attempt, no retry)', async () => {
       const mockFetch = jest.fn().mockResolvedValue({ ok: false, status: 404 });
       global.fetch = mockFetch;
 
-      const resultPromise = realFetchVAA('999', NETWORK.TESTNET);
-      for (let i = 0; i < 20; i++) {
-        await jest.advanceTimersByTimeAsync(31000);
-      }
-      const result = await resultPromise;
+      const result = await realFetchVAA('100', NETWORK.TESTNET);
 
+      expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(result).toBeNull();
-      expect(mockFetch).toHaveBeenCalledTimes(20);
     });
 
-    it('should handle fetch network errors gracefully', async () => {
-      const mockFetch = jest
-        .fn()
-        .mockRejectedValueOnce(new Error('Network error'))
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ data: { vaa: 'aftererrorvaa' } }),
-        });
+    it('should return null when VAA field is missing in response', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: {} }),
+      });
       global.fetch = mockFetch;
 
-      const resultPromise = realFetchVAA('200', NETWORK.TESTNET);
-      await jest.advanceTimersByTimeAsync(31000);
-      const result = await resultPromise;
+      const result = await realFetchVAA('999', NETWORK.TESTNET);
 
-      expect(result).toBe('aftererrorvaa');
+      expect(result).toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return null on network error (single attempt, no retry)', async () => {
+      const mockFetch = jest.fn().mockRejectedValue(new Error('Network error'));
+      global.fetch = mockFetch;
+
+      const result = await realFetchVAA('200', NETWORK.TESTNET);
+
+      expect(result).toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('should use correct Token Bridge emitter address for mainnet', async () => {
@@ -499,16 +487,18 @@ describe('EVMChainHandler', () => {
         receiveTbtc: mockReceiveTbtc,
       };
 
-      // Mock shared fetchVAAFromAPI to return a valid base64 VAA
-      // 'AQID' is base64 for bytes [1, 2, 3]
-      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValue('AQID');
+      // Mock shared fetchVAAFromAPI to return a valid base64 VAA long enough to pass
+      // the length check (>= 200 hex chars = >= 100 bytes).
+      // 100 null bytes in base64: 132 'A's (99 bytes) + 'AA==' (1 byte) = 100 bytes total.
+      const MOCK_VAA_BASE64 = 'A'.repeat(132) + 'AA==';
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValue(MOCK_VAA_BASE64);
     });
 
     it('should call receiveTbtc with hex-encoded VAA bytes', async () => {
       await handler.bridgeEvmDeposit(mockDeposit);
 
-      // base64 'AQID' decodes to [0x01, 0x02, 0x03] -> hex '0x010203'
-      expect(mockReceiveTbtc).toHaveBeenCalledWith('0x010203');
+      // 100 null bytes -> hex '0x' + '00'.repeat(100)
+      expect(mockReceiveTbtc).toHaveBeenCalledWith('0x' + '00'.repeat(100));
     });
 
     it('should call updateToBridgedDeposit on successful transaction', async () => {
