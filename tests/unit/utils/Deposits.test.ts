@@ -24,7 +24,7 @@ describe('Deposits Util', () => {
       const fundingTxHash = '0x' + 'a'.repeat(64); // 64 char hex string
       const fundingOutputIndex = 0;
       // Reverse the hash for expected value
-      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
+      const reversedHash = '0x' + (fundingTxHash.slice(2).match(/.{2}/g) ?? []).reverse().join('');
       const expectedDepositId = ethers.BigNumber.from(
         ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
       ).toString();
@@ -37,7 +37,7 @@ describe('Deposits Util', () => {
       // Example from https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/integration/FullFlow.test.ts
       const fundingTxHash = '0x6fc25b8ebd5fcfdf6de60c39dbaa46cfb0d0e792c671edac4112cabb11fb72c8';
       const fundingOutputIndex = 0;
-      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
+      const reversedHash = '0x' + (fundingTxHash.slice(2).match(/.{2}/g) ?? []).reverse().join('');
       const expectedDepositId = ethers.BigNumber.from(
         ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
       ).toString();
@@ -49,7 +49,7 @@ describe('Deposits Util', () => {
       // Example from https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/data/deposit-sweep.ts
       const fundingTxHash = '0xd32586237f6a832c3aa324bb83151e43e6cca2e4312d676f14dbbd6b1f04f468';
       const fundingOutputIndex = 0;
-      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
+      const reversedHash = '0x' + (fundingTxHash.slice(2).match(/.{2}/g) ?? []).reverse().join('');
       const expectedDepositId = ethers.BigNumber.from(
         ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
       ).toString();
@@ -823,7 +823,7 @@ describe('Deposits Util', () => {
     });
 
     it('should update deposit to AWAITING_WORMHOLE_VAA, set wormholeInfo, clear error, and log correctly', async () => {
-      const depositToUpdate = JSON.parse(JSON.stringify(mockInitialDepositBase)); // Deep copy
+      const depositToUpdate = structuredClone(mockInitialDepositBase); // Deep copy
 
       await updateToAwaitingWormholeVAA(mockWormholeTxHash, depositToUpdate, mockTransferSequence);
 
@@ -857,7 +857,7 @@ describe('Deposits Util', () => {
     });
 
     it('should set bridgingAttempted to true if provided', async () => {
-      const depositToUpdate = JSON.parse(JSON.stringify(mockInitialDepositBase));
+      const depositToUpdate = structuredClone(mockInitialDepositBase);
       await updateToAwaitingWormholeVAA(
         mockWormholeTxHash,
         depositToUpdate,
@@ -905,7 +905,7 @@ describe('Deposits Util', () => {
         },
         error: null,
       };
-      const depositToUpdate = JSON.parse(JSON.stringify(alreadyAwaitingDeposit));
+      const depositToUpdate = structuredClone(alreadyAwaitingDeposit);
       const newWormholeTxHash = '0x' + 'new_wormhole_tx'.padEnd(64, '0');
       const newTransferSequence = '67890';
 
@@ -1020,7 +1020,7 @@ describe('Deposits Util', () => {
     });
 
     it('should update deposit to BRIDGED, set Solana tx hash, update wormholeInfo, clear error, and log correctly', async () => {
-      const depositToUpdate = JSON.parse(JSON.stringify(mockInitialDeposit));
+      const depositToUpdate = structuredClone(mockInitialDeposit);
 
       await updateToBridgedDeposit(depositToUpdate, mockSolanaTxSignature);
 
@@ -1071,7 +1071,7 @@ describe('Deposits Util', () => {
         },
         error: null,
       };
-      const depositToUpdate = JSON.parse(JSON.stringify(alreadyBridgedDeposit));
+      const depositToUpdate = structuredClone(alreadyBridgedDeposit);
       const newSolanaTxSignature = 'new_solana_tx_signature_' + 'N'.repeat(48);
 
       await updateToBridgedDeposit(depositToUpdate, newSolanaTxSignature);
@@ -1192,7 +1192,7 @@ describe('Deposits Util', () => {
       );
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(loggerWarnSpy).toHaveBeenCalledWith(
-        `[updateToBridgedDeposit] Unknown chainId: ${ambiguousDeposit.chainId}. Defaulting to Solana hash structure for backward compatibility.`,
+        `[updateToBridgedDeposit] Unknown chainId: ${ambiguousDeposit.chainId}. Defaulting to Solana hash structure for backward compatibility. Pass chainType explicitly to avoid this.`,
       );
     });
   });
@@ -1265,7 +1265,7 @@ describe('Deposits Util', () => {
     });
 
     it('should update only the lastActivityAt timestamp and call DepositStore.update', async () => {
-      const depositToUpdate = JSON.parse(JSON.stringify(mockInitialDeposit));
+      const depositToUpdate = structuredClone(mockInitialDeposit);
 
       const returnedDeposit = await updateLastActivity(depositToUpdate);
 
@@ -1295,7 +1295,7 @@ describe('Deposits Util', () => {
           bridgedAt: 1678885000000,
         },
       };
-      const depositToUpdate = JSON.parse(JSON.stringify(complexDeposit));
+      const depositToUpdate = structuredClone(complexDeposit);
 
       const returnedDeposit = await updateLastActivity(depositToUpdate);
 
