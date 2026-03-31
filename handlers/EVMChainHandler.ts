@@ -354,8 +354,6 @@ export class EVMChainHandler
    * filters out those without a transfer sequence, and bridges each one.
    */
   public async processWormholeBridging(): Promise<void> {
-    if (this.config.chainType !== CHAIN_TYPE.EVM) return;
-
     const bridgingDeposits = await DepositStore.getByStatus(
       DepositStatus.AWAITING_WORMHOLE_VAA,
       this.config.chainName,
