@@ -298,7 +298,9 @@ export class EndpointController {
       const onChainStatus = await this.chainHandler.checkDepositStatus(normalizedDepositKey);
 
       if (onChainStatus === null) {
-        logger.error(`[${this.chainName}] Could not verify deposit on-chain | ID: ${normalizedDepositKey}`);
+        logger.error(
+          `[${this.chainName}] Could not verify deposit on-chain | ID: ${normalizedDepositKey}`,
+        );
         res.status(503).json({
           success: false,
           error: 'Could not verify deposit status on-chain',
@@ -356,11 +358,7 @@ export class EndpointController {
       });
     } catch (error: any) {
       logErrorContext(`[${this.chainName}] Error handling deposit notification:`, error);
-      logDepositError(
-        depositKey || 'unknown',
-        `Error handling deposit notification`,
-        error,
-      );
+      logDepositError(depositKey || 'unknown', `Error handling deposit notification`, error);
       logApiRequest('/api/deposit/notify', 'POST', depositKey, {}, 500);
 
       res.status(500).json({
