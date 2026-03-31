@@ -32,9 +32,23 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
         ? 'https://api.wormholescan.io'
         : 'https://api.testnet.wormholescan.io';
 
-    const response = await fetch(`${wormholeApi}/api/v1/vaas/${vaaId}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+
+    let response: Response;
+    try {
+      response = await fetch(`${wormholeApi}/api/v1/vaas/${vaaId}`, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (response.ok) {
+      const MAX_RESPONSE_BYTES = 1_000_000; // 1 MB
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_BYTES) {
+        logger.warn(`VAA response unexpectedly large (${contentLength} bytes) for sequence ${sequence} — skipping`);
+        return null;
+      }
       const data = await response.json();
       if (data && data.data && data.data.vaa) {
         logger.info(`VAA found for sequence ${sequence}!`);
