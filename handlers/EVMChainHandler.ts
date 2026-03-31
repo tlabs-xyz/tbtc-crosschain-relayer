@@ -27,10 +27,6 @@ import { BaseChainHandler } from './BaseChainHandler.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
 
-const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
-  'TokensTransferredWithPayload(uint256,address,uint64)',
-);
-
 // Minimum time a deposit must be stuck before recovery is attempted
 const RECOVERY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -525,37 +521,4 @@ export class EVMChainHandler
     return receipt;
   }
 
-  /**
-   * Searches receipt logs for the TokensTransferredWithPayload event emitted by
-   * the L1BitcoinDepositor contract. Returns the transfer sequence and transaction
-   * hash on success, or nulls if not found.
-   */
-  private parseTransferSequenceFromReceipt(
-    receipt: TransactionReceipt,
-    depositId: string,
-  ): { transferSequence: string | null; eventTxHash: string | null } {
-    try {
-      const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
-      const logs = (receipt.logs || []).filter(
-        (log) =>
-          log.address.toLowerCase() === l1BitcoinDepositorAddress &&
-          log.topics[0] === TOKENS_TRANSFERRED_SIG,
-      );
-      for (const log of logs) {
-        try {
-          const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
-            const transferSequence = parsedLog.args.transferSequence.toString();
-            logger.info(`Found transfer sequence ${transferSequence} in receipt for deposit ${depositId}`);
-            return { transferSequence, eventTxHash: receipt.transactionHash };
-          }
-        } catch (error) {
-          logger.warn(`Failed to parse TokensTransferredWithPayload log for deposit ${depositId}: ${error}`);
-        }
-      }
-    } catch (error: any) {
-      logErrorContext(`Error parsing L1 logs for deposit ${depositId}`, error);
-    }
-    return { transferSequence: null, eventTxHash: null };
-  }
 }
