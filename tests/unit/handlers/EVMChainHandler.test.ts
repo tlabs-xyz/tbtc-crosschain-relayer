@@ -1,16 +1,16 @@
-import { EVMChainHandler } from '../../../handlers/EVMChainHandler.js';
-import {
-  EvmChainConfigSchema,
-  type EvmChainConfig,
-} from '../../../config/schemas/evm.chain.schema.js';
-import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
-import { DepositStore } from '../../../utils/DepositStore.js';
-import logger from '../../../utils/Logger.js';
-import { DepositStatus } from '../../../types/DepositStatus.enum.js';
-import type { Deposit } from '../../../types/Deposit.type.js';
-import * as depositUtils from '../../../utils/Deposits.js';
-import * as wormholeVAAModule from '../../../utils/WormholeVAA.js';
 import { ethers } from 'ethers';
+import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
+import {
+  type EvmChainConfig,
+  EvmChainConfigSchema,
+} from '../../../config/schemas/evm.chain.schema.js';
+import { EVMChainHandler } from '../../../handlers/EVMChainHandler.js';
+import type { Deposit } from '../../../types/Deposit.type.js';
+import { DepositStatus } from '../../../types/DepositStatus.enum.js';
+import { DepositStore } from '../../../utils/DepositStore.js';
+import * as depositUtils from '../../../utils/Deposits.js';
+import logger from '../../../utils/Logger.js';
+import * as wormholeVAAModule from '../../../utils/WormholeVAA.js';
 
 // Mock external dependencies
 jest.mock('../../../utils/DepositStore');
@@ -614,5 +614,4 @@ describe('EVMChainHandler', () => {
       expect((handlerNoGateway as any).l2WormholeGateway).toBeUndefined();
     });
   });
-
 });

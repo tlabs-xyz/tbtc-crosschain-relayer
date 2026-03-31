@@ -1,5 +1,6 @@
 import { NonceManager } from '@ethersproject/experimental';
 import type { TransactionReceipt } from '@ethersproject/providers';
+import * as Sentry from '@sentry/node';
 import { ethers } from 'ethers';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
@@ -15,11 +16,10 @@ import { DepositStore } from '../utils/DepositStore.js';
 import {
   createDeposit,
   getDepositId,
-  updateToFinalizedAwaitingVAA,
   updateToBridgedDeposit,
+  updateToFinalizedAwaitingVAA,
 } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
-import * as Sentry from '@sentry/node';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
@@ -427,7 +427,11 @@ export class EVMChainHandler
         const msg = `receiveTbtc transaction reverted for deposit ${deposit.id} (status=${receipt?.status ?? 'null'})`;
         logger.error(msg, { depositId: deposit.id, txHash: receipt?.transactionHash });
         Sentry.captureException(new Error(msg), {
-          extra: { depositId: deposit.id, chainName: this.config.chainName, txHash: receipt?.transactionHash },
+          extra: {
+            depositId: deposit.id,
+            chainName: this.config.chainName,
+            txHash: receipt?.transactionHash,
+          },
         });
         // Persist error tag so the recovery cron skips this deposit instead of
         // retrying a permanently-failing revert on every tick.
@@ -544,5 +548,4 @@ export class EVMChainHandler
 
     return receipt;
   }
-
 }

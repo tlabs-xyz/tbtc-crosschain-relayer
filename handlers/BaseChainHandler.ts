@@ -1,5 +1,6 @@
 import { NonceManager } from '@ethersproject/experimental';
 import type { TransactionReceipt } from '@ethersproject/providers';
+import * as Sentry from '@sentry/node';
 import { type Network, type Wormhole, wormhole } from '@wormhole-foundation/sdk';
 import evm from '@wormhole-foundation/sdk/evm';
 import solana from '@wormhole-foundation/sdk/solana';
@@ -16,7 +17,6 @@ import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { logDepositError } from '../utils/AuditLog.js';
-import * as Sentry from '@sentry/node';
 import { DepositStore } from '../utils/DepositStore.js';
 import {
   updateLastActivity,
@@ -26,7 +26,6 @@ import {
 import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
-
 
 export abstract class BaseChainHandler<T extends AnyChainConfig> implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
@@ -611,14 +610,15 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         'TokensTransferredWithPayload',
       );
       const logs = (receipt.logs || []).filter(
-        (log) =>
-          log.address.toLowerCase() === l1BitcoinDepositorAddress &&
-          log.topics[0] === sig,
+        (log) => log.address.toLowerCase() === l1BitcoinDepositorAddress && log.topics[0] === sig,
       );
       for (const log of logs) {
         try {
           const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
-          if (parsedLog.name === 'TokensTransferredWithPayload' && parsedLog.args.transferSequence) {
+          if (
+            parsedLog.name === 'TokensTransferredWithPayload' &&
+            parsedLog.args.transferSequence
+          ) {
             const transferSequence = parsedLog.args.transferSequence.toString();
             logger.info(
               `Found transfer sequence ${transferSequence} in receipt for deposit ${depositId}`,

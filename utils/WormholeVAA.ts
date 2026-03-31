@@ -46,7 +46,9 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
       const MAX_RESPONSE_BYTES = 1_000_000; // 1 MB
       const text = await response.text();
       if (text.length > MAX_RESPONSE_BYTES) {
-        logger.warn(`VAA response unexpectedly large (${text.length} chars) for sequence ${sequence} — skipping`);
+        logger.warn(
+          `VAA response unexpectedly large (${text.length} chars) for sequence ${sequence} — skipping`,
+        );
         return null;
       }
       let data: any;
@@ -68,7 +70,9 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
         `Wormhole API rate-limited for sequence ${sequence}${retryAfter ? ` (retry-after: ${retryAfter}s)` : ''}`,
       );
     } else {
-      logger.warn(`Unexpected response status ${response.status} when fetching VAA for sequence ${sequence}`);
+      logger.warn(
+        `Unexpected response status ${response.status} when fetching VAA for sequence ${sequence}`,
+      );
     }
 
     return null;

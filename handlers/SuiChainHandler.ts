@@ -5,18 +5,17 @@ import { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
+import * as Sentry from '@sentry/node';
 import type { Chain, ChainContext } from '@wormhole-foundation/sdk-connect';
-
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
-import * as Sentry from '@sentry/node';
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { DepositStore } from '../utils/DepositStore.js';
 import {
   createDeposit,
-  updateToFinalizedAwaitingVAA,
   updateToBridgedDeposit,
+  updateToFinalizedAwaitingVAA,
 } from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { parseDepositInitializedEvent } from '../utils/SuiMoveEventParser.js';
@@ -595,5 +594,4 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       });
     }
   }
-
 }

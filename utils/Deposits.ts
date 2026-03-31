@@ -1,4 +1,5 @@
 import { ethers } from 'ethers';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
@@ -11,7 +12,6 @@ import {
   logDepositInitialized,
   logStatusChange,
 } from './AuditLog.js';
-import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import { DepositStore } from './DepositStore.js';
 import { getTransactionHash } from './GetTransactionHash.js';
 import logger, { createLoggerWithCorrelation } from './Logger.js';

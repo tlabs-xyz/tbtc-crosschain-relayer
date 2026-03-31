@@ -4,7 +4,12 @@ export const L1BitcoinDepositorABI = [
     anonymous: false,
     inputs: [
       { indexed: true, internalType: 'uint256', name: 'depositKey', type: 'uint256' },
-      { indexed: true, internalType: 'bytes32', name: 'destinationChainDepositOwner', type: 'bytes32' },
+      {
+        indexed: true,
+        internalType: 'bytes32',
+        name: 'destinationChainDepositOwner',
+        type: 'bytes32',
+      },
       { indexed: true, internalType: 'address', name: 'l1Sender', type: 'address' },
       { indexed: false, internalType: 'uint256', name: 'initialAmount', type: 'uint256' },
       { indexed: false, internalType: 'uint256', name: 'tbtcAmount', type: 'uint256' },
@@ -16,7 +21,12 @@ export const L1BitcoinDepositorABI = [
     anonymous: false,
     inputs: [
       { indexed: true, internalType: 'uint256', name: 'depositKey', type: 'uint256' },
-      { indexed: true, internalType: 'bytes32', name: 'destinationChainDepositOwner', type: 'bytes32' },
+      {
+        indexed: true,
+        internalType: 'bytes32',
+        name: 'destinationChainDepositOwner',
+        type: 'bytes32',
+      },
       { indexed: true, internalType: 'address', name: 'l1Sender', type: 'address' },
     ],
     name: 'DepositInitialized',
