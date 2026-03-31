@@ -548,7 +548,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         }
 
         // Update deposit status to BRIDGED
-        await updateToBridgedDeposit(deposit, result.digest);
+        await updateToBridgedDeposit(deposit, result.digest, CHAIN_TYPE.SUI);
 
         logger.info(`Sui bridging completed successfully for deposit ${deposit.id}`);
       } catch (transactionError: any) {

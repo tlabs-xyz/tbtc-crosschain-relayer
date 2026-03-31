@@ -17,6 +17,7 @@ import * as GetTransactionHash from '../../../utils/GetTransactionHash.js';
 import * as AuditLog from '../../../utils/AuditLog.js';
 import * as DepositStore from '../../../utils/DepositStore.js';
 import logger from '../../../utils/Logger.js';
+import { CHAIN_TYPE } from '../../../config/schemas/common.schema.js';
 
 describe('Deposits Util', () => {
   describe('getDepositId', () => {
@@ -24,7 +25,7 @@ describe('Deposits Util', () => {
       const fundingTxHash = '0x' + 'a'.repeat(64); // 64 char hex string
       const fundingOutputIndex = 0;
       // Reverse the hash for expected value
-      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
+      const reversedHash = '0x' + (fundingTxHash.slice(2).match(/.{2}/g) ?? []).reverse().join('');
       const expectedDepositId = ethers.BigNumber.from(
         ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
       ).toString();
@@ -37,7 +38,7 @@ describe('Deposits Util', () => {
       // Example from https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/integration/FullFlow.test.ts
       const fundingTxHash = '0x6fc25b8ebd5fcfdf6de60c39dbaa46cfb0d0e792c671edac4112cabb11fb72c8';
       const fundingOutputIndex = 0;
-      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
+      const reversedHash = '0x' + (fundingTxHash.slice(2).match(/.{2}/g) ?? []).reverse().join('');
       const expectedDepositId = ethers.BigNumber.from(
         ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
       ).toString();
@@ -49,7 +50,7 @@ describe('Deposits Util', () => {
       // Example from https://github.com/threshold-network/tbtc-v2/blob/f702144f/solidity/test/data/deposit-sweep.ts
       const fundingTxHash = '0xd32586237f6a832c3aa324bb83151e43e6cca2e4312d676f14dbbd6b1f04f468';
       const fundingOutputIndex = 0;
-      const reversedHash = '0x' + fundingTxHash.slice(2).match(/.{2}/g)!.reverse().join('');
+      const reversedHash = '0x' + (fundingTxHash.slice(2).match(/.{2}/g) ?? []).reverse().join('');
       const expectedDepositId = ethers.BigNumber.from(
         ethers.utils.solidityKeccak256(['bytes32', 'uint32'], [reversedHash, fundingOutputIndex]),
       ).toString();
@@ -823,7 +824,7 @@ describe('Deposits Util', () => {
     });
 
     it('should update deposit to AWAITING_WORMHOLE_VAA, set wormholeInfo, clear error, and log correctly', async () => {
-      const depositToUpdate = JSON.parse(JSON.stringify(mockInitialDepositBase)); // Deep copy
+      const depositToUpdate = structuredClone(mockInitialDepositBase); // Deep copy
 
       await updateToAwaitingWormholeVAA(mockWormholeTxHash, depositToUpdate, mockTransferSequence);
 
@@ -857,7 +858,7 @@ describe('Deposits Util', () => {
     });
 
     it('should set bridgingAttempted to true if provided', async () => {
-      const depositToUpdate = JSON.parse(JSON.stringify(mockInitialDepositBase));
+      const depositToUpdate = structuredClone(mockInitialDepositBase);
       await updateToAwaitingWormholeVAA(
         mockWormholeTxHash,
         depositToUpdate,
@@ -905,7 +906,7 @@ describe('Deposits Util', () => {
         },
         error: null,
       };
-      const depositToUpdate = JSON.parse(JSON.stringify(alreadyAwaitingDeposit));
+      const depositToUpdate = structuredClone(alreadyAwaitingDeposit);
       const newWormholeTxHash = '0x' + 'new_wormhole_tx'.padEnd(64, '0');
       const newTransferSequence = '67890';
 
@@ -1020,9 +1021,9 @@ describe('Deposits Util', () => {
     });
 
     it('should update deposit to BRIDGED, set Solana tx hash, update wormholeInfo, clear error, and log correctly', async () => {
-      const depositToUpdate = JSON.parse(JSON.stringify(mockInitialDeposit));
+      const depositToUpdate = structuredClone(mockInitialDeposit);
 
-      await updateToBridgedDeposit(depositToUpdate, mockSolanaTxSignature);
+      await updateToBridgedDeposit(depositToUpdate, mockSolanaTxSignature, CHAIN_TYPE.SOLANA);
 
       expect(dateNowSpy).toHaveBeenCalledTimes(2);
       const expectedUpdatedDeposit: Deposit = {
@@ -1071,10 +1072,10 @@ describe('Deposits Util', () => {
         },
         error: null,
       };
-      const depositToUpdate = JSON.parse(JSON.stringify(alreadyBridgedDeposit));
+      const depositToUpdate = structuredClone(alreadyBridgedDeposit);
       const newSolanaTxSignature = 'new_solana_tx_signature_' + 'N'.repeat(48);
 
-      await updateToBridgedDeposit(depositToUpdate, newSolanaTxSignature);
+      await updateToBridgedDeposit(depositToUpdate, newSolanaTxSignature, CHAIN_TYPE.SOLANA);
 
       const expectedUpdatedDeposit: Deposit = {
         ...depositToUpdate,
@@ -1113,7 +1114,7 @@ describe('Deposits Util', () => {
       };
       const mockSuiTxSignature = 'sui_tx_digest_' + 'S'.repeat(50);
 
-      await updateToBridgedDeposit(suiDeposit, mockSuiTxSignature);
+      await updateToBridgedDeposit(suiDeposit, mockSuiTxSignature, CHAIN_TYPE.SUI);
 
       expect(dateNowSpy).toHaveBeenCalledTimes(2); // lastActivityAt and bridgedAt
       const expectedUpdatedDeposit: Deposit = {
@@ -1149,15 +1150,15 @@ describe('Deposits Util', () => {
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
     });
 
-    it('should default to Solana when chain detection is ambiguous', async () => {
-      // Create a deposit with non-obvious chain ID
+    it('should default to Solana for unhandled chain types (e.g. Starknet)', async () => {
+      // Create a deposit with a chainType that has no specific hash branch
       const ambiguousDeposit: Deposit = {
         ...mockInitialDeposit,
-        chainId: 'CustomChain', // Non-SUI, non-Solana chain
+        chainId: 'starknet-testnet',
       };
       const mockTxSignature = 'ambiguous_tx_' + 'A'.repeat(50);
 
-      await updateToBridgedDeposit(ambiguousDeposit, mockTxSignature);
+      await updateToBridgedDeposit(ambiguousDeposit, mockTxSignature, CHAIN_TYPE.STARKNET);
 
       expect(dateNowSpy).toHaveBeenCalledTimes(2);
       const expectedUpdatedDeposit: Deposit = {
@@ -1192,7 +1193,7 @@ describe('Deposits Util', () => {
       );
       expect(logDepositBridgedSpy).toHaveBeenCalledWith(expectedUpdatedDeposit);
       expect(loggerWarnSpy).toHaveBeenCalledWith(
-        `[updateToBridgedDeposit] Unknown chainId: ${ambiguousDeposit.chainId}. Defaulting to Solana hash structure for backward compatibility.`,
+        `[updateToBridgedDeposit] Unhandled chainType: ${CHAIN_TYPE.STARKNET} for deposit ${ambiguousDeposit.id}. Defaulting to Solana hash structure.`,
       );
     });
   });
@@ -1265,7 +1266,7 @@ describe('Deposits Util', () => {
     });
 
     it('should update only the lastActivityAt timestamp and call DepositStore.update', async () => {
-      const depositToUpdate = JSON.parse(JSON.stringify(mockInitialDeposit));
+      const depositToUpdate = structuredClone(mockInitialDeposit);
 
       const returnedDeposit = await updateLastActivity(depositToUpdate);
 
@@ -1295,7 +1296,7 @@ describe('Deposits Util', () => {
           bridgedAt: 1678885000000,
         },
       };
-      const depositToUpdate = JSON.parse(JSON.stringify(complexDeposit));
+      const depositToUpdate = structuredClone(complexDeposit);
 
       const returnedDeposit = await updateLastActivity(depositToUpdate);
 

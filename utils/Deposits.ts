@@ -14,6 +14,7 @@ import {
   logDepositBridged,
 } from './AuditLog.js';
 import { type Reveal } from '../types/Reveal.type.js';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 
 // Type for transaction objects with hash property
 interface TransactionWithHash {
@@ -604,20 +605,6 @@ export const updateToFinalizedAwaitingVAA = async (
   logDepositAwaitingWormholeVAA(updatedDeposit);
 };
 
-const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'evm' | 'unknown' => {
-  const lowerChainId = chainId.toLowerCase();
-  if (lowerChainId.includes('sui')) {
-    return 'sui';
-  }
-  if (lowerChainId.includes('solana')) {
-    return 'solana';
-  }
-  if (lowerChainId.includes('base') || lowerChainId.includes('arbitrum')) {
-    return 'evm';
-  }
-  return 'unknown';
-};
-
 /**
  * @name updateToBridgedDeposit
  * @description Updates the status of a deposit to `BRIDGED`
@@ -629,22 +616,21 @@ const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'evm' | 'unknow
  * - Writes the updated deposit object to JSON storage
  *
  * @param deposit The deposit object to update
- * @param transferSequence The Wormhole transfer sequence ID
- * @param bridgingAttempted Whether bridging was already attempted (default: false)
+ * @param txSignature The transaction hash of the L2 bridge call
+ * @param chainType The chain type of the deposit (CHAIN_TYPE enum value)
  */
 export const updateToBridgedDeposit = async (
   deposit: Deposit,
   txSignature: string,
+  chainType: CHAIN_TYPE,
 ): Promise<void> => {
   const oldStatus = deposit.status;
   const newStatus = DepositStatus.BRIDGED;
 
   let updatedHashes;
-  const chainType = getChainTypeFromId(deposit.chainId);
 
   switch (chainType) {
-    case 'sui':
-      // Update SUI-specific hash structure
+    case CHAIN_TYPE.SUI:
       updatedHashes = {
         ...deposit.hashes,
         sui: {
@@ -653,8 +639,7 @@ export const updateToBridgedDeposit = async (
         },
       };
       break;
-    case 'solana':
-      // Update Solana-specific hash structure
+    case CHAIN_TYPE.SOLANA:
       updatedHashes = {
         ...deposit.hashes,
         solana: {
@@ -663,8 +648,7 @@ export const updateToBridgedDeposit = async (
         },
       };
       break;
-    case 'evm':
-      // Update EVM-specific hash structure (Base, Arbitrum)
+    case CHAIN_TYPE.EVM:
       updatedHashes = {
         ...deposit.hashes,
         evm: {
@@ -675,9 +659,8 @@ export const updateToBridgedDeposit = async (
       break;
     default:
       logger.warn(
-        `[updateToBridgedDeposit] Unknown chainId: ${deposit.chainId}. Defaulting to Solana hash structure for backward compatibility.`,
+        `[updateToBridgedDeposit] Unhandled chainType: ${chainType} for deposit ${deposit.id}. Defaulting to Solana hash structure.`,
       );
-      // Default to Solana for backward compatibility
       updatedHashes = {
         ...deposit.hashes,
         solana: {

@@ -427,7 +427,7 @@ export class EVMChainHandler
       const tx = await this.l2WormholeGateway.receiveTbtc(vaaBytes);
       const receipt = await tx.wait();
 
-      await updateToBridgedDeposit(deposit, receipt.transactionHash);
+      await updateToBridgedDeposit(deposit, receipt.transactionHash, CHAIN_TYPE.EVM);
 
       logger.info(`EVM bridging completed successfully for deposit ${deposit.id}`, {
         depositId: deposit.id,

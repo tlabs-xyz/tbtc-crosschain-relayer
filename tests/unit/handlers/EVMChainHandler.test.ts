@@ -507,6 +507,7 @@ describe('EVMChainHandler', () => {
       expect(mockDepositsUtil.updateToBridgedDeposit).toHaveBeenCalledWith(
         mockDeposit,
         '0xreceipt-tx-hash',
+        CHAIN_TYPE.EVM,
       );
     });
 

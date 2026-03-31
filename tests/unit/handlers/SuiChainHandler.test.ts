@@ -669,6 +669,7 @@ describe('SuiChainHandler', () => {
       expect(mockDepositsUtil.updateToBridgedDeposit).toHaveBeenCalledWith(
         mockDeposit,
         'mock-transaction-digest',
+        CHAIN_TYPE.SUI,
       );
     });
 
