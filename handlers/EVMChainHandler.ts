@@ -443,20 +443,11 @@ export class EVMChainHandler
   }
 
   /**
-   * Recovers deposits stuck in AWAITING_WORMHOLE_VAA status by re-attempting
-   * bridging via bridgeEvmDeposit(). FINALIZED deposits are no longer recoverable
-   * via block scanning — any deposit in FINALIZED status represents an explicit
-   * parse failure requiring manual intervention.
+   * Re-attempts bridging for deposits stuck in AWAITING_WORMHOLE_VAA status.
+   * Filters to deposits waiting longer than RECOVERY_DELAY_MS. FINALIZED deposits
+   * are not recoverable via this path — they require manual intervention.
    */
   public async recoverStuckFinalizedDeposits(): Promise<void> {
-    await this.recoverAwaitingDeposits();
-  }
-
-  /**
-   * Fetches deposits stuck in AWAITING_WORMHOLE_VAA status for this chain
-   * and re-attempts bridging for those past the recovery delay threshold.
-   */
-  private async recoverAwaitingDeposits(): Promise<void> {
     const awaitingDeposits = await DepositStore.getByStatus(
       DepositStatus.AWAITING_WORMHOLE_VAA,
       this.config.chainName,
