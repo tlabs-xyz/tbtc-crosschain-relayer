@@ -359,7 +359,7 @@ describe('EVMChainHandler', () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         headers: { get: () => null },
-        json: () => Promise.resolve({ data: { vaa: 'dGVzdHZhYQ==' } }),
+        text: () => Promise.resolve(JSON.stringify({ data: { vaa: 'dGVzdHZhYQ==' } })),
       });
       global.fetch = mockFetch;
 
@@ -384,7 +384,7 @@ describe('EVMChainHandler', () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         headers: { get: () => null },
-        json: () => Promise.resolve({ data: { vaa: 'mainnetvaa' } }),
+        text: () => Promise.resolve(JSON.stringify({ data: { vaa: 'mainnetvaa' } })),
       });
       global.fetch = mockFetch;
 
@@ -411,7 +411,7 @@ describe('EVMChainHandler', () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         headers: { get: () => null },
-        json: () => Promise.resolve({ data: { vaa: 'base64vaastring' } }),
+        text: () => Promise.resolve(JSON.stringify({ data: { vaa: 'base64vaastring' } })),
       });
       global.fetch = mockFetch;
 
@@ -435,7 +435,8 @@ describe('EVMChainHandler', () => {
     it('should return null when VAA field is missing in response', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({ data: {} }),
+        headers: { get: () => null },
+        text: () => Promise.resolve(JSON.stringify({ data: {} })),
       });
       global.fetch = mockFetch;
 
@@ -459,7 +460,7 @@ describe('EVMChainHandler', () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
         headers: { get: () => null },
-        json: () => Promise.resolve({ data: { vaa: 'vaa' } }),
+        text: () => Promise.resolve(JSON.stringify({ data: { vaa: 'vaa' } })),
       });
       global.fetch = mockFetch;
 
@@ -498,6 +499,7 @@ describe('EVMChainHandler', () => {
       mockWait = jest.fn().mockResolvedValue({
         transactionHash: '0xreceipt-tx-hash',
         blockNumber: 99999,
+        status: 1,
       });
       mockReceiveTbtc = jest.fn().mockResolvedValue({ wait: mockWait });
 
