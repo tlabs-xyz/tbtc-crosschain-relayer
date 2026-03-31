@@ -1,0 +1,3 @@
+[[skills]]
+name = "*"
+trigger = { type = "pull_request" }

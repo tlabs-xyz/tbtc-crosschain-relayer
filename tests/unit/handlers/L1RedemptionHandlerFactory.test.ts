@@ -1,11 +1,11 @@
-import { L1RedemptionHandlerFactory } from '../../../handlers/L1RedemptionHandlerFactory.js';
-import { L1RedemptionHandler } from '../../../handlers/L1RedemptionHandler.js';
-import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
 import type { AnyChainConfig } from '../../../config/index.js';
+import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../../../config/schemas/evm.chain.schema.js';
 import type { SolanaChainConfig } from '../../../config/schemas/solana.chain.schema.js';
-import type { SuiChainConfig } from '../../../config/schemas/sui.chain.schema.js';
 import type { StarknetChainConfig } from '../../../config/schemas/starknet.chain.schema.js';
+import type { SuiChainConfig } from '../../../config/schemas/sui.chain.schema.js';
+import { L1RedemptionHandler } from '../../../handlers/L1RedemptionHandler.js';
+import { L1RedemptionHandlerFactory } from '../../../handlers/L1RedemptionHandlerFactory.js';
 import logger from '../../../utils/Logger.js';
 
 // Mock the logger

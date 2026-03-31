@@ -1,12 +1,16 @@
-import { ethers } from 'ethers';
-import type { TransactionReceipt } from '@ethersproject/providers';
 import { NonceManager } from '@ethersproject/experimental';
-
-import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import type { TransactionReceipt } from '@ethersproject/providers';
+import { ethers } from 'ethers';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
+import { L2WormholeGatewayABI } from '../interfaces/L2WormholeGateway.js';
 import type { Deposit } from '../types/Deposit.type.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
+import type { Reveal } from '../types/Reveal.type.js';
+import { logDepositError } from '../utils/AuditLog.js';
 import { DepositStore } from '../utils/DepositStore.js';
 import {
   createDeposit,
@@ -15,16 +19,9 @@ import {
   updateToBridgedDeposit,
 } from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
-
-import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
-import { L2WormholeGatewayABI } from '../interfaces/L2WormholeGateway.js';
-import { logDepositError } from '../utils/AuditLog.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
-
-import { BaseChainHandler } from './BaseChainHandler.js';
-import type { Reveal } from '../types/Reveal.type.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
+import { BaseChainHandler } from './BaseChainHandler.js';
 
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
   'TokensTransferredWithPayload(uint256,address,uint64)',

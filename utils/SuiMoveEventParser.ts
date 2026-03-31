@@ -1,13 +1,13 @@
 import type { SuiEvent } from '@mysten/sui/client';
-import {
-  parseFundingTransaction,
-  normalizeInput,
-  BitcoinParsingError,
-  InvalidRevealFormatError,
-  bytesToHex,
-} from './BitcoinTransactionParser.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
+import {
+  BitcoinParsingError,
+  bytesToHex,
+  InvalidRevealFormatError,
+  normalizeInput,
+  parseFundingTransaction,
+} from './BitcoinTransactionParser.js';
 import logger from './Logger.js';
 
 /**

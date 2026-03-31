@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CommonChainConfigSchema, CHAIN_TYPE } from './common.schema.js';
+import { CHAIN_TYPE, CommonChainConfigSchema } from './common.schema.js';
 import { SuiObjectIdSchema, SuiTypeSchema } from './shared.js';
 
 // Use CommonChainConfigSchema.omit({ privateKey: true }) since we use a different private key field

@@ -1,4 +1,4 @@
-import { buildEvmChainInput, EvmChainBuildParams } from '../../../config/chain/evm-common.js';
+import { buildEvmChainInput, type EvmChainBuildParams } from '../../../config/chain/evm-common.js';
 import { NETWORK } from '../../../config/schemas/common.schema.js';
 
 // Mock the external modules

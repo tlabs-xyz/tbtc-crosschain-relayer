@@ -1,24 +1,19 @@
-import {
+import type { EventFragment, FunctionFragment, Result } from '@ethersproject/abi';
+import type { Listener, Provider } from '@ethersproject/providers';
+import type {
   BaseContract,
   BigNumber,
-  type BigNumberish,
-  type BytesLike,
-  type CallOverrides,
-  type ContractTransaction,
-  type Overrides,
-  type PayableOverrides,
-  type PopulatedTransaction,
+  BigNumberish,
+  BytesLike,
+  CallOverrides,
+  ContractTransaction,
+  Overrides,
+  PayableOverrides,
+  PopulatedTransaction,
   Signer,
   utils,
 } from 'ethers';
-import { FunctionFragment, type Result, EventFragment } from '@ethersproject/abi';
-import { type Listener, type Provider } from '@ethersproject/providers';
-import {
-  type TypedEventFilter,
-  type TypedEvent,
-  type TypedListener,
-  type OnEvent,
-} from './common.js';
+import type { OnEvent, TypedEvent, TypedEventFilter, TypedListener } from './common.js';
 
 export type BitcoinTxInfoStruct = {
   version: BytesLike;

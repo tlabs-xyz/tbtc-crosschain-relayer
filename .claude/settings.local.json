@@ -27,13 +27,13 @@
       "Bash(grep:*)"
     ],
     "deny": [
-      "Bash(git push:*--force*)",
-      "Bash(git push:*--mirror*)",
-      "Bash(git push:*--delete*)",
+      "Bash(git push*--force*)",
+      "Bash(git push*--mirror*)",
+      "Bash(git push*--delete*)",
       "Bash(git push:-f)",
       "Bash(git push:-f *)",
-      "Bash(git push:* -f)",
-      "Bash(git push:* -f *)"
+      "Bash(git push* -f)",
+      "Bash(git push* -f *)"
     ]
   },
   "enableAllProjectMcpServers": false

@@ -3,37 +3,31 @@
 // -------------------------------------------------------------------------
 import './sentry.js';
 import 'dotenv/config';
-import { shutdownOtel } from './instrumentation.js';
-
-// Express Server
-import express from 'express';
-import type { Express, RequestHandler } from 'express';
-import type { Server } from 'http';
-
-// Security
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 
 // Compression
 import compression from 'compression';
-
+// Security
+import cors from 'cors';
+import type { Express, RequestHandler } from 'express';
+// Express Server
+import express from 'express';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import type { Server } from 'http';
+import { appConfig } from './config/app.config.js';
+import { chainConfigs } from './config/index.js';
+import { NodeEnv } from './config/schemas/app.schema.js';
+import { shutdownOtel } from './instrumentation.js';
 // Rutas
 import Routes from './routes/Routes.js';
-
-// Utils
-import logger from './utils/Logger.js';
 import {
   initializeAllChains,
   initializeAllL2RedemptionServices,
   runStartupTasks,
   startCronJobs,
 } from './services/Core.js';
-import { logErrorContext } from './utils/Logger.js';
-
-import { chainConfigs } from './config/index.js';
-import { appConfig } from './config/app.config.js';
-import { NodeEnv } from './config/schemas/app.schema.js';
+// Utils
+import logger, { logErrorContext } from './utils/Logger.js';
 import { prisma } from './utils/prisma.js';
 
 // -------------------------------------------------------------------------

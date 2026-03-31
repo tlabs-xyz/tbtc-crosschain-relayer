@@ -1,11 +1,11 @@
+import { ethers } from 'ethers';
 import type { Request, Response } from 'express';
 import { EndpointController } from '../../../controllers/Endpoint.controller.js';
-import { MockChainHandler } from '../../mocks/MockChainHandler.js';
-import { createTestDeposit } from '../../mocks/BlockchainMock.js';
-import { ethers } from 'ethers';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
 import { DepositStore } from '../../../utils/DepositStore.js';
 import { prisma } from '../../../utils/prisma.js';
+import { createTestDeposit } from '../../mocks/BlockchainMock.js';
+import { MockChainHandler } from '../../mocks/MockChainHandler.js';
 
 // Mock DepositStore
 jest.mock('../../../utils/DepositStore.js');

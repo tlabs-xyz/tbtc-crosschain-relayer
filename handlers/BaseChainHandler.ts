@@ -1,32 +1,29 @@
-import { type Network, Wormhole, wormhole } from '@wormhole-foundation/sdk';
-
+import { NonceManager } from '@ethersproject/experimental';
+import type { TransactionReceipt } from '@ethersproject/providers';
+import { type Network, type Wormhole, wormhole } from '@wormhole-foundation/sdk';
+import evm from '@wormhole-foundation/sdk/evm';
 import solana from '@wormhole-foundation/sdk/solana';
 import sui from '@wormhole-foundation/sdk/sui';
-import evm from '@wormhole-foundation/sdk/evm';
-
 import { BigNumber, ethers } from 'ethers';
-import type { TransactionReceipt } from '@ethersproject/providers';
-import { NonceManager } from '@ethersproject/experimental';
-
+import type { AnyChainConfig } from '../config/index.js';
+import { CHAIN_TYPE, NETWORK } from '../config/schemas/common.schema.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { NETWORK, CHAIN_TYPE } from '../config/schemas/common.schema.js';
-import type { Deposit } from '../types/Deposit.type.js';
-import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
-import { DepositStore } from '../utils/DepositStore.js';
-import {
-  updateToInitializedDeposit,
-  updateToFinalizedDeposit,
-  updateLastActivity,
-  createFinalizedDepositFromOnChainData,
-} from '../utils/Deposits.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { L1BitcoinDepositorABI as L1BitcoinDepositorGenericABI } from '../interfaces/L1BitcoinDepositor.js';
 // Import both ABIs - EVM version expects address, generic version expects bytes32
 import { L1BitcoinDepositorABI as L1BitcoinDepositorEVMABI } from '../interfaces/L1EVMBitcoinDepositor.js';
-import { L1BitcoinDepositorABI as L1BitcoinDepositorGenericABI } from '../interfaces/L1BitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
+import type { Deposit } from '../types/Deposit.type.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { logDepositError } from '../utils/AuditLog.js';
-import type { AnyChainConfig } from '../config/index.js';
-import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import {
+  createFinalizedDepositFromOnChainData,
+  updateLastActivity,
+  updateToFinalizedDeposit,
+  updateToInitializedDeposit,
+} from '../utils/Deposits.js';
+import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
 
@@ -86,7 +83,8 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             L1BitcoinDepositorEVMABI,
             this.nonceManagerL1,
           );
-          this.tbtcVault = new ethers.Contract( // Keep for completeness, though not sending txs currently
+          this.tbtcVault = new ethers.Contract(
+            // Keep for completeness, though not sending txs currently
             this.config.vaultAddress,
             TBTCVaultABI,
             this.l1Signer, // Use l1Signer here, not nonceManagerL1 unless needed
@@ -214,8 +212,8 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             // - Backend is properly retrying failed notifications
             logger.warn(
               `Received OptimisticMintingFinalized event for unknown Deposit Key: ${depositId}. ` +
-              `Skipping automatic recovery. Deposit should be created via L2 event listener or backend notification. ` +
-              `Chain: ${this.config.chainName}`,
+                `Skipping automatic recovery. Deposit should be created via L2 event listener or backend notification. ` +
+                `Chain: ${this.config.chainName}`,
             );
             logDepositError(
               depositId,
@@ -326,7 +324,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         fundingTxHash: deposit.fundingTxHash ?? undefined,
         initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
         finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash ?? undefined,
-      }).info(`Deposit state change: ${DepositStatus[deposit.status]} → ${DepositStatus[l1Status]} (mirrored from L1)`);
+      }).info(
+        `Deposit state change: ${DepositStatus[deposit.status]} → ${DepositStatus[l1Status]} (mirrored from L1)`,
+      );
     } catch (e: any) {
       logErrorContext(`Failed to mirror local status to L1 for ${deposit.id}`, e, {
         depositId: deposit.id,
@@ -785,11 +785,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
           // Revert local state? Log and let processInitializeDeposits handle it?
           // For now, just log. processInitializeDeposits should eventually correct it.
           break;
-        case null:
+        case null: {
           const errorMsg = `Could not fetch L1 status or deposit not found on L1 (local status was INITIALIZED) | ID: ${updatedDeposit.id}`;
           logErrorContext(errorMsg, new Error(errorMsg));
           // Keep local status as INITIALIZED and let retry happen after TIME_TO_RETRY.
           break;
+        }
         default:
           logger.warn(
             `FINALIZE | Unhandled L1 deposit status (${contractStatus}) for ID: ${updatedDeposit.id}`,

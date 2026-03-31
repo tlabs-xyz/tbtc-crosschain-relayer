@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import type { z } from 'zod';
+import { getEnv } from '../../utils/Env.js';
 import { NETWORK } from '../schemas/common.schema.js';
 import type { StarknetChainConfigSchema } from '../schemas/starknet.chain.schema.js';
-import { getEnv } from '../../utils/Env.js';
 import { getStarknetCommonInput } from './starknet-common.js';
 
 type StarknetChainInput = z.input<typeof StarknetChainConfigSchema>;

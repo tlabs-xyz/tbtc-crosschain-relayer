@@ -1,9 +1,8 @@
+import type { NextFunction, Request, Response } from 'express';
 import express from 'express';
-import type { Request, Response, NextFunction } from 'express';
-
+import { EndpointController } from '../controllers/Endpoint.controller.js';
 import Operations from '../controllers/Operations.controller.js';
 import Utils from '../controllers/Utils.controller.js';
-import { EndpointController } from '../controllers/Endpoint.controller.js';
 import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import logger from '../utils/Logger.js';

@@ -11,9 +11,9 @@ export interface TypedEvent<
 
 export type TypedEventFilter<_TEvent extends TypedEvent> = EventFilter;
 
-export interface TypedListener<TEvent extends TypedEvent> {
-  (...listenerArg: [...__TypechainArgsArray<TEvent>, TEvent]): void;
-}
+export type TypedListener<TEvent extends TypedEvent> = (
+  ...listenerArg: [...__TypechainArgsArray<TEvent>, TEvent]
+) => void;
 
 type __TypechainArgsArray<T> = T extends TypedEvent<infer U> ? U : never;
 

@@ -1,0 +1,10 @@
+pre-commit:
+  commands:
+    lint:
+      glob: "**/*.ts"
+      run: yarn lint
+
+pre-push:
+  commands:
+    test:
+      run: yarn test:unit
