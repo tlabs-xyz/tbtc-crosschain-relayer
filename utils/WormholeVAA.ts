@@ -56,8 +56,13 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
       }
     } else if (response.status === 404) {
       logger.debug(`VAA not yet available for sequence ${sequence}`);
+    } else if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after');
+      logger.warn(
+        `Wormhole API rate-limited for sequence ${sequence}${retryAfter ? ` (retry-after: ${retryAfter}s)` : ''}`,
+      );
     } else {
-      logger.warn(`Unexpected response status ${response.status} when fetching VAA`);
+      logger.warn(`Unexpected response status ${response.status} when fetching VAA for sequence ${sequence}`);
     }
 
     return null;
