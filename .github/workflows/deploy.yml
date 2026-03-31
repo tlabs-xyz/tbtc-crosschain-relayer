@@ -1,0 +1,42 @@
+name: Deploy to Testnet
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: testnet
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Trigger DigitalOcean App Platform deployment
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.DO_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://api.digitalocean.com/v2/apps/${{ secrets.DO_APP_ID }}/deployments" \
+            | jq '.deployment.id // "triggered"'
+
+      - name: Wait for app to become healthy
+        run: |
+          echo "Deployment triggered. Waiting 90s for app to start..."
+          sleep 90
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://tbtc-crosschain-relayer-swmku.ondigitalocean.app/status)
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "App is healthy!"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "App did not become healthy in time"
+          exit 1
