@@ -479,6 +479,26 @@ export class EVMChainHandler
   }
 
   override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+    if (deposit.status === DepositStatus.FINALIZED) {
+      logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
+      return;
+    }
+    if (deposit.status !== DepositStatus.INITIALIZED) {
+      const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
+      logErrorContext(
+        `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
+        new Error(errorMsg),
+      );
+      logDepositError(deposit.id, errorMsg, {
+        error: errorMsg,
+        context: 'Invalid status for finalize',
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+      });
+      return;
+    }
+
     const receipt = await this.submitFinalizationTx(deposit);
 
     if (receipt) {
