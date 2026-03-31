@@ -1,5 +1,12 @@
+import { ethers } from 'ethers';
 import { NETWORK } from '../config/schemas/common.schema.js';
 import logger, { logErrorContext } from './Logger.js';
+
+// Wormhole Token Bridge addresses on Ethereum L1, validated at module load.
+const WORMHOLE_TOKEN_BRIDGE: Record<string, string> = {
+  [NETWORK.MAINNET]: ethers.utils.getAddress('0x3ee18B2214AFF97000D974cf647E7C347E8fa585'),
+  [NETWORK.TESTNET]: ethers.utils.getAddress('0xDB5492265f6038831E89f495670fF909aDe94bd9'),
+};
 
 /**
  * Fetches a signed VAA from the Wormhole API for a given transfer sequence.
@@ -17,12 +24,9 @@ export async function fetchVAAFromAPI(sequence: string, network: string): Promis
   try {
     const emitterChain = network === NETWORK.MAINNET ? '2' : '10002';
 
-    // Wormhole Token Bridge addresses on Ethereum L1
-    const tokenBridgeAddress =
-      network === NETWORK.MAINNET
-        ? '0x3ee18B2214AFF97000D974cf647E7C347E8fa585'
-        : '0xDB5492265f6038831E89f495670fF909aDe94bd9';
+    const tokenBridgeAddress = WORMHOLE_TOKEN_BRIDGE[network] ?? WORMHOLE_TOKEN_BRIDGE[NETWORK.TESTNET];
     const emitterAddress = tokenBridgeAddress.slice(2).toLowerCase().padStart(64, '0');
+    logger.debug(`Wormhole emitter address for ${network}: ${emitterAddress}`);
 
     const vaaId = `${emitterChain}/${emitterAddress}/${sequence}`;
     logger.debug(`Fetching VAA with ID: ${vaaId}`);
