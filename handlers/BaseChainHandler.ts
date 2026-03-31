@@ -651,13 +651,15 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     return { transferSequence: null, eventTxHash: null };
   }
 
-  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    // Check if already finalized locally
+  /**
+   * Returns true if the deposit is in a state that can be finalized (INITIALIZED).
+   * Logs appropriate warnings/errors and returns false for all other statuses.
+   */
+  protected isDepositFinalizable(deposit: Deposit): boolean {
     if (deposit.status === DepositStatus.FINALIZED) {
       logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
-      return;
+      return false;
     }
-    // Ensure it was initialized or mark as error if called prematurely
     if (deposit.status !== DepositStatus.INITIALIZED) {
       const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
       logErrorContext(
@@ -671,9 +673,13 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         fundingTxHash: deposit.fundingTxHash ?? undefined,
         initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
       });
-      // For now, just return, assuming the process loop or event handler called this correctly.
-      return;
+      return false;
     }
+    return true;
+  }
+
+  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+    if (!this.isDepositFinalizable(deposit)) return;
 
     const receipt = await this.submitFinalizationTx(deposit);
 
