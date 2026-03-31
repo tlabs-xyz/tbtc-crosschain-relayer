@@ -18,11 +18,18 @@ jobs:
 
       - name: Trigger DigitalOcean App Platform deployment
         run: |
-          curl -s -X POST \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.DO_API_TOKEN }}" \
             -H "Content-Type: application/json" \
-            "https://api.digitalocean.com/v2/apps/${{ secrets.DO_APP_ID }}/deployments" \
-            | jq '.deployment.id // "triggered"'
+            "https://api.digitalocean.com/v2/apps/${{ secrets.DO_APP_ID }}/deployments")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+            echo "Deployment trigger failed with HTTP $HTTP_CODE"
+            echo "$BODY"
+            exit 1
+          fi
+          echo "Deployment triggered: $(echo "$BODY" | jq -r '.deployment.id')"
 
       - name: Wait for app to become healthy
         run: |
