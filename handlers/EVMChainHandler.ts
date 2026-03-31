@@ -458,7 +458,8 @@ export class EVMChainHandler
   /**
    * Re-attempts bridging for deposits stuck in AWAITING_WORMHOLE_VAA status.
    * Filters to deposits waiting longer than RECOVERY_DELAY_MS. FINALIZED deposits
-   * are not recoverable via this path — they require manual intervention.
+   * with a transferSequence_not_found error cannot be auto-recovered — they are
+   * surfaced via Sentry so operators are alerted.
    */
   public async recoverStuckFinalizedDeposits(): Promise<void> {
     const awaitingDeposits = await DepositStore.getByStatus(
@@ -481,6 +482,28 @@ export class EVMChainHandler
       } catch (error) {
         logErrorContext(`Error re-bridging deposit ${deposit.id}`, error);
       }
+    }
+
+    // Alert on FINALIZED deposits whose transferSequence was never parsed.
+    // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
+    const finalizedDeposits = await DepositStore.getByStatus(
+      DepositStatus.FINALIZED,
+      this.config.chainName,
+    );
+    for (const deposit of finalizedDeposits) {
+      if (deposit.error !== 'transferSequence_not_found') continue;
+      if (!deposit.dates.finalizationAt) continue;
+      if (now - deposit.dates.finalizationAt <= RECOVERY_DELAY_MS) continue;
+      const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found — manual intervention required`;
+      logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
+      Sentry.captureException(new Error(msg), {
+        extra: {
+          depositId: deposit.id,
+          chainName: this.config.chainName,
+          finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
+          finalizationAt: deposit.dates.finalizationAt,
+        },
+      });
     }
   }
 

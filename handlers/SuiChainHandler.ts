@@ -557,6 +557,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
   /**
    * Process all deposits that are in the AWAITING_WORMHOLE_VAA status.
    * This function will attempt to bridge the deposits using the Wormhole protocol.
+   * Also surfaces any FINALIZED deposits with a transferSequence_not_found error
+   * via Sentry so operators are alerted to investigate.
    */
   public async processWormholeBridging(): Promise<void> {
     if (this.config.chainType !== CHAIN_TYPE.SUI) return; // Only for Sui chains
@@ -573,6 +575,30 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         continue;
       }
       await this.bridgeSuiDeposit(deposit);
+    }
+
+    // Alert on FINALIZED deposits whose transferSequence was never parsed.
+    // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
+    const RECOVERY_DELAY_MS = 5 * 60 * 1000;
+    const now = Date.now();
+    const finalizedDeposits = await DepositStore.getByStatus(
+      DepositStatus.FINALIZED,
+      this.config.chainName,
+    );
+    for (const deposit of finalizedDeposits) {
+      if (deposit.error !== 'transferSequence_not_found') continue;
+      if (!deposit.dates.finalizationAt) continue;
+      if (now - deposit.dates.finalizationAt <= RECOVERY_DELAY_MS) continue;
+      const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found — manual intervention required`;
+      logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
+      Sentry.captureException(new Error(msg), {
+        extra: {
+          depositId: deposit.id,
+          chainName: this.config.chainName,
+          finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
+          finalizationAt: deposit.dates.finalizationAt,
+        },
+      });
     }
   }
 
