@@ -1,19 +1,19 @@
-import { ethers } from 'ethers';
 import type { ChainId } from '@wormhole-foundation/sdk';
 import { encoding, serialize } from '@wormhole-foundation/sdk';
-import { WormholeVaaService } from './WormholeVaaService.js';
-import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
+import { ethers } from 'ethers';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import type { L1RedemptionHandler } from '../handlers/L1RedemptionHandler.js';
-import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
+import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
+import type { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer.js';
 import {
-  RedemptionStatus,
   type Redemption,
   type RedemptionRequestedEventData,
+  RedemptionStatus,
 } from '../types/Redemption.type.js';
+import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
-import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
-import { L2BitcoinRedeemerABI } from '../interfaces/L2BitcoinRedeemer.js';
-import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import { WormholeVaaService } from './WormholeVaaService.js';
 
 export class L2RedemptionService {
   private l2Provider: ethers.providers.JsonRpcProvider;

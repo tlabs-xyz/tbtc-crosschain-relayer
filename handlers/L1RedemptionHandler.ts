@@ -1,10 +1,10 @@
-import { ethers, Wallet, providers } from 'ethers';
-import { TBTC, DestinationChainName } from '@keep-network/tbtc-v2.ts';
+import { type DestinationChainName, TBTC } from '@keep-network/tbtc-v2.ts';
 import type { BigNumber } from 'ethers';
-import logger, { logErrorContext } from '../utils/Logger.js';
+import { type ethers, providers, Wallet } from 'ethers';
 import { NETWORK } from '../config/schemas/common.schema.js';
-import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
-import { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
+import type { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 
 const destinationChainName: Record<string, DestinationChainName> = {
   ArbitrumMainnet: 'Arbitrum',

@@ -1,7 +1,7 @@
-import type { Redemption, RedemptionStatus } from '../types/Redemption.type.js';
-import logger, { logErrorContext } from './Logger.js';
 import { ethers } from 'ethers';
-import { prisma, dbLimit } from '../utils/prisma.js';
+import type { Redemption, RedemptionStatus } from '../types/Redemption.type.js';
+import { dbLimit, prisma } from '../utils/prisma.js';
+import logger, { logErrorContext } from './Logger.js';
 
 function serializeRedemptionData(redemption: Redemption): any {
   // Clone the redemption object and remove top-level fields that are separate columns in Prisma

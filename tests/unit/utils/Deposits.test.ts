@@ -1,21 +1,21 @@
-import {
-  getDepositId,
-  createDeposit,
-  updateToInitializedDeposit,
-  updateToFinalizedDeposit,
-  updateToAwaitingWormholeVAA,
-  updateToBridgedDeposit,
-  updateLastActivity,
-  createPartialDepositFromOnChainData,
-} from '../../../utils/Deposits.js';
 import { ethers } from 'ethers';
-import { type FundingTransaction } from '../../../types/FundingTransaction.type.js';
-import { type Reveal } from '../../../types/Reveal.type.js';
+import type { Deposit } from '../../../types/Deposit.type.js';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
-import { type Deposit } from '../../../types/Deposit.type.js';
-import * as GetTransactionHash from '../../../utils/GetTransactionHash.js';
+import type { FundingTransaction } from '../../../types/FundingTransaction.type.js';
+import type { Reveal } from '../../../types/Reveal.type.js';
 import * as AuditLog from '../../../utils/AuditLog.js';
 import * as DepositStore from '../../../utils/DepositStore.js';
+import {
+  createDeposit,
+  createPartialDepositFromOnChainData,
+  getDepositId,
+  updateLastActivity,
+  updateToAwaitingWormholeVAA,
+  updateToBridgedDeposit,
+  updateToFinalizedDeposit,
+  updateToInitializedDeposit,
+} from '../../../utils/Deposits.js';
+import * as GetTransactionHash from '../../../utils/GetTransactionHash.js';
 import logger from '../../../utils/Logger.js';
 import { CHAIN_TYPE } from '../../../config/schemas/common.schema.js';
 

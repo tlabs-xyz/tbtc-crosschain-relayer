@@ -1,8 +1,8 @@
-import { z } from 'zod';
-import { NETWORK, CHAIN_TYPE } from '../schemas/common.schema.js';
+import type { z } from 'zod';
+import { getEnv, getEnvNumber } from '../../utils/Env.js';
+import { CHAIN_TYPE, type NETWORK } from '../schemas/common.schema.js';
 import { EvmChainConfigSchema } from '../schemas/evm.chain.schema.js';
 import { getCommonChainInput } from './common.chain.js';
-import { getEnv, getEnvNumber } from '../../utils/Env.js';
 
 export type EvmChainInput = z.input<typeof EvmChainConfigSchema>;
 

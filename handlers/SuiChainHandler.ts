@@ -1,30 +1,27 @@
-import { SuiClient } from '@mysten/sui/client';
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { fromBase64 } from '@mysten/bcs';
-import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import type { SuiEvent, SuiEventFilter } from '@mysten/sui/client';
-import { Transaction } from '@mysten/sui/transactions';
-import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
-import { ethers } from 'ethers';
 import type { TransactionReceipt } from '@ethersproject/providers';
+import { fromBase64 } from '@mysten/bcs';
+import type { SuiEvent, SuiEventFilter } from '@mysten/sui/client';
+import { SuiClient } from '@mysten/sui/client';
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { Transaction } from '@mysten/sui/transactions';
+import type { Chain, ChainContext } from '@wormhole-foundation/sdk-connect';
 
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import { logDepositError } from '../utils/AuditLog.js';
 import * as Sentry from '@sentry/node';
-import { BaseChainHandler } from './BaseChainHandler.js';
-import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
-import { type Deposit } from '../types/Deposit.type.js';
+import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { DepositStore } from '../utils/DepositStore.js';
 import {
+  createDeposit,
   updateToFinalizedAwaitingVAA,
   updateToBridgedDeposit,
-  createDeposit,
 } from '../utils/Deposits.js';
-import { DepositStore } from '../utils/DepositStore.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 import { parseDepositInitializedEvent } from '../utils/SuiMoveEventParser.js';
-
+import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
+import { BaseChainHandler } from './BaseChainHandler.js';
 
 /**
  * Chain handler for SUI blockchain integration.

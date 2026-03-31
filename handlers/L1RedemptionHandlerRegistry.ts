@@ -1,6 +1,6 @@
 import type { AnyChainConfig } from '../config/index.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
-import { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
+import type { L1RedemptionHandlerInterface } from '../interfaces/L1RedemptionHandler.interface.js';
 import { logErrorContext } from '../utils/Logger.js';
 import { L1RedemptionHandlerFactory } from './L1RedemptionHandlerFactory.js';
 

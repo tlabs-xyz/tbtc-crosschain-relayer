@@ -1,6 +1,6 @@
-import { AppConfig, AppConfigSchema, NodeEnv } from '../../../config/schemas/app.schema';
-import logger from '../../../utils/Logger';
 import { ZodError } from 'zod';
+import { type AppConfig, AppConfigSchema, NodeEnv } from '../../../config/schemas/app.schema';
+import logger from '../../../utils/Logger';
 
 // Mock process.exit
 const mockExit = jest.spyOn(process, 'exit').mockImplementation(

@@ -1,7 +1,7 @@
-import { CHAIN_TYPE, NETWORK } from '../schemas/common.schema.js';
-import { getCommonChainInput } from './common.chain.js';
 import type { PartialDeep } from 'type-fest';
+import { CHAIN_TYPE, type NETWORK } from '../schemas/common.schema.js';
 import type { SolanaChainConfig } from '../schemas/solana.chain.schema.js';
+import { getCommonChainInput } from './common.chain.js';
 
 // This function provides common defaults specifically for Solana chains,
 // building upon the universal getCommonChainInput.

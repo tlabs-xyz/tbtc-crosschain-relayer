@@ -1,5 +1,5 @@
-import pino from 'pino';
 import { trace } from '@opentelemetry/api';
+import pino from 'pino';
 
 const APP_NAME = (process.env.APP_NAME || 'tBTC Cross-Chain Relayer').toUpperCase();
 
@@ -125,7 +125,8 @@ const logger = pino({
   mixin() {
     return getTraceContext();
   },
-  transport: OTEL_LOGS_ENABLED || process.env.NODE_ENV !== 'production' ? getTransport() : undefined,
+  transport:
+    OTEL_LOGS_ENABLED || process.env.NODE_ENV !== 'production' ? getTransport() : undefined,
 });
 
 export default logger;
@@ -142,7 +143,7 @@ export default logger;
 export function createLoggerWithCorrelation(ids: CorrelationIds): pino.Logger {
   const sanitized: Record<string, string> = {};
   for (const [k, v] of Object.entries(ids)) {
-    if (v != null && v !== '') sanitized[k] = String(v);
+    if (v !== null && v !== undefined && v !== '') sanitized[k] = String(v);
   }
   return logger.child(sanitized);
 }

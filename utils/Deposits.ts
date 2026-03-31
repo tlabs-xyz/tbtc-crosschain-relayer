@@ -1,20 +1,20 @@
 import { ethers } from 'ethers';
-import { type Deposit } from '../types/Deposit.type.js';
-import { type FundingTransaction } from '../types/FundingTransaction.type.js';
-import { getTransactionHash } from './GetTransactionHash.js';
-import { DepositStore } from './DepositStore.js';
-import logger, { createLoggerWithCorrelation } from './Logger.js';
+import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
+import type { FundingTransaction } from '../types/FundingTransaction.type.js';
+import type { Reveal } from '../types/Reveal.type.js';
 import {
-  logDepositCreated,
-  logStatusChange,
-  logDepositInitialized,
-  logDepositFinalized,
   logDepositAwaitingWormholeVAA,
   logDepositBridged,
+  logDepositCreated,
+  logDepositFinalized,
+  logDepositInitialized,
+  logStatusChange,
 } from './AuditLog.js';
-import { type Reveal } from '../types/Reveal.type.js';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
+import { DepositStore } from './DepositStore.js';
+import { getTransactionHash } from './GetTransactionHash.js';
+import logger, { createLoggerWithCorrelation } from './Logger.js';
 
 // Type for transaction objects with hash property
 interface TransactionWithHash {

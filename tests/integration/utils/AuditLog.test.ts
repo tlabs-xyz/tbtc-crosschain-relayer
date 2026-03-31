@@ -1,19 +1,19 @@
-import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
+import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum.js';
 import {
   AuditEventType,
   appendToAuditLog,
   getAuditLogs,
   getAuditLogsByDepositId,
-  logDepositCreated,
-  logStatusChange,
-  logDepositInitialized,
-  logDepositFinalized,
-  logDepositDeleted,
   logApiRequest,
+  logDepositCreated,
+  logDepositDeleted,
   logDepositError,
+  logDepositFinalized,
+  logDepositInitialized,
+  logStatusChange,
 } from '../../../utils/AuditLog.js';
 import { prisma } from '../../../utils/prisma.js';
-import { DepositStatus as DepositStatusEnum } from '../../../types/DepositStatus.enum.js';
 
 const testDeposit = {
   id: 'test-id',

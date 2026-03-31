@@ -1,9 +1,9 @@
-import { L1RedemptionHandler } from '../../../handlers/L1RedemptionHandler.js';
-import { ethers, Wallet, providers } from 'ethers';
 import { TBTC } from '@keep-network/tbtc-v2.ts';
 import type { BigNumber } from 'ethers';
+import { ethers, providers, Wallet } from 'ethers';
 import { NETWORK } from '../../../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../../../config/schemas/evm.chain.schema.js';
+import { L1RedemptionHandler } from '../../../handlers/L1RedemptionHandler.js';
 import logger, { logErrorContext } from '../../../utils/Logger.js';
 
 // Mock external dependencies

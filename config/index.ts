@@ -1,16 +1,16 @@
+import { writeFileSync } from 'fs';
 import { z } from 'zod';
+import baseLogger from '../utils/Logger.js';
+import { appConfig } from './app.config.js';
 import {
-  chainSchemaRegistry,
-  getAvailableChainKeys,
   type ChainSchemaRegistryEntry,
+  chainSchemaRegistry,
   type EvmChainConfig,
+  getAvailableChainKeys,
   type SolanaChainConfig,
   type StarknetChainConfig,
   type SuiChainConfig,
 } from './chainRegistry.js';
-import baseLogger from '../utils/Logger.js';
-import { writeFileSync } from 'fs';
-import { appConfig } from './app.config.js';
 
 export type AnyChainConfig =
   | EvmChainConfig

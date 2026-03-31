@@ -1,16 +1,16 @@
 import type { TransactionReceipt } from '@ethersproject/providers';
-import type { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface.js';
-import { DepositStatus } from '../../types/DepositStatus.enum.js';
-import type { Deposit } from '../../types/Deposit.type.js';
-import logger from '../../utils/Logger.js';
-import { createTestDeposit } from './BlockchainMock.js';
 import { BigNumber, ethers } from 'ethers';
 import type { AnyChainConfig } from '../../config/index.js';
 import { CHAIN_TYPE, NETWORK } from '../../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../../config/schemas/evm.chain.schema.js';
 import type { SolanaChainConfig } from '../../config/schemas/solana.chain.schema.js';
-import type { SuiChainConfig } from '../../config/schemas/sui.chain.schema.js';
 import type { StarknetChainConfig } from '../../config/schemas/starknet.chain.schema.js';
+import type { SuiChainConfig } from '../../config/schemas/sui.chain.schema.js';
+import type { ChainHandlerInterface } from '../../interfaces/ChainHandler.interface.js';
+import type { Deposit } from '../../types/Deposit.type.js';
+import { DepositStatus } from '../../types/DepositStatus.enum.js';
+import logger from '../../utils/Logger.js';
+import { createTestDeposit } from './BlockchainMock.js';
 
 const mockReceipt = {
   to: '0x0000000000000000000000000000000000000000',

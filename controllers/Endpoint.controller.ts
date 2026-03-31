@@ -1,16 +1,16 @@
-import type { Request, Response } from 'express';
-import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
-import { createDeposit, createDepositFromNotification, getDepositId } from '../utils/Deposits.js';
-import logger, { logErrorContext } from '../utils/Logger.js';
-import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
-import { getTransactionHash } from '../utils/GetTransactionHash.js';
-import { DepositStore } from '../utils/DepositStore.js';
-import {
-  RevealRequestSchema,
-  DepositNotificationSchema,
-} from '../config/schemas/endpoint.request.schema.js';
 import { BigNumber } from 'ethers';
+import type { Request, Response } from 'express';
+import {
+  DepositNotificationSchema,
+  RevealRequestSchema,
+} from '../config/schemas/endpoint.request.schema.js';
+import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
+import { logApiRequest, logDepositError } from '../utils/AuditLog.js';
+import { DepositStore } from '../utils/DepositStore.js';
+import { createDeposit, createDepositFromNotification, getDepositId } from '../utils/Deposits.js';
+import { getTransactionHash } from '../utils/GetTransactionHash.js';
+import logger, { logErrorContext } from '../utils/Logger.js';
 
 /**
  * Controller for handling deposits via HTTP endpoints for chains without L2 contract listeners
@@ -155,7 +155,9 @@ export class EndpointController {
       );
 
       // Log error to audit log
-      const depositId = req.body.fundingTx ? '0x' + getTransactionHash(req.body.fundingTx) : 'unknown';
+      const depositId = req.body.fundingTx
+        ? '0x' + getTransactionHash(req.body.fundingTx)
+        : 'unknown';
       logDepositError(
         depositId,
         `[${this.chainHandler.config.chainName}] Error handling reveal endpoint`,
@@ -270,8 +272,14 @@ export class EndpointController {
         return;
       }
 
-      const { depositKey: depositKeyRaw, fundingTx, reveal, destinationChainDepositOwner, initTxHash, backendAddress } =
-        validationResult.data;
+      const {
+        depositKey: depositKeyRaw,
+        fundingTx,
+        reveal,
+        destinationChainDepositOwner,
+        initTxHash,
+        backendAddress,
+      } = validationResult.data;
 
       // Normalize depositKey to decimal format (relayer's internal representation)
       // Backend sends hex string (0x...), but relayer stores deposits with decimal string IDs
