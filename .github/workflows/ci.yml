@@ -87,10 +87,11 @@ jobs:
       - name: Stop Docker Compose services
         if: always()
         run: |
-          cp env.example .env 2>/dev/null || true
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml down
+          [ -f env.example ] && cp env.example .env || true
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml down --remove-orphans
 
       - name: Upload coverage as artifact
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-report
