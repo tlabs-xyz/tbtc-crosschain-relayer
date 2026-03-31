@@ -45,7 +45,7 @@ jobs:
           git config --global url."https://github.com/".insteadOf "git@github.com:"
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile --ignore-optional
+        run: yarn install --frozen-lockfile
 
       - name: Detect unused dependencies
         run: yarn depcheck
