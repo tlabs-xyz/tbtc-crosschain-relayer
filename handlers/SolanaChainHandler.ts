@@ -13,7 +13,11 @@ import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json' with { type
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
+import {
+  updateToAwaitingWormholeVAA,
+  updateToBridgedDeposit,
+  updateToFinalizedAwaitingVAA,
+} from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { BaseChainHandler } from './BaseChainHandler.js';
 
@@ -131,47 +135,38 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
 
   /**
    * Override finalizeDeposit to:
-   *  1) finalize on L1 (super call)
-   *  2) parse Wormhole transferSequence from logs
-   *  3) update deposit to AWAITING_WORMHOLE_VAA
+   *  1) submit finalization tx on L1 (without persisting FINALIZED status)
+   *  2) parse Wormhole transferSequence from receipt logs
+   *  3) update deposit to AWAITING_WORMHOLE_VAA with transfer sequence
+   *
+   * Follows the same pattern as EVMChainHandler and SuiChainHandler:
+   * call submitFinalizationTx() directly instead of super.finalizeDeposit()
+   * to avoid marking FINALIZED before the transfer sequence is parsed.
    */
   override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    const finalizedDepositReceipt = await super.finalizeDeposit(deposit);
+    if (!this.isDepositFinalizable(deposit)) return;
 
-    if (!finalizedDepositReceipt) {
-      return;
-    }
-    logger.info(`Finalizing deposit ${deposit.id} on Solana...`);
+    const receipt = await this.submitFinalizationTx(deposit);
 
-    const l1Receipt = finalizedDepositReceipt;
-    if (!l1Receipt) {
-      logger.warn(`No finalize receipt found for deposit ${deposit.id}; cannot parse logs.`);
-      return;
-    }
+    if (receipt) {
+      logger.info(`Processing Solana deposit finalization for ${deposit.id}...`);
 
-    let transferSequence: string | null = null;
-    try {
-      const logs = l1Receipt.logs || [];
+      const { transferSequence, eventTxHash } = this.parseTransferSequenceFromReceipt(
+        receipt,
+        deposit.id,
+      );
 
-      for (const log of logs) {
-        if (log.topics[0] === TOKENS_TRANSFERRED_SIG) {
-          const parsedLog = this.l1BitcoinDepositor.interface.parseLog(log);
-          const { transferSequence: seq } = parsedLog.args;
-          transferSequence = seq.toString();
-          break;
-        }
+      if (transferSequence && eventTxHash) {
+        await updateToFinalizedAwaitingVAA(deposit, receipt.transactionHash, transferSequence);
+        logger.info(
+          `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
+        );
+      } else {
+        await this.handleMissingTransferSequence(deposit, receipt.transactionHash);
       }
-    } catch (error: any) {
-      logErrorContext(`Error parsing L1 logs for deposit ${deposit.id}`, error);
     }
 
-    if (!transferSequence) {
-      logger.warn(`Could not find transferSequence in logs for deposit ${deposit.id}.`);
-      return;
-    }
-
-    await updateToAwaitingWormholeVAA(l1Receipt.transactionHash, deposit, transferSequence);
-    logger.info(`Deposit ${deposit.id} now awaiting Wormhole VAA.`);
+    return receipt;
   }
 
   public async bridgeSolanaDeposit(deposit: Deposit): Promise<void> {
