@@ -660,6 +660,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
       return false;
     }
+    if (deposit.status === DepositStatus.AWAITING_WORMHOLE_VAA) {
+      logger.debug(`FINALIZE | Deposit already awaiting Wormhole VAA | ID: ${deposit.id}`);
+      return false;
+    }
     if (deposit.status !== DepositStatus.INITIALIZED) {
       const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
       logErrorContext(
