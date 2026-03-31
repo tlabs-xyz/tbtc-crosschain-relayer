@@ -398,7 +398,7 @@ export class EVMChainHandler
         this.config.network,
       );
 
-      if (!vaaBase64) {
+      if (!vaaBase64 || vaaBase64.length === 0) {
         logger.warn(
           `VAA not yet available for deposit ${deposit.id}, sequence ${deposit.wormholeInfo.transferSequence}`,
         );
@@ -407,6 +407,12 @@ export class EVMChainHandler
 
       // Convert base64 VAA to hex-encoded bytes for the EVM contract call
       const vaaBytes = '0x' + Buffer.from(vaaBase64, 'base64').toString('hex');
+      if (vaaBytes.length < 200) {
+        logger.warn(
+          `VAA bytes suspiciously short (${vaaBytes.length} chars) for deposit ${deposit.id} — skipping`,
+        );
+        return;
+      }
 
       logger.debug(`Submitting receiveTbtc transaction for deposit ${deposit.id}`, {
         depositId: deposit.id,
