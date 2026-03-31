@@ -30,9 +30,6 @@ import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
 
-const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
-  'TokensTransferredWithPayload(uint256,bytes32,uint64)',
-);
 
 export abstract class BaseChainHandler<T extends AnyChainConfig> implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
@@ -622,10 +619,15 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
   ): { transferSequence: string | null; eventTxHash: string | null } {
     try {
       const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
+      // Derive the topic hash from the loaded ABI so it matches whatever type
+      // the contract uses (address for EVM chains, bytes32 for Sui/Solana chains).
+      const sig = this.l1BitcoinDepositorProvider.interface.getEventTopic(
+        'TokensTransferredWithPayload',
+      );
       const logs = (receipt.logs || []).filter(
         (log) =>
           log.address.toLowerCase() === l1BitcoinDepositorAddress &&
-          log.topics[0] === TOKENS_TRANSFERRED_SIG,
+          log.topics[0] === sig,
       );
       for (const log of logs) {
         try {

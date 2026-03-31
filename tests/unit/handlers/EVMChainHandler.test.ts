@@ -32,9 +32,9 @@ jest.mock('@wormhole-foundation/sdk', () => ({
   },
 }));
 
-// Compute the correct EVM event signature for topic matching
+// Compute the correct EVM event signature — EVM ABI uses address (not bytes32) for l2Receiver
 const EVM_TOKENS_TRANSFERRED_SIG = ethers.utils.id(
-  'TokensTransferredWithPayload(uint256,bytes32,uint64)',
+  'TokensTransferredWithPayload(uint256,address,uint64)',
 );
 
 // Valid EVM config that passes EvmChainConfigSchema.parse()
