@@ -674,8 +674,9 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
             `Deposit ${deposit.id} missing finalization tx hash, estimating search block...`,
           );
 
-          const currentBlock = await this.l1Provider.getBlockNumber();
-          const currentTimestamp = (await this.l1Provider.getBlock(currentBlock)).timestamp;
+          const latestBlock = await this.l1Provider.getBlock('latest');
+          const currentBlock = latestBlock.number;
+          const currentTimestamp = latestBlock.timestamp;
 
           // We know finalizationAt exists because we filtered for it earlier
           const finalizationTimestamp = Math.floor(deposit.dates.finalizationAt! / 1000);
@@ -703,7 +704,7 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           // Search a wider range if initial search failed
           const widerSearchResult = await this.searchForTransferSequence(
             deposit,
-            searchStartBlock - 10,
+            Math.max(0, searchStartBlock - 10),
             30,
           );
           if (widerSearchResult) {
