@@ -22,12 +22,7 @@ import {
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
-import { BaseChainHandler } from './BaseChainHandler.js';
-
-// Minimum time a deposit must be stuck in AWAITING_WORMHOLE_VAA before recovery
-// is attempted. Note: recovery cron fires every 60 minutes, so effective SLA
-// is up to RECOVERY_DELAY_MS + 60 minutes (~65 minutes with default value).
-const RECOVERY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
+import { BaseChainHandler, RECOVERY_DELAY_MS } from './BaseChainHandler.js';
 
 export class EVMChainHandler
   extends BaseChainHandler<EvmChainConfig>
@@ -459,6 +454,11 @@ export class EVMChainHandler
         errorMessage: error.message,
         stack: error.stack,
       });
+      await DepositStore.update({
+        ...deposit,
+        error: 'bridging_exception',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
+      });
     }
   }
 
@@ -477,7 +477,8 @@ export class EVMChainHandler
 
     const now = Date.now();
     const stuckDeposits = awaitingDeposits.filter((deposit) => {
-      if (deposit.error === 'receiveTbtc_reverted') return false;
+      if (deposit.error === 'receiveTbtc_reverted' || deposit.error === 'bridging_exception')
+        return false;
       const awaitingSince =
         deposit.dates.awaitingWormholeVAAMessageSince ?? deposit.dates.finalizationAt;
       if (!awaitingSince) return false;
