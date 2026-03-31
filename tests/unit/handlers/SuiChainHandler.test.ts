@@ -499,7 +499,6 @@ describe('SuiChainHandler', () => {
       expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         mockDeposit,
         '0xtest-finalize-hash',
-        '0xtest-finalize-hash',
         '123',
       );
     });

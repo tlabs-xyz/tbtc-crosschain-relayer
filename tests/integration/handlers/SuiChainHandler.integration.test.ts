@@ -402,7 +402,6 @@ describe('SuiChainHandler Integration Tests', () => {
       expect(updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         testDeposit,
         '0xfinalize-hash',
-        '0xfinalize-hash',
         '456',
       );
     });

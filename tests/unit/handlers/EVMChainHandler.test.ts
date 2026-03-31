@@ -181,7 +181,6 @@ describe('EVMChainHandler', () => {
       expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         mockDeposit,
         mockReceipt.transactionHash,
-        mockReceipt.transactionHash,
         '42',
       );
       expect(mockDepositsUtil.updateToFinalizedDeposit).not.toHaveBeenCalled();
@@ -246,7 +245,6 @@ describe('EVMChainHandler', () => {
 
       expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         mockDeposit,
-        expect.any(String),
         expect.any(String),
         '999999',
       );

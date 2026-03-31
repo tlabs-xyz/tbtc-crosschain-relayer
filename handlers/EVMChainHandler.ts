@@ -489,7 +489,7 @@ export class EVMChainHandler
       );
 
       if (transferSequence && eventTxHash) {
-        await updateToFinalizedAwaitingVAA(deposit, receipt.transactionHash, eventTxHash, transferSequence);
+        await updateToFinalizedAwaitingVAA(deposit, receipt.transactionHash, transferSequence);
         logger.info(
           `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
         );

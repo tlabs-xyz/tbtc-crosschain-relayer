@@ -547,14 +547,12 @@ export const updateToAwaitingWormholeVAA = async (
  * separate steps, use `updateToAwaitingWormholeVAA` instead.
  *
  * @param deposit - The deposit object to update.
- * @param finalizeTxHash - The L1 finalization transaction hash.
- * @param wormholeTxHash - The transaction hash that emitted the TokensTransferredWithPayload event.
+ * @param txHash - The L1 finalization transaction hash (same tx that emits TokensTransferredWithPayload).
  * @param transferSequence - The Wormhole transfer sequence number (as a string).
  */
 export const updateToFinalizedAwaitingVAA = async (
   deposit: Deposit,
-  finalizeTxHash: string,
-  wormholeTxHash: string,
+  txHash: string,
   transferSequence: string,
 ): Promise<void> => {
   const oldStatus = deposit.status;
@@ -568,7 +566,7 @@ export const updateToFinalizedAwaitingVAA = async (
       ...deposit.hashes,
       eth: {
         ...deposit.hashes.eth,
-        finalizeTxHash,
+        finalizeTxHash: txHash,
       },
     },
     dates: {
@@ -578,7 +576,7 @@ export const updateToFinalizedAwaitingVAA = async (
       lastActivityAt: now,
     },
     wormholeInfo: {
-      txHash: wormholeTxHash,
+      txHash,
       transferSequence,
       bridgingAttempted: false,
     },
@@ -594,8 +592,7 @@ export const updateToFinalizedAwaitingVAA = async (
     operation: 'deposit_finalized_awaiting_vaa',
     fundingTxHash: deposit.fundingTxHash ?? undefined,
     initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
-    finalizeTxHash,
-    wormholeTxHash,
+    finalizeTxHash: txHash,
     transferSequence,
   }).info(`Deposit state change: ${DepositStatus[oldStatus]} → ${DepositStatus[newStatus]}`);
 
