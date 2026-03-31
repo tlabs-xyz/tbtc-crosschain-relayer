@@ -530,6 +530,71 @@ export const updateToAwaitingWormholeVAA = async (
   logDepositAwaitingWormholeVAA(updatedDeposit);
 };
 
+/**
+ * @name updateToFinalizedAwaitingVAA
+ * @description Atomically transitions a deposit from INITIALIZED → AWAITING_WORMHOLE_VAA
+ * in a single DepositStore.update() call. Writes finalizeTxHash, wormholeInfo, and all
+ * relevant timestamps together so there is never an intermediate FINALIZED state.
+ *
+ * @param deposit - The deposit object to update.
+ * @param finalizeTxHash - The L1 finalization transaction hash.
+ * @param wormholeTxHash - The transaction hash that emitted the TokensTransferredWithPayload event.
+ * @param transferSequence - The Wormhole transfer sequence number (as a string).
+ */
+export const updateToFinalizedAwaitingVAA = async (
+  deposit: Deposit,
+  finalizeTxHash: string,
+  wormholeTxHash: string,
+  transferSequence: string,
+): Promise<void> => {
+  const oldStatus = deposit.status;
+  const newStatus = DepositStatus.AWAITING_WORMHOLE_VAA;
+  const now = Date.now();
+
+  const updatedDeposit: Deposit = {
+    ...deposit,
+    status: newStatus,
+    hashes: {
+      ...deposit.hashes,
+      eth: {
+        ...deposit.hashes.eth,
+        finalizeTxHash,
+      },
+    },
+    dates: {
+      ...deposit.dates,
+      finalizationAt: now,
+      awaitingWormholeVAAMessageSince: now,
+      lastActivityAt: now,
+    },
+    wormholeInfo: {
+      txHash: wormholeTxHash,
+      transferSequence,
+      bridgingAttempted: false,
+    },
+    error: null,
+  };
+
+  logStatusChange(updatedDeposit, newStatus, oldStatus);
+  createLoggerWithCorrelation({
+    depositId: deposit.id,
+    chainName: deposit.chainId,
+    fromStatus: DepositStatus[oldStatus],
+    toStatus: DepositStatus[newStatus],
+    operation: 'deposit_finalized_awaiting_vaa',
+    fundingTxHash: deposit.fundingTxHash ?? undefined,
+    initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+    finalizeTxHash,
+    wormholeTxHash,
+    transferSequence,
+  }).info(`Deposit state change: ${DepositStatus[oldStatus]} → ${DepositStatus[newStatus]}`);
+
+  await DepositStore.update(updatedDeposit);
+
+  logDepositFinalized(updatedDeposit);
+  logDepositAwaitingWormholeVAA(updatedDeposit);
+};
+
 const getChainTypeFromId = (chainId: string): 'sui' | 'solana' | 'evm' | 'unknown' => {
   const lowerChainId = chainId.toLowerCase();
   if (lowerChainId.includes('sui')) {
