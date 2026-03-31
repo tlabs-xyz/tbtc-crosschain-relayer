@@ -569,6 +569,8 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
     // Alert on FINALIZED deposits whose transferSequence was never parsed.
     // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
+    // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
+    // to prevent N × alerts-per-tick from exhausting Sentry quota.
     const RECOVERY_DELAY_MS = 5 * 60 * 1000;
     const now = Date.now();
     const finalizedDeposits = await DepositStore.getByStatus(
@@ -588,6 +590,11 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
           finalizationAt: deposit.dates.finalizationAt,
         },
+      });
+      await DepositStore.update({
+        ...deposit,
+        error: 'transferSequence_not_found_alerted',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
       });
     }
   }

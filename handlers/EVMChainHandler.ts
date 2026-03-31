@@ -432,6 +432,13 @@ export class EVMChainHandler
         Sentry.captureException(new Error(msg), {
           extra: { depositId: deposit.id, chainName: this.config.chainName, txHash: receipt?.transactionHash },
         });
+        // Persist error tag so the recovery cron skips this deposit instead of
+        // retrying a permanently-failing revert on every tick.
+        await DepositStore.update({
+          ...deposit,
+          error: 'receiveTbtc_reverted',
+          dates: { ...deposit.dates, lastActivityAt: Date.now() },
+        });
         return;
       }
 
@@ -456,9 +463,10 @@ export class EVMChainHandler
 
   /**
    * Re-attempts bridging for deposits stuck in AWAITING_WORMHOLE_VAA status.
-   * Filters to deposits waiting longer than RECOVERY_DELAY_MS. FINALIZED deposits
+   * Filters to deposits waiting longer than RECOVERY_DELAY_MS and excludes deposits
+   * tagged with a permanent error (e.g. receiveTbtc_reverted). FINALIZED deposits
    * with a transferSequence_not_found error cannot be auto-recovered — they are
-   * surfaced via Sentry so operators are alerted.
+   * surfaced via a one-time Sentry alert so operators are alerted.
    */
   public async recoverStuckFinalizedDeposits(): Promise<void> {
     const awaitingDeposits = await DepositStore.getByStatus(
@@ -468,6 +476,7 @@ export class EVMChainHandler
 
     const now = Date.now();
     const stuckDeposits = awaitingDeposits.filter((deposit) => {
+      if (deposit.error === 'receiveTbtc_reverted') return false;
       const awaitingSince =
         deposit.dates.awaitingWormholeVAAMessageSince ?? deposit.dates.finalizationAt;
       if (!awaitingSince) return false;
@@ -485,6 +494,8 @@ export class EVMChainHandler
 
     // Alert on FINALIZED deposits whose transferSequence was never parsed.
     // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
+    // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
+    // to prevent N × alerts-per-tick from exhausting Sentry quota.
     const finalizedDeposits = await DepositStore.getByStatus(
       DepositStatus.FINALIZED,
       this.config.chainName,
@@ -502,6 +513,11 @@ export class EVMChainHandler
           finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
           finalizationAt: deposit.dates.finalizationAt,
         },
+      });
+      await DepositStore.update({
+        ...deposit,
+        error: 'transferSequence_not_found_alerted',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
       });
     }
   }
