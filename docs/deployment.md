@@ -4,7 +4,7 @@
 
 **Platform:** DigitalOcean App Platform
 **Environment:** Testnet
-**Service URL:** `https://tbtc-crosschain-relayer-swmku.ondigitalocean.app`
+**Service URL:** configured as `DO_APP_URL` repository variable (see repo Settings → Variables)
 **Health endpoint:** `GET /status` → `200 OK`
 **Registry:** `tlabs-xyz/devops` → `config/registry.json` as `crosschain-relayer`
 
@@ -16,7 +16,7 @@ Deployments are triggered automatically on push to `main` via the deploy workflo
 1. In the DO App Platform dashboard, navigate to the `tbtc-crosschain-relayer` app
 2. Under **Deployments**, click **Deploy**
 3. Monitor the build log (takes ~3–5 minutes)
-4. Verify: `curl https://tbtc-crosschain-relayer-swmku.ondigitalocean.app/status`
+4. Verify: `curl ${DO_APP_URL}/status`
 
 ## Environment Variables / Secrets
 
@@ -39,7 +39,7 @@ If a deployment is broken:
 
 1. DO App Platform dashboard → **Deployments** → select last known-good deployment
 2. Click **Rollback to this deployment**
-3. Verify: `curl https://tbtc-crosschain-relayer-swmku.ondigitalocean.app/status`
+3. Verify: `curl ${DO_APP_URL}/status`
 
 **Database migrations:** Prisma does not auto-rollback. To revert a migration:
 1. Roll back the app first

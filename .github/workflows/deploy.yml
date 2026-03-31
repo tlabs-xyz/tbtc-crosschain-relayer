@@ -37,7 +37,7 @@ jobs:
           sleep 90
           for i in $(seq 1 10); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              https://tbtc-crosschain-relayer-swmku.ondigitalocean.app/status)
+              "${{ vars.DO_APP_URL }}/status")
             echo "Attempt $i: HTTP $STATUS"
             if [ "$STATUS" = "200" ]; then
               echo "App is healthy!"
