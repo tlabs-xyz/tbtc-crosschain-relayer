@@ -1,0 +1,11 @@
+version = 1
+gitignore = true
+agents = ["claude"]
+
+[[skills]]
+name = "dotagents"
+source = "getsentry/dotagents"
+
+[[skills]]
+name = "*"
+source = "tlabs-xyz/skills"

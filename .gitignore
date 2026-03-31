@@ -32,3 +32,6 @@ prisma/memory:
 .worktrees/
 package-lock.json
 external/
+
+.agents/
+agents.lock
