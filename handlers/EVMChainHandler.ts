@@ -28,7 +28,9 @@ import { BaseChainHandler } from './BaseChainHandler.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
 
-// Minimum time a deposit must be stuck before recovery is attempted
+// Minimum time a deposit must be stuck in AWAITING_WORMHOLE_VAA before recovery
+// is attempted. Note: recovery cron fires every 60 minutes, so effective SLA
+// is up to RECOVERY_DELAY_MS + 60 minutes (~65 minutes with default value).
 const RECOVERY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
 export class EVMChainHandler

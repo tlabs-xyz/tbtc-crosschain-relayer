@@ -235,7 +235,8 @@ export const startCronJobs = () => {
     await checkForPastRedemptionsForAllChains(60);
   });
 
-  // Every 60 minutes - recover stuck finalized deposits (for chains that support it)
+  // Every 60 minutes - recover stuck finalized deposits (for chains that support it).
+  // Combined with RECOVERY_DELAY_MS threshold, effective SLA is up to ~65 minutes.
   cron.schedule('*/60 * * * *', async () => {
     await recoverStuckFinalizedDeposits();
   });
