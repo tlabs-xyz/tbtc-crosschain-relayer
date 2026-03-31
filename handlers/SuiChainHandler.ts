@@ -12,6 +12,7 @@ import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { logDepositError } from '../utils/AuditLog.js';
+import * as Sentry from '@sentry/node';
 import { BaseChainHandler } from './BaseChainHandler.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
 import { type Deposit } from '../types/Deposit.type.js';
@@ -296,6 +297,12 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         );
       } else {
         await updateToFinalizedDeposit(deposit, { hash: receipt.transactionHash }, 'transferSequence_not_found');
+        const sentryErr = new Error(
+          `transferSequence_not_found for deposit ${deposit.id} on ${this.config.chainName} — manual intervention required`,
+        );
+        Sentry.captureException(sentryErr, {
+          extra: { depositId: deposit.id, chainName: this.config.chainName, txHash: receipt.transactionHash },
+        });
         logger.error(
           `Could not parse transferSequence for deposit ${deposit.id} — finalizeTxHash stored, manual intervention required`,
         );
