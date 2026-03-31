@@ -603,7 +603,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
       });
       // Mark as error to potentially prevent immediate retries depending on cleanup logic
-      updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
+      await updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
       return undefined;
     }
   }
