@@ -111,7 +111,7 @@ describe('EVMChainHandler', () => {
     mockDepositStore.getById = jest.fn().mockResolvedValue(null);
     mockDepositStore.getByStatus = jest.fn().mockResolvedValue([]);
     mockDepositStore.create = jest.fn().mockResolvedValue(undefined);
-    (mockDepositsUtil as any).updateToAwaitingWormholeVAA = jest.fn().mockResolvedValue(undefined);
+    (mockDepositsUtil as any).updateToFinalizedAwaitingVAA = jest.fn().mockResolvedValue(undefined);
     (mockDepositsUtil as any).updateToBridgedDeposit = jest.fn().mockResolvedValue(undefined);
 
     // Create handler instance
@@ -130,12 +130,13 @@ describe('EVMChainHandler', () => {
         id: 'test-evm-deposit-id',
         chainId: 'BaseSepolia',
         status: DepositStatus.INITIALIZED,
+        hashes: { eth: {}, btc: {}, solana: {} },
         wormholeInfo: {
           txHash: null,
           transferSequence: null,
           bridgingAttempted: false,
         },
-      } as Deposit;
+      } as unknown as Deposit;
 
       mockReceipt = {
         transactionHash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
@@ -155,10 +156,8 @@ describe('EVMChainHandler', () => {
         ],
       };
 
-      // Mock the parent finalizeDeposit call
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValue(mockReceipt);
+      // Mock submitFinalizationTx so the handler doesn't hit real infrastructure
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(mockReceipt);
 
       // Mock the l1BitcoinDepositorProvider interface for parseLog
       (handler as any).l1BitcoinDepositorProvider = {
@@ -171,149 +170,65 @@ describe('EVMChainHandler', () => {
       };
     });
 
-    it('should extract transferSequence via Method 1 (parseLog) and call updateToAwaitingWormholeVAA', async () => {
+    it('should call updateToFinalizedAwaitingVAA with sequence and hashes on success', async () => {
       const result = await handler.finalizeDeposit(mockDeposit);
 
       expect(result).toBe(mockReceipt);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledTimes(1);
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         mockDeposit,
+        mockReceipt.transactionHash,
+        mockReceipt.transactionHash,
         '42',
       );
+      expect(mockDepositsUtil.updateToFinalizedDeposit).not.toHaveBeenCalled();
     });
 
-    it('should return early when super.finalizeDeposit returns undefined', async () => {
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(undefined);
+    it('should return undefined when submitFinalizationTx returns undefined', async () => {
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(undefined);
 
       const result = await handler.finalizeDeposit(mockDeposit);
 
       expect(result).toBeUndefined();
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).not.toHaveBeenCalled();
+      expect(mockDepositsUtil.updateToFinalizedDeposit).not.toHaveBeenCalled();
     });
 
-    it('should handle receipt with no matching logs gracefully', async () => {
+    it('should call updateToFinalizedDeposit when transferSequence not found', async () => {
       const receiptWithoutLogs = {
         ...mockReceipt,
         logs: [],
       };
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(receiptWithoutLogs);
 
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(receiptWithoutLogs);
+      await handler.finalizeDeposit(mockDeposit);
 
-      const result = await handler.finalizeDeposit(mockDeposit);
-
-      expect(result).toBe(receiptWithoutLogs);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(mockDeposit.id));
-    });
-
-    it('should fall back to Method 2 (topic signature match) when Method 1 fails', async () => {
-      // parseLog throws on first call (Method 1 iterating all logs),
-      // but succeeds when the log has the matching topic signature (Method 2)
-      const parseLogMock = jest.fn();
-
-      // Method 1: throws for all logs (simulating unrecognized events)
-      parseLogMock.mockImplementationOnce(() => {
-        throw new Error('Cannot decode log');
-      });
-
-      // Method 2: when called again on the log with matching topic, it succeeds
-      parseLogMock.mockReturnValueOnce({
-        name: 'TokensTransferredWithPayload',
-        args: { transferSequence: ethers.BigNumber.from(77) },
-      });
-
-      (handler as any).l1BitcoinDepositorProvider = {
-        interface: { parseLog: parseLogMock },
-      };
-
-      // Receipt has one log with the correct topic signature
-      const receiptWithTopicMatch = {
-        ...mockReceipt,
-        logs: [
-          {
-            address: '0x9999999999999999999999999999999999999999',
-            topics: [EVM_TOKENS_TRANSFERRED_SIG],
-            data: '0x',
-            logIndex: 0,
-            blockNumber: 12345,
-            transactionHash: mockReceipt.transactionHash,
-            transactionIndex: 0,
-            blockHash: '0x' + '0'.repeat(64),
-            removed: false,
-          },
-        ],
-      };
-
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(receiptWithTopicMatch);
-
-      const result = await handler.finalizeDeposit(mockDeposit);
-
-      expect(result).toBe(receiptWithTopicMatch);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        mockReceipt.transactionHash,
+      expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledTimes(1);
+      expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
         mockDeposit,
-        '77',
+        receiptWithoutLogs,
+        'transferSequence_not_found',
       );
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).not.toHaveBeenCalled();
     });
 
-    it('should fall back to Method 3 (contract address filter) when Methods 1 and 2 fail', async () => {
-      const parseLogMock = jest.fn();
+    it('should return early when deposit status is FINALIZED', async () => {
+      mockDeposit = { ...mockDeposit, status: DepositStatus.FINALIZED } as Deposit;
 
-      // Method 1: throws for all logs
-      parseLogMock.mockImplementationOnce(() => {
-        throw new Error('Cannot decode log');
-      });
-      // Method 2: also throws (no topic match will be attempted on this log)
-      // Method 3: succeeds on the log from the correct contract address
-      parseLogMock.mockReturnValueOnce({
-        name: 'TokensTransferredWithPayload',
-        args: { transferSequence: ethers.BigNumber.from(555) },
-      });
+      await handler.finalizeDeposit(mockDeposit);
 
-      (handler as any).l1BitcoinDepositorProvider = {
-        interface: { parseLog: parseLogMock },
-      };
-
-      // Receipt has a log from the l1BitcoinDepositorAddress but NO matching topic
-      const l1DepositorAddress = mockEvmConfig.l1BitcoinDepositorAddress;
-      const receiptWithContractLog = {
-        ...mockReceipt,
-        logs: [
-          {
-            address: l1DepositorAddress,
-            topics: ['0x' + 'ff'.repeat(32)], // non-matching topic
-            data: '0x',
-            logIndex: 0,
-            blockNumber: 12345,
-            transactionHash: mockReceipt.transactionHash,
-            transactionIndex: 0,
-            blockHash: '0x' + '0'.repeat(64),
-            removed: false,
-          },
-        ],
-      };
-
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(receiptWithContractLog);
-
-      const result = await handler.finalizeDeposit(mockDeposit);
-
-      expect(result).toBe(receiptWithContractLog);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        mockReceipt.transactionHash,
-        mockDeposit,
-        '555',
-      );
+      expect((handler as any).submitFinalizationTx).not.toHaveBeenCalled();
     });
 
-    it('should convert transferSequence BigNumber to string correctly', async () => {
+    it('should return early when deposit status is not INITIALIZED', async () => {
+      mockDeposit = { ...mockDeposit, status: DepositStatus.AWAITING_WORMHOLE_VAA } as Deposit;
+
+      await handler.finalizeDeposit(mockDeposit);
+
+      expect((handler as any).submitFinalizationTx).not.toHaveBeenCalled();
+    });
+
+    it('should convert transferSequence BigNumber to string', async () => {
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           parseLog: jest.fn().mockReturnValue({
@@ -325,30 +240,11 @@ describe('EVMChainHandler', () => {
 
       await handler.finalizeDeposit(mockDeposit);
 
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        expect.any(String),
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         mockDeposit,
+        expect.any(String),
+        expect.any(String),
         '999999',
-      );
-    });
-
-    it('should use correct transaction hash from receipt', async () => {
-      const specificTxHash = '0x1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff';
-      const receiptWithSpecificHash = {
-        ...mockReceipt,
-        transactionHash: specificTxHash,
-      };
-
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValueOnce(receiptWithSpecificHash);
-
-      await handler.finalizeDeposit(mockDeposit);
-
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        specificTxHash,
-        mockDeposit,
-        expect.any(String),
       );
     });
   });
@@ -708,576 +604,4 @@ describe('EVMChainHandler', () => {
     });
   });
 
-  describe('recoverStuckFinalizedDeposits', () => {
-    const TEN_MINUTES_MS = 10 * 60 * 1000;
-    const TWO_MINUTES_MS = 2 * 60 * 1000;
-
-    let mockL1Provider: any;
-    let mockParseLog: jest.Mock;
-
-    // Helper to create a FINALIZED deposit with configurable age and tx hash
-    function makeFinalizedDeposit(
-      overrides: {
-        id?: string;
-        finalizationAt?: number | null;
-        finalizeTxHash?: string | null;
-      } = {},
-    ): Deposit {
-      return {
-        id: overrides.id ?? 'finalized-deposit-1',
-        chainId: 'BaseSepolia',
-        status: DepositStatus.FINALIZED,
-        dates: {
-          createdAt: Date.now() - TEN_MINUTES_MS,
-          initializationAt: Date.now() - TEN_MINUTES_MS,
-          finalizationAt:
-            overrides.finalizationAt !== undefined
-              ? overrides.finalizationAt
-              : Date.now() - TEN_MINUTES_MS,
-          lastActivityAt: Date.now() - TEN_MINUTES_MS,
-          awaitingWormholeVAAMessageSince: null,
-          bridgedAt: null,
-        },
-        hashes: {
-          btc: { btcTxHash: '0xbtc' },
-          eth: {
-            initializeTxHash: '0xinit',
-            finalizeTxHash:
-              overrides.finalizeTxHash !== undefined
-                ? overrides.finalizeTxHash
-                : '0xfinalize-tx-hash',
-          },
-          solana: { bridgeTxHash: null },
-        },
-        wormholeInfo: {
-          txHash: null,
-          transferSequence: null,
-          bridgingAttempted: false,
-        },
-        fundingTxHash: '0xfunding',
-        outputIndex: 0,
-        receipt: {
-          depositor: '0xdepositor',
-          blindingFactor: '0x',
-          walletPublicKeyHash: '0x',
-          refundPublicKeyHash: '0x',
-          refundLocktime: '0',
-          extraData: '0xowner',
-        },
-        owner: '0xowner',
-        L1OutputEvent: {
-          fundingTx: { version: '0', inputVector: '0x', outputVector: '0x', locktime: '0' },
-          reveal: {
-            blindingFactor: '0x',
-            fundingOutputIndex: 0,
-            refundLocktime: '0',
-            refundPubKeyHash: '0x',
-            vault: '0x',
-            walletPubKeyHash: '0x',
-          },
-          l2DepositOwner: '0xowner',
-          l2Sender: '0xsender',
-        },
-        error: null,
-      } as Deposit;
-    }
-
-    // Helper to create an AWAITING_WORMHOLE_VAA deposit
-    function makeAwaitingDeposit(
-      overrides: {
-        id?: string;
-        awaitingSince?: number | null;
-        finalizationAt?: number | null;
-      } = {},
-    ): Deposit {
-      const base = makeFinalizedDeposit({
-        id: overrides.id ?? 'awaiting-deposit-1',
-        finalizationAt: overrides.finalizationAt ?? Date.now() - TEN_MINUTES_MS,
-      });
-      return {
-        ...base,
-        status: DepositStatus.AWAITING_WORMHOLE_VAA,
-        dates: {
-          ...base.dates,
-          awaitingWormholeVAAMessageSince:
-            overrides.awaitingSince !== undefined
-              ? overrides.awaitingSince
-              : Date.now() - TEN_MINUTES_MS,
-        },
-        wormholeInfo: {
-          txHash: '0xwormhole-tx',
-          transferSequence: '42',
-          bridgingAttempted: false,
-        },
-      } as Deposit;
-    }
-
-    beforeEach(() => {
-      mockParseLog = jest.fn().mockReturnValue({
-        name: 'TokensTransferredWithPayload',
-        args: {
-          transferSequence: ethers.BigNumber.from(99),
-          l2Receiver: '0xowner',
-        },
-      });
-
-      mockL1Provider = {
-        getTransactionReceipt: jest.fn().mockResolvedValue({
-          blockNumber: 100,
-          transactionHash: '0xfinalize-tx-hash',
-        }),
-        getBlockNumber: jest.fn().mockResolvedValue(200),
-        getBlock: jest.fn().mockResolvedValue({
-          timestamp: Math.floor(Date.now() / 1000),
-          number: 200,
-        }),
-        getLogs: jest.fn().mockResolvedValue([
-          {
-            address: mockEvmConfig.l1BitcoinDepositorAddress,
-            topics: [EVM_TOKENS_TRANSFERRED_SIG],
-            data: '0x',
-            transactionHash: '0xlog-tx-hash',
-            blockNumber: 101,
-          },
-        ]),
-      };
-
-      (handler as any).l1Provider = mockL1Provider;
-      (handler as any).l1BitcoinDepositorProvider = {
-        interface: { parseLog: mockParseLog },
-      };
-    });
-
-    it('should return early when deposits array is empty', async () => {
-      await handler.recoverStuckFinalizedDeposits([]);
-
-      // No FINALIZED recovery work should be done
-      expect(mockL1Provider.getTransactionReceipt).not.toHaveBeenCalled();
-      // AWAITING recovery phase still runs (getByStatus is called for AWAITING deposits)
-    });
-
-    it('should filter out deposits finalized less than 5 minutes ago', async () => {
-      const oldDeposit = makeFinalizedDeposit({
-        id: 'old-deposit',
-        finalizationAt: Date.now() - TEN_MINUTES_MS,
-      });
-      const recentDeposit = makeFinalizedDeposit({
-        id: 'recent-deposit',
-        finalizationAt: Date.now() - TWO_MINUTES_MS,
-      });
-
-      await handler.recoverStuckFinalizedDeposits([oldDeposit, recentDeposit]);
-
-      // Only the old deposit should trigger a receipt lookup
-      expect(mockL1Provider.getTransactionReceipt).toHaveBeenCalledTimes(1);
-      expect(mockL1Provider.getTransactionReceipt).toHaveBeenCalledWith('0xfinalize-tx-hash');
-    });
-
-    it('should filter out deposits with null finalizationAt', async () => {
-      const noTimestampDeposit = makeFinalizedDeposit({
-        id: 'no-timestamp',
-        finalizationAt: null,
-      });
-
-      await handler.recoverStuckFinalizedDeposits([noTimestampDeposit]);
-
-      expect(mockL1Provider.getTransactionReceipt).not.toHaveBeenCalled();
-    });
-
-    it('should recover FINALIZED deposit using finalizeTxHash to determine search start block', async () => {
-      const deposit = makeFinalizedDeposit({ finalizeTxHash: '0xmy-finalize-hash' });
-
-      mockL1Provider.getTransactionReceipt.mockResolvedValue({
-        blockNumber: 150,
-        transactionHash: '0xmy-finalize-hash',
-      });
-
-      await handler.recoverStuckFinalizedDeposits([deposit]);
-
-      expect(mockL1Provider.getTransactionReceipt).toHaveBeenCalledWith('0xmy-finalize-hash');
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        '0xlog-tx-hash',
-        deposit,
-        '99',
-      );
-    });
-
-    it('should fall back to timestamp-based block estimation when finalizeTxHash is null', async () => {
-      const deposit = makeFinalizedDeposit({
-        finalizeTxHash: null,
-        finalizationAt: Date.now() - TEN_MINUTES_MS,
-      });
-
-      await handler.recoverStuckFinalizedDeposits([deposit]);
-
-      // Should use block estimation path (getBlockNumber + getBlock)
-      expect(mockL1Provider.getTransactionReceipt).not.toHaveBeenCalled();
-      expect(mockL1Provider.getBlockNumber).toHaveBeenCalled();
-      expect(mockL1Provider.getBlock).toHaveBeenCalled();
-      // Should still find the sequence via getLogs
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalled();
-    });
-
-    it('should perform wider search when initial search returns null', async () => {
-      const deposit = makeFinalizedDeposit();
-
-      // First getLogs call returns empty (initial search fails),
-      // second getLogs call returns a match (wider search succeeds)
-      mockL1Provider.getLogs
-        .mockResolvedValueOnce([]) // initial search: no results
-        .mockResolvedValueOnce([
-          // wider search: found match
-          {
-            address: mockEvmConfig.l1BitcoinDepositorAddress,
-            topics: [EVM_TOKENS_TRANSFERRED_SIG],
-            data: '0x',
-            transactionHash: '0xwider-search-tx',
-            blockNumber: 95,
-          },
-        ]);
-
-      await handler.recoverStuckFinalizedDeposits([deposit]);
-
-      // getLogs should be called twice (initial + wider search)
-      expect(mockL1Provider.getLogs).toHaveBeenCalledTimes(2);
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        '0xwider-search-tx',
-        deposit,
-        '99',
-      );
-    });
-
-    it('should log warning when neither initial nor wider search finds sequence', async () => {
-      const deposit = makeFinalizedDeposit();
-
-      // Both searches return empty
-      mockL1Provider.getLogs.mockResolvedValue([]);
-
-      await handler.recoverStuckFinalizedDeposits([deposit]);
-
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(deposit.id));
-    });
-
-    it('should fetch and re-bridge AWAITING_WORMHOLE_VAA deposits', async () => {
-      const finalizedDeposit = makeFinalizedDeposit();
-      const awaitingDeposit = makeAwaitingDeposit({ id: 'awaiting-rebrid-1' });
-
-      // DepositStore returns AWAITING deposits for the second recovery phase
-      mockDepositStore.getByStatus.mockResolvedValue([awaitingDeposit]);
-
-      // Spy on bridgeEvmDeposit to verify it is called for AWAITING deposits
-      const bridgeSpy = jest.spyOn(handler, 'bridgeEvmDeposit').mockResolvedValue(undefined);
-
-      await handler.recoverStuckFinalizedDeposits([finalizedDeposit]);
-
-      expect(mockDepositStore.getByStatus).toHaveBeenCalledWith(
-        DepositStatus.AWAITING_WORMHOLE_VAA,
-        'BaseSepolia',
-      );
-      expect(bridgeSpy).toHaveBeenCalledWith(awaitingDeposit);
-    });
-
-    it('should apply 5-minute delay filter to AWAITING_WORMHOLE_VAA deposits', async () => {
-      const oldAwaitingDeposit = makeAwaitingDeposit({
-        id: 'old-awaiting',
-        awaitingSince: Date.now() - TEN_MINUTES_MS,
-        finalizationAt: Date.now() - TEN_MINUTES_MS,
-      });
-      const recentAwaitingDeposit = makeAwaitingDeposit({
-        id: 'recent-awaiting',
-        awaitingSince: Date.now() - TWO_MINUTES_MS,
-        finalizationAt: Date.now() - TWO_MINUTES_MS,
-      });
-
-      mockDepositStore.getByStatus.mockResolvedValue([oldAwaitingDeposit, recentAwaitingDeposit]);
-
-      const bridgeSpy = jest.spyOn(handler, 'bridgeEvmDeposit').mockResolvedValue(undefined);
-
-      // Pass empty finalized array to skip that phase
-      await handler.recoverStuckFinalizedDeposits([]);
-
-      // Only the old awaiting deposit should be re-bridged
-      expect(bridgeSpy).toHaveBeenCalledTimes(1);
-      expect(bridgeSpy).toHaveBeenCalledWith(oldAwaitingDeposit);
-    });
-
-    it('should isolate errors per deposit -- one failure does not block others', async () => {
-      const deposit1 = makeFinalizedDeposit({
-        id: 'failing-deposit',
-        finalizeTxHash: '0xfail-hash',
-      });
-      const deposit2 = makeFinalizedDeposit({
-        id: 'succeeding-deposit',
-        finalizeTxHash: '0xsuccess-hash',
-      });
-
-      // First deposit receipt lookup throws, second succeeds
-      mockL1Provider.getTransactionReceipt
-        .mockRejectedValueOnce(new Error('RPC timeout'))
-        .mockResolvedValueOnce({
-          blockNumber: 100,
-          transactionHash: '0xsuccess-hash',
-        });
-
-      await handler.recoverStuckFinalizedDeposits([deposit1, deposit2]);
-
-      // Second deposit should still be processed successfully
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        '0xlog-tx-hash',
-        deposit2,
-        '99',
-      );
-    });
-
-    it('should skip recovery when getTransactionReceipt returns null', async () => {
-      const deposit = makeFinalizedDeposit({ finalizeTxHash: '0xorphan-hash' });
-
-      mockL1Provider.getTransactionReceipt.mockResolvedValue(null);
-
-      await handler.recoverStuckFinalizedDeposits([deposit]);
-
-      expect(mockL1Provider.getLogs).not.toHaveBeenCalled();
-      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(deposit.id));
-    });
-  });
-
-  describe('searchForTransferSequence', () => {
-    let mockL1Provider: any;
-    let mockParseLog: jest.Mock;
-
-    beforeEach(() => {
-      mockParseLog = jest.fn().mockReturnValue({
-        name: 'TokensTransferredWithPayload',
-        args: {
-          transferSequence: ethers.BigNumber.from(77),
-          l2Receiver: '0xowner',
-        },
-      });
-
-      mockL1Provider = {
-        getBlockNumber: jest.fn().mockResolvedValue(200),
-        getLogs: jest.fn().mockResolvedValue([
-          {
-            address: mockEvmConfig.l1BitcoinDepositorAddress,
-            topics: [EVM_TOKENS_TRANSFERRED_SIG],
-            data: '0x',
-            transactionHash: '0xfound-tx',
-            blockNumber: 102,
-          },
-        ]),
-      };
-
-      (handler as any).l1Provider = mockL1Provider;
-      (handler as any).l1BitcoinDepositorProvider = {
-        interface: { parseLog: mockParseLog },
-      };
-    });
-
-    it('should scan correct block range and return sequence when found', async () => {
-      const deposit = {
-        id: 'search-deposit-1',
-        chainId: 'BaseSepolia',
-        owner: '0xowner',
-      } as Deposit;
-
-      const result = await (handler as any).searchForTransferSequence(deposit, 100);
-
-      expect(mockL1Provider.getLogs).toHaveBeenCalledWith(
-        expect.objectContaining({
-          topics: [EVM_TOKENS_TRANSFERRED_SIG],
-          fromBlock: 100,
-          toBlock: 105, // startBlock(100) + default searchBlocks(5)
-        }),
-      );
-      expect(result).toEqual({ sequence: '77', txHash: '0xfound-tx' });
-    });
-
-    it('should respect configurable searchBlocks parameter', async () => {
-      const deposit = { id: 'search-deposit-2', owner: '0xowner' } as Deposit;
-
-      await (handler as any).searchForTransferSequence(deposit, 100, 30);
-
-      expect(mockL1Provider.getLogs).toHaveBeenCalledWith(
-        expect.objectContaining({
-          fromBlock: 100,
-          toBlock: 130, // startBlock(100) + searchBlocks(30)
-        }),
-      );
-    });
-
-    it('should cap endBlock at current block number', async () => {
-      const deposit = { id: 'search-deposit-3', owner: '0xowner' } as Deposit;
-      mockL1Provider.getBlockNumber.mockResolvedValue(200);
-
-      await (handler as any).searchForTransferSequence(deposit, 198);
-
-      // endBlock should be min(198+5=203, 200) = 200
-      expect(mockL1Provider.getLogs).toHaveBeenCalledWith(
-        expect.objectContaining({
-          fromBlock: 198,
-          toBlock: 200,
-        }),
-      );
-    });
-
-    it('should return null when no matching logs found', async () => {
-      const deposit = { id: 'search-deposit-4', owner: '0xowner' } as Deposit;
-      mockL1Provider.getLogs.mockResolvedValue([]);
-
-      const result = await (handler as any).searchForTransferSequence(deposit, 100);
-
-      expect(result).toBeNull();
-      expect(mockParseLog).not.toHaveBeenCalled();
-    });
-
-    it('should filter logs by l1BitcoinDepositorAddress', async () => {
-      const deposit = { id: 'search-deposit-5', owner: '0xowner' } as Deposit;
-
-      // Return logs from two different addresses
-      mockL1Provider.getLogs.mockResolvedValue([
-        {
-          address: '0x9999999999999999999999999999999999999999', // wrong address
-          topics: [EVM_TOKENS_TRANSFERRED_SIG],
-          data: '0x',
-          transactionHash: '0xwrong-addr-tx',
-          blockNumber: 101,
-        },
-        {
-          address: mockEvmConfig.l1BitcoinDepositorAddress, // correct address
-          topics: [EVM_TOKENS_TRANSFERRED_SIG],
-          data: '0x',
-          transactionHash: '0xcorrect-addr-tx',
-          blockNumber: 102,
-        },
-      ]);
-
-      const result = await (handler as any).searchForTransferSequence(deposit, 100);
-
-      // Should return the log from the correct address only
-      expect(result).toEqual({ sequence: '77', txHash: '0xcorrect-addr-tx' });
-      // parseLog should only be called for the matching address log
-      expect(mockParseLog).toHaveBeenCalledTimes(1);
-    });
-
-    it('should skip events where l2Receiver does not match deposit owner', async () => {
-      const deposit = { id: 'search-deposit-corr', owner: '0xAlice' } as Deposit;
-
-      // Two logs from the correct contract address
-      mockL1Provider.getLogs.mockResolvedValue([
-        {
-          address: mockEvmConfig.l1BitcoinDepositorAddress,
-          topics: [EVM_TOKENS_TRANSFERRED_SIG],
-          data: '0x',
-          transactionHash: '0xbob-tx',
-          blockNumber: 101,
-        },
-        {
-          address: mockEvmConfig.l1BitcoinDepositorAddress,
-          topics: [EVM_TOKENS_TRANSFERRED_SIG],
-          data: '0x',
-          transactionHash: '0xalice-tx',
-          blockNumber: 102,
-        },
-      ]);
-
-      // First event belongs to Bob, second to Alice
-      mockParseLog
-        .mockReturnValueOnce({
-          name: 'TokensTransferredWithPayload',
-          args: {
-            transferSequence: ethers.BigNumber.from(10),
-            l2Receiver: '0xBob',
-          },
-        })
-        .mockReturnValueOnce({
-          name: 'TokensTransferredWithPayload',
-          args: {
-            transferSequence: ethers.BigNumber.from(20),
-            l2Receiver: '0xAlice',
-          },
-        });
-
-      const result = await (handler as any).searchForTransferSequence(deposit, 100);
-
-      // Should skip Bob's event and return Alice's
-      expect(result).toEqual({ sequence: '20', txHash: '0xalice-tx' });
-      expect(mockParseLog).toHaveBeenCalledTimes(2);
-    });
-
-    it('should return null when all events belong to other deposits', async () => {
-      const deposit = { id: 'search-deposit-nomatch', owner: '0xAlice' } as Deposit;
-
-      mockL1Provider.getLogs.mockResolvedValue([
-        {
-          address: mockEvmConfig.l1BitcoinDepositorAddress,
-          topics: [EVM_TOKENS_TRANSFERRED_SIG],
-          data: '0x',
-          transactionHash: '0xbob-tx',
-          blockNumber: 101,
-        },
-      ]);
-
-      mockParseLog.mockReturnValue({
-        name: 'TokensTransferredWithPayload',
-        args: {
-          transferSequence: ethers.BigNumber.from(10),
-          l2Receiver: '0xBob',
-        },
-      });
-
-      const result = await (handler as any).searchForTransferSequence(deposit, 100);
-
-      expect(result).toBeNull();
-    });
-
-    it('should handle getLogs errors gracefully', async () => {
-      const deposit = { id: 'search-deposit-6', owner: '0xowner' } as Deposit;
-      mockL1Provider.getLogs.mockRejectedValue(new Error('RPC error'));
-
-      const result = await (handler as any).searchForTransferSequence(deposit, 100);
-
-      expect(result).toBeNull();
-    });
-
-    it('should handle parseLog errors gracefully and continue', async () => {
-      const deposit = { id: 'search-deposit-7', owner: '0xowner' } as Deposit;
-
-      // Two logs from the correct address
-      mockL1Provider.getLogs.mockResolvedValue([
-        {
-          address: mockEvmConfig.l1BitcoinDepositorAddress,
-          topics: [EVM_TOKENS_TRANSFERRED_SIG],
-          data: '0xbaddata',
-          transactionHash: '0xfirst-tx',
-          blockNumber: 101,
-        },
-        {
-          address: mockEvmConfig.l1BitcoinDepositorAddress,
-          topics: [EVM_TOKENS_TRANSFERRED_SIG],
-          data: '0xgooddata',
-          transactionHash: '0xsecond-tx',
-          blockNumber: 102,
-        },
-      ]);
-
-      // First parseLog throws, second succeeds
-      mockParseLog
-        .mockImplementationOnce(() => {
-          throw new Error('Failed to decode');
-        })
-        .mockReturnValueOnce({
-          name: 'TokensTransferredWithPayload',
-          args: {
-            transferSequence: ethers.BigNumber.from(123),
-            l2Receiver: '0xowner',
-          },
-        });
-
-      const result = await (handler as any).searchForTransferSequence(deposit, 100);
-
-      expect(result).toEqual({ sequence: '123', txHash: '0xsecond-tx' });
-    });
-  });
 });
