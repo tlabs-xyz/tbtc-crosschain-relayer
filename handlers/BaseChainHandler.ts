@@ -685,7 +685,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
 
     if (receipt) {
       // Update status upon successful mining
-      updateToFinalizedDeposit(deposit, { hash: receipt.transactionHash }, undefined);
+      await updateToFinalizedDeposit(deposit, { hash: receipt.transactionHash }, undefined);
 
       // Explicit success log (with correlation IDs for SigNoz)
       createLoggerWithCorrelation({
