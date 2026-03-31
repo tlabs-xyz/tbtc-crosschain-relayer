@@ -468,6 +468,10 @@ export const updateToInitializedDeposit = async (
  * @description Updates the status of a deposit to `AWAITING_WORMHOLE_VAA` and
  * stores the Wormhole transfer sequence (so we can fetch the VAA later).
  *
+ * **Solana path only.** Called after the L1 finalize + bridge tx is confirmed
+ * but the finalizeTxHash is recorded separately; use `updateToFinalizedAwaitingVAA`
+ * for EVM/Sui chains where finalization and bridging happen atomically.
+ *
  * - Sets deposit status to AWAITING_WORMHOLE_VAA
  * - Records lastActivityAt
  * - Clears error
@@ -535,6 +539,11 @@ export const updateToAwaitingWormholeVAA = async (
  * @description Atomically transitions a deposit from INITIALIZED → AWAITING_WORMHOLE_VAA
  * in a single DepositStore.update() call. Writes finalizeTxHash, wormholeInfo, and all
  * relevant timestamps together so there is never an intermediate FINALIZED state.
+ *
+ * **EVM/Sui path only.** On these chains the L1 `finalizeDeposit` call emits
+ * `TokensTransferredWithPayload` in the same transaction, so finalization and
+ * the Wormhole sequence are captured atomically. For Solana, where they are
+ * separate steps, use `updateToAwaitingWormholeVAA` instead.
  *
  * @param deposit - The deposit object to update.
  * @param finalizeTxHash - The L1 finalization transaction hash.
