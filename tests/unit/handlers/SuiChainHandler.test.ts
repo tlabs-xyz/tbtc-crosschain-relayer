@@ -1,9 +1,11 @@
+import * as Sentry from '@sentry/node';
 import { ethers } from 'ethers';
 import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
 import {
   type SuiChainConfig,
   SuiChainConfigSchema,
 } from '../../../config/schemas/sui.chain.schema.js';
+import { RECOVERY_DELAY_MS } from '../../../handlers/BaseChainHandler.js';
 import { SuiChainHandler } from '../../../handlers/SuiChainHandler.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
@@ -20,6 +22,7 @@ jest.mock('../../../utils/AuditLog');
 jest.mock('../../../utils/BitcoinTransactionParser');
 jest.mock('../../../utils/SuiMoveEventParser');
 jest.mock('../../../utils/WormholeVAA');
+jest.mock('@sentry/node');
 
 // Mock SUI SDK with more defensive mocking
 jest.mock('@mysten/sui/client', () => {
@@ -223,6 +226,7 @@ describe('SuiChainHandler', () => {
     mockDepositStore.getById = jest.fn().mockResolvedValue(null);
     mockDepositStore.getByStatus = jest.fn().mockResolvedValue([]);
     mockDepositStore.create = jest.fn().mockResolvedValue(undefined);
+    mockDepositStore.update = jest.fn().mockResolvedValue(undefined);
     (mockDepositsUtil as any).updateToAwaitingWormholeVAA = jest.fn().mockResolvedValue(undefined);
     (mockDepositsUtil as any).updateToBridgedDeposit = jest.fn().mockResolvedValue(undefined);
     (mockDepositsUtil as any).createDeposit = jest.fn().mockReturnValue({
@@ -481,7 +485,8 @@ describe('SuiChainHandler', () => {
       // SuiChainHandler.finalizeDeposit calls submitFinalizationTx directly (not super.finalizeDeposit)
       (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(mockReceipt);
 
-      // Mock the l1BitcoinDepositorProvider interface (changed from l1BitcoinDepositor)
+      // Mock the l1BitcoinDepositorProvider with interface, queryFilter, and filters
+      // so that both receipt-based parsing and block-range search are properly exercised
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
           getEventTopic: jest
@@ -494,6 +499,21 @@ describe('SuiChainHandler', () => {
             args: { transferSequence: ethers.BigNumber.from(123) },
           }),
         },
+        queryFilter: jest.fn().mockResolvedValue([]),
+        filters: {
+          DepositFinalized: jest.fn().mockReturnValue({
+            topics: [ethers.utils.id('DepositFinalized(uint256,bytes32,address,uint256,uint256)')],
+          }),
+        },
+      };
+
+      // Mock l1Provider for block-range search receipt fetching
+      (handler as any).l1Provider = {
+        getTransactionReceipt: jest.fn().mockResolvedValue({
+          transactionHash: '0xevent-tx-hash',
+          blockNumber: 100,
+          logs: [],
+        }),
       };
     });
 
@@ -713,7 +733,7 @@ describe('SuiChainHandler', () => {
       // Mock fetchVAAFromAPI to return valid base64 VAA
       (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
 
-      // Mock failed transaction
+      // Mock failed transaction (permanent revert -- status 'failure')
       (handler as any).suiClient.signAndExecuteTransaction.mockResolvedValueOnce({
         digest: 'failed-transaction-digest',
         effects: {
@@ -723,8 +743,9 @@ describe('SuiChainHandler', () => {
 
       await (handler as any).bridgeSuiDeposit(mockDeposit);
 
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Wormhole bridging failed for deposit test-deposit-id'),
+      // Permanent reverts are logged at error level for operator visibility
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('permanently failed for deposit test-deposit-id'),
         expect.any(Object),
       );
       expect(mockDepositsUtil.updateToBridgedDeposit).not.toHaveBeenCalled();
@@ -748,6 +769,171 @@ describe('SuiChainHandler', () => {
         expect.any(Object),
       );
       expect(mockDepositsUtil.updateToBridgedDeposit).not.toHaveBeenCalled();
+    });
+
+    describe('error persistence', () => {
+      const FIXED_NOW = 1700000000000;
+      let dateNowSpy: jest.SpyInstance;
+      let fullMockDeposit: Deposit;
+
+      beforeEach(() => {
+        dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+
+        fullMockDeposit = {
+          id: 'error-persist-deposit-id',
+          chainId: 'SuiTestnet',
+          status: DepositStatus.AWAITING_WORMHOLE_VAA,
+          fundingTxHash: 'mock-funding-tx-hash',
+          outputIndex: 1,
+          hashes: {
+            btc: { btcTxHash: null },
+            eth: { initializeTxHash: null, finalizeTxHash: null },
+            solana: { bridgeTxHash: null },
+            sui: { l2BridgeTxHash: null },
+          },
+          receipt: {
+            depositor: '0x123',
+            blindingFactor: '0x456',
+            walletPublicKeyHash: '0x789',
+            refundPublicKeyHash: '0xabc',
+            refundLocktime: '0',
+            extraData: '0x',
+          },
+          owner: 'test-owner',
+          L1OutputEvent: {
+            fundingTx: {
+              version: '01000000',
+              inputVector: 'mock_input_vector',
+              outputVector: 'mock_output_vector',
+              locktime: '00000000',
+            },
+            reveal: {
+              fundingOutputIndex: 1,
+              blindingFactor: '0x' + '00'.repeat(32),
+              walletPubKeyHash: '0x' + '00'.repeat(20),
+              refundPubKeyHash: '0x' + '00'.repeat(20),
+              refundLocktime: '0',
+              vault: '0x' + '00'.repeat(32),
+            },
+            l2DepositOwner: '0x0506070800000000000000000000000000000000000000000000000000000000',
+            l2Sender: '0x090a0b0c00000000000000000000000000000000000000000000000000000000',
+          },
+          dates: {
+            createdAt: 1699000000000,
+            initializationAt: 1699000100000,
+            finalizationAt: 1699000200000,
+            awaitingWormholeVAAMessageSince: 1699000300000,
+            bridgedAt: null,
+            lastActivityAt: 1699000300000,
+          },
+          wormholeInfo: {
+            txHash: '0xtest-tx-hash',
+            transferSequence: '123',
+            bridgingAttempted: false,
+          },
+          error: null,
+        };
+      });
+
+      afterEach(() => {
+        dateNowSpy.mockRestore();
+      });
+
+      it('should tag deposit with receiveTbtc_reverted on permanent transaction revert', async () => {
+        (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
+
+        // Simulate transaction revert: signAndExecuteTransaction returns failure status,
+        // causing the inner try-catch to throw "Transaction failed: ..."
+        (handler as any).suiClient.signAndExecuteTransaction.mockResolvedValueOnce({
+          digest: 'failed-digest',
+          effects: {
+            status: { status: 'failure', error: 'MoveAbort(0x1, 42)' },
+          },
+        });
+
+        await (handler as any).bridgeSuiDeposit(fullMockDeposit);
+
+        expect(mockDepositStore.update).toHaveBeenCalledTimes(1);
+        const updatedDeposit = mockDepositStore.update.mock.calls[0][0];
+        expect(updatedDeposit.error).toBe('receiveTbtc_reverted');
+        expect(updatedDeposit.dates.lastActivityAt).toBe(FIXED_NOW);
+        expect(updatedDeposit.id).toBe('error-persist-deposit-id');
+        expect(mockDepositsUtil.updateToBridgedDeposit).not.toHaveBeenCalled();
+      });
+
+      it('should report permanent transaction revert to Sentry', async () => {
+        (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
+
+        (handler as any).suiClient.signAndExecuteTransaction.mockResolvedValueOnce({
+          digest: 'failed-digest',
+          effects: {
+            status: { status: 'failure', error: 'MoveAbort(0x1, 42)' },
+          },
+        });
+
+        await (handler as any).bridgeSuiDeposit(fullMockDeposit);
+
+        expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+        const sentryArgs = (Sentry.captureException as jest.Mock).mock.calls[0];
+        expect(sentryArgs[0]).toBeInstanceOf(Error);
+        expect(sentryArgs[1]).toEqual(
+          expect.objectContaining({
+            extra: expect.objectContaining({
+              depositId: 'error-persist-deposit-id',
+              chainName: 'SuiTestnet',
+            }),
+          }),
+        );
+      });
+
+      it('should tag deposit with bridging_exception on transient failure', async () => {
+        (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
+
+        // Simulate transient error: signAndExecuteTransaction rejects with a network error.
+        // This does NOT go through the inner try-catch "Transaction failed:" path.
+        (handler as any).suiClient.signAndExecuteTransaction.mockRejectedValueOnce(
+          new Error('Network timeout'),
+        );
+
+        await (handler as any).bridgeSuiDeposit(fullMockDeposit);
+
+        expect(mockDepositStore.update).toHaveBeenCalledTimes(1);
+        const updatedDeposit = mockDepositStore.update.mock.calls[0][0];
+        expect(updatedDeposit.error).toBe('bridging_exception');
+        expect(updatedDeposit.dates.lastActivityAt).toBe(FIXED_NOW);
+        expect(Sentry.captureException).not.toHaveBeenCalled();
+      });
+
+      it('should preserve all original deposit fields when persisting error', async () => {
+        (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
+
+        (handler as any).suiClient.signAndExecuteTransaction.mockRejectedValueOnce(
+          new Error('RPC unavailable'),
+        );
+
+        await (handler as any).bridgeSuiDeposit(fullMockDeposit);
+
+        expect(mockDepositStore.update).toHaveBeenCalledTimes(1);
+        const updatedDeposit = mockDepositStore.update.mock.calls[0][0];
+
+        // Verify identity and immutable fields are preserved
+        expect(updatedDeposit.id).toBe(fullMockDeposit.id);
+        expect(updatedDeposit.chainId).toBe(fullMockDeposit.chainId);
+        expect(updatedDeposit.status).toBe(fullMockDeposit.status);
+        expect(updatedDeposit.fundingTxHash).toBe(fullMockDeposit.fundingTxHash);
+
+        // Verify dates are preserved except lastActivityAt
+        expect(updatedDeposit.dates.createdAt).toBe(fullMockDeposit.dates.createdAt);
+        expect(updatedDeposit.dates.initializationAt).toBe(fullMockDeposit.dates.initializationAt);
+        expect(updatedDeposit.dates.finalizationAt).toBe(fullMockDeposit.dates.finalizationAt);
+        expect(updatedDeposit.dates.awaitingWormholeVAAMessageSince).toBe(
+          fullMockDeposit.dates.awaitingWormholeVAAMessageSince,
+        );
+
+        // Only lastActivityAt and error should differ
+        expect(updatedDeposit.dates.lastActivityAt).toBe(FIXED_NOW);
+        expect(updatedDeposit.error).toBe('bridging_exception');
+      });
     });
   });
 
@@ -1249,6 +1435,253 @@ describe('SuiChainHandler', () => {
     });
   });
 
+  describe('searchForTransferSequence', () => {
+    let mockDeposit: Deposit;
+    let mockFinalizationReceipt: any;
+    const FINALIZATION_BLOCK = 1000;
+    const MOCK_DEPOSIT_KEY = '12345678901234567890';
+    const MOCK_EVENT_TX_HASH = '0xmatching-event-tx-hash';
+    const MOCK_TRANSFER_SEQUENCE = '42';
+    const TOKENS_TRANSFERRED_TOPIC = ethers.utils.id(
+      'TokensTransferredWithPayload(uint256,bytes32,uint64)',
+    );
+
+    beforeEach(async () => {
+      await (handler as any).initializeL2();
+
+      mockDeposit = {
+        id: MOCK_DEPOSIT_KEY,
+        chainId: 'SuiTestnet',
+        status: DepositStatus.INITIALIZED,
+        fundingTxHash: 'mock-funding-tx-hash',
+        outputIndex: 1,
+        hashes: {
+          btc: { btcTxHash: null },
+          eth: { initializeTxHash: null, finalizeTxHash: null },
+          solana: { bridgeTxHash: null },
+          sui: { l2BridgeTxHash: null },
+        },
+        receipt: {
+          depositor: '0x123',
+          blindingFactor: '0x456',
+          walletPublicKeyHash: '0x789',
+          refundPublicKeyHash: '0xabc',
+          refundLocktime: '0',
+          extraData: '0x',
+        },
+        owner: 'test-owner',
+        L1OutputEvent: {
+          fundingTx: {
+            version: '01000000',
+            inputVector: 'mock_input_vector',
+            outputVector: 'mock_output_vector',
+            locktime: '00000000',
+          },
+          reveal: {
+            fundingOutputIndex: 1,
+            blindingFactor: '0x' + '00'.repeat(32),
+            walletPubKeyHash: '0x' + '00'.repeat(20),
+            refundPubKeyHash: '0x' + '00'.repeat(20),
+            refundLocktime: '0',
+            vault: '0x' + '00'.repeat(32),
+          },
+          l2DepositOwner: '0x0506070800000000000000000000000000000000000000000000000000000000',
+          l2Sender: '0x090a0b0c00000000000000000000000000000000000000000000000000000000',
+        },
+        dates: {
+          createdAt: 1699000000000,
+          initializationAt: 1699000100000,
+          finalizationAt: null,
+          awaitingWormholeVAAMessageSince: null,
+          bridgedAt: null,
+          lastActivityAt: 1699000100000,
+        },
+        wormholeInfo: {
+          txHash: null,
+          transferSequence: null,
+          bridgingAttempted: false,
+        },
+        error: null,
+      };
+
+      // Receipt from finalization transaction (no TokensTransferredWithPayload)
+      mockFinalizationReceipt = {
+        transactionHash: '0xfinalize-hash',
+        blockNumber: FINALIZATION_BLOCK,
+        logs: [],
+      };
+
+      // Mock submitFinalizationTx to return receipt without TokensTransferredWithPayload
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(mockFinalizationReceipt);
+
+      // Mock l1BitcoinDepositorProvider with queryFilter, filters, and interface
+      (handler as any).l1BitcoinDepositorProvider = {
+        queryFilter: jest.fn().mockResolvedValue([]),
+        filters: {
+          DepositFinalized: jest.fn().mockReturnValue({
+            topics: [ethers.utils.id('DepositFinalized(uint256,bytes32,address,uint256,uint256)')],
+          }),
+        },
+        interface: {
+          getEventTopic: jest.fn().mockReturnValue(TOKENS_TRANSFERRED_TOPIC),
+          parseLog: jest.fn().mockReturnValue({
+            name: 'TokensTransferredWithPayload',
+            args: {
+              transferSequence: ethers.BigNumber.from(MOCK_TRANSFER_SEQUENCE),
+            },
+          }),
+        },
+      };
+
+      // Mock l1Provider for fetching event transaction receipts
+      (handler as any).l1Provider = {
+        getTransactionReceipt: jest.fn().mockResolvedValue({
+          transactionHash: MOCK_EVENT_TX_HASH,
+          blockNumber: FINALIZATION_BLOCK + 2,
+          logs: [
+            {
+              address: mockSuiConfig.l1BitcoinDepositorAddress,
+              topics: [TOKENS_TRANSFERRED_TOPIC],
+              data: '0x',
+            },
+          ],
+        }),
+      };
+    });
+
+    it('should find transferSequence via 5-block immediate window search', async () => {
+      // Mock queryFilter to return a matching DepositFinalized event on first call (5-block window)
+      const mockEvent = {
+        transactionHash: MOCK_EVENT_TX_HASH,
+        args: { depositKey: ethers.BigNumber.from(MOCK_DEPOSIT_KEY) },
+      };
+      (handler as any).l1BitcoinDepositorProvider.queryFilter.mockResolvedValueOnce([mockEvent]);
+
+      // Call finalizeDeposit which should trigger searchForTransferSequence
+      await handler.finalizeDeposit(mockDeposit);
+
+      // Verify block-range search found the sequence and updated deposit
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
+        mockDeposit,
+        MOCK_EVENT_TX_HASH,
+        MOCK_TRANSFER_SEQUENCE,
+      );
+
+      // Verify handleMissingTransferSequence was NOT called
+      expect(mockDepositsUtil.updateToFinalizedDeposit).not.toHaveBeenCalledWith(
+        mockDeposit,
+        expect.objectContaining({ hash: expect.any(String) }),
+        'transferSequence_not_found',
+      );
+    });
+
+    it('should widen to 30-block window when 5-block search misses', async () => {
+      // First call (5-block window) returns empty
+      // Second call (30-block window) returns matching event
+      const mockEvent = {
+        transactionHash: MOCK_EVENT_TX_HASH,
+        args: { depositKey: ethers.BigNumber.from(MOCK_DEPOSIT_KEY) },
+      };
+      (handler as any).l1BitcoinDepositorProvider.queryFilter
+        .mockResolvedValueOnce([]) // 5-block: miss
+        .mockResolvedValueOnce([mockEvent]); // 30-block: hit
+
+      await handler.finalizeDeposit(mockDeposit);
+
+      // Verify queryFilter was called twice (5-block then 30-block)
+      expect((handler as any).l1BitcoinDepositorProvider.queryFilter).toHaveBeenCalledTimes(2);
+
+      // Verify second call uses wider block range
+      const secondCall = (handler as any).l1BitcoinDepositorProvider.queryFilter.mock.calls[1];
+      expect(secondCall[1]).toBe(FINALIZATION_BLOCK - 30); // fromBlock
+      expect(secondCall[2]).toBe(FINALIZATION_BLOCK + 30); // toBlock
+
+      // Verify deposit was updated with found sequence
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
+        mockDeposit,
+        MOCK_EVENT_TX_HASH,
+        MOCK_TRANSFER_SEQUENCE,
+      );
+    });
+
+    it('should fall back to handleMissingTransferSequence when block-range search fails', async () => {
+      // Both windows return empty
+      (handler as any).l1BitcoinDepositorProvider.queryFilter
+        .mockResolvedValueOnce([]) // 5-block: miss
+        .mockResolvedValueOnce([]); // 30-block: miss
+
+      await handler.finalizeDeposit(mockDeposit);
+
+      // Verify handleMissingTransferSequence was called (stores with error + Sentry)
+      expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
+        mockDeposit,
+        { hash: mockFinalizationReceipt.transactionHash },
+        'transferSequence_not_found',
+      );
+      expect(Sentry.captureException).toHaveBeenCalled();
+
+      // Verify updateToFinalizedAwaitingVAA was NOT called
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).not.toHaveBeenCalled();
+    });
+
+    it('should use depositKey for deterministic correlation (not owner-based matching)', async () => {
+      // Return an event so the code path exercises filter creation
+      const mockEvent = {
+        transactionHash: MOCK_EVENT_TX_HASH,
+        args: { depositKey: ethers.BigNumber.from(MOCK_DEPOSIT_KEY) },
+      };
+      (handler as any).l1BitcoinDepositorProvider.queryFilter.mockResolvedValueOnce([mockEvent]);
+
+      await handler.finalizeDeposit(mockDeposit);
+
+      // Verify DepositFinalized filter was created with the deposit's id (depositKey)
+      expect(
+        (handler as any).l1BitcoinDepositorProvider.filters.DepositFinalized,
+      ).toHaveBeenCalledWith(expect.objectContaining(ethers.BigNumber.from(MOCK_DEPOSIT_KEY)));
+    });
+
+    it('should handle L1 provider errors gracefully during block-range search', async () => {
+      // queryFilter throws an error
+      (handler as any).l1BitcoinDepositorProvider.queryFilter.mockRejectedValueOnce(
+        new Error('RPC timeout'),
+      );
+
+      await handler.finalizeDeposit(mockDeposit);
+
+      // Verify fallback to handleMissingTransferSequence
+      expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
+        mockDeposit,
+        { hash: mockFinalizationReceipt.transactionHash },
+        'transferSequence_not_found',
+      );
+
+      // Verify no unhandled exception (test completes without throwing)
+    });
+
+    it('should correctly parse transferSequence from DepositFinalized transaction receipt', async () => {
+      // Set up a matching event
+      const mockEvent = {
+        transactionHash: MOCK_EVENT_TX_HASH,
+        args: { depositKey: ethers.BigNumber.from(MOCK_DEPOSIT_KEY) },
+      };
+      (handler as any).l1BitcoinDepositorProvider.queryFilter.mockResolvedValueOnce([mockEvent]);
+
+      await handler.finalizeDeposit(mockDeposit);
+
+      // Verify l1Provider.getTransactionReceipt was called with the event's tx hash
+      expect((handler as any).l1Provider.getTransactionReceipt).toHaveBeenCalledWith(
+        MOCK_EVENT_TX_HASH,
+      );
+
+      // Verify the sequence was extracted and used to update the deposit
+      expect(mockDepositsUtil.updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
+        mockDeposit,
+        MOCK_EVENT_TX_HASH,
+        MOCK_TRANSFER_SEQUENCE,
+      );
+    });
+  });
+
   describe('Error Handling', () => {
     it('should handle SUI client initialization errors', async () => {
       const { SuiClient } = require('@mysten/sui/client');
@@ -1317,6 +1750,220 @@ describe('SuiChainHandler', () => {
       );
 
       logErrorContextSpy.mockRestore();
+    });
+  });
+
+  describe('recoverStuckFinalizedDeposits', () => {
+    const FIXED_NOW = 1700000000000;
+    let dateNowSpy: jest.SpyInstance;
+
+    const makeDeposit = (overrides: Partial<Deposit> = {}): Deposit => ({
+      id: 'recovery-sui-deposit-id',
+      chainId: 'SuiTestnet',
+      status: DepositStatus.AWAITING_WORMHOLE_VAA,
+      fundingTxHash: 'mock-funding-tx-hash',
+      outputIndex: 1,
+      hashes: {
+        btc: { btcTxHash: null },
+        eth: { initializeTxHash: null, finalizeTxHash: null },
+        solana: { bridgeTxHash: null },
+        sui: { l2BridgeTxHash: null },
+      },
+      receipt: {
+        depositor: '0x123',
+        blindingFactor: '0x456',
+        walletPublicKeyHash: '0x789',
+        refundPublicKeyHash: '0xabc',
+        refundLocktime: '0',
+        extraData: '0x',
+      },
+      owner: 'test-owner',
+      L1OutputEvent: {
+        fundingTx: {
+          version: '01000000',
+          inputVector: 'mock_input_vector',
+          outputVector: 'mock_output_vector',
+          locktime: '00000000',
+        },
+        reveal: {
+          fundingOutputIndex: 1,
+          blindingFactor: '0x' + '00'.repeat(32),
+          walletPubKeyHash: '0x' + '00'.repeat(20),
+          refundPubKeyHash: '0x' + '00'.repeat(20),
+          refundLocktime: '0',
+          vault: '0x' + '00'.repeat(32),
+        },
+        l2DepositOwner: '0x0506070800000000000000000000000000000000000000000000000000000000',
+        l2Sender: '0x090a0b0c00000000000000000000000000000000000000000000000000000000',
+      },
+      dates: {
+        createdAt: 1699000000000,
+        initializationAt: 1699000100000,
+        finalizationAt: 1699000200000,
+        awaitingWormholeVAAMessageSince: FIXED_NOW - RECOVERY_DELAY_MS - 60000,
+        bridgedAt: null,
+        lastActivityAt: 1699000300000,
+      },
+      wormholeInfo: {
+        txHash: '0xtest-tx-hash',
+        transferSequence: '123',
+        bridgingAttempted: false,
+      },
+      error: null,
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+    });
+
+    afterEach(() => {
+      dateNowSpy.mockRestore();
+    });
+
+    it('should re-attempt bridging for stuck deposits older than threshold', async () => {
+      const stuckDeposit = makeDeposit();
+      mockDepositStore.getByStatus.mockResolvedValueOnce([stuckDeposit]).mockResolvedValueOnce([]);
+
+      const bridgeSpy = jest.spyOn(handler, 'bridgeSuiDeposit' as any).mockResolvedValue(undefined);
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(mockDepositStore.getByStatus).toHaveBeenCalledWith(
+        DepositStatus.AWAITING_WORMHOLE_VAA,
+        'SuiTestnet',
+      );
+      expect(bridgeSpy).toHaveBeenCalledTimes(1);
+      expect(bridgeSpy).toHaveBeenCalledWith(stuckDeposit);
+      bridgeSpy.mockRestore();
+    });
+
+    it('should skip deposits tagged with receiveTbtc_reverted', async () => {
+      const permanentDeposit = makeDeposit({ error: 'receiveTbtc_reverted' });
+      mockDepositStore.getByStatus
+        .mockResolvedValueOnce([permanentDeposit])
+        .mockResolvedValueOnce([]);
+
+      const bridgeSpy = jest.spyOn(handler, 'bridgeSuiDeposit' as any).mockResolvedValue(undefined);
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(bridgeSpy).not.toHaveBeenCalled();
+      bridgeSpy.mockRestore();
+    });
+
+    it('should skip deposits not yet older than RECOVERY_DELAY_MS threshold', async () => {
+      const recentDeposit = makeDeposit({
+        dates: {
+          createdAt: 1699000000000,
+          initializationAt: 1699000100000,
+          finalizationAt: 1699000200000,
+          awaitingWormholeVAAMessageSince: FIXED_NOW - 60000,
+          bridgedAt: null,
+          lastActivityAt: 1699000300000,
+        },
+      });
+      mockDepositStore.getByStatus.mockResolvedValueOnce([recentDeposit]).mockResolvedValueOnce([]);
+
+      const bridgeSpy = jest.spyOn(handler, 'bridgeSuiDeposit' as any).mockResolvedValue(undefined);
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(bridgeSpy).not.toHaveBeenCalled();
+      bridgeSpy.mockRestore();
+    });
+
+    it('should fall back to finalizationAt when awaitingWormholeVAAMessageSince is null', async () => {
+      const fallbackDeposit = makeDeposit({
+        dates: {
+          createdAt: 1699000000000,
+          initializationAt: 1699000100000,
+          finalizationAt: FIXED_NOW - RECOVERY_DELAY_MS - 60000,
+          awaitingWormholeVAAMessageSince: null,
+          bridgedAt: null,
+          lastActivityAt: 1699000300000,
+        },
+      });
+      mockDepositStore.getByStatus
+        .mockResolvedValueOnce([fallbackDeposit])
+        .mockResolvedValueOnce([]);
+
+      const bridgeSpy = jest.spyOn(handler, 'bridgeSuiDeposit' as any).mockResolvedValue(undefined);
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(bridgeSpy).toHaveBeenCalledTimes(1);
+      bridgeSpy.mockRestore();
+    });
+
+    it('should do nothing when no AWAITING_WORMHOLE_VAA deposits exist', async () => {
+      mockDepositStore.getByStatus.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      const bridgeSpy = jest.spyOn(handler, 'bridgeSuiDeposit' as any).mockResolvedValue(undefined);
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(bridgeSpy).not.toHaveBeenCalled();
+      bridgeSpy.mockRestore();
+    });
+
+    it('should handle errors from bridgeSuiDeposit gracefully without throwing', async () => {
+      const deposit1 = makeDeposit({ id: 'deposit-1' });
+      const deposit2 = makeDeposit({ id: 'deposit-2' });
+      mockDepositStore.getByStatus
+        .mockResolvedValueOnce([deposit1, deposit2])
+        .mockResolvedValueOnce([]);
+
+      const bridgeSpy = jest
+        .spyOn(handler, 'bridgeSuiDeposit' as any)
+        .mockRejectedValueOnce(new Error('Bridge failed'))
+        .mockResolvedValueOnce(undefined);
+
+      await expect((handler as any).recoverStuckFinalizedDeposits()).resolves.toBeUndefined();
+
+      expect(bridgeSpy).toHaveBeenCalledTimes(2);
+      bridgeSpy.mockRestore();
+    });
+
+    it('should alert on FINALIZED deposits with transferSequence_not_found', async () => {
+      const finalizedDeposit = makeDeposit({
+        id: 'finalized-stuck-deposit',
+        status: DepositStatus.FINALIZED,
+        error: 'transferSequence_not_found',
+        dates: {
+          createdAt: 1699000000000,
+          initializationAt: 1699000100000,
+          finalizationAt: FIXED_NOW - RECOVERY_DELAY_MS - 60000,
+          awaitingWormholeVAAMessageSince: null,
+          bridgedAt: null,
+          lastActivityAt: 1699000300000,
+        },
+      });
+
+      mockDepositStore.getByStatus
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([finalizedDeposit]);
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(Sentry.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('finalized-stuck-deposit'),
+        }),
+        expect.objectContaining({
+          extra: expect.objectContaining({
+            depositId: 'finalized-stuck-deposit',
+            chainName: 'SuiTestnet',
+          }),
+        }),
+      );
+
+      expect(mockDepositStore.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'finalized-stuck-deposit',
+          error: 'transferSequence_not_found_alerted',
+        }),
+      );
     });
   });
 });

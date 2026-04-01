@@ -7,6 +7,7 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import * as Sentry from '@sentry/node';
 import type { Chain, ChainContext } from '@wormhole-foundation/sdk-connect';
+import { BigNumber } from 'ethers';
 import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { SuiChainConfig } from '../config/schemas/sui.chain.schema.js';
 import type { Deposit } from '../types/Deposit.type.js';
@@ -21,6 +22,12 @@ import logger, { logErrorContext } from '../utils/Logger.js';
 import { parseDepositInitializedEvent } from '../utils/SuiMoveEventParser.js';
 import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
 import { BaseChainHandler, RECOVERY_DELAY_MS } from './BaseChainHandler.js';
+
+/** Number of blocks around the finalization block to search for DepositFinalized events (narrow window). */
+export const IMMEDIATE_SEARCH_BLOCKS = 5;
+
+/** Number of blocks around the finalization block to search if the narrow window misses (wide window). */
+export const WIDE_SEARCH_BLOCKS = 30;
 
 /**
  * Chain handler for SUI blockchain integration.
@@ -250,9 +257,13 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
 
   /**
    * Override finalizeDeposit to:
-   *  1) finalize on L1 (super call)
-   *  2) parse Wormhole transferSequence from logs
-   *  3) update deposit to AWAITING_WORMHOLE_VAA
+   *  1) submit finalization transaction on L1
+   *  2) parse Wormhole transferSequence from the finalization receipt logs
+   *  3) if receipt parsing misses, attempt block-range search on L1 for the
+   *     DepositFinalized event matching this deposit's depositKey (progressive
+   *     windows: IMMEDIATE_SEARCH_BLOCKS then WIDE_SEARCH_BLOCKS)
+   *  4) if block-range search also misses, fall back to handleMissingTransferSequence
+   *     (stores deposit as FINALIZED with error tag, fires Sentry alert)
    */
   override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     if (!this.isDepositFinalizable(deposit)) return;
@@ -273,11 +284,91 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
           `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
         );
       } else {
-        await this.handleMissingTransferSequence(deposit, receipt.transactionHash);
+        // Receipt parsing failed -- attempt block-range search on L1 before giving up
+        const searchResult = await this.searchForTransferSequence(deposit, receipt.blockNumber);
+
+        if (searchResult) {
+          await updateToFinalizedAwaitingVAA(
+            deposit,
+            searchResult.eventTxHash,
+            searchResult.transferSequence,
+          );
+          logger.info(
+            `Deposit ${deposit.id} recovered via block-range search — sequence ${searchResult.transferSequence} from tx ${searchResult.eventTxHash}`,
+          );
+        } else {
+          await this.handleMissingTransferSequence(deposit, receipt.transactionHash);
+        }
       }
     }
 
     return receipt;
+  }
+
+  /**
+   * Searches L1 for DepositFinalized events matching the deposit's depositKey within
+   * progressive block windows around the finalization block. When a matching event is found,
+   * fetches the full transaction receipt and extracts the Wormhole transferSequence from
+   * the TokensTransferredWithPayload event emitted in the same transaction.
+   *
+   * Uses two search passes:
+   *  1. Narrow window: +/- IMMEDIATE_SEARCH_BLOCKS (default 5) around finalizationBlockNumber
+   *  2. Wide window: +/- WIDE_SEARCH_BLOCKS (default 30) if the narrow window misses
+   *
+   * @param deposit - The deposit whose transferSequence is missing.
+   * @param finalizationBlockNumber - The block number of the finalization receipt.
+   * @returns The transferSequence and event transaction hash, or null if not found.
+   */
+  private async searchForTransferSequence(
+    deposit: Deposit,
+    finalizationBlockNumber: number,
+  ): Promise<{ transferSequence: string; eventTxHash: string } | null> {
+    try {
+      const depositKey = BigNumber.from(deposit.id);
+      const searchWindows = [IMMEDIATE_SEARCH_BLOCKS, WIDE_SEARCH_BLOCKS];
+
+      for (const windowSize of searchWindows) {
+        const fromBlock = Math.max(0, finalizationBlockNumber - windowSize);
+        const toBlock = finalizationBlockNumber + windowSize;
+
+        logger.debug(
+          `Searching for DepositFinalized in [${fromBlock}, ${toBlock}] for deposit ${deposit.id}`,
+        );
+
+        const filter = this.l1BitcoinDepositorProvider.filters.DepositFinalized(depositKey);
+        const events = await this.l1BitcoinDepositorProvider.queryFilter(
+          filter,
+          fromBlock,
+          toBlock,
+        );
+
+        for (const event of events) {
+          const eventReceipt = await this.l1Provider.getTransactionReceipt(event.transactionHash);
+          const { transferSequence, eventTxHash } = this.parseTransferSequenceFromReceipt(
+            eventReceipt,
+            deposit.id,
+          );
+
+          if (transferSequence && eventTxHash) {
+            logger.info(
+              `Block-range search found transferSequence ${transferSequence} for deposit ${deposit.id} in tx ${eventTxHash}`,
+            );
+            return { transferSequence, eventTxHash };
+          }
+        }
+      }
+
+      logger.warn(
+        `Block-range search exhausted for deposit ${deposit.id} — no transferSequence found`,
+      );
+      return null;
+    } catch (error: any) {
+      logErrorContext(
+        `Error during block-range transferSequence search for deposit ${deposit.id}`,
+        error,
+      );
+      return null;
+    }
   }
 
   /**
@@ -530,21 +621,56 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       }
     } catch (error: any) {
       const reason = error.message || 'Unknown bridging error';
-      logger.warn(`Wormhole bridging failed for deposit ${deposit.id}: ${reason}`, {
-        depositId: deposit.id,
-        transferSequence: deposit.wormholeInfo?.transferSequence,
-        errorType: error.constructor.name,
-        errorMessage: error.message,
-        stack: error.stack,
+
+      // Classify error: the inner try-catch at line ~493 throws
+      // "Transaction failed: <msg>" for on-chain execution failures (permanent
+      // reverts). All other errors reaching this catch block are transient
+      // (network timeouts, RPC failures, VAA fetch issues) and eligible for retry.
+      const isPermanentRevert = error.message?.includes('Transaction failed:');
+
+      if (isPermanentRevert) {
+        logger.error(`Wormhole bridging permanently failed for deposit ${deposit.id}: ${reason}`, {
+          depositId: deposit.id,
+          transferSequence: deposit.wormholeInfo?.transferSequence,
+          errorType: error.constructor.name,
+          errorMessage: error.message,
+        });
+        Sentry.captureException(
+          new Error(`receiveTbtc transaction reverted for deposit ${deposit.id}`),
+          {
+            extra: {
+              depositId: deposit.id,
+              chainName: this.config.chainName,
+              transferSequence: deposit.wormholeInfo?.transferSequence,
+              reason,
+            },
+          },
+        );
+      } else {
+        logger.warn(`Wormhole bridging failed for deposit ${deposit.id}: ${reason}`, {
+          depositId: deposit.id,
+          transferSequence: deposit.wormholeInfo?.transferSequence,
+          errorType: error.constructor.name,
+          errorMessage: error.message,
+          stack: error.stack,
+        });
+      }
+
+      await DepositStore.update({
+        ...deposit,
+        error: isPermanentRevert ? 'receiveTbtc_reverted' : 'bridging_exception',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
       });
     }
   }
 
   /**
    * Process all deposits that are in the AWAITING_WORMHOLE_VAA status.
-   * This function will attempt to bridge the deposits using the Wormhole protocol.
-   * Also surfaces any FINALIZED deposits with a transferSequence_not_found error
-   * via Sentry so operators are alerted to investigate.
+   * Attempts to bridge each deposit using the Wormhole protocol via fetchVAAFromAPI.
+   *
+   * FINALIZED deposits with transferSequence_not_found are handled exclusively by
+   * recoverStuckFinalizedDeposits() (called on the hourly recovery cron), which
+   * provides one-time Sentry alerting with idempotent error tag updates.
    */
   public async processWormholeBridging(): Promise<void> {
     if (this.config.chainType !== CHAIN_TYPE.SUI) return; // Only for Sui chains
@@ -562,12 +688,44 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
       }
       await this.bridgeSuiDeposit(deposit);
     }
+  }
+
+  /**
+   * Re-attempts bridging for deposits stuck in AWAITING_WORMHOLE_VAA status.
+   * Filters to deposits waiting longer than RECOVERY_DELAY_MS and excludes deposits
+   * tagged with a permanent error (receiveTbtc_reverted). Transient errors
+   * (bridging_exception) are retried after RECOVERY_DELAY_MS backoff via
+   * lastActivityAt. FINALIZED deposits with transferSequence_not_found cannot be
+   * auto-recovered — they are surfaced via a one-time Sentry alert.
+   */
+  public async recoverStuckFinalizedDeposits(): Promise<void> {
+    const awaitingDeposits = await DepositStore.getByStatus(
+      DepositStatus.AWAITING_WORMHOLE_VAA,
+      this.config.chainName,
+    );
+
+    const now = Date.now();
+    const stuckDeposits = awaitingDeposits.filter((deposit) => {
+      if (deposit.error === 'receiveTbtc_reverted') return false;
+      const awaitingSince =
+        deposit.dates.awaitingWormholeVAAMessageSince ?? deposit.dates.finalizationAt;
+      if (!awaitingSince) return false;
+      return now - awaitingSince > RECOVERY_DELAY_MS;
+    });
+
+    for (const deposit of stuckDeposits) {
+      try {
+        logger.info(`Re-attempting bridging for AWAITING deposit ${deposit.id}`);
+        await this.bridgeSuiDeposit(deposit);
+      } catch (error) {
+        logErrorContext(`Error re-bridging deposit ${deposit.id}`, error);
+      }
+    }
 
     // Alert on FINALIZED deposits whose transferSequence was never parsed.
     // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
     // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
-    // to prevent N × alerts-per-tick from exhausting Sentry quota.
-    const now = Date.now();
+    // to prevent repeated alerts from exhausting Sentry quota.
     const finalizedDeposits = await DepositStore.getByStatus(
       DepositStatus.FINALIZED,
       this.config.chainName,
