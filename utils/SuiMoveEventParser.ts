@@ -111,7 +111,12 @@ function parseSuiReveal(bytes: number[]): Reveal {
   }
 
   try {
+    // Cast via Uint8Array to avoid Node 22+ Buffer<ArrayBuffer> type
+    // incompatibilities (TS2769, TS2339) with Array.from / .buffer / .byteOffset.
     const buffer = Buffer.from(bytes);
+    const buf = buffer as unknown as Uint8Array;
+    const sliceToArray = (start: number, length: number): number[] =>
+      Array.from(buf.slice(start, start + length));
     let offset = 0;
 
     logger.debug('Parsing SUI reveal data', {
@@ -124,7 +129,7 @@ function parseSuiReveal(bytes: number[]): Reveal {
     // NOTE: SUI uses BIG-ENDIAN but L1 expects LITTLE-ENDIAN, so we keep as number
     const fundingOutputIndex = buffer.readUInt32BE(offset);
     logger.debug('Read fundingOutputIndex', {
-      bytes: Array.from(buffer.subarray(offset, offset + 4)),
+      bytes: sliceToArray(offset, 4),
       asBE: fundingOutputIndex,
       asLE: buffer.readUInt32LE(offset),
     });
@@ -132,19 +137,19 @@ function parseSuiReveal(bytes: number[]): Reveal {
 
     // Read blinding factor (8 bytes)
     const blindingFactor = bytesToHex(
-      Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.BLINDING_FACTOR)),
+      sliceToArray(offset, SUI_REVEAL_DATA_LENGTHS.BLINDING_FACTOR),
     );
     offset += SUI_REVEAL_DATA_LENGTHS.BLINDING_FACTOR;
 
     // Read wallet public key hash (20 bytes)
     const walletPubKeyHash = bytesToHex(
-      Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.WALLET_PUBKEY_HASH)),
+      sliceToArray(offset, SUI_REVEAL_DATA_LENGTHS.WALLET_PUBKEY_HASH),
     );
     offset += SUI_REVEAL_DATA_LENGTHS.WALLET_PUBKEY_HASH;
 
     // Read refund public key hash (20 bytes)
     const refundPubKeyHash = bytesToHex(
-      Array.from(buffer.subarray(offset, offset + SUI_REVEAL_DATA_LENGTHS.REFUND_PUBKEY_HASH)),
+      sliceToArray(offset, SUI_REVEAL_DATA_LENGTHS.REFUND_PUBKEY_HASH),
     );
     offset += SUI_REVEAL_DATA_LENGTHS.REFUND_PUBKEY_HASH;
 
