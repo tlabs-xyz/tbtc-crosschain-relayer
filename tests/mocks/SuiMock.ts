@@ -35,6 +35,7 @@ export class MockSuiClient {
         transactionModule: 'bitcoin_depositor',
         bcs: 'base64data',
         bcsEncoding: 'base64' as const,
+        timestampMs: Date.now().toString(),
         checkpoint: '12340',
       } as SuiEvent & { checkpoint: string },
       {
@@ -54,6 +55,7 @@ export class MockSuiClient {
         transactionModule: 'bitcoin_depositor',
         bcs: 'base64data',
         bcsEncoding: 'base64' as const,
+        timestampMs: Date.now().toString(),
         checkpoint: '12341',
       } as SuiEvent & { checkpoint: string },
     ];
@@ -172,6 +174,7 @@ export class MockSuiClient {
       transactionModule: module,
       bcs: 'base64data',
       bcsEncoding: 'base64' as const,
+      timestampMs: Date.now().toString(),
       checkpoint: this.checkpointSequence.toString(),
     } as SuiEvent & { checkpoint: string };
 
@@ -278,6 +281,7 @@ export function createMockSuiDepositEvent(
     depositor: string;
     txDigest: string;
     checkpoint: string;
+    timestampMs: string;
   }>,
 ): SuiEvent {
   const defaults = {
@@ -287,6 +291,7 @@ export function createMockSuiDepositEvent(
     depositor: '0xmockdepositor1234567890123456789012345678901234567890123456789012',
     txDigest: `mock-tx-digest-${Date.now()}`,
     checkpoint: Date.now().toString(),
+    timestampMs: Date.now().toString(),
   };
 
   const eventData = { ...defaults, ...overrides };
@@ -308,6 +313,7 @@ export function createMockSuiDepositEvent(
     transactionModule: 'bitcoin_depositor',
     bcs: 'base64data',
     bcsEncoding: 'base64' as const,
+    timestampMs: eventData.timestampMs,
     checkpoint: eventData.checkpoint,
   } as SuiEvent & { checkpoint: string };
 }

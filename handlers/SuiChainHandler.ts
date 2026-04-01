@@ -208,12 +208,19 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         },
       };
 
+      // Sui SDK queryEvents does not support time-range filtering, but each
+      // event carries a timestampMs field from the RPC. Since we query in
+      // descending order (newest first), we can stop paginating once events
+      // fall outside the requested window.
+      const cutoffMs = Date.now() - options.pastTimeInMinutes * 60 * 1000;
+
       logger.debug(`checkForPastDeposits filter for ${this.config.chainName}:`, {
         package: this.config.l2PackageId,
         module: 'BitcoinDepositor',
+        pastTimeInMinutes: options.pastTimeInMinutes,
+        cutoffMs,
       });
 
-      // Query events in batches
       let cursor = null;
       let hasNextPage = true;
       let totalEvents = 0;
@@ -229,22 +236,25 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
         logger.debug(
           `checkForPastDeposits batch for ${this.config.chainName}: ${response.data.length} events`,
         );
-        totalEvents += response.data.length;
 
         for (const eventData of response.data) {
-          await this.handleSuiDepositEvent(eventData, true); // true = isPastEvent
+          const eventTimestamp = Number(eventData.timestampMs);
+          if (eventTimestamp < cutoffMs) {
+            hasNextPage = false;
+            break;
+          }
+          await this.handleSuiDepositEvent(eventData, true);
+          totalEvents++;
         }
 
-        hasNextPage = response.hasNextPage;
-        cursor = response.nextCursor;
+        if (hasNextPage) {
+          hasNextPage = response.hasNextPage;
+          cursor = response.nextCursor;
+        }
       }
 
       logger.debug(
-        `checkForPastDeposits completed for ${this.config.chainName}: ${totalEvents} total events processed`,
-      );
-
-      logger.debug(
-        `Checked past deposits for ${this.config.chainName}: ${options.pastTimeInMinutes} minutes`,
+        `checkForPastDeposits completed for ${this.config.chainName}: ${totalEvents} events within last ${options.pastTimeInMinutes} minutes`,
       );
     } catch (error: any) {
       logErrorContext(`Failed to check past deposits for ${this.config.chainName}`, error);

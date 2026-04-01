@@ -415,6 +415,53 @@ describe('SuiChainHandler', () => {
       });
     });
 
+    it('should stop paginating when events fall outside the time window', async () => {
+      const FIXED_NOW = 1700000000000;
+      const dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+
+      const recentTimestamp = (FIXED_NOW - 10 * 60 * 1000).toString(); // 10 min ago
+      const oldTimestamp = (FIXED_NOW - 120 * 60 * 1000).toString(); // 2 hours ago
+
+      const recentEvent = {
+        type: 'pkg::bitcoin_depositor::DepositInitialized',
+        parsedJson: { deposit_key: 'recent' },
+        id: { txDigest: 'tx-recent', eventSeq: '0' },
+        packageId: 'pkg',
+        sender: '0xsender',
+        transactionModule: 'bitcoin_depositor',
+        bcs: '',
+        bcsEncoding: 'base64' as const,
+        timestampMs: recentTimestamp,
+      };
+      const oldEvent = {
+        ...recentEvent,
+        parsedJson: { deposit_key: 'old' },
+        id: { txDigest: 'tx-old', eventSeq: '0' },
+        timestampMs: oldTimestamp,
+      };
+
+      const mockClient = (handler as any).suiClient;
+      mockClient.queryEvents.mockResolvedValueOnce({
+        data: [recentEvent, oldEvent],
+        hasNextPage: true,
+        nextCursor: '2',
+      });
+
+      const handleSpy = jest
+        .spyOn(handler as any, 'handleSuiDepositEvent')
+        .mockResolvedValue(undefined);
+
+      await handler.checkForPastDeposits({ pastTimeInMinutes: 60, latestBlock: 12345 });
+
+      // Should only process the recent event, not the old one
+      expect(handleSpy).toHaveBeenCalledTimes(1);
+      // Should NOT request the second page despite hasNextPage: true
+      expect(mockClient.queryEvents).toHaveBeenCalledTimes(1);
+
+      handleSpy.mockRestore();
+      dateNowSpy.mockRestore();
+    });
+
     it('should skip when using endpoint', async () => {
       const endpointConfig = { ...mockSuiConfig, useEndpoint: true };
       const endpointHandler = new SuiChainHandler(endpointConfig);
