@@ -163,7 +163,29 @@ const main = async () => {
         throw new Error(`Endpoint mode initialization failed in test mode: ${error.message}`);
       }
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // |                              SERVER START                             |
+  // -------------------------------------------------------------------------
+  // Start the HTTP server before background services so the /status health
+  // check endpoint is reachable while chain handlers and startup tasks
+  // initialize (which can take 30+ seconds across 10 chains).
+  if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
+    server = app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
+      logger.info(`Server listening on port ${appConfig.APP_PORT}`);
+    });
+    setupGracefulShutdown();
   } else {
+    logger.info(
+      'Server startup tasks are skipped in the test environment. Server has already started successfully.',
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // |                        BACKGROUND SERVICES                          |
+  // -------------------------------------------------------------------------
+  if (!appConfig.API_ONLY_MODE && appConfig.NODE_ENV !== 'test') {
     try {
       await initializeBackgroundServices();
     } catch (error: any) {
@@ -174,20 +196,6 @@ const main = async () => {
         throw new Error(`Initialization failed in test mode: ${error.message}`);
       }
     }
-  }
-
-  // -------------------------------------------------------------------------
-  // |                              SERVER START                             |
-  // -------------------------------------------------------------------------
-  if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
-    server = app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
-      logger.info(`Server listening on port ${appConfig.APP_PORT}`);
-    });
-    setupGracefulShutdown();
-  } else {
-    logger.info(
-      'Server startup tasks are skipped in the test environment. Server has already started successfully.',
-    );
   }
 
   logger.info('Application initialization sequence complete.');
