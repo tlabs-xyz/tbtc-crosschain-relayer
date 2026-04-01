@@ -303,7 +303,23 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
     );
     if (bridgingDeposits.length === 0) return;
 
-    for (const deposit of bridgingDeposits) {
+    const now = Date.now();
+    const eligibleDeposits = bridgingDeposits.filter((deposit) => {
+      if (deposit.error === 'receiveTbtc_reverted') {
+        logger.debug(`Skipping deposit ${deposit.id}: permanent error (receiveTbtc_reverted)`);
+        return false;
+      }
+      if (
+        deposit.error === 'bridging_exception' &&
+        now - (deposit.dates?.lastActivityAt ?? 0) < RECOVERY_DELAY_MS
+      ) {
+        logger.debug(`Skipping deposit ${deposit.id}: transient error within backoff window`);
+        return false;
+      }
+      return true;
+    });
+
+    for (const deposit of eligibleDeposits) {
       if (!deposit.wormholeInfo || !deposit.wormholeInfo.transferSequence) {
         logger.warn(`Deposit ${deposit.id} is missing transferSequence. Skipping.`);
         continue;
