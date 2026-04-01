@@ -38,6 +38,8 @@ const app: Express = express();
 /** HTTP server reference for graceful shutdown. */
 let server: Server | null = null;
 
+import { setReady } from './utils/readiness.js';
+
 // -------------------------------------------------------------------------
 // |                        EXTRACTED SETUP FUNCTIONS                      |
 // -------------------------------------------------------------------------
@@ -188,7 +190,10 @@ const main = async () => {
   if (!appConfig.API_ONLY_MODE && appConfig.NODE_ENV !== 'test') {
     try {
       await initializeBackgroundServices();
+      setReady(true);
+      logger.info('Background services initialized — readiness flag set.');
     } catch (error: any) {
+      setReady(false);
       logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);
       if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
         process.exit(1);
@@ -196,6 +201,8 @@ const main = async () => {
         throw new Error(`Initialization failed in test mode: ${error.message}`);
       }
     }
+  } else {
+    setReady(true);
   }
 
   logger.info('Application initialization sequence complete.');

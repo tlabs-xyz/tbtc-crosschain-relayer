@@ -52,8 +52,11 @@ const operations = new Operations();
 // Default route for the API
 router.get('/', utils.defaultController);
 
-// Ping route for the API
+// Liveness probe — returns 200 as soon as the HTTP server is up
 router.get('/status', utils.pingController);
+
+// Readiness probe — returns 200 only after background services have initialized
+router.get('/ready', utils.readinessController);
 
 // Audit logs route for a specific chain
 router.get('/api/:chainName/audit-logs', validateChainAllowAll, (req: Request, res: Response) => {
