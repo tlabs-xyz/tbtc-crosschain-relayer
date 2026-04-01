@@ -364,7 +364,7 @@ export class EndpointController {
       res.status(500).json({
         success: false,
         error: error.message || 'Internal server error',
-        depositId: depositKey,
+        depositId: depositKey || 'unknown',
       });
     }
   }
