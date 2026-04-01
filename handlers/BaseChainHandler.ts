@@ -591,10 +591,12 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         fundingTxHash: deposit.fundingTxHash ?? undefined,
         initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
       });
-      // Mark with error and update activity timestamp to prevent immediate retry.
-      // The deposit stays INITIALIZED so it will be retried after DEFAULT_DEPOSIT_RETRY_MS.
+      // Mark with error. The deposit stays INITIALIZED so it will be retried
+      // after DEFAULT_DEPOSIT_RETRY_MS. updateToFinalizedDeposit already sets
+      // lastActivityAt internally (Deposits.ts:375), so a separate
+      // updateLastActivity call is not needed — and would overwrite the error
+      // tag with the stale deposit object.
       await updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
-      await updateLastActivity(deposit);
       return undefined;
     }
   }
