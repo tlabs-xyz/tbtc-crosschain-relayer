@@ -3,26 +3,36 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
     branches: ["**"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-test:
+  static:
+    name: Static checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    strategy:
-      matrix:
-        node-version: [20.x]
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: "20.x"
           cache: "yarn"
 
       # This step forces Git to download dependencies using `https://` protocol,
@@ -35,24 +45,50 @@ jobs:
           git config --global url."https://github.com/".insteadOf "git@github.com:"
 
       - name: Install dependencies
-        run: |
-          echo "yarn version:"
-          yarn --version
-          echo "node version:"
-          node --version
-          yarn install --frozen-lockfile
-
-      - name: Lint
-        run: yarn lint
+        run: yarn install --frozen-lockfile
 
       - name: Detect unused dependencies
         run: yarn depcheck
 
-      - name: Build
+      - name: Build (type-check + compile)
+        run: yarn build
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Format check
+        run: yarn format
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [static]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20.x"
+          cache: "yarn"
+
+      # This step forces Git to download dependencies using `https://` protocol,
+      # even if `yarn.lock` refers to packages via `git://` or `ssh://`. CI has
+      # no SSH keys, so SSH URLs (e.g. thesis/solidity-contracts) would fail.
+      - name: Force HTTPS for git protocol
         run: |
-          # Avoid full TypeScript compile in CI to reduce flakiness and memory use
-          yarn clean:build
-          yarn run prisma:generate
+          git config --global url."https://".insteadOf git://
+          git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile --ignore-optional
+
+      - name: Build
+        run: yarn build
 
       - name: Setup .env file
         run: cp env.example .env
@@ -68,7 +104,7 @@ jobs:
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm tbtc-relayer-dev yarn run validate-config
 
       - name: Reset database
-        run: npx prisma migrate reset --force --skip-seed
+        run: npx prisma migrate reset --force --skip-seed --skip-generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tbtc_relayer?schema=public
 
@@ -81,11 +117,12 @@ jobs:
       - name: Stop Docker Compose services
         if: always()
         run: |
-          cp env.example .env 2>/dev/null || true
-          docker compose -f docker-compose.yml -f docker-compose.ci.yml down
+          [ -f env.example ] && cp env.example .env || true
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml down --remove-orphans
 
       - name: Upload coverage as artifact
-        uses: actions/upload-artifact@v4
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-report
           path: coverage/

@@ -8,14 +8,14 @@
     "postinstall": "yarn run prisma:generate",
     "start": "yarn build && yarn db:migrate && node --env-file .env dist/index.js",
     "start:dev": "yarn build && yarn db:migrate && node dist/index.js",
-    "start:docker": "docker-compose up",
+    "start:docker": "docker compose up",
     "dev": "tsx watch --trace-warnings index.ts",
     "validate-config": "node dist/scripts/validate-config.js",
     "test": "jest --runInBand",
     "test:unit": "jest --config jest.config.unit.cjs --testPathPattern=tests/unit",
-    "test:integration": "jest --testPathPattern=tests/integration",
+    "test:integration": "jest --testPathPattern=tests/integration --runInBand",
     "test:e2e": "jest --testPathPattern=tests/e2e --runInBand",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --runInBand",
     "test:watch": "jest --watchAll",
     "prebuild": "yarn clean:build && yarn run prisma:generate",
     "build": "tsc -p tsconfig.build.json",
@@ -38,7 +38,7 @@
     "db:backup": "pg_dump -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -F c -b -v -f backup.dump",
     "db:restore": "pg_restore -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB -v backup.dump",
     "db:reset": "npx prisma db push --force-reset --accept-data-loss",
-    "pretest": "docker-compose -f docker-compose.yml -f docker-compose.ci.yml down -v && docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres",
+    "pretest": "docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v && docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres",
     "depcheck": "depcheck --ignores @opentelemetry/sdk-trace-node,pino-opentelemetry-transport,pino-pretty,rimraf,@types/jest,improved-yarn-audit,lefthook",
     "typecheck": "tsc -p tsconfig.build.json --noEmit"
   },
@@ -80,8 +80,7 @@
     "zod": "^3.25.16"
   },
   "optionalDependencies": {
-    "fsevents": "^2.3.2",
-    "globals": "^16.1.0"
+    "fsevents": "^2.3.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",

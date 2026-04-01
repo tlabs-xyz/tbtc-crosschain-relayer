@@ -14,15 +14,12 @@ README*
 
 # Source maps and sources
 **/*.map
-**/*.ts
-**/*.tsx
 **/*.flow
 **/*.coffee
 **/*.mdx
 **/*.markdown
 
-# Types and bins not needed at runtime
-**/@types
+# Bins not needed at runtime
 **/bin/*.cmd
 
 # Common bulky folders
