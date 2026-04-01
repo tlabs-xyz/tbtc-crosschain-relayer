@@ -281,7 +281,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     return {
       fundingTx: transformedFundingTx,
       reveal: transformedReveal,
-      destinationChainDepositOwner: zeroPad(l1OutputEvent.l2DepositOwner, 32),
+      destinationChainDepositOwner: ethers.utils.hexZeroPad(
+        ensureHexPrefix(l1OutputEvent.l2DepositOwner),
+        32,
+      ),
     };
   }
 
