@@ -104,7 +104,7 @@ jobs:
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml run --rm tbtc-relayer-dev yarn run validate-config
 
       - name: Reset database
-        run: npx prisma migrate reset --force --skip-seed
+        run: npx prisma migrate reset --force --skip-seed --skip-generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tbtc_relayer?schema=public
 
