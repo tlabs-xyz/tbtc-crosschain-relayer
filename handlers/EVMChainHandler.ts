@@ -465,9 +465,10 @@ export class EVMChainHandler
   /**
    * Re-attempts bridging for deposits stuck in AWAITING_WORMHOLE_VAA status.
    * Filters to deposits waiting longer than RECOVERY_DELAY_MS and excludes deposits
-   * tagged with a permanent error (e.g. receiveTbtc_reverted). FINALIZED deposits
-   * with a transferSequence_not_found error cannot be auto-recovered — they are
-   * surfaced via a one-time Sentry alert so operators are alerted.
+   * tagged with a permanent error (receiveTbtc_reverted). Transient errors
+   * (bridging_exception) are retried after RECOVERY_DELAY_MS backoff via
+   * lastActivityAt. FINALIZED deposits with transferSequence_not_found cannot be
+   * auto-recovered — they are surfaced via a one-time Sentry alert.
    */
   public async recoverStuckFinalizedDeposits(): Promise<void> {
     const awaitingDeposits = await DepositStore.getByStatus(
@@ -477,8 +478,7 @@ export class EVMChainHandler
 
     const now = Date.now();
     const stuckDeposits = awaitingDeposits.filter((deposit) => {
-      if (deposit.error === 'receiveTbtc_reverted' || deposit.error === 'bridging_exception')
-        return false;
+      if (deposit.error === 'receiveTbtc_reverted') return false;
       const awaitingSince =
         deposit.dates.awaitingWormholeVAAMessageSince ?? deposit.dates.finalizationAt;
       if (!awaitingSince) return false;
