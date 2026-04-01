@@ -854,7 +854,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `FINALIZE | Deposit already finalized on L1 (local status was INITIALIZED) | ID: ${updatedDeposit.id}`,
           );
           // Update local status to match L1
-          updateToFinalizedDeposit(updatedDeposit, undefined, 'Deposit found finalized on L1');
+          await updateToFinalizedDeposit(
+            updatedDeposit,
+            undefined,
+            'Deposit found finalized on L1',
+          );
           break;
 
         // Should not happen if local state is INITIALIZED, but handle defensively
