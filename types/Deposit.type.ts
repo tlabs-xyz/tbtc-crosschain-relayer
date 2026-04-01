@@ -18,6 +18,9 @@ export type Deposit = {
     solana: {
       bridgeTxHash: string | null;
     };
+    evm?: {
+      l2BridgeTxHash?: string | null;
+    };
     sui?: {
       l2BridgeTxHash?: string | null;
     };

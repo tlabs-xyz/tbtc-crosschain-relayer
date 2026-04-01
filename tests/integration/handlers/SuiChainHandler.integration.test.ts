@@ -87,13 +87,17 @@ jest.mock('@mysten/sui/keypairs/ed25519', () => ({
 }));
 
 jest.mock('@mysten/sui/transactions', () => ({
-  Transaction: jest.fn(),
+  Transaction: jest.fn().mockImplementation(() => ({
+    moveCall: jest.fn(),
+    object: jest.fn().mockImplementation((id: string) => `object(${id})`),
+    pure: { vector: jest.fn().mockImplementation((_type: string, data: any) => data) },
+  })),
   __esModule: true,
 }));
 
 // Mock @mysten/bcs to prevent deep loading and transform errors
 jest.mock('@mysten/bcs', () => ({
-  fromBase64: jest.fn().mockReturnValue(new Uint8Array(32)),
+  fromBase64: jest.fn().mockReturnValue(Uint8Array.from({ length: 32 }, () => 0)),
   toBase64: jest.fn().mockReturnValue('base64-string'),
   BCS: jest.fn(),
   bcs: {
@@ -129,7 +133,7 @@ jest.mock('@mysten/bcs', () => ({
 jest.mock('@mysten/sui/cryptography', () => ({
   decodeSuiPrivateKey: jest.fn().mockReturnValue({
     schema: 'ED25519',
-    secretKey: new Uint8Array(32),
+    secretKey: Uint8Array.from({ length: 32 }, () => 0),
   }),
   __esModule: true,
 }));
@@ -139,6 +143,8 @@ jest.mock('../../../config/index.js', () => ({
   chainConfigs: {},
   getAvailableChainKeys: () => ['suiTestnet'],
 }));
+
+jest.mock('../../../utils/WormholeVAA');
 
 // Mock the SuiMoveEventParser
 jest.mock('../../../utils/SuiMoveEventParser.js', () => ({
@@ -163,6 +169,8 @@ jest.mock('../../../utils/SuiMoveEventParser.js', () => ({
 // Mock the Deposits utility module
 jest.mock('../../../utils/Deposits.js', () => ({
   updateToAwaitingWormholeVAA: jest.fn().mockResolvedValue(undefined),
+  updateToFinalizedAwaitingVAA: jest.fn().mockResolvedValue(undefined),
+  updateToFinalizedDeposit: jest.fn().mockResolvedValue(undefined),
   updateToBridgedDeposit: jest.fn().mockResolvedValue(undefined),
   createDeposit: jest.fn().mockImplementation(() => ({
     id: `integration-test-deposit-${Date.now()}`,
@@ -176,6 +184,10 @@ jest.mock('../../../utils/Deposits.js', () => ({
       solana: { initializeTxHash: null, finalizeTxHash: null },
       sui: { initializeTxHash: null, finalizeTxHash: null },
       starknet: { initializeTxHash: null, finalizeTxHash: null },
+    },
+    L1OutputEvent: {
+      l2DepositOwner: '0xdeposit-owner',
+      l2Sender: '0xsender',
     },
   })),
 }));
@@ -309,7 +321,7 @@ describe('SuiChainHandler Integration Tests', () => {
 
     beforeEach(() => {
       testDeposit = createTestDeposit({
-        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        status: DepositStatus.INITIALIZED,
         chainId: 'SuiTestnet',
         wormholeInfo: {
           txHash: '0xtest-tx-hash',
@@ -365,25 +377,26 @@ describe('SuiChainHandler Integration Tests', () => {
         'TokensTransferredWithPayload(uint256,bytes32,uint64)',
       );
 
-      // Mock parent finalizeDeposit
+      // Mock submitFinalizationTx (SuiChainHandler.finalizeDeposit calls it directly)
       const mockReceipt = {
         transactionHash: '0xfinalize-hash',
         logs: [
           {
-            topics: [TOKENS_TRANSFERRED_SIG], // Use the correct topic signature
-            data: '0x' + '0'.repeat(128), // Mock log data
+            address: MOCK_ADDRESSES.L1_CONTRACT, // must match l1BitcoinDepositorAddress
+            topics: [TOKENS_TRANSFERRED_SIG],
+            data: '0x' + '0'.repeat(128),
           },
         ],
       };
 
-      jest
-        .spyOn(Object.getPrototypeOf(Object.getPrototypeOf(handler)), 'finalizeDeposit')
-        .mockResolvedValue(mockReceipt);
+      (handler as any).submitFinalizationTx = jest.fn().mockResolvedValue(mockReceipt);
 
       // Mock L1 contract interface - need to ensure parseLog is called successfully
       (handler as any).l1BitcoinDepositorProvider = {
         interface: {
+          getEventTopic: jest.fn().mockReturnValue(TOKENS_TRANSFERRED_SIG),
           parseLog: jest.fn().mockReturnValue({
+            name: 'TokensTransferredWithPayload',
             args: { transferSequence: { toString: () => '456' } },
           }),
         },
@@ -394,10 +407,10 @@ describe('SuiChainHandler Integration Tests', () => {
       expect(result).toBe(mockReceipt);
 
       // Import the mocked module to access the mock function
-      const { updateToAwaitingWormholeVAA } = require('../../../utils/Deposits.js');
-      expect(updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
-        '0xfinalize-hash',
+      const { updateToFinalizedAwaitingVAA } = require('../../../utils/Deposits.js');
+      expect(updateToFinalizedAwaitingVAA).toHaveBeenCalledWith(
         testDeposit,
+        '0xfinalize-hash',
         '456',
       );
     });
@@ -409,12 +422,12 @@ describe('SuiChainHandler Integration Tests', () => {
       const mockFundingTxBytes = [
         ...new Uint8Array([1, 0, 0, 0]), // version (4 bytes)
         1, // input count (1 byte)
-        ...new Uint8Array(32), // previous output hash (32 bytes)
+        ...Uint8Array.from({ length: 32 }, () => 0), // previous output hash (32 bytes)
         ...new Uint8Array([255, 255, 255, 255]), // previous output index (4 bytes)
         0, // script length (1 byte)
         ...new Uint8Array([255, 255, 255, 255]), // sequence (4 bytes)
         1, // output count (1 byte)
-        ...new Uint8Array(8), // value (8 bytes)
+        ...Uint8Array.from({ length: 8 }, () => 0), // value (8 bytes)
         25, // script length (1 byte)
         118,
         169,
@@ -422,16 +435,16 @@ describe('SuiChainHandler Integration Tests', () => {
         ...Array.from({ length: 20 }, (_, i) => (i % 10) + 1), // 20 bytes of address
         136,
         172, // OP_EQUALVERIFY OP_CHECKSIG
-        ...new Uint8Array(4), // locktime (4 bytes)
+        ...Uint8Array.from({ length: 4 }, () => 0), // locktime (4 bytes)
       ];
 
       // Mock Bitcoin reveal bytes (112 bytes total as expected by parseReveal)
       const mockRevealBytes = [
-        ...new Uint8Array(4), // funding output index (4 bytes)
+        ...Uint8Array.from({ length: 4 }, () => 0), // funding output index (4 bytes)
         ...Array.from({ length: 32 }, (_, i) => i + 1), // blindingFactor (32 bytes)
         ...Array.from({ length: 20 }, (_, i) => (i % 10) + 1), // wallet pubkey hash (20 bytes)
         ...Array.from({ length: 20 }, (_, i) => (i % 10) + 11), // refund pubkey hash (20 bytes)
-        ...new Uint8Array(4), // refund locktime (4 bytes)
+        ...Uint8Array.from({ length: 4 }, () => 0), // refund locktime (4 bytes)
         ...Array.from({ length: 32 }, (_, i) => i + 1), // vault (32 bytes)
       ];
 
@@ -647,13 +660,14 @@ describe('SuiChainHandler Integration Tests', () => {
 
       // Mock complete Wormhole workflow
       (handler as any).wormhole.getVaa.mockResolvedValue({
-        binary: new Uint8Array([1, 2, 3, 4, 5]),
+        binary: Uint8Array.from([1, 2, 3, 4, 5]),
       });
 
       await (handler as any).initializeL2();
 
-      // Mock fetchVAAFromAPI to return a VAA
-      (handler as any).fetchVAAFromAPI = jest.fn().mockResolvedValue('base64-encoded-vaa-data');
+      // Mock shared fetchVAAFromAPI to return a VAA
+      const wormholeVAAModule = require('../../../utils/WormholeVAA.js');
+      (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValue('base64-encoded-vaa-data');
 
       // Test the complete workflow
       const testDeposit = {
@@ -670,7 +684,7 @@ describe('SuiChainHandler Integration Tests', () => {
 
       // Verify Wormhole components were called
       expect((handler as any).wormhole.getChain).toHaveBeenCalledWith('Sui');
-      expect((handler as any).fetchVAAFromAPI).toHaveBeenCalledWith('999');
+      expect(wormholeVAAModule.fetchVAAFromAPI).toHaveBeenCalledWith('999', expect.any(String));
     });
   });
 });

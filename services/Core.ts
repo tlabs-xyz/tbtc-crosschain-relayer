@@ -6,11 +6,8 @@ import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import type { BaseChainHandler } from '../handlers/BaseChainHandler.js';
 import { chainHandlerRegistry } from '../handlers/ChainHandlerRegistry.js';
 import { l1RedemptionHandlerRegistry } from '../handlers/L1RedemptionHandlerRegistry.js';
-import type { Deposit } from '../types/Deposit.type.js';
-import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { RedemptionStatus } from '../types/Redemption.type.js';
 import { DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES } from '../utils/Constants.js';
-import { DepositStore } from '../utils/DepositStore.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
 import { RedemptionStore } from '../utils/RedemptionStore.js';
 import {
@@ -74,7 +71,7 @@ const l2RedemptionServices: Map<string, L2RedemptionService> = new Map();
 
 export async function processDeposits(): Promise<void> {
   logger.info('Processing deposits...');
-  await Promise.all(
+  await Promise.allSettled(
     chainHandlerRegistry.list().map(async (handler) => {
       const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
       try {
@@ -101,7 +98,7 @@ export async function processRedemptions(): Promise<void> {
   }
 
   logger.info('Processing redemptions...');
-  await Promise.all(
+  await Promise.allSettled(
     evmChainConfigs.map(async (evmConfig) => {
       const chainName = evmConfig.chainName;
       try {
@@ -130,7 +127,7 @@ export async function processRedemptions(): Promise<void> {
 
 export async function checkForPastDepositsForAllChains(): Promise<void> {
   logger.info('Checking for past deposits...');
-  await Promise.all(
+  await Promise.allSettled(
     chainHandlerRegistry.list().map(async (handler) => {
       const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
       try {
@@ -176,7 +173,7 @@ export async function checkForPastRedemptionsForAllChains(
   }
 
   logger.info('Checking for past redemptions...');
-  await Promise.all(
+  await Promise.allSettled(
     evmChainConfigs.map(async (evmConfig) => {
       const chainName = evmConfig.chainName;
       try {
@@ -237,7 +234,8 @@ export const startCronJobs = () => {
     await checkForPastRedemptionsForAllChains(60);
   });
 
-  // Every 60 minutes - recover stuck finalized deposits (for chains that support it)
+  // Every 60 minutes - recover stuck finalized deposits (for chains that support it).
+  // Combined with RECOVERY_DELAY_MS threshold, effective SLA is up to ~65 minutes.
   cron.schedule('*/60 * * * *', async () => {
     await recoverStuckFinalizedDeposits();
   });
@@ -284,73 +282,64 @@ export const startCronJobs = () => {
 };
 
 export async function recoverStuckFinalizedDeposits(): Promise<void> {
-  logger.info('Recovering stuck finalized deposits...');
+  logger.info('Recovering stuck AWAITING_WORMHOLE_VAA deposits...');
 
-  try {
-    // Get all finalized deposits across all chains
-    const finalizedDeposits = await DepositStore.getByStatus(DepositStatus.FINALIZED);
-
-    if (finalizedDeposits.length === 0) {
-      logger.debug('No stuck finalized deposits found');
-      return;
-    }
-
-    logger.info(`Found ${finalizedDeposits.length} finalized deposits to check`);
-
-    // Group deposits by chain
-    const depositsByChain = new Map<string, Deposit[]>();
-    for (const deposit of finalizedDeposits) {
-      const chainDeposits = depositsByChain.get(deposit.chainId) || [];
-      chainDeposits.push(deposit);
-      depositsByChain.set(deposit.chainId, chainDeposits);
-    }
-
-    // Process each chain's deposits
-    await Promise.all(
-      Array.from(depositsByChain.entries()).map(async ([chainName, deposits]) => {
-        try {
-          // Get the handler for this chain
-          const handler = chainHandlerRegistry
-            .list()
-            .find((h) => (h as BaseChainHandler<AnyChainConfig>).config.chainName === chainName);
-
-          if (!handler) {
-            logger.warn(`No handler found for chain ${chainName}, skipping recovery`);
-            return;
-          }
-
-          // Check if handler supports recovery (currently only SUI)
-          if (
-            'recoverStuckFinalizedDeposits' in handler &&
-            typeof (handler as any).recoverStuckFinalizedDeposits === 'function'
-          ) {
-            logger.info(`Running recovery for ${deposits.length} deposits on ${chainName}`);
-            await (handler as any).recoverStuckFinalizedDeposits(deposits);
-          } else {
-            logger.debug(`Chain ${chainName} does not support finalized deposit recovery`);
-          }
-        } catch (error) {
-          logErrorContext(`Error recovering stuck deposits for ${chainName}:`, error);
+  await Promise.allSettled(
+    chainHandlerRegistry.list().map(async (handler) => {
+      const chainName = (handler as BaseChainHandler<AnyChainConfig>).config.chainName;
+      try {
+        if (
+          'recoverStuckFinalizedDeposits' in handler &&
+          typeof (handler as any).recoverStuckFinalizedDeposits === 'function'
+        ) {
+          await (handler as any).recoverStuckFinalizedDeposits();
         }
-      }),
-    );
+      } catch (error) {
+        logErrorContext(`Error in AWAITING recovery for ${chainName}:`, error);
+      }
+    }),
+  );
 
-    logger.info('Stuck finalized deposits recovery complete');
-  } catch (error) {
-    logErrorContext('Error in recoverStuckFinalizedDeposits:', error);
-  }
+  logger.info('AWAITING_WORMHOLE_VAA recovery complete');
 }
 
 export async function runStartupTasks(): Promise<void> {
   logger.info('Running startup tasks...');
-  await Promise.all([
+  const results = await Promise.allSettled([
     processDeposits(),
     processRedemptions(),
     checkForPastDepositsForAllChains(),
     checkForPastRedemptionsForAllChains(DEFAULT_STARTUP_PAST_REDEMPTIONS_LOOKBACK_MINUTES),
     recoverStuckFinalizedDeposits(),
   ]);
-  logger.info('Startup tasks complete.');
+
+  const taskNames = [
+    'processDeposits',
+    'processRedemptions',
+    'checkForPastDepositsForAllChains',
+    'checkForPastRedemptionsForAllChains',
+    'recoverStuckFinalizedDeposits',
+  ];
+  const failed = results
+    .map((r, i) => ({
+      status: r.status,
+      name: taskNames[i],
+      reason: r.status === 'rejected' ? (r as PromiseRejectedResult).reason : null,
+    }))
+    .filter((r) => r.status === 'rejected');
+
+  if (failed.length > 0) {
+    for (const f of failed) {
+      logger.error(`Startup task failed: ${f.name}`, { error: f.reason?.message ?? f.reason });
+    }
+    if (failed.length === results.length) {
+      logger.error('All startup tasks failed — relayer may not operate correctly');
+    }
+  }
+
+  logger.info(
+    `Startup tasks complete. ${results.length - failed.length}/${results.length} succeeded.`,
+  );
 }
 
 export async function initializeAllChains(): Promise<void> {
@@ -395,7 +384,7 @@ export async function initializeAllChains(): Promise<void> {
       }
     }),
   );
-  await Promise.all(initializationPromises);
+  await Promise.allSettled(initializationPromises);
   logger.info('All available chain handlers initialized and listeners set up.');
 }
 

@@ -1,6 +1,7 @@
 import { AnchorProvider, type Idl, Program, setProvider, Wallet } from '@coral-xyz/anchor';
 import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes/index.js';
 import type { TransactionReceipt } from '@ethersproject/providers';
+import * as Sentry from '@sentry/node';
 import { type Commitment, Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { signSendWait, Wormhole } from '@wormhole-foundation/sdk';
 import type { Chain, ChainContext, TBTCBridge } from '@wormhole-foundation/sdk-connect';
@@ -13,9 +14,13 @@ import wormholeGatewayIdl from '../target/idl/wormhole_gateway.json' with { type
 import type { Deposit } from '../types/Deposit.type.js';
 import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import { updateToAwaitingWormholeVAA, updateToBridgedDeposit } from '../utils/Deposits.js';
+import {
+  updateToAwaitingWormholeVAA,
+  updateToBridgedDeposit,
+  updateToFinalizedAwaitingVAA,
+} from '../utils/Deposits.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import { BaseChainHandler } from './BaseChainHandler.js';
+import { BaseChainHandler, RECOVERY_DELAY_MS } from './BaseChainHandler.js';
 
 const WORMHOLE_GATEWAY_PROGRAM_ID = new PublicKey('87MEvHZCXE3ML5rrmh5uX1FbShHmRXXS32xJDGbQ7h5t');
 const TOKENS_TRANSFERRED_SIG = ethers.utils.id(
@@ -131,47 +136,38 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
 
   /**
    * Override finalizeDeposit to:
-   *  1) finalize on L1 (super call)
-   *  2) parse Wormhole transferSequence from logs
-   *  3) update deposit to AWAITING_WORMHOLE_VAA
+   *  1) submit finalization tx on L1 (without persisting FINALIZED status)
+   *  2) parse Wormhole transferSequence from receipt logs
+   *  3) update deposit to AWAITING_WORMHOLE_VAA with transfer sequence
+   *
+   * Follows the same pattern as EVMChainHandler and SuiChainHandler:
+   * call submitFinalizationTx() directly instead of super.finalizeDeposit()
+   * to avoid marking FINALIZED before the transfer sequence is parsed.
    */
   override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    const finalizedDepositReceipt = await super.finalizeDeposit(deposit);
+    if (!this.isDepositFinalizable(deposit)) return;
 
-    if (!finalizedDepositReceipt) {
-      return;
-    }
-    logger.info(`Finalizing deposit ${deposit.id} on Solana...`);
+    const receipt = await this.submitFinalizationTx(deposit);
 
-    const l1Receipt = finalizedDepositReceipt;
-    if (!l1Receipt) {
-      logger.warn(`No finalize receipt found for deposit ${deposit.id}; cannot parse logs.`);
-      return;
-    }
+    if (receipt) {
+      logger.info(`Processing Solana deposit finalization for ${deposit.id}...`);
 
-    let transferSequence: string | null = null;
-    try {
-      const logs = l1Receipt.logs || [];
+      const { transferSequence, eventTxHash } = this.parseTransferSequenceFromReceipt(
+        receipt,
+        deposit.id,
+      );
 
-      for (const log of logs) {
-        if (log.topics[0] === TOKENS_TRANSFERRED_SIG) {
-          const parsedLog = this.l1BitcoinDepositor.interface.parseLog(log);
-          const { transferSequence: seq } = parsedLog.args;
-          transferSequence = seq.toString();
-          break;
-        }
+      if (transferSequence && eventTxHash) {
+        await updateToFinalizedAwaitingVAA(deposit, receipt.transactionHash, transferSequence);
+        logger.info(
+          `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
+        );
+      } else {
+        await this.handleMissingTransferSequence(deposit, receipt.transactionHash);
       }
-    } catch (error: any) {
-      logErrorContext(`Error parsing L1 logs for deposit ${deposit.id}`, error);
     }
 
-    if (!transferSequence) {
-      logger.warn(`Could not find transferSequence in logs for deposit ${deposit.id}.`);
-      return;
-    }
-
-    await updateToAwaitingWormholeVAA(l1Receipt.transactionHash, deposit, transferSequence);
-    logger.info(`Deposit ${deposit.id} now awaiting Wormhole VAA.`);
+    return receipt;
   }
 
   public async bridgeSolanaDeposit(deposit: Deposit): Promise<void> {
@@ -253,10 +249,44 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
         `Solana bridging success for deposit ${deposit.id}, txids=${destinationTransactionIds}`,
       );
 
-      updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid);
+      await updateToBridgedDeposit(deposit, destinationTransactionIds[1].txid, CHAIN_TYPE.SOLANA);
     } catch (error: any) {
       const reason = error.message || 'Unknown bridging error';
-      logger.warn(`Wormhole bridging not ready for deposit ${deposit.id}: ${reason}`);
+      const isPermanentRevert = error.message?.includes('Transaction failed:');
+
+      if (isPermanentRevert) {
+        logger.error(`Wormhole bridging permanently failed for deposit ${deposit.id}: ${reason}`, {
+          depositId: deposit.id,
+          transferSequence: deposit.wormholeInfo?.transferSequence,
+          errorType: error.constructor.name,
+          errorMessage: error.message,
+        });
+        Sentry.captureException(
+          new Error(`receiveTbtc transaction reverted for deposit ${deposit.id}`),
+          {
+            extra: {
+              depositId: deposit.id,
+              chainName: this.config.chainName,
+              transferSequence: deposit.wormholeInfo?.transferSequence,
+              reason,
+            },
+          },
+        );
+      } else {
+        logger.warn(`Wormhole bridging failed for deposit ${deposit.id}: ${reason}`, {
+          depositId: deposit.id,
+          transferSequence: deposit.wormholeInfo?.transferSequence,
+          errorType: error.constructor.name,
+          errorMessage: error.message,
+          stack: error.stack,
+        });
+      }
+
+      await DepositStore.update({
+        ...deposit,
+        error: isPermanentRevert ? 'receiveTbtc_reverted' : 'bridging_exception',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
+      });
     }
   }
 
@@ -273,12 +303,90 @@ export class SolanaChainHandler extends BaseChainHandler<SolanaChainConfig> {
     );
     if (bridgingDeposits.length === 0) return;
 
-    for (const deposit of bridgingDeposits) {
+    const now = Date.now();
+    const eligibleDeposits = bridgingDeposits.filter((deposit) => {
+      if (deposit.error === 'receiveTbtc_reverted') {
+        logger.debug(`Skipping deposit ${deposit.id}: permanent error (receiveTbtc_reverted)`);
+        return false;
+      }
+      if (
+        deposit.error === 'bridging_exception' &&
+        now - (deposit.dates?.lastActivityAt ?? 0) < RECOVERY_DELAY_MS
+      ) {
+        logger.debug(`Skipping deposit ${deposit.id}: transient error within backoff window`);
+        return false;
+      }
+      return true;
+    });
+
+    for (const deposit of eligibleDeposits) {
       if (!deposit.wormholeInfo || !deposit.wormholeInfo.transferSequence) {
         logger.warn(`Deposit ${deposit.id} is missing transferSequence. Skipping.`);
         continue;
       }
       await this.bridgeSolanaDeposit(deposit);
+    }
+  }
+
+  /**
+   * Re-attempts bridging for deposits stuck in AWAITING_WORMHOLE_VAA status.
+   * Filters to deposits waiting longer than RECOVERY_DELAY_MS and excludes deposits
+   * tagged with a permanent error (receiveTbtc_reverted). Transient errors
+   * (bridging_exception) are retried after RECOVERY_DELAY_MS backoff via
+   * lastActivityAt. FINALIZED deposits with transferSequence_not_found cannot be
+   * auto-recovered — they are surfaced via a one-time Sentry alert.
+   */
+  public async recoverStuckFinalizedDeposits(): Promise<void> {
+    const awaitingDeposits = await DepositStore.getByStatus(
+      DepositStatus.AWAITING_WORMHOLE_VAA,
+      this.config.chainName,
+    );
+
+    const now = Date.now();
+    const stuckDeposits = awaitingDeposits.filter((deposit) => {
+      if (deposit.error === 'receiveTbtc_reverted') return false;
+      const awaitingSince =
+        deposit.dates.awaitingWormholeVAAMessageSince ?? deposit.dates.finalizationAt;
+      if (!awaitingSince) return false;
+      return now - awaitingSince > RECOVERY_DELAY_MS;
+    });
+
+    for (const deposit of stuckDeposits) {
+      try {
+        logger.info(`Re-attempting bridging for AWAITING deposit ${deposit.id}`);
+        await this.bridgeSolanaDeposit(deposit);
+      } catch (error) {
+        logErrorContext(`Error re-bridging deposit ${deposit.id}`, error);
+      }
+    }
+
+    // Alert on FINALIZED deposits whose transferSequence was never parsed.
+    // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
+    // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
+    // to prevent repeated alerts from exhausting Sentry quota.
+    const finalizedDeposits = await DepositStore.getByStatus(
+      DepositStatus.FINALIZED,
+      this.config.chainName,
+    );
+    for (const deposit of finalizedDeposits) {
+      if (deposit.error !== 'transferSequence_not_found') continue;
+      if (!deposit.dates.finalizationAt) continue;
+      if (now - deposit.dates.finalizationAt <= RECOVERY_DELAY_MS) continue;
+      const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found — manual intervention required`;
+      logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
+      Sentry.captureException(new Error(msg), {
+        extra: {
+          depositId: deposit.id,
+          chainName: this.config.chainName,
+          finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
+          finalizationAt: deposit.dates.finalizationAt,
+        },
+      });
+      await DepositStore.update({
+        ...deposit,
+        error: 'transferSequence_not_found_alerted',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
+      });
     }
   }
 }

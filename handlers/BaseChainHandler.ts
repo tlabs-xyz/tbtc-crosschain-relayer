@@ -1,5 +1,6 @@
 import { NonceManager } from '@ethersproject/experimental';
 import type { TransactionReceipt } from '@ethersproject/providers';
+import * as Sentry from '@sentry/node';
 import { type Network, type Wormhole, wormhole } from '@wormhole-foundation/sdk';
 import evm from '@wormhole-foundation/sdk/evm';
 import solana from '@wormhole-foundation/sdk/solana';
@@ -18,7 +19,6 @@ import { DepositStatus } from '../types/DepositStatus.enum.js';
 import { logDepositError } from '../utils/AuditLog.js';
 import { DepositStore } from '../utils/DepositStore.js';
 import {
-  createFinalizedDepositFromOnChainData,
   updateLastActivity,
   updateToFinalizedDeposit,
   updateToInitializedDeposit,
@@ -26,6 +26,7 @@ import {
 import logger, { createLoggerWithCorrelation, logErrorContext } from '../utils/Logger.js';
 
 export const DEFAULT_DEPOSIT_RETRY_MS = 1000 * 60 * 5; // 5 minutes
+export const RECOVERY_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
 export abstract class BaseChainHandler<T extends AnyChainConfig> implements ChainHandlerInterface {
   protected l1Provider: ethers.providers.JsonRpcProvider;
@@ -280,7 +281,10 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     return {
       fundingTx: transformedFundingTx,
       reveal: transformedReveal,
-      l2DepositOwner: l1OutputEvent.l2DepositOwner,
+      destinationChainDepositOwner: ethers.utils.hexZeroPad(
+        ensureHexPrefix(l1OutputEvent.l2DepositOwner),
+        32,
+      ),
     };
   }
 
@@ -373,23 +377,9 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       vault: l1OutputEvent.reveal.vault,
     };
 
-    // Handle the deposit owner based on chain type
-    if (this.config.chainType === CHAIN_TYPE.EVM) {
-      // For EVM chains, normalize as address
-      const l2DepositOwner = ((): string => {
-        try {
-          return ethers.utils.getAddress(l1OutputEvent.l2DepositOwner);
-        } catch {
-          // If it's not a valid address, keep original to let callStatic surface a clear error
-          return l1OutputEvent.l2DepositOwner;
-        }
-      })();
-      return { fundingTx, reveal, l2DepositOwner };
-    } else {
-      // For non-EVM chains (Sui, Solana, StarkNet), use bytes32 destinationChainDepositOwner
-      const destinationChainDepositOwner = zeroPad(l1OutputEvent.l2DepositOwner, 32);
-      return { fundingTx, reveal, destinationChainDepositOwner };
-    }
+    // All chain types use bytes32 destinationChainDepositOwner (V2 contract ABI)
+    const destinationChainDepositOwner = zeroPad(l1OutputEvent.l2DepositOwner, 32);
+    return { fundingTx, reveal, destinationChainDepositOwner };
   }
 
   async initializeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
@@ -454,7 +444,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       await this.l1BitcoinDepositorProvider.callStatic.initializeDeposit(
         transformedL1OutputEvent.fundingTx,
         transformedL1OutputEvent.reveal,
-        transformedL1OutputEvent.l2DepositOwner,
+        transformedL1OutputEvent.destinationChainDepositOwner,
       );
       logger.debug(`INITIALIZE | Pre-call successful | ID: ${deposit.id}`);
 
@@ -467,7 +457,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
       const tx = await this.l1BitcoinDepositor.initializeDeposit(
         transformedL1OutputEvent.fundingTx,
         transformedL1OutputEvent.reveal,
-        transformedL1OutputEvent.l2DepositOwner,
+        transformedL1OutputEvent.destinationChainDepositOwner,
         { nonce: currentNonce },
       );
 
@@ -521,31 +511,15 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
     }
   }
 
-  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
-    // Check if already finalized locally
-    if (deposit.status === DepositStatus.FINALIZED) {
-      logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
-      return;
-    }
-    // Ensure it was initialized or mark as error if called prematurely
-    if (deposit.status !== DepositStatus.INITIALIZED) {
-      const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
-      logErrorContext(
-        `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
-        new Error(errorMsg),
-      );
-      logDepositError(deposit.id, errorMsg, {
-        error: errorMsg,
-        context: 'Invalid status for finalize',
-        chainName: this.config.chainName,
-        fundingTxHash: deposit.fundingTxHash ?? undefined,
-        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
-      });
-      // Optionally mark with error? updateToFinalizedDeposit(deposit, null, 'Invalid status for finalize')? Or just let process loop retry?
-      // For now, just return, assuming the process loop or event handler called this correctly.
-      return;
-    }
-
+  /**
+   * Submits the L1 finalizeDeposit transaction and waits for a receipt.
+   * Contains all error handling for the tx submission phase, but does NOT
+   * write to DepositStore on success — that is the caller's responsibility.
+   *
+   * Returns the TransactionReceipt on success, or undefined if the deposit
+   * should not be retried (bridge delay, race condition, or unrecoverable error).
+   */
+  protected async submitFinalizationTx(deposit: Deposit): Promise<TransactionReceipt | undefined> {
     try {
       logger.debug(`FINALIZE | Quoting fee... | ID: ${deposit.id}`);
       // Use provider instance for read-only quote
@@ -579,22 +553,6 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         `FINALIZE | L1 finalize transaction mined | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
       );
 
-      // Update status upon successful mining
-      updateToFinalizedDeposit(deposit, receipt, undefined); // Pass only deposit and receipt on success
-
-      // Explicit success log (with correlation IDs for SigNoz)
-      createLoggerWithCorrelation({
-        depositId: deposit.id,
-        chainName: this.config.chainName,
-        operation: 'finalizeDeposit',
-        fundingTxHash: deposit.fundingTxHash ?? undefined,
-        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
-        finalizeTxHash: receipt.transactionHash,
-        blockNumber: String(receipt.blockNumber),
-      }).info(
-        `FINALIZE | SUCCESS | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
-      );
-
       return receipt;
     } catch (error: any) {
       const reason = error.reason ?? error.error?.message ?? error.message ?? 'Unknown error';
@@ -604,7 +562,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         logger.warn(`FINALIZE | WAITING (Bridge Delay) | ID: ${deposit.id} | Reason: ${reason}`);
         // Don't mark as error, just update activity to allow retry after TIME_TO_RETRY
         await updateLastActivity(deposit);
-        return;
+        return undefined;
       }
 
       // If generic failure, re-check L1 status – it might have finalized already
@@ -615,7 +573,7 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `FINALIZE | Tx failed but L1 shows FINALIZED (race/duplicate) | ID: ${deposit.id}`,
           );
           await this.mirrorLocalStatusToL1(deposit, DepositStatus.FINALIZED, reason);
-          return;
+          return undefined;
         }
       } catch {}
 
@@ -633,9 +591,133 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
         fundingTxHash: deposit.fundingTxHash ?? undefined,
         initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
       });
-      // Mark as error to potentially prevent immediate retries depending on cleanup logic
-      updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
+      // Mark with error. The deposit stays INITIALIZED so it will be retried
+      // after DEFAULT_DEPOSIT_RETRY_MS. updateToFinalizedDeposit already sets
+      // lastActivityAt internally (Deposits.ts:375), so a separate
+      // updateLastActivity call is not needed — and would overwrite the error
+      // tag with the stale deposit object.
+      await updateToFinalizedDeposit(deposit, undefined, `Error: ${reason}`);
+      return undefined;
     }
+  }
+
+  /**
+   * Searches receipt logs for the TokensTransferredWithPayload event emitted by
+   * the L1BitcoinDepositor contract. Returns the transfer sequence and transaction
+   * hash on success, or nulls if not found.
+   */
+  protected parseTransferSequenceFromReceipt(
+    receipt: TransactionReceipt,
+    depositId: string,
+  ): { transferSequence: string | null; eventTxHash: string | null } {
+    try {
+      const l1BitcoinDepositorAddress = this.config.l1BitcoinDepositorAddress.toLowerCase();
+      // Derive the topic hash from the loaded ABI so it matches whatever type
+      // the contract uses (address for EVM chains, bytes32 for Sui/Solana chains).
+      const sig = this.l1BitcoinDepositorProvider.interface.getEventTopic(
+        'TokensTransferredWithPayload',
+      );
+      const logs = (receipt.logs || []).filter(
+        (log) => log.address.toLowerCase() === l1BitcoinDepositorAddress && log.topics[0] === sig,
+      );
+      for (const log of logs) {
+        try {
+          const parsedLog = this.l1BitcoinDepositorProvider.interface.parseLog(log);
+          if (
+            parsedLog.name === 'TokensTransferredWithPayload' &&
+            parsedLog.args.transferSequence
+          ) {
+            const transferSequence = parsedLog.args.transferSequence.toString();
+            logger.info(
+              `Found transfer sequence ${transferSequence} in receipt for deposit ${depositId}`,
+            );
+            return { transferSequence, eventTxHash: receipt.transactionHash };
+          }
+        } catch (error) {
+          logger.warn(
+            `Failed to parse TokensTransferredWithPayload log for deposit ${depositId}: ${error}`,
+          );
+        }
+      }
+    } catch (error: any) {
+      logErrorContext(`Error parsing L1 logs for deposit ${depositId}`, error);
+    }
+    return { transferSequence: null, eventTxHash: null };
+  }
+
+  /**
+   * Returns true if the deposit is in a state that can be finalized (INITIALIZED).
+   * Logs appropriate warnings/errors and returns false for all other statuses.
+   */
+  protected isDepositFinalizable(deposit: Deposit): boolean {
+    if (deposit.status === DepositStatus.FINALIZED) {
+      logger.warn(`FINALIZE | Deposit already finalized locally | ID: ${deposit.id}`);
+      return false;
+    }
+    if (deposit.status === DepositStatus.AWAITING_WORMHOLE_VAA) {
+      logger.debug(`FINALIZE | Deposit already awaiting Wormhole VAA | ID: ${deposit.id}`);
+      return false;
+    }
+    if (deposit.status !== DepositStatus.INITIALIZED) {
+      const errorMsg = `Attempted to finalize non-initialized deposit (Status: ${DepositStatus[deposit.status]})`;
+      logErrorContext(
+        `FINALIZE | ERROR | Attempted to finalize non-initialized deposit | ID: ${deposit.id} | STATUS: ${DepositStatus[deposit.status]}`,
+        new Error(errorMsg),
+      );
+      logDepositError(deposit.id, errorMsg, {
+        error: errorMsg,
+        context: 'Invalid status for finalize',
+        chainName: this.config.chainName,
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+      });
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Called when the Wormhole transferSequence cannot be parsed from the
+   * finalization receipt. Stores the deposit as FINALIZED with an error tag
+   * and fires a Sentry alert for operator investigation.
+   */
+  protected async handleMissingTransferSequence(deposit: Deposit, txHash: string): Promise<void> {
+    await updateToFinalizedDeposit(deposit, { hash: txHash }, 'transferSequence_not_found');
+    const sentryErr = new Error(
+      `transferSequence_not_found for deposit ${deposit.id} on ${this.config.chainName} — manual intervention required`,
+    );
+    Sentry.captureException(sentryErr, {
+      extra: { depositId: deposit.id, chainName: this.config.chainName, txHash },
+    });
+    logger.error(
+      `Could not parse transferSequence for deposit ${deposit.id} — finalizeTxHash stored, manual intervention required`,
+    );
+  }
+
+  async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+    if (!this.isDepositFinalizable(deposit)) return;
+
+    const receipt = await this.submitFinalizationTx(deposit);
+
+    if (receipt) {
+      // Update status upon successful mining
+      await updateToFinalizedDeposit(deposit, { hash: receipt.transactionHash }, undefined);
+
+      // Explicit success log (with correlation IDs for SigNoz)
+      createLoggerWithCorrelation({
+        depositId: deposit.id,
+        chainName: this.config.chainName,
+        operation: 'finalizeDeposit',
+        fundingTxHash: deposit.fundingTxHash ?? undefined,
+        initializeTxHash: deposit.hashes?.eth?.initializeTxHash ?? undefined,
+        finalizeTxHash: receipt.transactionHash,
+        blockNumber: String(receipt.blockNumber),
+      }).info(
+        `FINALIZE | SUCCESS | ID: ${deposit.id} | TxHash: ${receipt.transactionHash} | Block: ${receipt.blockNumber}`,
+      );
+    }
+
+    return receipt;
   }
 
   async checkDepositStatus(depositOrId: string | Deposit): Promise<DepositStatus | null> {
@@ -774,7 +856,11 @@ export abstract class BaseChainHandler<T extends AnyChainConfig> implements Chai
             `FINALIZE | Deposit already finalized on L1 (local status was INITIALIZED) | ID: ${updatedDeposit.id}`,
           );
           // Update local status to match L1
-          updateToFinalizedDeposit(updatedDeposit, undefined, 'Deposit found finalized on L1');
+          await updateToFinalizedDeposit(
+            updatedDeposit,
+            undefined,
+            'Deposit found finalized on L1',
+          );
           break;
 
         // Should not happen if local state is INITIALIZED, but handle defensively

@@ -1,17 +1,28 @@
 import { NonceManager } from '@ethersproject/experimental';
+import type { TransactionReceipt } from '@ethersproject/providers';
+import * as Sentry from '@sentry/node';
 import { ethers } from 'ethers';
+import { CHAIN_TYPE } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import { L2BitcoinDepositorABI } from '../interfaces/L2BitcoinDepositor.js';
+import { L2WormholeGatewayABI } from '../interfaces/L2WormholeGateway.js';
 import type { Deposit } from '../types/Deposit.type.js';
+import { DepositStatus } from '../types/DepositStatus.enum.js';
 import type { FundingTransaction } from '../types/FundingTransaction.type.js';
 import type { Reveal } from '../types/Reveal.type.js';
 import { logDepositError } from '../utils/AuditLog.js';
 import { DepositStore } from '../utils/DepositStore.js';
-import { createDeposit, getDepositId } from '../utils/Deposits.js';
+import {
+  createDeposit,
+  getDepositId,
+  updateToBridgedDeposit,
+  updateToFinalizedAwaitingVAA,
+} from '../utils/Deposits.js';
 import { getFundingTxHash } from '../utils/GetTransactionHash.js';
 import logger, { logErrorContext } from '../utils/Logger.js';
-import { BaseChainHandler } from './BaseChainHandler.js';
+import { fetchVAAFromAPI } from '../utils/WormholeVAA.js';
+import { BaseChainHandler, RECOVERY_DELAY_MS } from './BaseChainHandler.js';
 
 export class EVMChainHandler
   extends BaseChainHandler<EvmChainConfig>
@@ -22,6 +33,7 @@ export class EVMChainHandler
   protected nonceManagerL2: NonceManager | undefined;
   protected l2BitcoinDepositor: ethers.Contract | undefined;
   protected l2BitcoinDepositorProvider: ethers.Contract | undefined;
+  protected l2WormholeGateway: ethers.Contract | undefined;
 
   constructor(config: EvmChainConfig) {
     super(config);
@@ -66,6 +78,16 @@ export class EVMChainHandler
           `EVM L2 Contract Address not configured for ${this.config.chainName}. L2 contract features disabled.`,
         );
       }
+
+      // Initialize L2WormholeGateway contract for Wormhole VAA bridging
+      if (this.config.l2WormholeGatewayAddress && this.nonceManagerL2) {
+        this.l2WormholeGateway = new ethers.Contract(
+          this.config.l2WormholeGatewayAddress,
+          L2WormholeGatewayABI,
+          this.nonceManagerL2,
+        );
+        logger.debug(`EVM L2WormholeGateway contract created for ${this.config.chainName}`);
+      }
     } else {
       logger.warn(`EVM L2 RPC not configured for ${this.config.chainName}. L2 features disabled.`);
     }
@@ -106,7 +128,7 @@ export class EVMChainHandler
               l2Sender,
               this.config.chainName,
             );
-            DepositStore.create(deposit);
+            await DepositStore.create(deposit);
 
             logger.debug(`L2 Listener | Triggering L1 initializeDeposit | ID: ${deposit.id}`);
             await this.initializeDeposit(deposit);
@@ -215,7 +237,7 @@ export class EVMChainHandler
               l2Sender,
               this.config.chainName,
             );
-            DepositStore.create(newDeposit);
+            await DepositStore.create(newDeposit);
 
             await this.initializeDeposit(newDeposit);
           }
@@ -279,17 +301,16 @@ export class EVMChainHandler
 
         const blockData = await this.l2Provider.getBlock(mid);
 
-        if (!blockData) {
-          high = mid - 1;
-          continue;
-        }
-
-        if (blockData.timestamp === timestamp) {
-          startBlock = mid;
-          break;
-        } else if (blockData.timestamp < timestamp) {
-          startBlock = mid;
-          low = mid + 1;
+        if (blockData) {
+          if (blockData.timestamp === timestamp) {
+            startBlock = mid;
+            break;
+          } else if (blockData.timestamp < timestamp) {
+            startBlock = mid;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
         } else {
           high = mid - 1;
         }
@@ -317,5 +338,233 @@ export class EVMChainHandler
       `_getBlocksByTimestampEVM | Binary search result for ${this.config.chainName}: startBlock=${startBlock}, endBlock=${endBlock}`,
     );
     return { startBlock, endBlock };
+  }
+
+  /**
+   * Processes all deposits awaiting Wormhole VAA bridging on this EVM chain.
+   * Queries DepositStore for deposits with AWAITING_WORMHOLE_VAA status,
+   * excludes permanently failed deposits (receiveTbtc_reverted) and transient
+   * failures still within the RECOVERY_DELAY_MS backoff window, filters out
+   * those without a transfer sequence, and bridges each remaining deposit.
+   */
+  public async processWormholeBridging(): Promise<void> {
+    const bridgingDeposits = await DepositStore.getByStatus(
+      DepositStatus.AWAITING_WORMHOLE_VAA,
+      this.config.chainName,
+    );
+    if (bridgingDeposits.length === 0) return;
+
+    const now = Date.now();
+    const eligibleDeposits = bridgingDeposits.filter((deposit) => {
+      if (deposit.error === 'receiveTbtc_reverted') {
+        logger.debug(`Skipping deposit ${deposit.id}: permanent error (receiveTbtc_reverted)`);
+        return false;
+      }
+      if (
+        deposit.error === 'bridging_exception' &&
+        now - (deposit.dates?.lastActivityAt ?? 0) < RECOVERY_DELAY_MS
+      ) {
+        logger.debug(`Skipping deposit ${deposit.id}: transient error within backoff window`);
+        return false;
+      }
+      return true;
+    });
+
+    for (const deposit of eligibleDeposits) {
+      if (!deposit.wormholeInfo || !deposit.wormholeInfo.transferSequence) {
+        logger.warn(`Deposit ${deposit.id} is missing transferSequence. Skipping.`);
+        continue;
+      }
+      await this.bridgeEvmDeposit(deposit);
+    }
+  }
+
+  /**
+   * Bridges a single EVM deposit by fetching the Wormhole VAA and calling
+   * receiveTbtc on the L2WormholeGateway contract. Updates the deposit
+   * status to BRIDGED on success.
+   */
+  public async bridgeEvmDeposit(deposit: Deposit): Promise<void> {
+    if (deposit.status !== DepositStatus.AWAITING_WORMHOLE_VAA) return;
+
+    if (!this.l2WormholeGateway) {
+      logger.warn(`L2WormholeGateway not initialized. Cannot bridge deposit ${deposit.id}.`);
+      return;
+    }
+
+    try {
+      if (!deposit.wormholeInfo?.transferSequence) {
+        logger.warn(`No transfer sequence for deposit ${deposit.id}`);
+        return;
+      }
+
+      logger.info(`Bridging EVM deposit ${deposit.id}...`);
+      logger.info(
+        `Using sequence ${deposit.wormholeInfo.transferSequence} from L1 tx ${deposit.wormholeInfo.txHash}`,
+      );
+
+      const vaaBase64 = await fetchVAAFromAPI(
+        deposit.wormholeInfo.transferSequence,
+        this.config.network,
+      );
+
+      if (!vaaBase64 || vaaBase64.length === 0) {
+        logger.warn(
+          `VAA not yet available for deposit ${deposit.id}, sequence ${deposit.wormholeInfo.transferSequence}`,
+        );
+        return;
+      }
+
+      // Convert base64 VAA to bytes; a signed Wormhole VAA with 19 guardians
+      // is ~500 bytes. Reject anything that looks implausibly small.
+      const MIN_VAA_BYTES = 100;
+      const vaaBuf = Buffer.from(vaaBase64, 'base64');
+      if (vaaBuf.length < MIN_VAA_BYTES) {
+        logger.warn(
+          `VAA suspiciously short (${vaaBuf.length} bytes) for deposit ${deposit.id} — skipping`,
+        );
+        return;
+      }
+      const vaaBytes = '0x' + vaaBuf.toString('hex');
+
+      logger.debug(`Submitting receiveTbtc transaction for deposit ${deposit.id}`, {
+        depositId: deposit.id,
+        vaaLength: vaaBuf.length,
+        transferSequence: deposit.wormholeInfo.transferSequence,
+      });
+
+      const tx = await this.l2WormholeGateway.receiveTbtc(vaaBytes);
+      const receipt = await tx.wait();
+
+      if (!receipt || receipt.status !== 1) {
+        const msg = `receiveTbtc transaction reverted for deposit ${deposit.id} (status=${receipt?.status ?? 'null'})`;
+        logger.error(msg, { depositId: deposit.id, txHash: receipt?.transactionHash });
+        Sentry.captureException(new Error(msg), {
+          extra: {
+            depositId: deposit.id,
+            chainName: this.config.chainName,
+            txHash: receipt?.transactionHash,
+          },
+        });
+        // Persist error tag so the recovery cron skips this deposit instead of
+        // retrying a permanently-failing revert on every tick.
+        await DepositStore.update({
+          ...deposit,
+          error: 'receiveTbtc_reverted',
+          dates: { ...deposit.dates, lastActivityAt: Date.now() },
+        });
+        return;
+      }
+
+      await updateToBridgedDeposit(deposit, receipt.transactionHash, CHAIN_TYPE.EVM);
+
+      logger.info(`EVM bridging completed successfully for deposit ${deposit.id}`, {
+        depositId: deposit.id,
+        transactionHash: receipt.transactionHash,
+        transferSequence: deposit.wormholeInfo.transferSequence,
+      });
+    } catch (error: any) {
+      const reason = error.message || 'Unknown bridging error';
+      logger.warn(`Wormhole bridging failed for deposit ${deposit.id}: ${reason}`, {
+        depositId: deposit.id,
+        transferSequence: deposit.wormholeInfo?.transferSequence,
+        errorType: error.constructor.name,
+        errorMessage: error.message,
+        stack: error.stack,
+      });
+      await DepositStore.update({
+        ...deposit,
+        error: 'bridging_exception',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
+      });
+    }
+  }
+
+  /**
+   * Re-attempts bridging for deposits stuck in AWAITING_WORMHOLE_VAA status.
+   * Filters to deposits waiting longer than RECOVERY_DELAY_MS and excludes deposits
+   * tagged with a permanent error (receiveTbtc_reverted). Transient errors
+   * (bridging_exception) are retried after RECOVERY_DELAY_MS backoff via
+   * lastActivityAt. FINALIZED deposits with transferSequence_not_found cannot be
+   * auto-recovered — they are surfaced via a one-time Sentry alert.
+   */
+  public async recoverStuckFinalizedDeposits(): Promise<void> {
+    const awaitingDeposits = await DepositStore.getByStatus(
+      DepositStatus.AWAITING_WORMHOLE_VAA,
+      this.config.chainName,
+    );
+
+    const now = Date.now();
+    const stuckDeposits = awaitingDeposits.filter((deposit) => {
+      if (deposit.error === 'receiveTbtc_reverted') return false;
+      const awaitingSince =
+        deposit.dates.awaitingWormholeVAAMessageSince ?? deposit.dates.finalizationAt;
+      if (!awaitingSince) return false;
+      return now - awaitingSince > RECOVERY_DELAY_MS;
+    });
+
+    for (const deposit of stuckDeposits) {
+      try {
+        logger.info(`Re-attempting bridging for AWAITING deposit ${deposit.id}`);
+        await this.bridgeEvmDeposit(deposit);
+      } catch (error) {
+        logErrorContext(`Error re-bridging deposit ${deposit.id}`, error);
+      }
+    }
+
+    // Alert on FINALIZED deposits whose transferSequence was never parsed.
+    // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
+    // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
+    // to prevent N × alerts-per-tick from exhausting Sentry quota.
+    const finalizedDeposits = await DepositStore.getByStatus(
+      DepositStatus.FINALIZED,
+      this.config.chainName,
+    );
+    for (const deposit of finalizedDeposits) {
+      if (deposit.error !== 'transferSequence_not_found') continue;
+      if (!deposit.dates.finalizationAt) continue;
+      if (now - deposit.dates.finalizationAt <= RECOVERY_DELAY_MS) continue;
+      const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found — manual intervention required`;
+      logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
+      Sentry.captureException(new Error(msg), {
+        extra: {
+          depositId: deposit.id,
+          chainName: this.config.chainName,
+          finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
+          finalizationAt: deposit.dates.finalizationAt,
+        },
+      });
+      await DepositStore.update({
+        ...deposit,
+        error: 'transferSequence_not_found_alerted',
+        dates: { ...deposit.dates, lastActivityAt: Date.now() },
+      });
+    }
+  }
+
+  override async finalizeDeposit(deposit: Deposit): Promise<TransactionReceipt | undefined> {
+    if (!this.isDepositFinalizable(deposit)) return;
+
+    const receipt = await this.submitFinalizationTx(deposit);
+
+    if (receipt) {
+      logger.info(`Processing EVM deposit finalization for ${deposit.id}...`);
+
+      const { transferSequence, eventTxHash } = this.parseTransferSequenceFromReceipt(
+        receipt,
+        deposit.id,
+      );
+
+      if (transferSequence && eventTxHash) {
+        await updateToFinalizedAwaitingVAA(deposit, receipt.transactionHash, transferSequence);
+        logger.info(
+          `Deposit ${deposit.id} now awaiting Wormhole VAA with sequence ${transferSequence}`,
+        );
+      } else {
+        await this.handleMissingTransferSequence(deposit, receipt.transactionHash);
+      }
+    }
+
+    return receipt;
   }
 }
