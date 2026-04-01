@@ -87,7 +87,11 @@ jest.mock('@mysten/sui/keypairs/ed25519', () => ({
 }));
 
 jest.mock('@mysten/sui/transactions', () => ({
-  Transaction: jest.fn(),
+  Transaction: jest.fn().mockImplementation(() => ({
+    moveCall: jest.fn(),
+    object: jest.fn().mockImplementation((id: string) => `object(${id})`),
+    pure: { vector: jest.fn().mockImplementation((_type: string, data: any) => data) },
+  })),
   __esModule: true,
 }));
 
