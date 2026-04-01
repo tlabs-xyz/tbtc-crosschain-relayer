@@ -343,7 +343,9 @@ export class EVMChainHandler
   /**
    * Processes all deposits awaiting Wormhole VAA bridging on this EVM chain.
    * Queries DepositStore for deposits with AWAITING_WORMHOLE_VAA status,
-   * filters out those without a transfer sequence, and bridges each one.
+   * excludes permanently failed deposits (receiveTbtc_reverted) and transient
+   * failures still within the RECOVERY_DELAY_MS backoff window, filters out
+   * those without a transfer sequence, and bridges each remaining deposit.
    */
   public async processWormholeBridging(): Promise<void> {
     const bridgingDeposits = await DepositStore.getByStatus(
@@ -352,7 +354,23 @@ export class EVMChainHandler
     );
     if (bridgingDeposits.length === 0) return;
 
-    for (const deposit of bridgingDeposits) {
+    const now = Date.now();
+    const eligibleDeposits = bridgingDeposits.filter((deposit) => {
+      if (deposit.error === 'receiveTbtc_reverted') {
+        logger.debug(`Skipping deposit ${deposit.id}: permanent error (receiveTbtc_reverted)`);
+        return false;
+      }
+      if (
+        deposit.error === 'bridging_exception' &&
+        now - (deposit.dates?.lastActivityAt ?? 0) < RECOVERY_DELAY_MS
+      ) {
+        logger.debug(`Skipping deposit ${deposit.id}: transient error within backoff window`);
+        return false;
+      }
+      return true;
+    });
+
+    for (const deposit of eligibleDeposits) {
       if (!deposit.wormholeInfo || !deposit.wormholeInfo.transferSequence) {
         logger.warn(`Deposit ${deposit.id} is missing transferSequence. Skipping.`);
         continue;

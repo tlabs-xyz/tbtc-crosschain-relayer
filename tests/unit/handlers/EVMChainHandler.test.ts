@@ -4,6 +4,7 @@ import {
   type EvmChainConfig,
   EvmChainConfigSchema,
 } from '../../../config/schemas/evm.chain.schema.js';
+import { RECOVERY_DELAY_MS } from '../../../handlers/BaseChainHandler.js';
 import { EVMChainHandler } from '../../../handlers/EVMChainHandler.js';
 import type { Deposit } from '../../../types/Deposit.type.js';
 import { DepositStatus } from '../../../types/DepositStatus.enum.js';
@@ -338,6 +339,194 @@ describe('EVMChainHandler', () => {
       expect(bridgeSpy).toHaveBeenCalledWith(mockDeposits[0]);
       expect(bridgeSpy).toHaveBeenCalledWith(mockDeposits[1]);
     });
+
+    it('should skip deposits with receiveTbtc_reverted error tag permanently', async () => {
+      const permanentErrorDeposit = {
+        id: 'deposit-permanent-error',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        wormholeInfo: {
+          txHash: '0xpermanent-error-tx',
+          transferSequence: '789',
+          bridgingAttempted: true,
+        },
+        error: 'receiveTbtc_reverted',
+        dates: { lastActivityAt: Date.now() - RECOVERY_DELAY_MS - 60_000 },
+      } as Deposit;
+
+      mockDepositStore.getByStatus.mockResolvedValue([permanentErrorDeposit]);
+
+      const bridgeSpy = jest.spyOn(handler as any, 'bridgeEvmDeposit').mockResolvedValue(undefined);
+
+      await handler.processWormholeBridging();
+
+      expect(mockDepositStore.getByStatus).toHaveBeenCalledWith(
+        DepositStatus.AWAITING_WORMHOLE_VAA,
+        'BaseSepolia',
+      );
+      expect(bridgeSpy).not.toHaveBeenCalled();
+    });
+
+    it('should skip deposits with bridging_exception within backoff window', async () => {
+      const FIXED_NOW = 1700000000000;
+      jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+
+      const recentTransientDeposit = {
+        id: 'deposit-transient-recent',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        wormholeInfo: {
+          txHash: '0xtransient-recent-tx',
+          transferSequence: '101',
+          bridgingAttempted: true,
+        },
+        error: 'bridging_exception',
+        dates: { lastActivityAt: FIXED_NOW - (RECOVERY_DELAY_MS - 60_000) },
+      } as Deposit;
+
+      mockDepositStore.getByStatus.mockResolvedValue([recentTransientDeposit]);
+
+      const bridgeSpy = jest.spyOn(handler as any, 'bridgeEvmDeposit').mockResolvedValue(undefined);
+
+      await handler.processWormholeBridging();
+
+      expect(bridgeSpy).not.toHaveBeenCalled();
+    });
+
+    it('should process deposits with bridging_exception after backoff window expires', async () => {
+      const FIXED_NOW = 1700000000000;
+      jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+
+      const expiredTransientDeposit = {
+        id: 'deposit-transient-expired',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        wormholeInfo: {
+          txHash: '0xtransient-expired-tx',
+          transferSequence: '202',
+          bridgingAttempted: true,
+        },
+        error: 'bridging_exception',
+        dates: { lastActivityAt: FIXED_NOW - (RECOVERY_DELAY_MS + 60_000) },
+      } as Deposit;
+
+      mockDepositStore.getByStatus.mockResolvedValue([expiredTransientDeposit]);
+
+      const bridgeSpy = jest.spyOn(handler as any, 'bridgeEvmDeposit').mockResolvedValue(undefined);
+
+      await handler.processWormholeBridging();
+
+      expect(bridgeSpy).toHaveBeenCalledTimes(1);
+      expect(bridgeSpy).toHaveBeenCalledWith(expiredTransientDeposit);
+    });
+
+    it('should process deposits without error tags normally', async () => {
+      const cleanDeposit = {
+        id: 'deposit-no-error',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        wormholeInfo: {
+          txHash: '0xclean-tx',
+          transferSequence: '303',
+          bridgingAttempted: false,
+        },
+        error: null,
+        dates: { lastActivityAt: Date.now() },
+      } as Deposit;
+
+      mockDepositStore.getByStatus.mockResolvedValue([cleanDeposit]);
+
+      const bridgeSpy = jest.spyOn(handler as any, 'bridgeEvmDeposit').mockResolvedValue(undefined);
+
+      await handler.processWormholeBridging();
+
+      expect(bridgeSpy).toHaveBeenCalledTimes(1);
+      expect(bridgeSpy).toHaveBeenCalledWith(cleanDeposit);
+    });
+
+    it('should handle mixed deposits: skip errored, process clean ones', async () => {
+      const FIXED_NOW = 1700000000000;
+      jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+
+      const permanentDeposit = {
+        id: 'deposit-mixed-permanent',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        wormholeInfo: {
+          txHash: '0xmixed-permanent-tx',
+          transferSequence: '401',
+          bridgingAttempted: true,
+        },
+        error: 'receiveTbtc_reverted',
+        dates: { lastActivityAt: FIXED_NOW - RECOVERY_DELAY_MS - 60_000 },
+      } as Deposit;
+
+      const recentTransientDeposit = {
+        id: 'deposit-mixed-transient',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        wormholeInfo: {
+          txHash: '0xmixed-transient-tx',
+          transferSequence: '402',
+          bridgingAttempted: true,
+        },
+        error: 'bridging_exception',
+        dates: { lastActivityAt: FIXED_NOW - 60_000 },
+      } as Deposit;
+
+      const cleanDeposit = {
+        id: 'deposit-mixed-clean',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        wormholeInfo: {
+          txHash: '0xmixed-clean-tx',
+          transferSequence: '403',
+          bridgingAttempted: false,
+        },
+        error: null,
+        dates: { lastActivityAt: FIXED_NOW },
+      } as Deposit;
+
+      mockDepositStore.getByStatus.mockResolvedValue([
+        permanentDeposit,
+        recentTransientDeposit,
+        cleanDeposit,
+      ]);
+
+      const bridgeSpy = jest.spyOn(handler as any, 'bridgeEvmDeposit').mockResolvedValue(undefined);
+
+      await handler.processWormholeBridging();
+
+      expect(bridgeSpy).toHaveBeenCalledTimes(1);
+      expect(bridgeSpy).toHaveBeenCalledWith(cleanDeposit);
+    });
+
+    it('should process bridging_exception deposit at exact backoff boundary', async () => {
+      const FIXED_NOW = 1700000000000;
+      jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+
+      const boundaryDeposit = {
+        id: 'deposit-boundary',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.AWAITING_WORMHOLE_VAA,
+        wormholeInfo: {
+          txHash: '0xboundary-tx',
+          transferSequence: '501',
+          bridgingAttempted: true,
+        },
+        error: 'bridging_exception',
+        dates: { lastActivityAt: FIXED_NOW - RECOVERY_DELAY_MS },
+      } as Deposit;
+
+      mockDepositStore.getByStatus.mockResolvedValue([boundaryDeposit]);
+
+      const bridgeSpy = jest.spyOn(handler as any, 'bridgeEvmDeposit').mockResolvedValue(undefined);
+
+      await handler.processWormholeBridging();
+
+      expect(bridgeSpy).toHaveBeenCalledTimes(1);
+      expect(bridgeSpy).toHaveBeenCalledWith(boundaryDeposit);
+    });
   });
 
   describe('fetchVAAFromAPI (shared utility)', () => {
@@ -612,6 +801,77 @@ describe('EVMChainHandler', () => {
       await (handlerNoGateway as any).initializeL2();
 
       expect((handlerNoGateway as any).l2WormholeGateway).toBeUndefined();
+    });
+  });
+
+  describe('processFinalizeDeposits', () => {
+    let mockDeposit: Deposit;
+
+    beforeEach(() => {
+      mockDeposit = {
+        id: 'test-finalize-deposit',
+        chainId: 'BaseSepolia',
+        status: DepositStatus.INITIALIZED,
+        hashes: { eth: {}, btc: {}, solana: {} },
+        dates: { lastActivityAt: 0, createdAt: Date.now() - 600000 },
+        wormholeInfo: { txHash: null, transferSequence: null, bridgingAttempted: false },
+      } as unknown as Deposit;
+
+      mockDepositStore.getByStatus.mockResolvedValue([mockDeposit]);
+      (mockDepositsUtil as any).updateLastActivity = jest.fn().mockResolvedValue(mockDeposit);
+      jest.spyOn(handler as any, 'checkDepositStatus').mockResolvedValue(DepositStatus.FINALIZED);
+      jest
+        .spyOn(handler as any, 'filterDepositsActivityTime')
+        .mockImplementation((deposits: any) => deposits);
+    });
+
+    it('should call updateToFinalizedDeposit with correct arguments when L1 status is FINALIZED', async () => {
+      (mockDepositsUtil as any).updateToFinalizedDeposit = jest.fn().mockResolvedValue(undefined);
+
+      await handler.processFinalizeDeposits();
+
+      expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledTimes(1);
+      expect(mockDepositsUtil.updateToFinalizedDeposit).toHaveBeenCalledWith(
+        mockDeposit,
+        undefined,
+        'Deposit found finalized on L1',
+      );
+    });
+
+    it('should await updateToFinalizedDeposit ensuring sequential execution within the deposit loop', async () => {
+      // Verify that processFinalizeDeposits awaits updateToFinalizedDeposit
+      // by tracking execution order. If awaited, the mock completes before
+      // processFinalizeDeposits returns. If fire-and-forget, the ordering is
+      // non-deterministic and the mock may resolve after the caller returns.
+      const executionOrder: string[] = [];
+
+      (mockDepositsUtil as any).updateToFinalizedDeposit = jest
+        .fn()
+        .mockImplementation(async () => {
+          // Simulate an async DB operation that takes a microtask tick
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          executionOrder.push('updateToFinalizedDeposit_resolved');
+        });
+
+      await handler.processFinalizeDeposits();
+      executionOrder.push('processFinalizeDeposits_returned');
+
+      // If updateToFinalizedDeposit is properly awaited, its resolution marker
+      // appears BEFORE the caller returns. If fire-and-forget, the caller
+      // returns first and the deferred resolution runs after.
+      expect(executionOrder[0]).toBe('updateToFinalizedDeposit_resolved');
+      expect(executionOrder[1]).toBe('processFinalizeDeposits_returned');
+    });
+
+    it('should propagate database errors from updateToFinalizedDeposit when L1 status is FINALIZED', async () => {
+      // When updateToFinalizedDeposit rejects (e.g. DB failure), the error must
+      // propagate to the caller. Without await, the rejection would be an
+      // unhandled promise rejection and processFinalizeDeposits would resolve
+      // successfully, silently swallowing the error.
+      const dbError = new Error('Database connection lost');
+      (mockDepositsUtil as any).updateToFinalizedDeposit = jest.fn().mockRejectedValue(dbError);
+
+      await expect(handler.processFinalizeDeposits()).rejects.toThrow('Database connection lost');
     });
   });
 });
