@@ -3,6 +3,7 @@ import { appConfig } from '../config/app.config.js';
 import CustomResponse from '../helpers/CustomResponse.helper.js';
 import { logErrorContext } from '../utils/Logger.js';
 import { prisma } from '../utils/prisma.js';
+import { isReady } from '../utils/readiness.js';
 
 export default class Utils {
   /**
@@ -36,6 +37,21 @@ export default class Utils {
       logErrorContext('Error pinging API:', err);
       return response.ko((err as Error).message);
     }
+  };
+
+  /**
+   * @name readinessController
+   * @description Returns 200 when background services have initialized, 503 otherwise.
+   *              Use for orchestrator readiness probes; /status remains the liveness check.
+   * @method GET
+   * @returns {Object} Readiness status
+   */
+  readinessController = (_req: Request, res: Response): void => {
+    const response = new CustomResponse(res);
+    if (isReady()) {
+      return response.ok('Ready', { ready: true });
+    }
+    return response.custom(503, 'Service is starting', { ready: false });
   };
 
   /**

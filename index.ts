@@ -38,6 +38,8 @@ const app: Express = express();
 /** HTTP server reference for graceful shutdown. */
 let server: Server | null = null;
 
+import { setReady } from './utils/readiness.js';
+
 // -------------------------------------------------------------------------
 // |                        EXTRACTED SETUP FUNCTIONS                      |
 // -------------------------------------------------------------------------
@@ -163,22 +165,14 @@ const main = async () => {
         throw new Error(`Endpoint mode initialization failed in test mode: ${error.message}`);
       }
     }
-  } else {
-    try {
-      await initializeBackgroundServices();
-    } catch (error: any) {
-      logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);
-      if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
-        process.exit(1);
-      } else {
-        throw new Error(`Initialization failed in test mode: ${error.message}`);
-      }
-    }
   }
 
   // -------------------------------------------------------------------------
   // |                              SERVER START                             |
   // -------------------------------------------------------------------------
+  // Start the HTTP server before background services so the /status health
+  // check endpoint is reachable while chain handlers and startup tasks
+  // initialize (which can take 30+ seconds across 10 chains).
   if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
     server = app.listen({ port: appConfig.APP_PORT, host: '0.0.0.0' }, () => {
       logger.info(`Server listening on port ${appConfig.APP_PORT}`);
@@ -188,6 +182,27 @@ const main = async () => {
     logger.info(
       'Server startup tasks are skipped in the test environment. Server has already started successfully.',
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // |                        BACKGROUND SERVICES                          |
+  // -------------------------------------------------------------------------
+  if (!appConfig.API_ONLY_MODE && appConfig.NODE_ENV !== 'test') {
+    try {
+      await initializeBackgroundServices();
+      setReady(true);
+      logger.info('Background services initialized — readiness flag set.');
+    } catch (error: any) {
+      setReady(false);
+      logErrorContext('FATAL: Failed to initialize chain handlers or dependent services:', error);
+      if ((appConfig.NODE_ENV as NodeEnv) !== NodeEnv.TEST) {
+        process.exit(1);
+      } else {
+        throw new Error(`Initialization failed in test mode: ${error.message}`);
+      }
+    }
+  } else {
+    setReady(true);
   }
 
   logger.info('Application initialization sequence complete.');
