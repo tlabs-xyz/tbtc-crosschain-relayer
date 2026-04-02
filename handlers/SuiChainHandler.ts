@@ -632,11 +632,13 @@ export class SuiChainHandler extends BaseChainHandler<SuiChainConfig> {
     } catch (error: any) {
       const reason = error.message || 'Unknown bridging error';
 
-      // Classify error: the inner try-catch at line ~493 throws
-      // "Transaction failed: <msg>" for on-chain execution failures (permanent
-      // reverts). All other errors reaching this catch block are transient
-      // (network timeouts, RPC failures, VAA fetch issues) and eligible for retry.
-      const isPermanentRevert = error.message?.includes('Transaction failed:');
+      // Classify error as permanent or transient:
+      // - "Transaction failed:" → on-chain execution revert (status != success)
+      // - "MoveAbort" → Move contract abort during dry-run simulation.
+      //   All abort codes in receiveWormholeMessages are permanent:
+      //   0 = INVALID_CHAIN_ID, 1 = INVALID_SENDER, 2 = MESSAGE_ALREADY_PROCESSED
+      const isPermanentRevert =
+        error.message?.includes('Transaction failed:') || error.message?.includes('MoveAbort');
 
       if (isPermanentRevert) {
         logger.error(`Wormhole bridging permanently failed for deposit ${deposit.id}: ${reason}`, {

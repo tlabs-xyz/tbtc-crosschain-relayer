@@ -933,6 +933,25 @@ describe('SuiChainHandler', () => {
         );
       });
 
+      it('should tag deposit with receiveTbtc_reverted on MoveAbort dry-run failure', async () => {
+        (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
+
+        // Simulate MoveAbort during dry-run: the Sui SDK throws before execution
+        // with a message containing "MoveAbort" (e.g., MESSAGE_ALREADY_PROCESSED).
+        (handler as any).suiClient.signAndExecuteTransaction.mockRejectedValueOnce(
+          new Error(
+            'Dry run failed, could not automatically determine a budget: MoveAbort(MoveLocation { module: ModuleId { address: 3d78, name: Identifier("BitcoinDepositor") }, function: 3, instruction: 36, function_name: Some("receiveWormholeMessages") }, 2) in command 0',
+          ),
+        );
+
+        await (handler as any).bridgeSuiDeposit(fullMockDeposit);
+
+        expect(mockDepositStore.update).toHaveBeenCalledTimes(1);
+        const updatedDeposit = mockDepositStore.update.mock.calls[0][0];
+        expect(updatedDeposit.error).toBe('receiveTbtc_reverted');
+        expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+      });
+
       it('should tag deposit with bridging_exception on transient failure', async () => {
         (wormholeVAAModule.fetchVAAFromAPI as jest.Mock).mockResolvedValueOnce('base64encodedvaa');
 
