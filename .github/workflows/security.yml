@@ -75,6 +75,22 @@ jobs:
           echo "audit-ci failed after 3 attempts."
           exit 1
 
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.157.0
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Run Semgrep
+        run: semgrep --config .semgrep.yml --config p/typescript --config p/secrets --config r/trailofbits.javascript --error
+
+  osv-scan:
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@c51854704019a247608d928f370c98740469d4b5 # v2.3.5
+    with:
+      upload-sarif: false
+      scan-args: |-
+        --lockfile=yarn.lock
+
   codeql:
     runs-on: ubuntu-latest
     timeout-minutes: 15
