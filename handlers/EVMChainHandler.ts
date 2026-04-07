@@ -16,6 +16,7 @@ import { DepositStore } from '../utils/DepositStore.js';
 import {
   createDeposit,
   getDepositId,
+  updateToAwaitingWormholeVAA,
   updateToBridgedDeposit,
   updateToFinalizedAwaitingVAA,
 } from '../utils/Deposits.js';
@@ -493,8 +494,9 @@ export class EVMChainHandler
    * Re-fetches the finalization receipt from L1 and re-attempts to parse the
    * Wormhole `transferSequence`. If the sequence is found, the deposit is
    * transitioned directly to AWAITING_WORMHOLE_VAA so the normal bridging flow
-   * can continue without manual intervention. Only when the receipt is
-   * unavailable or the sequence still cannot be parsed is a one-time Sentry
+   * can continue without manual intervention. Transient RPC errors are skipped
+   * so the deposit can be retried on the next cron tick. Only when the receipt
+   * is unavailable or the sequence still cannot be parsed is a one-time Sentry
    * alert fired. The error tag is updated afterward to prevent repeated alerts
    * on subsequent cron ticks.
    */
@@ -558,7 +560,7 @@ export class EVMChainHandler
             );
 
             if (transferSequence && eventTxHash) {
-              await updateToFinalizedAwaitingVAA(deposit, eventTxHash, transferSequence);
+              await updateToAwaitingWormholeVAA(eventTxHash, deposit, transferSequence);
               logger.info(
                 `Recovered stuck FINALIZED deposit ${deposit.id} — transferSequence ${transferSequence} found via receipt re-parse`,
                 { depositId: deposit.id, chainName: this.config.chainName, transferSequence },
@@ -581,6 +583,7 @@ export class EVMChainHandler
             `Error re-fetching receipt for deposit ${deposit.id} (tx: ${finalizeTxHash})`,
             receiptError,
           );
+          continue; // Transient error — retry on next cron tick
         }
       }
 
