@@ -23,14 +23,16 @@ describe('Wormhole ABI Definitions', () => {
 
     it('should contain TokensTransferredWithPayload event entry', () => {
       expect(tokensTransferredEvent).toBeDefined();
-      expect(tokensTransferredEvent!.anonymous).toBe(false);
-      expect(tokensTransferredEvent!.inputs).toHaveLength(3);
+      if (!tokensTransferredEvent) return;
+      expect(tokensTransferredEvent.anonymous).toBe(false);
+      expect(tokensTransferredEvent.inputs).toHaveLength(3);
     });
 
     it('should have correct parameter types for EVM-specific variant', () => {
       expect(tokensTransferredEvent).toBeDefined();
+      if (!tokensTransferredEvent) return;
 
-      const inputs = tokensTransferredEvent!.inputs;
+      const inputs = tokensTransferredEvent.inputs;
 
       // First input: amount (uint256)
       expect(inputs[0].name).toBe('amount');
@@ -38,10 +40,10 @@ describe('Wormhole ABI Definitions', () => {
       expect(inputs[0].internalType).toBe('uint256');
       expect(inputs[0].indexed).toBe(false);
 
-      // Second input: l2Receiver (address, NOT bytes32 -- EVM-specific)
-      expect(inputs[1].name).toBe('l2Receiver');
-      expect(inputs[1].type).toBe('address');
-      expect(inputs[1].internalType).toBe('address');
+      // Second input: destinationChainReceiver (bytes32)
+      expect(inputs[1].name).toBe('destinationChainReceiver');
+      expect(inputs[1].type).toBe('bytes32');
+      expect(inputs[1].internalType).toBe('bytes32');
       expect(inputs[1].indexed).toBe(false);
 
       // Third input: transferSequence (uint64)
@@ -101,12 +103,13 @@ describe('Wormhole ABI Definitions', () => {
       );
 
       expect(receiveTbtc).toBeDefined();
-      expect(receiveTbtc!.stateMutability).toBe('nonpayable');
-      expect(receiveTbtc!.inputs).toHaveLength(1);
-      expect(receiveTbtc!.inputs[0].name).toBe('encodedVm');
-      expect(receiveTbtc!.inputs[0].type).toBe('bytes');
-      expect(receiveTbtc!.inputs[0].internalType).toBe('bytes');
-      expect(receiveTbtc!.outputs).toHaveLength(0);
+      if (!receiveTbtc) return;
+      expect(receiveTbtc.stateMutability).toBe('nonpayable');
+      expect(receiveTbtc.inputs).toHaveLength(1);
+      expect(receiveTbtc.inputs[0].name).toBe('encodedVm');
+      expect(receiveTbtc.inputs[0].type).toBe('bytes');
+      expect(receiveTbtc.inputs[0].internalType).toBe('bytes');
+      expect(receiveTbtc.outputs).toHaveLength(0);
     });
 
     it('should be encodable by ethers.js Interface', () => {

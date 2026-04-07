@@ -11,7 +11,7 @@ import { CHAIN_TYPE, NETWORK } from '../config/schemas/common.schema.js';
 import type { EvmChainConfig } from '../config/schemas/evm.chain.schema.js';
 import type { ChainHandlerInterface } from '../interfaces/ChainHandler.interface.js';
 import { L1BitcoinDepositorABI as L1BitcoinDepositorGenericABI } from '../interfaces/L1BitcoinDepositor.js';
-// Import both ABIs - EVM version expects address, generic version expects bytes32
+// Import both ABIs - EVM version matches generic (both use bytes32 for destinationChainReceiver)
 import { L1BitcoinDepositorABI as L1BitcoinDepositorEVMABI } from '../interfaces/L1EVMBitcoinDepositor.js';
 import { TBTCVaultABI } from '../interfaces/TBTCVault.js';
 import type { Deposit } from '../types/Deposit.type.js';
