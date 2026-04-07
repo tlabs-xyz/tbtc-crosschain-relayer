@@ -106,7 +106,12 @@ export const L1BitcoinDepositorABI = [
     anonymous: false,
     inputs: [
       { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
-      { indexed: false, internalType: 'address', name: 'l2Receiver', type: 'address' },
+      {
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'destinationChainReceiver',
+        type: 'bytes32',
+      },
       { indexed: false, internalType: 'uint64', name: 'transferSequence', type: 'uint64' },
     ],
     name: 'TokensTransferredWithPayload',
