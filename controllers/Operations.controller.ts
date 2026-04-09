@@ -30,6 +30,7 @@ export default class Operations {
       const operations: Deposit[] = await prisma.deposit.findMany({
         where: whereClause,
       });
+      operations.sort((a, b) => (b.dates.createdAt ?? 0) - (a.dates.createdAt ?? 0));
       response.ok('OK - Retrieved all operations', operations);
     } catch (err) {
       logErrorContext('Error fetching all operations:', err);
@@ -61,6 +62,7 @@ export default class Operations {
       const operations: Deposit[] = await prisma.deposit.findMany({
         where: whereClause,
       });
+      operations.sort((a, b) => (b.dates.createdAt ?? 0) - (a.dates.createdAt ?? 0));
       return response.ok('OK - Retrieved all queued operations', operations);
     } catch (err) {
       logErrorContext('Error fetching queued operations:', err);
@@ -92,6 +94,7 @@ export default class Operations {
       const operations: Deposit[] = await prisma.deposit.findMany({
         where: whereClause,
       });
+      operations.sort((a, b) => (b.dates.createdAt ?? 0) - (a.dates.createdAt ?? 0));
       return response.ok('OK - Retrieved all initialized operations', operations);
     } catch (err) {
       logErrorContext('Error fetching initialized operations:', err);
@@ -122,6 +125,7 @@ export default class Operations {
       const operations: Deposit[] = await prisma.deposit.findMany({
         where: whereClause,
       });
+      operations.sort((a, b) => (b.dates.createdAt ?? 0) - (a.dates.createdAt ?? 0));
       return response.ok('OK - Retrieved all finalized operations', operations);
     } catch (err) {
       logErrorContext('Error fetching finalized operations:', err);
