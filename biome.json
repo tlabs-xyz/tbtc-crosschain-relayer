@@ -1,6 +1,6 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
-  "assist": { "enabled": true },
+  "assists": { "enabled": true },
   "linter": {
     "enabled": true,
     "rules": {
@@ -30,6 +30,6 @@
     }
   },
   "files": {
-    "includes": ["**/*.ts", "!node_modules", "!dist", "!generated", "!coverage"]
+    "include": ["**/*.ts", "!node_modules", "!dist", "!generated", "!coverage"]
   }
 }

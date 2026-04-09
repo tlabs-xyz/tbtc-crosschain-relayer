@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import { ethers } from 'ethers';
 import { CHAIN_TYPE, NETWORK } from '../../../config/schemas/common.schema.js';
 import {
@@ -19,6 +20,7 @@ jest.mock('../../../utils/Logger');
 jest.mock('../../../utils/Deposits');
 jest.mock('../../../utils/AuditLog');
 jest.mock('../../../utils/WormholeVAA');
+jest.mock('@sentry/node');
 
 // Mock the config module to prevent loading all chain configurations during unit tests
 jest.mock('../../../config/index.js', () => ({
@@ -33,9 +35,9 @@ jest.mock('@wormhole-foundation/sdk', () => ({
   },
 }));
 
-// Compute the correct EVM event signature — EVM ABI uses bytes32 for destinationChainReceiver
+// Compute the correct EVM event signature — EVM ABI uses address (not bytes32) for l2Receiver
 const EVM_TOKENS_TRANSFERRED_SIG = ethers.utils.id(
-  'TokensTransferredWithPayload(uint256,bytes32,uint64)',
+  'TokensTransferredWithPayload(uint256,address,uint64)',
 );
 
 // Valid EVM config that passes EvmChainConfigSchema.parse()
@@ -113,6 +115,7 @@ describe('EVMChainHandler', () => {
     mockDepositStore.getByStatus = jest.fn().mockResolvedValue([]);
     mockDepositStore.create = jest.fn().mockResolvedValue(undefined);
     (mockDepositsUtil as any).updateToFinalizedAwaitingVAA = jest.fn().mockResolvedValue(undefined);
+    (mockDepositsUtil as any).updateToAwaitingWormholeVAA = jest.fn().mockResolvedValue(undefined);
     (mockDepositsUtil as any).updateToBridgedDeposit = jest.fn().mockResolvedValue(undefined);
 
     // Create handler instance
@@ -872,6 +875,217 @@ describe('EVMChainHandler', () => {
       (mockDepositsUtil as any).updateToFinalizedDeposit = jest.fn().mockRejectedValue(dbError);
 
       await expect(handler.processFinalizeDeposits()).rejects.toThrow('Database connection lost');
+    });
+  });
+
+  describe('recoverStuckFinalizedDeposits', () => {
+    const FIXED_NOW = 1700000000000;
+    let dateNowSpy: jest.SpyInstance;
+
+    const makeDeposit = (overrides: Partial<Deposit> = {}): Deposit => ({
+      id: 'recovery-evm-deposit-id',
+      chainId: 'BaseSepolia',
+      status: DepositStatus.FINALIZED,
+      fundingTxHash: 'mock-funding-tx-hash',
+      outputIndex: 1,
+      hashes: {
+        btc: { btcTxHash: null },
+        eth: { initializeTxHash: null, finalizeTxHash: '0xfinalize123' },
+        solana: { bridgeTxHash: null },
+        sui: { l2BridgeTxHash: null },
+      },
+      receipt: {
+        depositor: '0x123',
+        blindingFactor: '0x456',
+        walletPublicKeyHash: '0x789',
+        refundPublicKeyHash: '0xabc',
+        refundLocktime: '0',
+        extraData: '0x',
+      },
+      owner: 'test-owner',
+      L1OutputEvent: {
+        fundingTx: {
+          version: '01000000',
+          inputVector: 'mock_input_vector',
+          outputVector: 'mock_output_vector',
+          locktime: '00000000',
+        },
+        reveal: {
+          fundingOutputIndex: 1,
+          blindingFactor: `0x${'00'.repeat(32)}`,
+          walletPubKeyHash: `0x${'00'.repeat(20)}`,
+          refundPubKeyHash: `0x${'00'.repeat(20)}`,
+          refundLocktime: '0',
+          vault: `0x${'00'.repeat(32)}`,
+        },
+        l2DepositOwner: `0x${'05'.repeat(20)}`,
+        l2Sender: `0x${'09'.repeat(20)}`,
+      },
+      dates: {
+        createdAt: 1699000000000,
+        initializationAt: 1699000100000,
+        finalizationAt: FIXED_NOW - RECOVERY_DELAY_MS - 60000,
+        awaitingWormholeVAAMessageSince: null,
+        bridgedAt: null,
+        lastActivityAt: 1699000300000,
+      },
+      wormholeInfo: {
+        txHash: null,
+        transferSequence: null,
+        bridgingAttempted: false,
+      },
+      error: 'transferSequence_not_found',
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+    });
+
+    afterEach(() => {
+      dateNowSpy.mockRestore();
+    });
+
+    it('should recover a stuck FINALIZED deposit when receipt re-parse yields a transferSequence', async () => {
+      const deposit = makeDeposit();
+      const mockReceipt = {
+        transactionHash: '0xfinalize123',
+        logs: [
+          {
+            address: mockEvmConfig.l1BitcoinDepositorAddress,
+            topics: [EVM_TOKENS_TRANSFERRED_SIG],
+            data: '0x',
+            logIndex: 0,
+            blockNumber: 12345,
+            transactionHash: '0xfinalize123',
+            transactionIndex: 0,
+            blockHash: `0x${'0'.repeat(64)}`,
+            removed: false,
+          },
+        ],
+      };
+
+      mockDepositStore.getByStatus
+        .mockResolvedValueOnce([]) // AWAITING_WORMHOLE_VAA pass
+        .mockResolvedValueOnce([deposit]); // FINALIZED pass
+
+      (handler as any).l1Provider = {
+        getTransactionReceipt: jest.fn().mockResolvedValue(mockReceipt),
+      };
+      (handler as any).l1BitcoinDepositorProvider = {
+        interface: {
+          getEventTopic: jest.fn().mockReturnValue(EVM_TOKENS_TRANSFERRED_SIG),
+          parseLog: jest.fn().mockReturnValue({
+            name: 'TokensTransferredWithPayload',
+            args: { transferSequence: ethers.BigNumber.from(99) },
+          }),
+        },
+      };
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(mockDepositsUtil.updateToAwaitingWormholeVAA).toHaveBeenCalledWith(
+        '0xfinalize123',
+        deposit,
+        '99',
+      );
+      expect(Sentry.captureException).not.toHaveBeenCalled();
+    });
+
+    it('should fire a Sentry alert when receipt is found but transferSequence is missing', async () => {
+      const deposit = makeDeposit();
+      const mockReceipt = {
+        transactionHash: '0xfinalize123',
+        logs: [], // no matching logs
+      };
+
+      mockDepositStore.getByStatus.mockResolvedValueOnce([]).mockResolvedValueOnce([deposit]);
+
+      (handler as any).l1Provider = {
+        getTransactionReceipt: jest.fn().mockResolvedValue(mockReceipt),
+      };
+      (handler as any).l1BitcoinDepositorProvider = {
+        interface: {
+          getEventTopic: jest.fn().mockReturnValue(EVM_TOKENS_TRANSFERRED_SIG),
+          parseLog: jest.fn(),
+        },
+      };
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(Sentry.captureException).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('recovery-evm-deposit-id'),
+        }),
+        expect.objectContaining({
+          extra: expect.objectContaining({
+            depositId: 'recovery-evm-deposit-id',
+            chainName: 'BaseSepolia',
+          }),
+        }),
+      );
+      expect(mockDepositStore.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: 'transferSequence_not_found_alerted',
+        }),
+      );
+    });
+
+    it('should fire a Sentry alert when receipt is null', async () => {
+      const deposit = makeDeposit();
+
+      mockDepositStore.getByStatus.mockResolvedValueOnce([]).mockResolvedValueOnce([deposit]);
+
+      (handler as any).l1Provider = {
+        getTransactionReceipt: jest.fn().mockResolvedValue(null),
+      };
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+      expect(mockDepositStore.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: 'transferSequence_not_found_alerted',
+        }),
+      );
+    });
+
+    it('should not permanently mark deposit on transient RPC error', async () => {
+      const deposit = makeDeposit();
+
+      mockDepositStore.getByStatus.mockResolvedValueOnce([]).mockResolvedValueOnce([deposit]);
+
+      (handler as any).l1Provider = {
+        getTransactionReceipt: jest.fn().mockRejectedValue(new Error('RPC timeout')),
+      };
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      // Transient error should NOT trigger Sentry alert or update error tag
+      expect(Sentry.captureException).not.toHaveBeenCalled();
+      expect(mockDepositStore.update).not.toHaveBeenCalled();
+    });
+
+    it('should fire a Sentry alert when finalizeTxHash is missing', async () => {
+      const deposit = makeDeposit({
+        hashes: {
+          btc: { btcTxHash: null },
+          eth: { initializeTxHash: null, finalizeTxHash: null },
+          solana: { bridgeTxHash: null },
+          sui: { l2BridgeTxHash: null },
+        },
+      });
+
+      mockDepositStore.getByStatus.mockResolvedValueOnce([]).mockResolvedValueOnce([deposit]);
+
+      await (handler as any).recoverStuckFinalizedDeposits();
+
+      expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+      expect(mockDepositStore.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: 'transferSequence_not_found_alerted',
+        }),
+      );
     });
   });
 });
