@@ -29,7 +29,6 @@ export default class Operations {
 
       const operations: Deposit[] = await prisma.deposit.findMany({
         where: whereClause,
-        orderBy: { dates: 'desc' },
       });
       response.ok('OK - Retrieved all operations', operations);
     } catch (err) {
@@ -61,7 +60,6 @@ export default class Operations {
 
       const operations: Deposit[] = await prisma.deposit.findMany({
         where: whereClause,
-        orderBy: { dates: 'desc' },
       });
       return response.ok('OK - Retrieved all queued operations', operations);
     } catch (err) {
@@ -93,7 +91,6 @@ export default class Operations {
 
       const operations: Deposit[] = await prisma.deposit.findMany({
         where: whereClause,
-        orderBy: { dates: 'desc' },
       });
       return response.ok('OK - Retrieved all initialized operations', operations);
     } catch (err) {
@@ -124,7 +121,6 @@ export default class Operations {
       }
       const operations: Deposit[] = await prisma.deposit.findMany({
         where: whereClause,
-        orderBy: { dates: 'desc' },
       });
       return response.ok('OK - Retrieved all finalized operations', operations);
     } catch (err) {

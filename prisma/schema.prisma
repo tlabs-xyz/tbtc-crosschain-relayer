@@ -22,6 +22,7 @@ model Deposit {
   wormholeInfo  Json?
 
   @@index([chainId])
+  @@index([chainId, status])
 }
 
 model AuditLog {
