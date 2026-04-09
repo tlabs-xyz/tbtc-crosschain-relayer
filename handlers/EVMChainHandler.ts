@@ -16,6 +16,7 @@ import { DepositStore } from '../utils/DepositStore.js';
 import {
   createDeposit,
   getDepositId,
+  updateToAwaitingWormholeVAA,
   updateToBridgedDeposit,
   updateToFinalizedAwaitingVAA,
 } from '../utils/Deposits.js';
@@ -481,12 +482,23 @@ export class EVMChainHandler
   }
 
   /**
-   * Re-attempts bridging for deposits stuck in AWAITING_WORMHOLE_VAA status.
-   * Filters to deposits waiting longer than RECOVERY_DELAY_MS and excludes deposits
-   * tagged with a permanent error (receiveTbtc_reverted). Transient errors
-   * (bridging_exception) are retried after RECOVERY_DELAY_MS backoff via
-   * lastActivityAt. FINALIZED deposits with transferSequence_not_found cannot be
-   * auto-recovered — they are surfaced via a one-time Sentry alert.
+   * Performs two recovery passes:
+   *
+   * **Pass 1 – AWAITING_WORMHOLE_VAA deposits:**
+   * Re-attempts bridging for deposits that have been waiting longer than
+   * RECOVERY_DELAY_MS. Deposits tagged with the permanent error
+   * `receiveTbtc_reverted` are skipped. Transient errors (`bridging_exception`)
+   * are retried after RECOVERY_DELAY_MS backoff via `lastActivityAt`.
+   *
+   * **Pass 2 – FINALIZED deposits with transferSequence_not_found:**
+   * Re-fetches the finalization receipt from L1 and re-attempts to parse the
+   * Wormhole `transferSequence`. If the sequence is found, the deposit is
+   * transitioned directly to AWAITING_WORMHOLE_VAA so the normal bridging flow
+   * can continue without manual intervention. Transient RPC errors are skipped
+   * so the deposit can be retried on the next cron tick. Only when the receipt
+   * is unavailable or the sequence still cannot be parsed is a one-time Sentry
+   * alert fired. The error tag is updated afterward to prevent repeated alerts
+   * on subsequent cron ticks.
    */
   public async recoverStuckFinalizedDeposits(): Promise<void> {
     const awaitingDeposits = await DepositStore.getByStatus(
@@ -512,10 +524,14 @@ export class EVMChainHandler
       }
     }
 
-    // Alert on FINALIZED deposits whose transferSequence was never parsed.
-    // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
-    // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
-    // to prevent N × alerts-per-tick from exhausting Sentry quota.
+    // Attempt to recover FINALIZED deposits whose transferSequence was never parsed
+    // by re-fetching the finalization receipt and re-parsing it.
+    // If recovery succeeds the deposit is transitioned to AWAITING_WORMHOLE_VAA so
+    // the normal bridging flow can continue without manual intervention.
+    // A Sentry alert is only fired when the receipt is unavailable or the transfer
+    // sequence still cannot be found after the re-parse attempt. Each unrecoverable
+    // deposit fires exactly one alert — the error tag is updated afterward to prevent
+    // N × alerts-per-tick from exhausting Sentry quota.
     const finalizedDeposits = await DepositStore.getByStatus(
       DepositStatus.FINALIZED,
       this.config.chainName,
@@ -524,13 +540,62 @@ export class EVMChainHandler
       if (deposit.error !== 'transferSequence_not_found') continue;
       if (!deposit.dates.finalizationAt) continue;
       if (now - deposit.dates.finalizationAt <= RECOVERY_DELAY_MS) continue;
+
+      const finalizeTxHash = deposit.hashes?.eth?.finalizeTxHash;
+
+      // Attempt to re-parse the transfer sequence from the finalization receipt.
+      if (finalizeTxHash) {
+        try {
+          logger.info(
+            `Attempting receipt re-parse for stuck FINALIZED deposit ${deposit.id} (tx: ${finalizeTxHash})`,
+            { depositId: deposit.id, chainName: this.config.chainName, finalizeTxHash },
+          );
+
+          const receipt = await this.l1Provider.getTransactionReceipt(finalizeTxHash);
+
+          if (receipt) {
+            const { transferSequence, eventTxHash } = this.parseTransferSequenceFromReceipt(
+              receipt,
+              deposit.id,
+            );
+
+            if (transferSequence && eventTxHash) {
+              await updateToAwaitingWormholeVAA(eventTxHash, deposit, transferSequence);
+              logger.info(
+                `Recovered stuck FINALIZED deposit ${deposit.id} — transferSequence ${transferSequence} found via receipt re-parse`,
+                { depositId: deposit.id, chainName: this.config.chainName, transferSequence },
+              );
+              continue; // Successfully recovered — skip the Sentry alert below.
+            }
+
+            logger.warn(
+              `Receipt re-parse did not yield a transferSequence for deposit ${deposit.id} — falling back to Sentry alert`,
+              { depositId: deposit.id, chainName: this.config.chainName, finalizeTxHash },
+            );
+          } else {
+            logger.warn(
+              `Could not fetch receipt for deposit ${deposit.id} (tx: ${finalizeTxHash}) — falling back to Sentry alert`,
+              { depositId: deposit.id, chainName: this.config.chainName, finalizeTxHash },
+            );
+          }
+        } catch (receiptError) {
+          logErrorContext(
+            `Error re-fetching receipt for deposit ${deposit.id} (tx: ${finalizeTxHash})`,
+            receiptError,
+          );
+          continue; // Transient error — retry on next cron tick
+        }
+      }
+
+      // Recovery failed (no txHash, receipt unavailable, or sequence still missing) —
+      // surface the issue via a one-time Sentry alert.
       const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found — manual intervention required`;
       logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
       Sentry.captureException(new Error(msg), {
         extra: {
           depositId: deposit.id,
           chainName: this.config.chainName,
-          finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
+          finalizeTxHash,
           finalizationAt: deposit.dates.finalizationAt,
         },
       });
