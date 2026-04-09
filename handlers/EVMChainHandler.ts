@@ -16,6 +16,7 @@ import { DepositStore } from '../utils/DepositStore.js';
 import {
   createDeposit,
   getDepositId,
+  updateToAwaitingWormholeVAA,
   updateToBridgedDeposit,
   updateToFinalizedAwaitingVAA,
 } from '../utils/Deposits.js';
@@ -485,8 +486,11 @@ export class EVMChainHandler
    * Filters to deposits waiting longer than RECOVERY_DELAY_MS and excludes deposits
    * tagged with a permanent error (receiveTbtc_reverted). Transient errors
    * (bridging_exception) are retried after RECOVERY_DELAY_MS backoff via
-   * lastActivityAt. FINALIZED deposits with transferSequence_not_found cannot be
-   * auto-recovered — they are surfaced via a one-time Sentry alert.
+   * lastActivityAt. FINALIZED deposits with transferSequence_not_found are recovered
+   * by re-fetching the L1 receipt and re-parsing the transferSequence. If re-parsing
+   * succeeds the deposit transitions to AWAITING_WORMHOLE_VAA; otherwise a one-time
+   * Sentry alert is fired. Transient RPC errors are silently skipped for retry on
+   * the next tick.
    */
   public async recoverStuckFinalizedDeposits(): Promise<void> {
     const awaitingDeposits = await DepositStore.getByStatus(
@@ -512,10 +516,9 @@ export class EVMChainHandler
       }
     }
 
-    // Alert on FINALIZED deposits whose transferSequence was never parsed.
-    // These cannot be auto-recovered; the Sentry alert prompts manual investigation.
-    // Each deposit fires exactly one Sentry alert — the error tag is updated afterward
-    // to prevent N × alerts-per-tick from exhausting Sentry quota.
+    // Attempt to recover FINALIZED deposits whose transferSequence was never parsed
+    // by re-fetching the receipt and re-parsing it. If re-parsing succeeds, transition
+    // the deposit to AWAITING_WORMHOLE_VAA. Otherwise fire a one-time Sentry alert.
     const finalizedDeposits = await DepositStore.getByStatus(
       DepositStatus.FINALIZED,
       this.config.chainName,
@@ -524,21 +527,59 @@ export class EVMChainHandler
       if (deposit.error !== 'transferSequence_not_found') continue;
       if (!deposit.dates.finalizationAt) continue;
       if (now - deposit.dates.finalizationAt <= RECOVERY_DELAY_MS) continue;
-      const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found — manual intervention required`;
-      logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
-      Sentry.captureException(new Error(msg), {
-        extra: {
-          depositId: deposit.id,
-          chainName: this.config.chainName,
-          finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
-          finalizationAt: deposit.dates.finalizationAt,
-        },
-      });
-      await DepositStore.update({
-        ...deposit,
-        error: 'transferSequence_not_found_alerted',
-        dates: { ...deposit.dates, lastActivityAt: Date.now() },
-      });
+
+      const finalizeTxHash = deposit.hashes?.eth?.finalizeTxHash;
+      if (!finalizeTxHash) {
+        const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found and no finalizeTxHash — manual intervention required`;
+        logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
+        Sentry.captureException(new Error(msg), {
+          extra: {
+            depositId: deposit.id,
+            chainName: this.config.chainName,
+            finalizeTxHash: null,
+            finalizationAt: deposit.dates.finalizationAt,
+          },
+        });
+        await DepositStore.update({
+          ...deposit,
+          error: 'transferSequence_not_found_alerted',
+          dates: { ...deposit.dates, lastActivityAt: Date.now() },
+        });
+        continue;
+      }
+
+      try {
+        const receipt = await this.l1Provider.getTransactionReceipt(finalizeTxHash);
+        if (receipt) {
+          const { transferSequence } = this.parseTransferSequenceFromReceipt(receipt, deposit.id);
+          if (transferSequence) {
+            await updateToAwaitingWormholeVAA(receipt.transactionHash, deposit, transferSequence);
+            logger.info(
+              `Recovered FINALIZED deposit ${deposit.id} with transfer sequence ${transferSequence}`,
+            );
+            continue;
+          }
+        }
+        // Receipt found but no transferSequence, or receipt is null — alert
+        const msg = `Deposit ${deposit.id} is stuck in FINALIZED with transferSequence_not_found — manual intervention required`;
+        logger.error(msg, { depositId: deposit.id, chainName: this.config.chainName });
+        Sentry.captureException(new Error(msg), {
+          extra: {
+            depositId: deposit.id,
+            chainName: this.config.chainName,
+            finalizeTxHash: deposit.hashes?.eth?.finalizeTxHash,
+            finalizationAt: deposit.dates.finalizationAt,
+          },
+        });
+        await DepositStore.update({
+          ...deposit,
+          error: 'transferSequence_not_found_alerted',
+          dates: { ...deposit.dates, lastActivityAt: Date.now() },
+        });
+      } catch (error) {
+        // Transient RPC error — skip this deposit, retry on next tick
+        logErrorContext(`Transient error re-fetching receipt for deposit ${deposit.id}`, error);
+      }
     }
   }
 

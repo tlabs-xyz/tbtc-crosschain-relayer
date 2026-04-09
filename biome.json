@@ -30,6 +30,6 @@
     }
   },
   "files": {
-    "includes": ["**/*.ts", "!node_modules", "!dist", "!generated", "!coverage"]
+    "includes": ["**/*.ts", "!node_modules", "!dist", "!generated", "!coverage", "!.claude"]
   }
 }
